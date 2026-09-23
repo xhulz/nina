@@ -1,0 +1,11 @@
+{
+  "core": "dev",
+  "surfaces": [],
+  "vocabulary": {
+    "OWNER": "the maintainer",
+    "API_DIR": "src/server",
+    "APP_DIR": "src/web",
+    "PKG_SCOPE": "@plain",
+    "EMITTING_PKGS": "`core`"
+  }
+}

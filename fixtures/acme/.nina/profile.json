@@ -1,0 +1,40 @@
+{
+  "core": "dev",
+  "surfaces": [
+    "db",
+    "integrations",
+    "edge-cf",
+    "frontend"
+  ],
+  "integrations": [
+    {
+      "slug": "stripe",
+      "name": "Stripe",
+      "kind": "live-api",
+      "boundary": "packages/stripe",
+      "skill": null
+    },
+    {
+      "slug": "better-auth",
+      "name": "Better Auth",
+      "kind": "installed-library",
+      "boundary": "apps/api/src/auth",
+      "skill": null
+    }
+  ],
+  "vocabulary": {
+    "PROJECT": "Acme",
+    "OWNER": "the maintainer",
+    "DB_PKG": "packages/db",
+    "DB_PKG_NAME": "@acme/db",
+    "PKG_SCOPE": "@acme",
+    "API_DIR": "apps/api",
+    "APP_DIR": "apps/app",
+    "AUTH_LIB": "Better Auth",
+    "SECRETS_LOCAL": ".dev.vars",
+    "SECRETS_PROD": "wrangler secret put",
+    "EMITTING_PKGS": "`db`, `core`",
+    "PAGES_PROJECT": "acme-app",
+    "API_STAGING": "acme-api-staging"
+  }
+}

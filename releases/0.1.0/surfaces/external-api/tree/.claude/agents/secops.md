@@ -1,0 +1,2 @@
+<!-- nina:slot external-api.1 -->
+6. **Input validation / injection / SSRF** — Zod at every trust boundary (request body, query, queue message body, webhook payload, {{PROVIDER}} responses). Prisma parameterization (no raw string interpolation). Outbound HTTP to {{PROVIDER}} — SSRF / URL-allowlist posture. DO SQLite — parameterized, never string-built SQL. The two webhook routes and the staging-only `/dev/*` surface are the internet-facing unauthenticated-by-session paths: verify their HMAC / secret gates cannot be bypassed or replayed.

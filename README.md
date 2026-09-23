@@ -8,8 +8,8 @@ for. It reads Claude Code's own transcripts to measure what the pipeline did. Wh
 the same mistake, NINA turns the lesson into a rule in the next release.
 
 > [!NOTE]
-> This repo is the write-up. The source is private. NINA is a personal project I use every day on a real
-> codebase, and I'm happy to walk through the code if you ask.
+> NINA is a personal project I use every day on a real codebase. It isn't on npm: a project installs it from a
+> tarball packed from this repo.
 
 ## At a glance
 
@@ -270,6 +270,51 @@ None of this showed up until I counted.
   reviewer got better at catching things, or maybe the lesson didn't help. It isn't proof, but without the
   numbers I couldn't even ask.
 
+## Getting started
+
+You need Node 20 or newer. NINA has no dependencies and isn't on npm, so you pack it here and vendor the tarball
+into the project that will use it:
+
+```bash
+git clone https://github.com/xhulz/nina && cd nina
+npm pack                                        # writes xhulz-nina-<version>.tgz
+
+cd ../your-project
+mkdir -p vendor && cp ../nina/xhulz-nina-<version>.tgz vendor/
+pnpm add -D file:vendor/xhulz-nina-<version>.tgz
+npx nina init
+```
+
+`init` works out the surfaces a repo reveals (a Prisma schema means `db`, a wrangler config means `edge-cf`) and
+asks about the ones no file can settle. It writes `.nina/profile.json`, wires the Claude Code hooks and composes
+the harness. The first Claude Code session in the project then starts by filling in whatever is still missing.
+
+The test suites run from this repo:
+
+```bash
+node scripts/compose-test.mjs     # the fixtures against their properties, plus the layer audit
+node scripts/cli-test.mjs         # the CLI end to end, in scratch projects
+```
+
+## Repository map
+
+| Path | What's there |
+|---|---|
+| [`bin/nina.mjs`](bin/nina.mjs) | entry point and command table |
+| [`src/commands/`](src/commands) | one file per command |
+| [`src/graph.mjs`](src/graph.mjs) | parses and validates a composed pipeline graph |
+| [`src/gate.mjs`](src/gate.mjs) | the loop gate: the ledger, what counts as a round, one answer per hook event |
+| [`src/wiring.mjs`](src/wiring.mjs) | the hooks and npm scripts a project needs, read by `init`, `wire`, `check` and `upgrade` |
+| [`src/transcripts.mjs`](src/transcripts.mjs) | the transcript parser |
+| [`src/detectors.mjs`](src/detectors.mjs) | runs a project's detectors from its hooks |
+| [`core/`](core), [`surfaces/`](surfaces) | the harness layers |
+| [`releases/`](releases) | the frozen releases projects pin |
+| [`fixtures/`](fixtures) | projects that exist to be composed and checked |
+| [`scripts/`](scripts) | the test suites and this repo's own checks |
+
+[`CLAUDE.md`](CLAUDE.md) is the long version: every mechanism, and why it ended up the way it did. It's also
+what Claude Code reads when it works on this repo.
+
 ## Engineering
 
 - Node.js with zero runtime dependencies. About 6.5k lines of source and 2.8k lines of tests.
@@ -282,5 +327,5 @@ None of this showed up until I counted.
 - Commands: `init`, `compose`, `check`, `where`, `pills`, `learn`, `requests`, `wire`, `gate`, `upgrade`,
   `release`, `snapshot`, `stats`.
 
-<sub>© 2026 Marcos Schulz. All rights reserved. This repository contains documentation only, and no license to
-use NINA is granted.</sub>
+<sub>© 2026 Marcos Schulz. All rights reserved. The source is public so it can be read, and forking it on GitHub
+is fine, but no license to use, copy, modify or distribute it is granted. See [LICENSE](LICENSE).</sub>

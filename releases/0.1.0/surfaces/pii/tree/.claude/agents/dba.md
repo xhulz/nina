@@ -1,0 +1,2 @@
+<!-- nina:slot pii.1 -->
+11. **Privacy / LGPD.** No raw PII in clear text where it must not be: CPF/CNPJ, bank account numbers, PIX keys, payer identifiers, and KYC document bytes. **KYC document bytes live only in R2, referenced by key (`documentsJson` holds R2 keys, never bytes) — never persisted in Postgres in clear text.** Any column flagged for masking in the architect's spec must be encrypted at rest. Reject schemas that violate `.claude/architecture.md` § *Privacy / LGPD model*.

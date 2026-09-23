@@ -1,0 +1,114 @@
+/**
+ * Whether every agent spec can actually do what it says: its `tools:` allowlist against what its
+ * body asks for, and every skill it names against what is installed.
+ *
+ * Written first in a consuming project, as its own detector, after a stage was twice instructed to
+ * do something the runtime never gave it the means to do: `Skill` was absent from all nine `tools:`
+ * lists while the specs made skills mandatory — 2 invocations in 743 runs — and devops was told to
+ * invoke Playwright through `Skill` when Playwright is an MCP server and no such skill exists.
+ * Neither surfaces on its own: the rule stays written, the agent reports success, and only a count
+ * over transcripts shows the zero. It lives here now so every project gets it, the same move that
+ * took the detector runner out of each project and into the package.
+ *
+ * Deliberately conservative. Skill and the browser tools are the two that actually went wrong and
+ * both are unambiguous; Bash is not inferred, because specs quote commands meant for other stages.
+ * A check that cries wolf gets ignored, which is the failure it exists to prevent.
+ */
+
+import { existsSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+/**
+ * A skill id carries a `-` or a `:`. Skills sections quote CLI words in backticks too — `validate`,
+ * `wrangler` — and every installed skill id is hyphenated or namespaced, so requiring one removes
+ * that whole class of false positive for nothing.
+ */
+const SKILL_ID = /^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/;
+
+/**
+ * Every skill installed for a project, by the id an agent would invoke: user skills by name,
+ * plugin skills as `<plugin>:<name>`, and the project's own.
+ *
+ * @param {string} target - The project directory.
+ * @returns {Promise<Set<string>>}
+ */
+export async function installedSkills(target) {
+  const found = new Set();
+  const user = join(homedir(), '.claude', 'skills');
+  for (const e of await readdir(user, { withFileTypes: true }).catch(() => [])) {
+    if (existsSync(join(user, e.name, 'SKILL.md'))) found.add(e.name);
+  }
+  const cache = join(homedir(), '.claude', 'plugins', 'cache');
+  for (const market of await readdir(cache, { withFileTypes: true }).catch(() => [])) {
+    if (!market.isDirectory()) continue;
+    for (const plugin of await readdir(join(cache, market.name), { withFileTypes: true }).catch(() => [])) {
+      if (!plugin.isDirectory()) continue;
+      const pluginDir = join(cache, market.name, plugin.name);
+      for (const version of await readdir(pluginDir, { withFileTypes: true }).catch(() => [])) {
+        for (const skill of await readdir(join(pluginDir, version.name, 'skills'), { withFileTypes: true }).catch(() => [])) {
+          if (skill.isDirectory()) found.add(`${plugin.name}:${skill.name}`);
+        }
+      }
+    }
+  }
+  const own = join(target, '.claude', 'skills');
+  for (const e of await readdir(own, { withFileTypes: true }).catch(() => [])) {
+    if (e.isDirectory()) found.add(e.name);
+  }
+  return found;
+}
+
+/**
+ * The tools a spec's frontmatter grants.
+ *
+ * @param {string} spec - A composed agent spec.
+ * @returns {string[]}
+ */
+export function granted(spec) {
+  const line = /^tools:\s*(.+)$/m.exec(spec);
+  return line ? line[1].split(',').map((t) => t.trim()).filter(Boolean) : [];
+}
+
+/**
+ * What a spec's body requires, and which skills it names.
+ *
+ * @param {string} spec - A composed agent spec.
+ * @returns {{needs: Set<string>, skills: Set<string>}}
+ */
+export function required(spec) {
+  const needs = new Set();
+  const skills = new Set();
+  const start = spec.indexOf('## Skills you MUST consult');
+  if (start !== -1) {
+    const rest = spec.slice(start + 3);
+    const end = rest.indexOf('\n## ');
+    const section = end === -1 ? rest : rest.slice(0, end);
+    for (const [, token] of section.matchAll(/`([a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?)`/g)) {
+      if (SKILL_ID.test(token) && (token.includes('-') || token.includes(':'))) skills.add(token);
+    }
+  }
+  if (skills.size > 0 || /\bSkill\b tool|via the `Skill`/.test(spec)) needs.add('Skill');
+  for (const [, tool] of spec.matchAll(/`?(browser_[a-z_]+)`?/g)) needs.add(`mcp__plugin_playwright_playwright__${tool}`);
+  return { needs, skills };
+}
+
+/**
+ * Every mismatch between what the specs ask for and what they are given.
+ *
+ * @param {Map<string, string>} specs - Role → composed spec text.
+ * @param {Set<string>|null} installed - Installed skills, or null to skip that half — the grant
+ *   check is a fact about the harness, the install check a fact about one machine.
+ * @returns {string[]}
+ */
+export function toolFindings(specs, installed) {
+  const out = [];
+  for (const [role, spec] of [...specs].sort(([a], [b]) => a.localeCompare(b))) {
+    const has = granted(spec);
+    const { needs, skills } = required(spec);
+    for (const need of needs) if (!has.includes(need)) out.push(`${role}: its spec needs \`${need}\`, and its tools: does not grant it`);
+    if (installed) for (const s of skills) if (!installed.has(s)) out.push(`${role}: names skill \`${s}\`, which is not installed`);
+  }
+  return out;
+}

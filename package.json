@@ -1,0 +1,33 @@
+{
+  "name": "@xhulz/nina",
+  "version": "0.21.1",
+  "description": "Composes an agent harness into a project from a versioned core, its surfaces, and the project's own layer.",
+  "type": "module",
+  "bin": {
+    "nina": "./bin/nina.mjs"
+  },
+  "exports": {
+    "./detectors": "./src/detectors.mjs",
+    "./gate": "./src/gate.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "src",
+    "releases",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "snapshot": "node bin/nina.mjs snapshot",
+    "stats": "node bin/nina.mjs stats",
+    "link": "ln -sf \"$PWD/bin/nina.mjs\" \"$HOME/.local/bin/nina\"",
+    "harness:check": "node scripts/harness-check.mjs",
+    "compose:test": "node scripts/compose-test.mjs",
+    "release": "node bin/nina.mjs release",
+    "cli:test": "node scripts/cli-test.mjs"
+  },
+  "private": true
+}

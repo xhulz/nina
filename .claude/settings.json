@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/marcosschulz/.claude/projects/**)",
+      "Read(//private/tmp/**)",
+      "Read(//tmp/**)",
+      "Bash(node bin/nina.mjs *)",
+      "Bash(node scripts/*.mjs)",
+      "Bash(node scripts/*.mjs *)",
+      "Bash(nina *)",
+      "Bash(pnpm snapshot *)",
+      "Bash(pnpm stats *)",
+      "Bash(pnpm harness:check)",
+      "Bash(pnpm agent-tools:check)",
+      "Bash(echo \"EXIT=$?\")"
+    ],
+    "additionalDirectories": ["/tmp", "/private/tmp"]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"${CLAUDE_PROJECT_DIR:-.}/scripts/harness-check.mjs\"; [ -f \"$f\" ] && node \"$f\" --hook || true",
+            "timeout": 30,
+            "statusMessage": "Checking harness drift..."
+          }
+        ]
+      }
+    ]
+  }
+}

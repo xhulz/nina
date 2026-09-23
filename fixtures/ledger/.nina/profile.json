@@ -1,0 +1,38 @@
+{
+  "core": "dev",
+  "surfaces": [
+    "db",
+    "money",
+    "integrations",
+    "edge-cf",
+    "pii"
+  ],
+  "integrations": [
+    {
+      "slug": "payway",
+      "name": "Payway",
+      "kind": "live-api",
+      "boundary": "packages/payway",
+      "skill": null
+    }
+  ],
+  "vocabulary": {
+    "PROJECT": "Ledger",
+    "OWNER": "the maintainer",
+    "CORE_PKG": "packages/settlement",
+    "DB_PKG": "packages/db",
+    "DB_PKG_NAME": "@ledger/db",
+    "PKG_SCOPE": "@ledger",
+    "API_DIR": "apps/api",
+    "APP_DIR": "apps/web",
+    "AUTH_LIB": "Better Auth",
+    "MINOR_UNIT": "cents",
+    "MONEY_MODULE": "packages/settlement/src/money.ts",
+    "SECRETS_LOCAL": ".dev.vars",
+    "SECRETS_PROD": "wrangler secret put",
+    "EMITTING_PKGS": "`db`, `settlement`",
+    "PAGES_PROJECT": "ledger-web",
+    "API_STAGING": "ledger-api-staging",
+    "PRIVACY_REGIME": "GDPR"
+  }
+}

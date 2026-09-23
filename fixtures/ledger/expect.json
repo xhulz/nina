@@ -1,0 +1,34 @@
+{
+  "describe": "A project with a money path, a database, one live-api integration and a platform runtime. Exists to hold the line that the money surface states invariants, not one project's state machine, model names or currency.",
+  "deny": [
+    "Spliter",
+    "Asaas",
+    "asaas",
+    "afinz",
+    "Payout",
+    "escrow",
+    "sobra",
+    "PIX",
+    "KYC",
+    "CPF",
+    "CNPJ",
+    "LGPD",
+    "centavos",
+    "BRL",
+    "DETECTADA",
+    "TRANSFERENCIA",
+    "ESCROW_RETENTION",
+    "IncomingEntry",
+    "AuditLog",
+    "AccountProcessor"
+  ],
+  "absent": [
+    ".claude/agents/solidity-dev.md",
+    ".claude/agents/solidity-auditor.md"
+  ],
+  "present": [
+    ".claude/agents/dba.md",
+    ".claude/agents/integration-tester.md",
+    ".claude/templates/integration.md"
+  ]
+}

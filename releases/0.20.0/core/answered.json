@@ -1,0 +1,11 @@
+{
+  "2026-09-22-integration-tester__regenerate-the-premise-index-after-editing-an-integration-doc": {
+    "in": "core/tree/.claude/agents/integration-tester.md"
+  },
+  "2026-09-22-qa__exit-code-is-the-verdict": {
+    "in": "core/tree/.claude/agents/qa.md"
+  },
+  "2026-09-22-shared__test-must-name-the-mutation-that-fails-it": {
+    "in": "core/tree/.claude/agents/reviewer.md"
+  }
+}

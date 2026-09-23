@@ -1,0 +1,303 @@
+#!/usr/bin/env node
+/**
+ * Composes every fixture project and asserts the invariants that replaced byte-exactness.
+ *
+ * While the harness was being extracted, the test was that a composition reproduced a live
+ * project byte for byte. That oracle is gone: projects now pin a frozen release, so the
+ * working core has no running tree to be checked against. What stands in its place is a
+ * fixture project per shape worth testing, and six properties that must hold for each:
+ *
+ *   1. No `{{PLACEHOLDER}}` survives — the profile's vocabulary covers what the core says.
+ *   2. Every unfilled slot belongs to the PROJECT layer. A declared surface that leaves one
+ *      of its own slots empty is a bug: the core expects text there and nothing supplies it.
+ *   3. Nothing from an undeclared surface leaks in, per the fixture's deny list.
+ *   4. Files gated on a surface appear, or do not, as the fixture expects.
+ *   5. Every `Hard Rule #N` reference points at a rule that exists in the composed CLAUDE.md.
+ *      The hard rules are a numbered list assembled from several layers, so a project that does
+ *      not declare a surface simply has no rule where that surface's rule would have been — and
+ *      a reference to it, written by a layer that IS present, points at nothing.
+ *   6. Every composed file carries the `nina:generated` notice, below its frontmatter rather
+ *      than above it — the notice is what tells an agent to edit the layer instead of the
+ *      output, and misplacing it silently un-dispatches a subagent spec.
+ *   8. The composed `.claude/graph.md` holds for the profile that composed it: every stage has a
+ *      spec and every spec is a stage, no edge points at a stage the profile lacks, every verdict a
+ *      stage can emit goes somewhere, every loop-back has a cap, and no spec's prose names a route
+ *      the graph does not have. See src/graph.mjs.
+ *   7. Every composed agent spec declares `name:` and `tools:` in its frontmatter. A spec with
+ *      no `tools:` is not restricted — the subagent inherits every tool the session has — so a
+ *      role told it is read-only is not, and nothing says so.
+ *
+ * Usage: node scripts/compose-test.mjs [--verbose]
+ */
+
+import { cp, mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { parseGraph, validateGraph } from '../src/graph.mjs';
+import { toolFindings } from '../src/tools.mjs';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { REQUIRES, composeProject } from '../src/commands/compose.mjs';
+import { ANSWERED, answers } from '../src/commands/learn.mjs';
+
+const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
+const verbose = process.argv.includes('--verbose');
+
+/** Every file under a directory, as paths relative to it. */
+async function walk(dir, prefix = '') {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const rel = join(prefix, entry.name);
+    if (entry.isDirectory()) out.push(...(await walk(join(dir, entry.name), rel)));
+    else out.push(rel);
+  }
+  return out;
+}
+
+/**
+ * Runs one fixture.
+ *
+ * @param {string} name - The fixture directory name.
+ * @returns {Promise<string[]>} Failures, empty when the fixture passes.
+ */
+async function runFixture(name) {
+  const source = join(ROOT, 'fixtures', name);
+  const expect = JSON.parse(await readFile(join(source, 'expect.json'), 'utf8'));
+  const work = await mkdtemp(join(tmpdir(), `nina-${name}-`));
+  await cp(join(source, '.nina'), join(work, '.nina'), { recursive: true });
+
+  const result = await composeProject(work, { root: ROOT });
+  if (result.error) return [result.error];
+
+  const failures = [];
+
+  // 2. A declared surface must fill every slot it claims.
+  const surfaceSlots = result.unfilled.filter((s) => !s.includes(' project.'));
+  for (const slot of surfaceSlots) failures.push(`declared surface left a slot empty: ${slot}`);
+
+  const composed = (await walk(work)).filter((f) => !f.startsWith('.nina'));
+
+  /** The hard rules this project actually composed, by number. */
+  const rules = new Set(
+    [...(await readFile(join(work, 'CLAUDE.md'), 'utf8').catch(() => ''))
+      .matchAll(/^(\d+)\. \*\*/gm)].map((m) => m[1]),
+  );
+
+  for (const rel of composed) {
+    const text = await readFile(join(work, rel), 'utf8');
+
+    // 5. A reference to a rule number that this project does not have.
+    for (const match of text.matchAll(/#(\d+)/g)) {
+      const context = text.slice(Math.max(0, match.index - 30), match.index);
+      if (!/rule/i.test(context)) continue;
+      if (!rules.has(match[1])) {
+        const line = text.slice(0, match.index).split('\n').length;
+        failures.push(`${rel}:${line}: refers to Hard Rule #${match[1]}, which this project has no rule for`);
+      }
+    }
+
+    // 1. The vocabulary covers what the core says.
+    for (const hole of new Set(text.match(/\{\{[A-Z_]+\}\}/g) ?? [])) {
+      failures.push(`${rel}: unresolved ${hole}`);
+    }
+
+    // 6. The generated notice is there, and it did not displace a frontmatter block.
+    //    Claude Code reads a subagent's name and tools from frontmatter only when the block
+    //    opens the file: a notice written above it leaves the spec undispatchable and says
+    //    nothing, which is the failure a marker meant to prevent hand edits would have caused.
+    if (!text.includes('nina:generated')) {
+      failures.push(`${rel}: composed without the nina:generated notice`);
+    }
+    if (rel.startsWith(join('.claude', 'agents') + sep) && !text.startsWith('---\n')) {
+      failures.push(`${rel}: agent spec does not open with frontmatter — it cannot be dispatched`);
+    }
+
+    // 7. The frontmatter says who the agent is and what it may touch. Opening with `---` is not
+    //    enough: the reviewer's whole `tools:` line was supplied by the frontend surface, so every
+    //    profile without a frontend composed a reviewer with no allowlist at all — which Claude
+    //    Code reads as "every tool", Edit and Write included, on the one role whose spec says it
+    //    is read-only. Placement was checked and passed; contents were never checked.
+    if (rel.startsWith(join('.claude', 'agents') + sep) && text.startsWith('---\n')) {
+      const front = text.slice(4, text.indexOf('\n---', 4));
+      for (const key of ['name', 'tools']) {
+        if (!new RegExp(`^${key}:\\s*\\S`, 'm').test(front)) {
+          failures.push(`${rel}: frontmatter has no \`${key}:\` — ${key === 'tools' ? 'the agent inherits every tool the session has' : 'it cannot be dispatched by name'}`);
+        }
+      }
+    }
+    // Same hazard one file type over: a `#!` line that is not at byte 0 is a comment, and the
+    // script stops being executable by the hook that runs it every turn.
+    if (/\.(mjs|cjs|js)$/.test(rel) && !text.startsWith('#!')) {
+      failures.push(`${rel}: composed script does not open with its shebang`);
+    }
+
+    // 3. Nothing from an undeclared surface leaks in.
+    for (const word of expect.deny ?? []) {
+      const line = text.split('\n').findIndex((l) => l.includes(word));
+      if (line >= 0) failures.push(`${rel}:${line + 1}: denied word "${word}"`);
+    }
+  }
+
+  // 4. Surface-gated files appear, or do not, as expected.
+  // 8. The pipeline graph holds for this profile. Checked against what was composed rather than
+  //    against the layers, because which stages exist is exactly what the profile decides.
+  const agentsDir = join(work, '.claude', 'agents');
+  const specs = new Map();
+  for (const file of (await readdir(agentsDir).catch(() => [])).filter((f) => f.endsWith('.md'))) {
+    specs.set(file.replace(/\.md$/, ''), await readFile(join(agentsDir, file), 'utf8'));
+  }
+  const graphText = await readFile(join(work, '.claude', 'graph.md'), 'utf8').catch(() => null);
+  if (graphText === null) failures.push('.claude/graph.md was not composed');
+  else {
+    const roles = new Set(
+      (await readdir(join(ROOT, 'core', 'tree', '.claude', 'agents'))).map((f) => f.replace(/\.md$/, '')),
+    );
+    for (const problem of validateGraph(parseGraph(graphText), specs, roles)) failures.push(`graph: ${problem}`);
+  }
+  // 7, continued. Having a `tools:` line is not the same as it granting what the spec asks for —
+  // `Skill` was missing from every role while the specs made skills mandatory.
+  for (const finding of toolFindings(specs, null)) failures.push(`tools: ${finding}`);
+
+  for (const rel of expect.present ?? []) {
+    if (!existsSync(join(work, rel))) failures.push(`expected ${rel} to be composed`);
+  }
+  for (const rel of expect.absent ?? []) {
+    if (existsSync(join(work, rel))) failures.push(`expected ${rel} NOT to be composed`);
+  }
+
+  if (verbose) {
+    console.log(`  ${name}: ${composed.length} file(s), ${result.skipped.length} gated out, ${result.unfilled.length} project slot(s) to fill`);
+  }
+  return failures;
+}
+
+
+/**
+ * A surface's technology may be named only inside that surface, or in a core file gated on it.
+ *
+ * This is checked against the layers rather than against a fixture's output, for two reasons. A
+ * fixture only proves what its own profile composes, so a leak into a file that fixture does not
+ * reach goes unseen; and a deny list matches substrings, which makes a word like `Hono`
+ * unusable — it fires on `Honor`. Reading the layers asks the question once, of everything.
+ */
+const SURFACE_TERMS = {
+  db: ['Prisma', 'Accelerate', 'Postgres', 'dba', 'DBA'],
+  'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Hono'],
+  integrations: ['integration-tester', 'INTEGRATION-TESTER'],
+  frontend: ['Playwright', 'playwright'],
+  blockchain: ['solidity-dev', 'solidity-auditor', 'Solidity', 'OpenZeppelin', 'Foundry', 'Hardhat', 'Ethereum', 'EVM', 'ERC20', 'ERC721', 'ERC1155', 'ERC-20', 'ERC-721', 'delegatecall', 'selfdestruct'],
+};
+
+/**
+ * Whether a line names a term, rather than merely containing its letters.
+ *
+ * `Hono` is inside `Honor`, so a plain substring test reports the word every time a rule says
+ * "honor the planner's grouping". A following lower-case letter means the match is part of a
+ * longer word; anything else — a space, a dot, a backtick, an apostrophe — is the term itself.
+ *
+ * @param {string} line - The line to search.
+ * @param {string} term - The technology name.
+ * @returns {boolean}
+ */
+function names(line, term) {
+  for (let i = line.indexOf(term); i !== -1; i = line.indexOf(term, i + 1)) {
+    if (!/[a-z]/.test(line[i + term.length] ?? '')) return true;
+  }
+  return false;
+}
+
+/**
+ * Every place a core file names a surface it is not gated on.
+ *
+ * @returns {Promise<string[]>} One line per leak.
+ */
+async function surfaceLeaks() {
+  const found = [];
+
+  /** Every layer to audit: the core, gated or not, and each surface as its own owner. */
+  const layers = [{ dir: join(ROOT, 'core', 'tree'), owner: null, label: 'core' }];
+  for (const entry of await readdir(join(ROOT, 'surfaces'), { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      layers.push({ dir: join(ROOT, 'surfaces', entry.name, 'tree'), owner: entry.name, label: entry.name });
+    }
+  }
+
+  for (const layer of layers) {
+    for (const rel of await walk(layer.dir)) {
+      const text = await readFile(join(layer.dir, rel), 'utf8');
+      // A core file may name what it is gated on. A surface file owns its own technology, and
+      // nothing else: `surfaces/edge-cf` naming Prisma composes a sentence about the database
+      // into a project that declared no database, which is the guarantee this repo makes in
+      // its first paragraph. Reading only the core missed that whole direction.
+      const owner = layer.owner ?? (REQUIRES.exec(text)?.[1] ?? null);
+      const lines = text.split('\n');
+      for (const [surface, terms] of Object.entries(SURFACE_TERMS)) {
+        if (owner === surface) continue;
+        for (const term of terms) {
+          lines.forEach((line, i) => {
+            if (names(line, term)) {
+              found.push(`${layer.label}/${rel}:${i + 1} names "${term}", which belongs to the ${surface} surface`);
+            }
+          });
+        }
+      }
+    }
+  }
+  return found;
+}
+
+const fixtures = (await readdir(join(ROOT, 'fixtures'), { withFileTypes: true }))
+  .filter((e) => e.isDirectory())
+  .map((e) => e.name);
+
+let failed = 0;
+for (const name of fixtures) {
+  const failures = await runFixture(name);
+  if (failures.length === 0) {
+    console.log(`  ✓ ${name}`);
+    continue;
+  }
+  failed += 1;
+  console.log(`  ✗ ${name} — ${failures.length} failure(s)`);
+  for (const f of failures.slice(0, Number(process.env.NINA_MAX ?? 25))) console.log(`      ${f}`);
+  if (failures.length > Number(process.env.NINA_MAX ?? 25)) console.log(`      … and ${failures.length - 25} more`);
+}
+
+console.log(failed === 0 ? `compose fixtures: ${fixtures.length} ok` : `compose fixtures: ${failed} failing`);
+
+const leaks = await surfaceLeaks();
+if (leaks.length === 0) {
+  console.log('surface leaks: none — no layer names a technology it does not own');
+} else {
+  failed += 1;
+  console.log(`surface leaks: ${leaks.length}`);
+  for (const l of leaks.slice(0, Number(process.env.NINA_MAX ?? 25))) console.log(`      ${l}`);
+  if (leaks.length > Number(process.env.NINA_MAX ?? 25)) console.log(`      … and ${leaks.length - 25} more`);
+}
+
+// The harness's answers to project requests travel in every release, and an upgrade tells a project
+// its rule now lives at the path an answer names. A path that does not exist would send the project
+// looking for a rule that is not there, and close its request on the strength of it.
+const answerProblems = [];
+let given = {};
+try {
+  given = await answers(ROOT);
+} catch (error) {
+  answerProblems.push(`${ANSWERED} is not valid JSON — ${error.message}`);
+}
+for (const [id, a] of Object.entries(given)) {
+  if (a?.in !== undefined) {
+    if (!/^(?:core|surfaces\/[^/]+)\/tree\/./.test(a.in) || !existsSync(join(ROOT, a.in))) answerProblems.push(`${id}: "in" names ${a.in}, which is not a layer file`);
+  } else if (typeof a?.declined !== 'string' || !a.declined.trim()) {
+    answerProblems.push(`${id}: neither "in" (where the rule lives) nor "declined" (why it does not)`);
+  }
+}
+if (answerProblems.length === 0) {
+  console.log(`request answers: ${Object.keys(given).length} — every one names a layer file or a reason`);
+} else {
+  failed += 1;
+  console.log(`request answers: ${answerProblems.length} problem(s)`);
+  for (const p of answerProblems) console.log(`      ${p}`);
+}
+
+process.exit(failed === 0 ? 0 : 1);
