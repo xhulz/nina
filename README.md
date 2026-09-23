@@ -7,10 +7,6 @@ pipeline into each project from versioned layers, and it uses hooks to enforce t
 for. It reads Claude Code's own transcripts to measure what the pipeline did. When the pipeline keeps making
 the same mistake, NINA turns the lesson into a rule in the next release.
 
-> [!NOTE]
-> NINA is a personal project I use every day on a real codebase. It isn't on npm: a project installs it from a
-> tarball packed from this repo.
-
 ## At a glance
 
 - Projects don't copy the harness anymore. Each one pins a frozen release and composes from it. `nina upgrade`
