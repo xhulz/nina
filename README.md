@@ -138,9 +138,8 @@ If a step fails, the project goes back byte for byte, including the old pin, the
 owner's own edits. Every step also runs before the move, so a problem the project already had gets reported as
 pre-existing instead of blamed on the upgrade.
 
-NINA ships as a vendored tarball. Three things in the project's own repo fully determine its harness: the
-package version, the release pin and the project layer. A fresh clone works without a registry, credentials or
-a checkout of the harness.
+Three things recorded in the project's own repo fully determine its harness: the NINA version in its lockfile,
+the release pin and the project layer.
 
 ### Loop caps that hold
 
@@ -268,16 +267,10 @@ None of this showed up until I counted.
 
 ## Getting started
 
-You need Node 20 or newer. NINA has no dependencies and isn't on npm, so you pack it here and vendor the tarball
-into the project that will use it:
+You need Node 20 or newer. NINA has no dependencies, and a project installs it straight from this repo:
 
 ```bash
-git clone https://github.com/xhulz/nina && cd nina
-npm pack                                        # writes xhulz-nina-<version>.tgz
-
-cd ../your-project
-mkdir -p vendor && cp ../nina/xhulz-nina-<version>.tgz vendor/
-pnpm add -D file:vendor/xhulz-nina-<version>.tgz
+pnpm add -D github:xhulz/nina
 npx nina init
 ```
 
