@@ -1,62 +1,54 @@
-```text
- ███╗   ██╗ ██╗ ███╗   ██╗  █████╗
- ████╗  ██║ ██║ ████╗  ██║ ██╔══██╗
- ██╔██╗ ██║ ██║ ██╔██╗ ██║ ███████║
- ██║╚██╗██║ ██║ ██║╚██╗██║ ██╔══██║
- ██║ ╚████║ ██║ ██║ ╚████║ ██║  ██║
- ╚═╝  ╚═══╝ ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═╝
-  harness orchestration
-```
+<p align="center">
+  <img src="assets/banner.svg" alt="NINA: harness orchestration" width="464">
+</p>
 
-# NINA
-
-**Harness orchestration for Claude Code.** NINA is a command-line compiler for the multi-agent pipeline I
-run inside Claude Code. It composes that pipeline into each project from versioned layers, holds the limits
-that prose alone can't, measures what the pipeline actually did from Claude Code's own transcripts, and turns
-a mistake the pipeline keeps making into a rule in the next release.
+NINA is a command-line compiler for the multi-agent pipeline I run inside Claude Code. It composes that
+pipeline into each project from versioned layers, and it uses hooks to enforce the rules a prompt can only ask
+for. It reads Claude Code's own transcripts to measure what the pipeline did. When the pipeline keeps making
+the same mistake, NINA turns the lesson into a rule in the next release.
 
 > [!NOTE]
-> This repository is the write-up — the source is private. NINA is a personal project in daily use on a real
-> codebase, and I'm happy to walk through the code on request.
+> This repo is the write-up. The source is private. NINA is a personal project I use every day on a real
+> codebase, and I'm happy to walk through the code if you ask.
 
 ## At a glance
 
-- **One harness, many projects, no copies.** Each project pins a frozen release and composes from it.
-  `nina upgrade` moves it forward, verifies the move with the project's own checks, and puts everything back
-  if one fails.
-- **The pipeline is a graph, not prose.** Stages, verdicts and edges are declared once and validated; every
-  loop-back carries a cap.
-- **Caps that hold.** Claude Code hooks count the rounds, and the round past a cap waits for the owner to
-  confirm it — in auto mode too.
-- **Measured, not assumed.** Reading the transcripts showed a "mandatory" rule followed 2 times in 743 runs,
-  and a naive loop counter whose cap fired 8 times — 7 of them on different issues.
-- **It learns.** A lesson learned three times is filed as a request to the harness, answered as a rule in a
-  release, and closed by the upgrade that installs it.
+- Projects don't copy the harness anymore. Each one pins a frozen release and composes from it. `nina upgrade`
+  moves it forward, checks the result with the project's own detectors, and undoes the move if a check fails.
+- The pipeline is declared as a graph of stages, verdicts and edges, and it's validated on every check. Every
+  loop-back edge has a cap.
+- Hooks count the rounds of each loop. When a dispatch would go past a cap, Claude Code asks the owner first,
+  even in auto mode.
+- The numbers come from transcripts. That's how I found a "mandatory" rule that had been followed 2 times in
+  743 runs, and a loop counter whose cap fired 8 times when only one of those was a real repeat.
+- A lesson the pipeline learns three times becomes a request to the harness. The answer ships as a rule in a
+  release, and the upgrade that installs it closes the request.
 
 ## Why
 
-My agent harness — `CLAUDE.md`, the subagent specs, the routing rules — used to travel between projects by
-copy-paste, and every copy drifted from the moment it was made. A rule fixed in one project stayed broken in
-the others, and nobody could tell which copy was current. NINA makes the harness something you compose and
-pin, instead of something you copy.
+My agent harness (the `CLAUDE.md`, the subagent specs, the routing rules) used to move between projects by
+copy-paste, and each copy started drifting the day it was made. I'd fix a rule in one project and it stayed
+broken in the others. After a while I couldn't tell which copy was current. NINA turns the harness into
+something a project composes and pins.
 
-It grew up one ladder, and each rung is a working mechanism:
+I built it one rung at a time, and every rung ended up as working code:
 
 | Rung | In NINA |
 |---|---|
-| **Prompts** | rules written once, in layers: core, surfaces, project |
-| **Harness** | the layers composed into a project, pinned to a frozen release |
-| **Loops** | stages that send work back — every loop capped, the caps held by hooks |
-| **Graphs** | the pipeline declared once, as data, and validated on every check |
-| **Self-improving system** | lessons that graduate into rules, with their effect measured |
+| Prompts | rules written once, split into layers: core, surfaces, project |
+| Harness | the layers composed into a project and pinned to a frozen release |
+| Loops | stages that send work back, with a cap on every loop that hooks enforce |
+| Graphs | the pipeline declared once as data, and validated on every check |
+| Self-improving system | lessons that graduate into rules, with their effect measured |
 
 ## The pipeline it composes
 
-Eleven specialized subagents, gated by risk. Every project gets `planner`, `architect`, `implementer`,
-`reviewer`, `qa`, `devops` and `secops`; `dba` comes with a database, `integration-tester` with external
-services, and `solidity-dev` and `solidity-auditor` with contracts that ship immutable. The chain is
-proportional: a one-file label change takes a light chain or a direct edit, while money, database, auth and
-integration changes are always fully gated.
+There are eleven subagents, and a project gets the ones its risks call for. Every project gets `planner`,
+`architect`, `implementer`, `reviewer`, `qa`, `devops` and `secops`. A database adds `dba`, external services
+add `integration-tester`, and smart contracts add `solidity-dev` and `solidity-auditor`, since contract code
+can't be patched once it ships. The chain also scales with the change. A one-file label fix gets a light chain
+or a direct edit, and anything that touches money, the database, auth or an integration goes through every
+gate.
 
 ```mermaid
 flowchart LR
@@ -75,19 +67,19 @@ flowchart LR
     architect -->|BLOCKED| owner((owner))
 ```
 
-<sub>Simplified. The core graph has 22 edges, 11 of them capped loop-backs (dotted), and each surface adds
-its own stage and edges.</sub>
+<sub>Simplified. The core graph has 22 edges, 11 of them capped loop-backs (the dotted ones), and each surface
+adds its own stage and edges.</sub>
 
-In the project, that graph is one file, one edge per line, and `nina check` validates it:
+In a project, the graph lives in one file with one edge per line, and `nina check` validates it:
 
 ```text
 - `reviewer` → `implementer` on `REJECTED` — an implementation bug · max 2
 - `reviewer` → `architect` on `REJECTED` — a design flaw, or no preview-deploy plan · max 2
 ```
 
-Every stage has a spec and every spec is a stage; every edge leaves on a verdict its stage can actually emit;
-every verdict goes somewhere; every loop-back has a cap; and no spec's prose names a route the graph doesn't
-have.
+Every stage needs a spec and every spec needs to be a stage. An edge has to leave on a verdict its stage can
+actually emit, every verdict has to go somewhere, and every loop-back needs a cap. A spec's prose can only
+mention a route the graph has.
 
 ## How it works
 
@@ -95,20 +87,20 @@ have.
 
 | Layer | Holds |
 |---|---|
-| **core** | what is true for every project |
-| **surface** | what is true for projects that have one: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain` |
-| **project** | what is true for one project only — kept in that project's own repository |
+| core | what's true for every project |
+| surface | what's true for projects that have it: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain` |
+| project | what's true for one project only, kept in that project's repo |
 
-Each layer mirrors the project's tree, and `nina compose` joins them:
+Each layer mirrors the project's file tree, and `nina compose` merges them:
 
-- **Slots.** `<!-- nina:slot db.1 -->` in a core file is a hole the `db` surface fills. A project with no
-  database drops it, and never reads a word about Prisma.
-- **Gated files.** `<!-- nina:requires db -->` makes a whole file conditional — which is why a frontend-only
-  project gets seven agent specs, not eleven.
-- **Vocabulary.** `{{PLACEHOLDERS}}` filled from the project's profile let the core state a rule without
-  naming one project's provider, packages or models.
-- **A generated notice.** Every composed file names the layer to edit instead. Claude Code's `Edit` refuses
-  a file the agent hasn't read, so the notice reaches every edit of an existing file.
+- `<!-- nina:slot db.1 -->` in a core file is a hole the `db` surface fills. A project with no database drops
+  the slot, so its agents never read a word about Prisma.
+- `<!-- nina:requires db -->` on a file's first line makes the whole file conditional. That's why a
+  frontend-only project gets seven agent specs instead of eleven.
+- `{{PLACEHOLDERS}}` get filled from the project's profile, so the core can state a rule without naming one
+  project's provider, packages or models.
+- Every composed file opens with a notice naming the layer to edit instead. Claude Code's `Edit` tool refuses
+  a file the agent hasn't read, so any agent editing an existing file sees the notice first.
 
 ```mermaid
 flowchart LR
@@ -119,22 +111,22 @@ flowchart LR
     compose --> out["CLAUDE.md · agent specs · graph.md<br/>router.md · hook scripts"]
 ```
 
-Composition is checked, not trusted. Four fixture projects — one per shape worth testing — must each hold
-eight properties: no placeholder survives, every unfilled slot is the project's own, nothing leaks from a
-surface the project didn't declare, gated files appear exactly when they should, rule references resolve,
-the notice never lands above a frontmatter, every agent spec declares its tool allowlist, and the graph
-validates. A ninth check audits the layers themselves: a surface's technology or role may only be named in
-files gated on that surface. The first time it ran, it found 37 places where ungated core prose sent work to
-a role only some projects have.
+Composition gets tested like code. Four fixture projects, one for each shape worth testing, have to pass eight
+properties each: no placeholder survives, every unfilled slot belongs to the project, nothing leaks in from a
+surface the project didn't declare, gated files show up exactly when they should, rule references resolve,
+the notice never lands above a frontmatter block, every agent spec declares its tool allowlist, and the graph
+validates. A ninth check looks at the layers themselves: a surface's technology or role may only be named in
+files gated on that surface. The first time it ran, it found 37 places where ungated core prose handed work
+to a role that only some projects have.
 
 ### Releases and upgrades
 
-A release freezes the core and surfaces, and releases are never rewritten. A project pins one in
-`.nina/profile.json`, so work on the harness never moves a project that is shipping.
+A release freezes the core and the surfaces, and a frozen release is never rewritten. Each project pins one in
+`.nina/profile.json`, so I can keep changing the harness without moving a project that's shipping.
 
-`nina upgrade --to <version>` first reports what the move would cost — text the project wrote that the new
-core has nowhere to put — and refuses to apply while anything would lose meaning. `--apply` runs the whole
-move, then verifies it with the project's own detectors:
+`nina upgrade --to <version>` starts with a report of what the move would cost. The real risk is text the
+project wrote that the new core has no place for, and the command won't apply while any of it would lose its
+meaning. `--apply` runs the whole move and then checks it with the project's own detectors:
 
 ```text
   pinned 0.13.0
@@ -146,21 +138,21 @@ move, then verifies it with the project's own detectors:
   upgrade: 0.7.0 → 0.13.0 applied and verified.
 ```
 
-A step that fails puts the project back byte for byte: the old pin, the old composition, and the owner's own
-edits. Every step is also measured before the move, so a problem the project already had is reported rather
-than blamed on the upgrade.
+If a step fails, the project goes back byte for byte, including the old pin, the old composition and the
+owner's own edits. Every step also runs before the move, so a problem the project already had gets reported as
+pre-existing instead of blamed on the upgrade.
 
-NINA ships as a vendored tarball. A project's harness is fully determined by three things in its own
-repository — the package version, the release pin and its project layer — so a fresh clone needs no
-registry, no auth and no checkout of the harness.
+NINA ships as a vendored tarball. Three things in the project's own repo fully determine its harness: the
+package version, the release pin and the project layer. A fresh clone works without a registry, credentials or
+a checkout of the harness.
 
 ### Loop caps that hold
 
-A cap written as an instruction depends on the model counting its own rounds. NINA's **loop gate** counts
-them instead. Claude Code hooks write a small ledger per session — metadata only: which stage reported which
-verdict, which dispatch went out and when, and when the owner spoke. At `PreToolUse`, the gate answers the
-dispatch that would go past a cap with `permissionDecision: "ask"`, so Claude Code puts it in front of the
-owner. That this works in auto mode was probed, not assumed.
+A cap written as an instruction only works if the model counts its own rounds, so NINA's loop gate counts them
+instead. Claude Code hooks keep a small ledger for each session, with metadata only: which stage reported which
+verdict, which dispatch went out and when, and when the owner last spoke. On `PreToolUse`, if a dispatch would
+go past a cap, the gate answers `permissionDecision: "ask"` and Claude Code puts the dispatch in front of the
+owner. Before relying on it, I checked that this also works in auto mode.
 
 ```mermaid
 sequenceDiagram
@@ -179,46 +171,53 @@ sequenceDiagram
     end
 ```
 
-**Why ask instead of deny.** Whether two rounds are "the same issue" can't be seen with certainty from
-outside the conversation, so a wrong count should cost one click, not a stopped pipeline.
+It asks instead of denying because it can't be sure two rounds are about the same issue. From outside the
+conversation that's a judgment call, and a wrong count should cost one click.
 
-**What counts as a round** came from replaying six weeks of a real project's history. The obvious rule — a
-dispatch to an edge's target after a loop-back from its source — fired its cap 8 times, and 7 were different
-issues on the same edge. What replaced it: a round is a dispatch that *acts on* a declared loop-back; parallel
-dispatches acting on the same verdicts are one round; a pass cancels a rejection only if a fix went out in
-between; and the owner speaking resets every count. Each of three independent reviews found a shape the
-counting still got wrong before it shipped.
+I worked out what counts as a round by replaying six weeks of a real project's history. The obvious rule was to
+count a dispatch to an edge's target after a loop-back from its source. It hit a cap 8 times, and 7 of those
+were different issues that happened to travel the same edge. The rules that replaced it:
 
-**Probing the live system shaped two decisions.** `UserPromptSubmit` fires when a subagent's report is
-delivered, not only when a person types — resetting on every prompt would have emptied every count, so only
-human prompts reset. And the gate never reads the session transcript to decide: Claude Code writes that file
-asynchronously, and a resumed session rewrites its own history — 74% of one 385 MB transcript was replay.
+- a round is a dispatch that acts on a declared loop-back;
+- parallel dispatches acting on the same verdicts count as one round;
+- a pass cancels a rejection only if a fix went out in between;
+- when the owner speaks, every count starts over.
 
-The gate fails open and logs its errors. A self-test runs as a detector in every project, dry-running a whole
-loop through the project's own hook command and expecting exactly the round past the cap to reach the owner.
+Three separate reviews each found a case the counting still got wrong before it shipped.
 
-### Findings the model actually reads
+Probing the live system changed the design twice. `UserPromptSubmit` fires when a subagent's report is
+delivered, and not only when a person types. Resetting on every prompt would have wiped every count, so only
+human prompts reset. The gate also never reads the session transcript to decide anything. Claude Code writes
+that file asynchronously, and a resumed session rewrites its own history. In one 385 MB transcript, 74% was
+replay.
 
-Each project runs NINA's detectors from two hooks, and they reach different readers:
+The gate fails open and logs its errors. Every project runs a self-test among its detectors. It pushes a whole
+loop through the project's own hook command and expects the round past the cap, and only that round, to reach
+the owner.
+
+### Findings that reach the model
+
+Each project runs NINA's detectors from two hooks, and each hook reaches a different reader:
 
 | Hook | Reaches |
 |---|---|
-| `Stop` | the person — what the turn left behind |
+| `Stop` | the person, with what the turn left behind |
 | `UserPromptSubmit` | the model, as `additionalContext`, before it answers |
 
-For a long time only the first existed, so every finding went to the one reader who wasn't about to act on
-it. The detectors cover drift in the composed files; what a new project still has to declare, so its first
-conversation starts by filling it in, unasked; lessons owed; and the loop gate's own health.
+For a long time only the first one existed, so every finding went to the person, who wasn't the one about to
+act on it. The detectors report drift in the composed files, what a new project still has to declare (so its
+first conversation starts by filling that in without being asked), lessons that are owed, and the health of the
+loop gate itself.
 
 ### Measurement and the learning cycle
 
-`nina snapshot` reads Claude Code's transcripts and records every dispatch: which stage ran, what verdict it
-declared, whether it was sent back, which skills it used, whether it read its lessons. The store holds
-metadata only — no report text, no source, no PII.
+`nina snapshot` reads Claude Code's transcripts and records each dispatch: which stage ran, the verdict it
+declared, whether it got sent back, which skills it used and whether it read its lessons. The store keeps
+metadata only. Report text, source code and personal data never go in.
 
-When a stage is sent back, the pipeline can write a **lesson** for that role. `nina learn` asks, link by
-link, whether the cycle is real. Its first audit found four of the five links open. The same project, before
-and after the redesign:
+When a stage gets sent back, the pipeline can write a lesson for that role. `nina learn` checks the cycle one
+link at a time, and its first audit found four of the five links broken. Here's the same project before and
+after I redesigned it:
 
 ```text
   observe   826 dispatch(es) recorded, 2026-08-12 → 2026-09-22
@@ -249,44 +248,39 @@ flowchart LR
     E -->|"closes the request, retires the lesson"| F["verify: loop-back rate before and after"]
 ```
 
-A lesson learned a third time is now filed automatically, as a request against the pinned version — a
-project can't edit the harness, only ask. The request is answered in the harness repository, into a file the
-next release freezes, and the upgrade that installs the answer closes the request and retires the lesson.
-The first full turn is done: the three lessons above became harness rules in 0.20.0, and the upgrade closed
-all three requests on its own.
+A lesson learned for the third time now gets filed automatically, as a request against the pinned version. A
+project can't edit the harness. It can only ask. I answer requests in the harness repo, into a file the next
+release freezes, and the upgrade that installs the answer closes the request and retires the lesson. The first
+full cycle has already happened: the three lessons in the second output became harness rules in 0.20.0, and the
+upgrade closed all three requests by itself.
 
 ## What measuring found
 
-Every rule the harness couldn't enforce stayed invisible until it was counted.
+None of this showed up until I counted.
 
-- **Mandatory skills were invoked 2 times in 743 subagent runs.** `Skill` was missing from every role's
-  `tools:` allowlist, so the rule had never been executable. The prose looked right for three months.
-- **Lesson capture ran at 3% of what the rules demanded** — 78 loop-backs, 2 lessons. "Write a lesson on
-  every loop-back" had taught everyone to skip them. The rule became "ask whether it would happen again", and
-  the detector now fires on an event rather than a rate.
-- **"Agents apply their lessons" read 92%** while listing a directory counted as reading. Counting only real
-  reads, it was 81% — and even that measures reading, not obeying.
-- **The first before/after readings went *up* after their lessons**, with every other role as a control.
-  That may mean a reviewer that catches more rather than one that learned less. It isn't proof — but without
-  the measurement the question couldn't even be asked.
+- Mandatory skills were invoked 2 times in 743 subagent runs. `Skill` was missing from every role's `tools:`
+  allowlist, so the rule could never run. The prose looked fine for three months.
+- Lessons were captured at 3% of the rate the rules asked for, 2 lessons from 78 loop-backs. "Write a lesson on
+  every loop-back" had trained everyone to skip them. The rule is now "ask whether this would happen again", and
+  the detector fires on an event instead of watching a rate.
+- A metric for "agents apply their lessons" said 92%, because listing a directory counted as reading. Counting
+  only real reads, it's 81%. Even that only measures reading. Nothing in a transcript shows whether an agent
+  obeyed.
+- The first before/after readings went up after their lessons, with every other role as a control. Maybe the
+  reviewer got better at catching things, or maybe the lesson didn't help. It isn't proof, but without the
+  numbers I couldn't even ask.
 
 ## Engineering
 
-- **Node.js, zero runtime dependencies.** About 6.5k lines of source and 2.8k lines of tests.
-- **33 frozen releases so far.** The package ships every one, so an upgrade can compose its target and report
-  the cost before it moves anything.
-- **Tests:** property checks over fixture projects, an audit of the layers, end-to-end CLI runs in scratch
-  projects, and mutation checks for the rules that matter — undo the rule, and some test must fail.
-- **Limits are written down, not hidden.** The loop gate can't see a fix the model makes without a subagent,
-  for example, and a scheduled `/loop` prompt resets counts the way a person's reply does.
-- **Commands:** `init` · `compose` · `check` · `where` · `pills` · `learn` · `requests` · `wire` · `gate` ·
-  `upgrade` · `release` · `snapshot` · `stats`
+- Node.js with zero runtime dependencies. About 6.5k lines of source and 2.8k lines of tests.
+- 33 frozen releases so far. The package ships all of them, so an upgrade can compose its target and report the
+  cost before it changes anything.
+- The tests check properties over the fixture projects, audit the layers, run the whole CLI in scratch projects,
+  and use mutation checks for the rules that matter: undo the rule and some test has to fail.
+- Known limits are written down. The loop gate can't see a fix the model makes by itself without a subagent, for
+  example, and a scheduled `/loop` prompt resets the counts the same way a person's reply does.
+- Commands: `init`, `compose`, `check`, `where`, `pills`, `learn`, `requests`, `wire`, `gate`, `upgrade`,
+  `release`, `snapshot`, `stats`.
 
-## About
-
-Built by [Marcos Schulz](https://github.com/xhulz) as a personal project — a way to learn by building every
-rung, from prompts to a self-improving system. Built in pair with Claude Code: I set the direction and the
-constraints and made the calls, and much of the code was written in those sessions.
-
-<sub>© 2026 Marcos Schulz. All rights reserved. This repository contains documentation only; no license to
+<sub>© 2026 Marcos Schulz. All rights reserved. This repository contains documentation only, and no license to
 use NINA is granted.</sub>
