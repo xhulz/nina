@@ -1,0 +1,21 @@
+{
+  "core": "dev",
+  "surfaces": [
+    "blockchain",
+    "money",
+    "pii"
+  ],
+  "vocabulary": {
+    "OWNER": "the maintainer",
+    "API_DIR": "src/server",
+    "APP_DIR": "src/web",
+    "PKG_SCOPE": "@vault",
+    "EMITTING_PKGS": "`core`",
+    "CONTRACTS_DIR": "contracts/src",
+    "PROJECT": "Vault",
+    "MINOR_UNIT": "wei",
+    "MONEY_MODULE": "`packages/core/src/amount.ts`",
+    "PRIVACY_REGIME": "GDPR",
+    "CORE_PKG": "`packages/core`"
+  }
+}

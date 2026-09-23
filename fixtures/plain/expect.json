@@ -1,0 +1,27 @@
+{
+  "describe": "A project that declares no surface at all. The most reduced composition there is: it exercises surface gating, the vocabulary the bare core needs, and whether any rule cross-reference survives with most of the numbered rules gone.",
+  "deny": [
+    "Spliter",
+    "Asaas",
+    "asaas",
+    "afinz",
+    "escrow",
+    "centavos",
+    "KYC",
+    "CPF",
+    "CNPJ",
+    "PIX"
+  ],
+  "absent": [
+    ".claude/agents/dba.md",
+    ".claude/agents/integration-tester.md",
+    ".claude/templates/integration.md",
+    ".claude/agents/solidity-dev.md",
+    ".claude/agents/solidity-auditor.md"
+  ],
+  "present": [
+    "CLAUDE.md",
+    ".claude/agents/reviewer.md",
+    ".claude/agents/qa.md"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "describe": "A project that deploys immutable code and also moves value and holds personal data. Exists for the two cross-surface seams the blockchain surface opens: what conservation means when the ledger is a contract, and the fact that anything written on-chain is public and permanent — which is the sharpest thing the pii surface has to say anywhere.",
+  "deny": [
+    "Spliter", "Asaas", "asaas", "afinz",
+    "Prisma", "prisma", "wrangler", "Cloudflare", "workerd",
+    "PIX", "CPF", "CNPJ", "LGPD"
+  ],
+  "absent": [
+    ".claude/agents/dba.md",
+    ".claude/agents/integration-tester.md"
+  ],
+  "present": [
+    ".claude/agents/solidity-dev.md",
+    ".claude/agents/solidity-auditor.md"
+  ]
+}

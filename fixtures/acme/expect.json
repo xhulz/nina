@@ -1,0 +1,26 @@
+{
+  "describe": "A project with two integrations of different kinds, no money path and no PII. Exists to prove the integrations surface is plural and that nothing from an undeclared surface leaks in.",
+  "deny": [
+    "Spliter",
+    "Asaas",
+    "asaas",
+    "afinz",
+    "centavos",
+    "payout",
+    "escrow",
+    "basis point",
+    "CPF",
+    "CNPJ",
+    "LGPD",
+    "PIX",
+    "KYC"
+  ],
+  "absent": [
+    ".claude/agents/solidity-dev.md",
+    ".claude/agents/solidity-auditor.md"
+  ],
+  "present": [
+    ".claude/agents/integration-tester.md",
+    ".claude/agents/dba.md"
+  ]
+}

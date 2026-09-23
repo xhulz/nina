@@ -1,0 +1,11 @@
+<!-- nina:slot edge-cf.1 -->
+
+---
+
+## Secrets
+
+- **Wrangler secrets** for Workers (`{{SECRETS_PROD}} X`). Never `.env` committed.
+- **Local dev:** `{{SECRETS_LOCAL}}` (gitignored).
+
+<!-- nina:slot edge-cf.2 -->
+- `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml` is required for `@prisma/client/edge`.
