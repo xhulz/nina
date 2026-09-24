@@ -29,7 +29,8 @@ make, or a loop that has run out of rounds.
 ## Edges
 
 One per line: the stage, where its work goes, on which verdict, and when. A loop-back edge ends with
-its **cap** — how many times the SAME issue may travel it. When the next round would exceed the cap,
+its **cap** — how many times the SAME issue may travel it, the issue being what the stage names on the
+`ISSUES` line under its verdict. When the next round would exceed the cap,
 the orchestrator stops and hands the owner the reports from every round, instead of dispatching again:
 a third attempt at a fix that failed twice is rarely different from the second, and each round costs
 minutes to hours. A different issue on the same edge starts its own count. Where the project wires the loop

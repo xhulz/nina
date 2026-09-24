@@ -116,11 +116,23 @@ VERDICT: <TOKEN>
 ```
 
 where `<TOKEN>` is one of `DIFF-READY` or `BLOCKED`. Nothing before it — no preamble, no heading, no
-markdown emphasis. Your report proper starts on the second line.
+markdown emphasis. Your report proper starts on the second line — or on the third when the verdict is `BLOCKED`, because the
+second line then names each issue by an id:
+
+```
+VERDICT: BLOCKED
+ISSUES: spec-omits-caller-file
+```
+
+An id is lowercase words joined by hyphens, at most 40 characters, and it names the defect rather than
+where it was found or which round this is: `spec-omits-caller-file`, not `issue-1`. When your dispatch carries the
+`ISSUES` line of an earlier round, an issue that is still open keeps its id exactly as written there, and
+a new issue gets a new id. Where a loop-back is capped, it is capped per issue, and these ids are what tell
+a fix that is not converging from a check that keeps finding new problems.
 
 `BLOCKED` means the spec could not be implemented as written; say what it got wrong. Never report `DIFF-READY` while typecheck, lint or build is red.
 
-This line is machine-read: it measures how often each stage sends work back, and where the project
+The verdict line is machine-read: it measures how often each stage sends work back, and where the project
 wires the loop gate it is what rounds are counted by. A report without it counts as no verdict at all,
 which makes the stage invisible to both.
 

@@ -9,7 +9,8 @@
  * the verdict a dispatch answers may not be on disk when the dispatch is about to go out, and the file
  * is mostly replay: a session resumed over a bridge rewrites its history, three quarters of the bytes
  * in the one measured. The gate keeps its own ledger instead — one small file per session, metadata
- * only — written by the hooks that see each fact as it happens:
+ * only, with the ids a report gave its issues as the one thing a model wrote — written by the hooks
+ * that see each fact as it happens:
  *
  *   PostToolUse on SubagentHandback   the report a stage handed back, verbatim — its verdict
  *   SubagentStop                      the same, for a stage that wrote its report as its last message
@@ -45,7 +46,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TERMINALS, declaredTokens, parseGraph } from './graph.mjs';
 import { gateDir, slugFor } from './paths.mjs';
-import { isLoopBack } from './transcripts.mjs';
+import { declaredIssues, isLoopBack } from './transcripts.mjs';
 
 /** The package this runs from: its releases say whether a pinned version ships the gate at all. */
 const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -447,7 +448,10 @@ function handbackIn(path) {
   return message;
 }
 
-/** Records a stage's verdict for its current completion, unless that completion already has this one. */
+/**
+ * Records a stage's verdict for its current completion, unless that completion already has this one —
+ * with the issues it named, when it sends work back and named them.
+ */
 function recordVerdict(path, entries, project, at, { agent, role, report }) {
   const tokens = project.tokens.get(role);
   const verdict = declaredVerdict(report, tokens);
@@ -455,7 +459,8 @@ function recordVerdict(path, entries, project, at, { agent, role, report }) {
   const since = currentLaunch(entries, agent);
   const last = entries.findLastIndex((e) => e.k === 'verdict' && e.agent === agent);
   if (last > since && entries[last].verdict === verdict) return;
-  append(path, { k: 'verdict', at, agent, role, verdict, declared: true });
+  const issues = isLoopBack(verdict) ? declaredIssues(report) : null;
+  append(path, { k: 'verdict', at, agent, role, verdict, declared: true, ...(issues?.length ? { issues } : {}) });
 }
 
 /** A subagent stopped: record its verdict, from its handback when its last message is a comment. */

@@ -145,7 +145,8 @@ the release pin and the project layer.
 
 A cap written as an instruction only works if the model counts its own rounds, so NINA's loop gate counts them
 instead. Claude Code hooks keep a small ledger for each session, with metadata only: which stage reported which
-verdict, which dispatch went out and when, and when the owner last spoke. On `PreToolUse`, if a dispatch would
+verdict and the short ids it gave the issues it sent back, which dispatch went out and when, and when the owner
+last spoke. On `PreToolUse`, if a dispatch would
 go past a cap, the gate answers `permissionDecision: "ask"` and Claude Code puts the dispatch in front of the
 owner. Before relying on it, I checked that this also works in auto mode.
 
