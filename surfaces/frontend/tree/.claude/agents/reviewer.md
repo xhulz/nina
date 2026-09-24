@@ -2,7 +2,7 @@
 - **If the diff touches `{{APP_DIR}}/**`: the spec must carry a Visual acceptance section, and you check the render against it — see *Visual gate* below.** No section → REJECT upstream to the architect.
 
 <!-- nina:slot frontend.3 -->
-- `pnpm build` for the affected frontend packages (`{{APP_DIR}}`)
+- `{{BUILD_CMD}}` for the affected frontend packages (`{{APP_DIR}}`)
 
 <!-- nina:slot frontend.4 -->
 ## Visual gate — you are the stage that looks at the screen
@@ -14,7 +14,7 @@ this pipeline and frontend work does not — the frontend defects were never exp
 
 For any diff touching `{{APP_DIR}}/**`:
 
-1. Build and serve it — you already run `pnpm build` for frontend diffs; serve that build locally.
+1. Build and serve it — you already run `{{BUILD_CMD}}` for frontend diffs; serve that build locally.
    Every protected screen redirects to `/login` without a session, so a plain static server
    screenshots the login page. Use `scripts/visual-fixture-server.mjs`, which serves the built
    `dist` AND a canned API from ONE origin (no auth, no DB, no backend):

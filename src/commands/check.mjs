@@ -17,6 +17,7 @@ import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { REQUIRES, SLOT, layerRootFor, walk } from './compose.mjs';
+import { defaultVocabulary } from '../vocabulary.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
 const INTEGRATION_FIELDS = {
@@ -243,9 +244,11 @@ export async function check(argv, ctx) {
 
   const referenced = await referencedVocabulary(resolved.dir, surfaces.filter((s) => available.includes(s)), target);
   const declared = profile.vocabulary ?? {};
+  const defaults = defaultVocabulary(resolved.dir);
   for (const name of [...referenced].sort()) {
-    if (!(name in declared)) problems.push(`vocabulary is missing {{${name}}}, which a chosen layer uses`);
-    else if (declared[name] === null || declared[name] === '') {
+    if (!(name in declared)) {
+      if (!(name in defaults)) problems.push(`vocabulary is missing {{${name}}}, which a chosen layer uses`);
+    } else if (declared[name] === null || declared[name] === '') {
       problems.push(`vocabulary {{${name}}} is declared but not filled in`);
     }
   }

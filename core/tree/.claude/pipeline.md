@@ -36,7 +36,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 ### Implementer
 
 - **Input:** architect's spec.
-- **Output:** working TS code + tests. `pnpm typecheck`, `pnpm lint`, and (when frontend) `pnpm build` clean for the affected packages. Diff scoped to the spec. **Does NOT run vitest.**
+- **Output:** working TS code + tests. `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend) `{{BUILD_CMD}}` clean for the affected packages. Diff scoped to the spec. **Does NOT run vitest.**
 - **Tools:** Read, Write, Edit, Glob, Grep, Bash.
 - **Exit criteria:** typecheck/lint/build pass; no scope creep; if the database was touched, says so on first line; if an external service surface touched, says so.
 <!-- nina:slot db.1 -->
@@ -48,7 +48,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 - **Output:** approve, or request changes with `path:line` references.
 - **Tools:** Read, Grep, Glob, Bash, WebFetch. **No edits. No vitest.**
 - **Exit criteria:**
-  - `pnpm typecheck`, `pnpm lint` pass; `pnpm build` when frontend touched.
+  - `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}` pass; `{{BUILD_CMD}}` when frontend touched.
   - Diff matches spec (reject scope creep).
   - `.claude/patterns.md` conventions followed (TSDoc, layering, naming, owner scoping).
 <!-- nina:slot db.2 -->

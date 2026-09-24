@@ -21,6 +21,7 @@ import { EXPECT_ENV } from '../expected.mjs';
 import { closeAnswered } from './learn.mjs';
 import { missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
+import { defaultVocabulary } from '../vocabulary.mjs';
 
 /** Banner lines, which are for a person watching and only noise inside a captured log. */
 const BANNER = /^[\s█╗╔╝║═╚▄▀]*$|harness orchestration ·/;
@@ -209,7 +210,9 @@ export async function upgrade(argv, ctx) {
   const filled = await filledSlots(target);
 
   const declared = profile.vocabulary ?? {};
-  const needed = [...vocabAfter].filter((v) => !(v in declared) || declared[v] === null).sort();
+  // A name the new release supplies a default for is not owed: it composes as the default until declared.
+  const defaultsAfter = defaultVocabulary(onto.dir);
+  const needed = [...vocabAfter].filter((v) => (!(v in declared) && !(v in defaultsAfter)) || declared[v] === null).sort();
   const unused = Object.keys(declared).filter((v) => !vocabAfter.has(v)).sort();
   const newSlots = [...slotsAfter].filter((s) => !slotsBefore.has(s) && !filled.has(s)).sort();
   const stranded = [...filled].filter((s) => !slotsAfter.has(s)).sort();

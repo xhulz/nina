@@ -20,6 +20,7 @@ import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, layerRootFor, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
+import { defaultVocabulary } from '../vocabulary.mjs';
 
 /** Surfaces a repository reveals by its files. The rest are claims about the domain. */
 const DETECTABLE = [
@@ -318,6 +319,12 @@ export async function init(argv, ctx) {
     });
   }
 
+  // A name the release supplies a default for is not asked: it composes as the default until the
+  // project declares it, and the TODO says what the default is so a project on another stack can.
+  const defaults = defaultVocabulary(resolved.dir);
+  const defaulted = [...vocabulary].filter((name) => name in defaults).sort();
+  for (const name of defaulted) vocabulary.delete(name);
+
   const profile = {
     core,
     surfaces,
@@ -384,6 +391,14 @@ export async function init(argv, ctx) {
     `in \`.nina/profile.json\`; a \`null\` leaves the placeholder standing in the composed output.`,
     '',
     ...[...vocabulary].sort().map((name) => `- [ ] \`${name}\``),
+    ...(defaulted.length > 0
+      ? [
+          '',
+          `${defaulted.length} more have a default from this release, and are declared only to change them:`,
+          '',
+          ...defaulted.map((name) => `- \`${name}\` — \`${defaults[name]}\``),
+        ]
+      : []),
     '',
     `## 2. Project fragments — ${slots.length} slots`,
     '',
