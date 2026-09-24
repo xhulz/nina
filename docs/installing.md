@@ -1,0 +1,144 @@
+# Installing NINA, and starting a project
+
+How a project gets NINA and a first harness: the vendored package, `init`, the vocabulary and its defaults, and the wiring. Read before touching `src/commands/init.mjs`, `src/commands/wire.mjs`, `src/wiring.mjs`, `src/vocabulary.mjs`, `core/vocabulary.json`, `src/paths.mjs` or the detectors.
+
+## Installing
+
+NINA is a package with no dependencies. It ships `bin/`, `src/` and every frozen release, so a
+project that installs it can compose any version it pins — which is what lets `upgrade` report the
+cost of a move before the move happens.
+
+```bash
+npm pack                                        # here: xhulz-nina-<version>.tgz, ~157 kB
+cp xhulz-nina-0.8.0.tgz ../thing/vendor/        # then, in the consuming project:
+pnpm add -D file:vendor/xhulz-nina-0.8.0.tgz
+pnpm nina compose                               # the command is `nina` whatever the package is called
+```
+
+**A project vendors the packed artifact; it does not link this checkout.** `link:../IA/harness`
+puts a symlink in `node_modules`, so the project runs this working tree — uncommitted edits
+included. The release pin freezes the layers and nothing freezes the compiler, which does decide
+composed output. Vendoring is what makes a project's harness fully determined by three things
+recorded in its own repository: the package version, the release pin, and its project layer. A
+fresh clone then installs with no registry, no auth, and no harness checkout on the machine.
+
+The package is scoped because `nina` is taken on the public registry. The scope changes what you
+install and nothing else: `bin` names the binary, so the command, the banner and every path in this
+document stay as they are.
+
+Two consequences worth knowing. **Bumping the package cannot change the rules a project composes**,
+because the pin lives in `.nina/profile.json`, not in the dependency range — so `pnpm up nina` only
+adds releases the project may later choose, and `nina upgrade` stays the one path that changes a pin.
+What a bump *can* change is how a composed file is rendered, because the `nina:generated` notice is
+written by the compiler rather than stored in the release: a version that changes its wording makes
+every composed file differ until the project recomposes. The detector reports that, correctly.
+And **`"core": "dev"`, which tracks the working tree, exists only in a checkout of this repo**; an
+installed package says so rather than composing an empty tree.
+
+Measured history does not live in the install. It is the user's, it spans every project, and under
+`node_modules` the next install would take it with it — so it lives in `~/.nina/snapshots/`, with
+`NINA_DATA` to point it elsewhere.
+
+The package also exports `@xhulz/nina/detectors`, which is the runner behind every project's
+`pnpm harness:check`, `@xhulz/nina/gate`, the loop gate the composed `scripts/loop-gate.mjs` runs, and
+`@xhulz/nina/guard`, the edit guard `scripts/edit-guard.mjs` runs. That mechanism used to be a script copied into each project, and the copies
+had already drifted — one had learned to run a detector that is a binary on PATH and the other
+never did, in the file whose job is to detect drift. It cannot live in a layer either, because this
+repo cannot compose itself: composing would overwrite its own `CLAUDE.md`, which is about the
+compiler and not about a project's harness. So the mechanism ships in the package and the LIST stays
+with the project — `core/tree/scripts/harness-check.mjs` is a dozen lines around a project slot.
+
+**Who reads a finding.** The runner has two hook modes, and the difference is who it reaches. `--hook`
+emits a `systemMessage` for a Stop hook, and Claude Code shows that to the person and never to the model.
+For a long time that was the only mode, so every detector — drift, a stale map, a lesson owed — reported
+to the one reader who was not about to act on it, and closing any loop meant the person relaying it.
+`--context` emits `additionalContext` for a UserPromptSubmit hook, which Claude Code puts in the model's
+own context before it answers. A project wants both: the Stop hook tells the person what the turn left
+behind, the prompt hook tells the model before the next one. Hooks are the project's own
+`.claude/settings.json` — NINA composes no settings — so `nina init` writes them where there is no
+settings file yet and never edits one that exists, `nina check` asks for whatever is missing, and
+`nina wire --apply` merges exactly what is missing into settings that already exist (see *Starting a
+project*) — and updates a hook still running the exact command an older `init` or `wire` wrote, so it
+too learns to say when its script cannot start; a command someone customised is never touched. Hooks
+kept in `.claude/settings.local.json` count: Claude Code reads both files. And "installed" means what
+the scripts' own `import` resolves, so a package hoisted to a workspace root counts. The list of hooks is `src/wiring.mjs`, one entry per hook, each naming the composed script
+it runs — so a project is only ever asked to wire what its pinned version composes.
+
+`nina wire` merges the hooks and npm scripts a version needs into a project's existing settings. With
+`--to <version>` it wires a version not pinned yet, which is safe: every hook runs its script only once
+that script is composed. `upgrade` refuses a move that composes a hooked script for the first time until
+its hooks are in place, and prints them.
+
+For working on the harness itself, `pnpm link` still symlinks `bin/nina.mjs` onto the PATH.
+
+## Starting a project
+
+```bash
+mkdir vendor && cp ../IA/harness/xhulz-nina-<version>.tgz vendor/
+pnpm add -D file:vendor/xhulz-nina-<version>.tgz        # first: every composed script imports it
+npx nina init                                           # interview, profile, TODO, hooks — and compose
+npx nina init --surfaces db,money                       # or declare the surfaces instead of the interview
+```
+
+The package comes first because every composed script imports it. Without it each hook used to fail
+without a word — no drift reported, no lesson owed, no loop cap held — so `init` and `check` now say it
+before anything else, and the hooks whose silence would hide it say it themselves: a script that exists
+and cannot even start answers the hook with that sentence, to the person on `Stop` and to the model on
+`UserPromptSubmit`.
+
+`init` writes `.nina/profile.json` and `.nina/TODO.md`, and **deliberately writes no stub
+fragments.**
+
+It **composes**, holes and all, so the hooks it wires have something to run from the first session. The
+core's detector list carries a `declaration` detector — `nina check --detector` — so before the model's
+first answer in a new project it is told what is still missing and where to fill it from:
+`.nina/TODO.md` for the items, `.nina/BRIEF.md` (when the interview wrote one) for what the project is.
+The first conversation starts by filling the project in, with nobody having to ask. The composition
+detector runs `compose --check --drift` beside it, which reports hand edits and nothing else: both used
+to report the unfilled slots, and a new project's first prompt got the same fact twice, the second time
+as 57 lines under a hint about hand edits.
+
+It never composes over a file of the project's own. A `CLAUDE.md` or an agent spec written by hand
+before the harness arrived — the adoption case — or a symlink where a composed file goes, would be
+destroyed; `init` names them, composes nothing, and the TODO says to move them aside (or into the
+project layer as fragments) and run `nina compose`.
+
+`--detector` is `check` as a detector, and it differs in two ways. Inside `nina upgrade --apply` it
+stays quiet, because the move measures `check` itself, before and after: a new core that adds this
+detector, measured against an old harness-check that never ran it, read every problem the project
+already had as one the move made, and rolled the move back — `--force` or not. And it leaves out which
+skills are installed, a fact about one machine rather than the project, which a `nina check` by hand
+still reports. In every mode, only the specs the harness composed are stages: a project may keep agents
+of its own beside them.
+
+It also writes the **wiring**, because without it the scripts it composes are never run:
+`.claude/settings.json` with every hook the pinned version's scripts need — the harness check's, the
+loop gate's and the edit guard's — when the project has no settings file, and the `harness:check` and
+`harness:compose:check` scripts added to an existing `package.json`. Both files belong to the project
+and carry far more than the harness, so `init` never edits settings that exist and a manifest only
+gains what it lacks. Whatever `init` could not write is §4 of the TODO, `nina wire --apply` merges it,
+and `nina check` reports it as a problem until it is done. The list lives in
+`src/wiring.mjs`, read by both — Spliter's wiring was typed by hand one piece per release, and the
+piece that let the model see a finding at all came last. A stub is a filled slot as far as every tool is concerned, so a tree of TODOs would
+compose and check clean while saying nothing — the exact failure this harness exists to remove.
+The project layer stays empty, and `compose` keeps naming what is missing until the work is done.
+
+Two things it can work out rather than ask:
+
+- **The surfaces a repository reveals.** A Prisma schema means `db`, a wrangler config means
+  `edge-cf`, a Vite config means `frontend`. `money`, `pii` and `integrations` are claims about the
+  domain that no file can settle — `init` says so and leaves them to you.
+- **The vocabulary.** Whatever `{{PLACEHOLDER}}` the chosen core and surfaces actually reference is
+  what this project must define, and nothing else. A `null` value means "declared, not filled": the
+  placeholder stays standing in the composed output instead of quietly becoming an empty string.
+  A name the release answers itself is not asked for: `core/vocabulary.json` holds defaults, frozen
+  with each release, for what is the same in every project on this stack — the typecheck, lint and
+  build commands a stage is told to run, and the test command every stage but qa is told NOT to run.
+  qa's own targeted vitest run stays literal: it is the stack's substance, not a command name. The
+  core names them as placeholders, a project that declares none composes
+  `pnpm typecheck` exactly as before, and one on another stack declares four lines instead of editing
+  a core it cannot reach. Declaring a name takes it over, `null` included; `init`'s TODO lists each
+  default so there is something to change it from. A release with no such file supplies nothing.
+
+`init` reads the layers from the version it is about to pin, so the checklist describes the harness
+the project will actually compose rather than whatever the working tree says today.
