@@ -82,6 +82,57 @@ than the retention window. A record whose transcript is gone keeps what it had.
 This half exists because every rule the harness could not enforce was invisible until
 measured: mandatory skills were invoked 2 times in 743 runs before anyone counted.
 
+### Sending it to Langfuse: `nina export`
+
+`stats` and `learn` read the store on a terminal. Langfuse reads the same records in a UI that filters,
+groups and charts them, beside whatever else a project already sends it.
+
+```bash
+nina export --langfuse --dry-run                 # what would go, and one span as it would be sent
+nina export --langfuse [--project Spliter]       # LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+```
+
+Each Claude Code session becomes a trace, named by the project's directory, and each dispatch an
+observation on it: a generation when the run spent tokens, with its model, usage and the cost `stats`
+would estimate, and a span otherwise. The verdict goes beside it as a categorical score. What goes is the
+store's metadata and less: each span is built field by field, so the description the orchestrator gave a
+dispatch stays behind, and so does the flattened path that names the owner's home directory. The
+credentials come from the environment, never a flag, since a flag lands in shell history.
+
+Observations go over OpenTelemetry (`/api/public/otel/v1/traces`, OTLP/HTTP as JSON), which is how
+Langfuse's v4 data model takes them; its `/ingestion` endpoint stops accepting them in November 2026. No
+dependency: `fetch` is enough.
+
+The design was settled by one fact found before anything was sent: Langfuse keeps what it is first sent.
+The first version resent a record whenever the snapshot changed it, on the reading that an id derived
+from the dispatch would make the second send an update. It would have made it a second observation, and
+every sum over the project would have counted both. A score is replaced only when its id, name and date
+all match, and the scores endpoint takes no date, it stamps the day it is called. So each run is sent
+once: its span when it has **settled**, 24 hours after its last known moment, because the snapshot fills
+a record in after the fact (a verdict read from a resumed run, tokens from a transcript that grew); and
+its score once it has a verdict and its span is there. A verdict read after the span went still gets its
+score, since that is a first score and not a second span. A record that changes after it went is counted
+and said, not sent again.
+
+What was sent is kept per project under `~/.nina/exports/langfuse/`, written after every request that
+succeeds, so a failure or an interruption leaves a retry only what did not go. The one way a span can
+still go twice is a request Langfuse took whose answer never arrived. Everything else that could send
+twice is refused instead:
+
+- A batch Langfuse did not take is sent again later, and its runs' scores wait with it, so no score
+  points at an observation Langfuse does not have.
+- A batch it took while refusing part of it (OTLP's `partialSuccess`, which counts the spans refused and
+  does not name them) is recorded as sent, since sending it again would double the ones it kept, and its
+  runs get no score, since any of them may be one it refused.
+- Two exports of one project do not run at once: each would read what was sent before the other wrote.
+  A lock names its process, so one left by a run that died is taken over.
+- A record of what was sent that cannot be read stops that project's export. Read as empty, it would
+  send the whole history again.
+
+One refused score does not hold back the rest, or a single bad one would block every later run's; a
+whole group refused means the endpoint is down, and the run stops. A record with no time cannot be
+placed on a trace and is never sent, and the export says how many there are.
+
 ### Evaluating a release
 
 Every rule so far was argued for, shipped, and then read back from a loop-back rate — a number that moves

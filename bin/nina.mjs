@@ -24,6 +24,7 @@ import { stats } from '../src/commands/stats.mjs';
 import { gate } from '../src/commands/gate.mjs';
 import { wire } from '../src/commands/wire.mjs';
 import { evalCommand } from '../src/commands/eval.mjs';
+import { exportCommand } from '../src/commands/export.mjs';
 
 /** The NINA install directory (the parent of `bin/`). */
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -43,6 +44,7 @@ const COMMANDS = {
   gate: { run: gate, help: 'the loop gate: is it wired, and would it still hold a loop past its cap?' },
   upgrade: { run: upgrade, help: 'move a project to a newer core, reporting what it costs' },
   eval: { run: evalCommand, help: "does a release's reviewer catch more planted defects than another's? runs on the login" },
+  export: { run: exportCommand, help: 'send the measured history to Langfuse: metadata only, each run once' },
   release: { run: release, help: 'freeze the working core + surfaces as a pinnable version' },
 };
 

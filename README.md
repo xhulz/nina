@@ -217,6 +217,11 @@ loop gate itself.
 declared, whether it got sent back, which skills it used and whether it read its lessons. The store keeps
 metadata only. Report text, source code and personal data never go in.
 
+`nina export --langfuse` sends the same history to Langfuse: each session a trace, each dispatch an
+observation with its tokens and estimated cost, each verdict a score. It sends less than the store holds, and
+each run exactly once, after it has settled, because Langfuse keeps what it is first sent and a second send
+of the same run would count twice.
+
 When a stage gets sent back, the pipeline can write a lesson for that role. `nina learn` checks the cycle one
 link at a time, and its first audit found four of the five links broken. Here's the same project before and
 after I redesigned it:
@@ -340,7 +345,7 @@ this repo, with a table of which document to read before changing what.
 - Known limits are written down. The loop gate can't see a fix the model makes by itself without a subagent, for
   example, and a scheduled `/loop` prompt resets the counts the same way a person's reply does.
 - Commands: `init`, `compose`, `check`, `where`, `pills`, `learn`, `requests`, `wire`, `gate`, `upgrade`,
-  `release`, `snapshot`, `stats`.
+  `release`, `snapshot`, `stats`, `eval`, `export`.
 
 <sub>© 2026 Marcos Schulz. All rights reserved. The source is public so it can be read, and forking it on GitHub
 is fine, but no license to use, copy, modify or distribute it is granted. See [LICENSE](LICENSE).</sub>

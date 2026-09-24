@@ -37,6 +37,15 @@ export function gateDir() {
 }
 
 /**
+ * Where `nina export` keeps what it has sent, per destination and project — beside the snapshots it reads.
+ *
+ * @returns {string}
+ */
+export function exportsDir() {
+  return process.env.NINA_DATA ? join(process.env.NINA_DATA, 'exports') : join(homedir(), '.nina', 'exports');
+}
+
+/**
  * How Claude Code names a project's transcript directory, and so its snapshot file and its gate
  * ledgers: the absolute path with every character that is not a letter or a digit made a dash.
  *
