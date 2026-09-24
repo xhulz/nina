@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeProjectDir } from '../src/commands/stats.mjs';
-import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, scanProject } from '../src/transcripts.mjs';
+import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, scanProject, tokensOf } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
@@ -30,6 +30,7 @@ import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
 import { defaultVocabulary } from '../src/vocabulary.mjs';
+import { costOf, priceOf } from '../src/prices.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -2598,6 +2599,79 @@ const dated = (date, status = 'active') =>
   run(['init', '--project', old, '--surfaces', 'frontend', '--core', '0.22.0']);
   const preview = run(['upgrade', '--project', old, '--to', 'dev'], { loud: true }).out;
   expect(!preview.includes('TYPECHECK_CMD'), `vocabulary: an upgrade onto a release with defaults does not ask for them — got ${preview}`);
+}
+
+// ─── cost: what a run spent, from its own transcript, priced when it is read ─────────────
+{
+  // A streamed message is written once per content block, under one id, with its output growing.
+  const streamed = (id, output, extra = {}) => ({ id, usage: { input_tokens: 10, output_tokens: output, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, ...extra }, model: 'claude-sonnet-5' });
+  const rows = [streamed('m1', 5), streamed('m1', 50), streamed('m1', 500), streamed('m2', 100, { cache_creation: { ephemeral_5m_input_tokens: 150, ephemeral_1h_input_tokens: 50 } })];
+  const usage = new Map();
+  for (const row of rows) usage.set(row.id, row);
+  const { tokens, model } = tokensOf(usage);
+  expect(tokens.output === 600 && tokens.input === 20 && tokens.read === 2000, `cost: each message counts once, at its final usage — got ${JSON.stringify(tokens)}`);
+  expect(tokens.write_5m === 350 && tokens.write_1h === 50, `cost: a write is split by TTL where the transcript says, and is the 5-minute kind where it does not — got ${JSON.stringify(tokens)}`);
+  expect(model === 'claude-sonnet-5', 'cost: the model is the one that spent the tokens');
+  expect(tokensOf(new Map()).tokens === null, 'cost: a run with no usage has no token record, not a zero one');
+  const fast = new Map([['f1', { usage: { output_tokens: 10, speed: 'fast' }, model: 'claude-opus-5' }]]);
+  const fellBack = new Map([['f2', { usage: { output_tokens: 10, iterations: [{ type: 'fallback_message' }] }, model: 'claude-fable-5-1' }]]);
+  expect(tokensOf(fast).model === null && tokensOf(fellBack).model === null, 'cost: a fast-mode or fallback run is left unpriced rather than priced as the model it names');
+
+  expect(priceOf('claude-opus-5-5').input === 4 && priceOf('claude-opus-5').input === 5, 'cost: the longest model prefix wins — 5.5 is not priced as 5');
+  expect(priceOf('claude-opus-4-8[1m]')?.input === 5, 'cost: a context suffix does not hide the model');
+  expect(priceOf('opus') === null && costOf({ output: 1 }, 'opus') === null, 'cost: a model the table does not know is left out, not guessed');
+  expect(Math.abs(costOf({ input: 1e6, output: 1e6, write_5m: 1e6, write_1h: 1e6, read: 1e6 }, 'claude-sonnet-5') - (2 + 10 + 2.5 + 4 + 0.2)) < 1e-9, 'cost: writes at 1.25× and 2× input, reads at 0.1×');
+  expect(Math.abs(costOf({ read: 1e6 }, 'claude-fable-5-1') - 0.25) < 1e-9, "cost: a model's own read rate beats the 0.1× rule");
+
+  // End to end: a dispatch, its launch naming the agent, and the agent's own transcript.
+  const dir = await scratch();
+  await writeFile(
+    join(dir, 'session.jsonl'),
+    [
+      JSON.stringify({ type: 'assistant', uuid: 'd1', timestamp: '2026-09-24T10:00:00.000Z', sessionId: 's1', message: { content: [{ type: 'tool_use', id: 'toolu_c', name: 'Agent', input: { subagent_type: 'reviewer' } }] } }),
+      JSON.stringify({ type: 'user', uuid: 'd2', timestamp: '2026-09-24T10:00:01.000Z', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_c', content: 'Async agent launched. agentId: abc123' }] } }),
+      '',
+    ].join('\n'),
+  );
+  await mkdir(join(dir, 's1', 'subagents'), { recursive: true });
+  await writeFile(
+    join(dir, 's1', 'subagents', 'agent-abc123.jsonl'),
+    // Every streamed copy, as Claude Code writes them: the reader, not this test, has to keep the last.
+    rows.map((u) => JSON.stringify({ type: 'assistant', message: { id: u.id, model: u.model, usage: u.usage, content: [] } })).concat(['']).join('\n'),
+  );
+  const agentFile = join(dir, 's1', 'subagents', 'agent-abc123.jsonl');
+  await writeFile(agentFile, `${await readFile(agentFile, 'utf8')}${JSON.stringify({ type: 'assistant', message: { id: 'h1', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\\nISSUES: a' } }] } })}\n`);
+  const [record] = (await scanProject(dir, {})).records;
+  expect(record?.tokens?.output === 600 && record.usage_model === 'claude-sonnet-5', `cost: the snapshot record carries the run's tokens and model — got ${JSON.stringify(record)}`);
+  // A record read before it learned the field is read once more while its transcript is on disk —
+  // how 825 runs recorded before tokens existed got theirs — and one already carrying it is not.
+  const before = { ...record, agent_read: true, lessons_read: 0 };
+  delete before.tokens;
+  const [backfilled] = (await scanProject(dir, { cursors: {}, records: [before] })).records;
+  expect(backfilled?.tokens?.output === 600, `cost: a record from before the field gets its tokens on the next snapshot — got ${JSON.stringify(backfilled?.tokens)}`);
+  // Read in full and unchanged since: not read again. A sentinel survives the next scan only if it was skipped.
+  const [kept] = (await scanProject(dir, { cursors: {}, records: [{ ...record, tokens: { output: -1 } }] })).records;
+  expect(kept?.tokens?.output === -1, 'cost: a run read in full whose transcript has not grown is not read again');
+  // Resumed after it reported: the transcript grew, with more spend and a new verdict, and both are read.
+  await writeFile(
+    agentFile,
+    `${await readFile(agentFile, 'utf8')}${[
+      JSON.stringify({ type: 'assistant', message: { id: 'm3', model: 'claude-sonnet-5', usage: { input_tokens: 0, output_tokens: 400 }, content: [] } }),
+      JSON.stringify({ type: 'assistant', message: { id: 'h2', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: APPROVED' } }] } }),
+    ].join('\n')}\n`,
+  );
+  const [resumed] = (await scanProject(dir, { cursors: {}, records: [{ ...record }] })).records;
+  expect(resumed?.tokens?.output === 1000 && resumed.verdict === 'APPROVED', `cost: a run resumed after it reported is read again — its later spend and its later verdict — got ${JSON.stringify({ tokens: resumed?.tokens, verdict: resumed?.verdict })}`);
+
+  // stats prices them when it reads them.
+  const snapshots = join(await scratch(), 'snaps');
+  await mkdir(snapshots, { recursive: true });
+  const row = (role, output, model = 'claude-sonnet-5') => JSON.stringify({ project: '-x', dispatch_id: `t${Math.random()}`, ts: '2026-09-24T10:00:00.000Z', role, verdict: 'APPROVED', verdict_source: 'declared', tokens: { input: 0, output, write_5m: 0, write_1h: 0, read: 0 }, usage_model: model });
+  await writeFile(join(snapshots, '-x.jsonl'), `${[row('reviewer', 5e5), row('reviewer', 1.5e6), row('qa', 5e5), row('qa', 1e6, 'claude-opus-4-1')].join('\n')}\n`);
+  const { out } = run(['stats', '--snapshots', snapshots, '--all'], { loud: true });
+  // Two reviewer runs of $5 and $15: the median is the upper middle, as the duration column's is.
+  expect(/reviewer\s+2\s+\$15\.00\s+\$20\.00\s+80%/.test(out) && /all stages\s+3\s+\$25\.00/.test(out), `cost: stats reports each stage's median, total and share — got ${out}`);
+  expect(out.includes('4 of 4 runs have a token record, 1 on a model the price table does not know'), `cost: the header counts the runs it could not price — got ${out}`);
 }
 
 // ─── 0.21.1: a new project, an adopted one, and the declaration detector ─────────────────

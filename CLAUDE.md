@@ -541,7 +541,7 @@ back.
 
 ```bash
 nina snapshot    # append new dispatches to ~/.nina/snapshots/<project>.jsonl
-nina stats       # loop-back rate per stage, and what the pipeline learned from it
+nina stats       # loop-back rate per stage, what each stage costs, and what the pipeline learned
 ```
 
 `stats` closes with a **learning** block, because a loop-back is the raw material and a pill is the
@@ -563,8 +563,23 @@ read as a zero — in a report about something not happening, a silent miss and 
 identical.
 
 `~/.nina/snapshots/` holds **metadata only** — role, verdict, timestamps, duration, branch,
-which skills were invoked, how many pills the run opened, how many issues a loop-back named. No report
-text, no source, no PII, not even a pill's path or an issue's id. Keep it that way.
+which skills were invoked, how many pills the run opened, how many issues a loop-back named, and the
+tokens the run spent by kind with the model that spent them. No report text, no source, no PII, not
+even a pill's path or an issue's id — and no dollars: a price is a fact about a date, so `stats`
+prices the tokens when it reads them, at the list prices in `src/prices.mjs`, and says which date's.
+Those are API-equivalent figures; a subscription pays nothing per token, and the unit is still the
+right one for comparing one stage with another. Keep it that way.
+
+The first reading, over one project's 825 runs: the implementer was 41% of the spend at a median of
+$2.40 a run, the architect 26%, and the dba — the gate whose rate of sending work back had been in
+question for weeks — 2%, at $0.40 a run. A stream counted per row would have read the same message
+three or four times over: Claude Code writes a streamed message once per content block under one id,
+so each message is counted once, at its final usage. A run's transcript is read again whenever it has
+grown since the last read: 14 in 1,389 were resumed after they reported, with a median 42% of their
+tokens and their final verdict written after the first handback. `usage_model` is the model that
+actually spent the tokens; the record's older `model` is the one the dispatch asked for, which is the
+orchestrator's own when it named none. A fast-mode or fallback run is left unpriced rather than priced
+as the model it names.
 
 ### The learning cycle
 
@@ -639,6 +654,7 @@ src/graph.mjs         parses and validates a composed pipeline graph (check + co
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/wiring.mjs        the hooks and npm scripts a project needs — read by init, wire, check and upgrade
 src/vocabulary.mjs    the vocabulary a release answers itself, from core/vocabulary.json
+src/prices.mjs        API list prices by model, dated, for what stats estimates a run cost
 src/transcripts.mjs   the transcript parser (dispatch/verdict/skill extraction)
 src/detectors.mjs     runs a project's drift detectors (imported by its harness-check)
 src/banner.mjs        the startup banner

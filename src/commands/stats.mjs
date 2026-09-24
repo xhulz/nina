@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { isLoopBack } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { snapshotsDir } from '../paths.mjs';
+import { PRICES_AS_OF, costOf } from '../prices.mjs';
 
 /**
  * The pipeline roles. A project that dispatches only generic agents
@@ -136,6 +137,47 @@ export async function harvest(projects) {
 
 /** Formats a percentage, or a dash when there is nothing to divide by. */
 const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
+
+/**
+ * What each stage cost, at API list prices, over the runs whose tokens were recorded. A gate that
+ * rarely sends work back is a question of what it costs as much as of what it catches, and until the
+ * snapshot kept tokens only the second half could be asked.
+ *
+ * @param {object[]} records - The runs in the window.
+ */
+function costReport(records) {
+  const measured = records.filter((r) => r.tokens && typeof r.tokens === 'object');
+  if (measured.length === 0) return;
+  /** @type {Map<string, number[]>} */
+  const byRole = new Map();
+  let unpriced = 0;
+  for (const r of measured) {
+    const cost = costOf(r.tokens, r.usage_model);
+    if (cost === null) {
+      unpriced += 1;
+      continue;
+    }
+    byRole.set(r.role, [...(byRole.get(r.role) ?? []), cost]);
+  }
+  const total = [...byRole.values()].flat().reduce((a, b) => a + b, 0);
+  if (total === 0) return;
+  const money = (n) => `$${n >= 100 ? n.toFixed(0) : n.toFixed(2)}`;
+  // The same convention as the duration column beside it: the upper middle of an even count.
+  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  console.log(
+    `\n  cost — at API list prices of ${PRICES_AS_OF}; ${measured.length} of ${records.length} runs have a token record` +
+      (unpriced > 0 ? `, ${unpriced} on a model the price table does not know` : ''),
+  );
+  console.log(`    ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'median'.padStart(10)}${'total'.padStart(10)}${'share'.padStart(8)}`);
+  for (const [role, costs] of [...byRole].sort((a, b) => b[1].reduce((x, y) => x + y, 0) - a[1].reduce((x, y) => x + y, 0))) {
+    const sum = costs.reduce((a, b) => a + b, 0);
+    console.log(
+      `    ${role.padEnd(20)}${String(costs.length).padStart(6)}${money(median(costs)).padStart(10)}` +
+        `${money(sum).padStart(10)}${pct(sum, total).padStart(8)}`,
+    );
+  }
+  console.log(`    ${'all stages'.padEnd(20)}${String([...byRole.values()].flat().length).padStart(6)}${''.padStart(10)}${money(total).padStart(10)}`);
+}
 
 /** Formats a median duration in minutes from a list of seconds. */
 function medianMin(values) {
@@ -287,6 +329,8 @@ export async function stats(argv, ctx) {
           : ''),
     );
   }
+
+  costReport(records.filter((r) => r.status !== 'denied'));
 
   // What the pipeline learned, against what it had to learn from. A loop-back is the raw
   // material and a pill is the product, so the two numbers belong on the same screen: the
