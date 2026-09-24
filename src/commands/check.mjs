@@ -340,7 +340,18 @@ export async function check(argv, ctx) {
   // first version read it off the directory instead, and never noticed the architecture being written.
   if (problems.length > 0) {
     const brief = existsSync(join(target, HARNESS, 'BRIEF.md'));
-    if (unwritten.has(join('.claude', 'architecture.md'))) {
+    if (unwritten.has(join('.claude', 'architecture.md')) && detector) {
+      // To the model, before its answer. Told the order, it still opened a new project's first session
+      // with the inventory and offered to read the brief; what the owner wanted was an answer about
+      // their project. The list stays below for the model, and in the TODO for everyone.
+      console.log(
+        '  → this project has no architecture yet, so the list below is not the conversation. ' +
+          (brief
+            ? 'Before you answer, read `.nina/BRIEF.md`, the owner\'s own description of the project, and open with it: say in a sentence what the project is, '
+            : 'Before you answer, read what the project already says about itself — its README, its code — and open with that; if there is nothing to read, ask the owner what it is for and who it serves. Then ') +
+          'propose writing `.claude/architecture.md` together, and ask the first question it raises. Do not recite the list: it is in `.nina/TODO.md`, and most of it is decided by that architecture.',
+      );
+    } else if (unwritten.has(join('.claude', 'architecture.md'))) {
       console.log(
         `  → start with the architecture, in this order: ${brief ? 'read `.nina/BRIEF.md`, the owner\'s description of the project, then ' : ''}` +
           'write `.claude/architecture.md` with the owner. The vocabulary and most project slots are decisions that architecture makes — fill them from it, then `nina compose`.',
