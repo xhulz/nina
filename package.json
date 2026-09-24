@@ -15,6 +15,7 @@
     "bin",
     "src",
     "releases",
+    "evals",
     "README.md"
   ],
   "engines": {

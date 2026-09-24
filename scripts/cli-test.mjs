@@ -31,6 +31,7 @@ import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
 import { defaultVocabulary } from '../src/vocabulary.mjs';
 import { costOf, priceOf } from '../src/prices.mjs';
+import { grade, plantedDefects, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -2725,6 +2726,88 @@ const dated = (date, status = 'active') =>
     /1–2 files\s+3\s+1 \(33%\)/.test(out) && /3–9 files\s+5\s+2 \(40%\)/.test(out) && /10\+ files\s+2\s+2 \(100%\)/.test(out),
     `proportion: each cycle is sized by its largest write and marked by whether it was designed — got ${out}`,
   );
+}
+
+// ─── eval: what a release's reviewer catches, graded without a model ────────────────────
+{
+  const fixture = join(ROOT, 'evals', 'reviewer');
+  const defects = plantedDefects(fixture);
+  expect(defects.length === 12 && defects.every((d) => d.line === null || d.line > 0), `eval: every planted defect resolves, each anchor to one line — got ${defects.length}`);
+  const at = (id) => defects.find((d) => d.id === id).line;
+
+  const report = (lines) => ['VERDICT: REJECTED', 'ISSUES: x', ...lines].join('\n');
+  // Each cited location goes to the nearest planted defect in its file: one citation cannot catch four neighbours.
+  const near = grade(report([`- src/server/services/notes.ts:${at('toggle-not-idempotent')} — toggles`]), defects);
+  expect(near.caught.join() === 'toggle-not-idempotent', `eval: a citation catches the nearest defect only — got ${near.caught.join()}`);
+  // A path is the reviewer's own choice of suffix; a file-level defect is caught by naming the file at all.
+  const suffix = grade(report([`- services/notes.ts:${at('owner-check') - 1}`, '- `src/server/config.ts` is out of scope', '- legacy-archive.ts is still here']), defects);
+  expect(['owner-check', 'scope-config', 'obsolete-not-deleted'].every((id) => suffix.caught.includes(id)), `eval: a shorter path, a line one off, and a file named alone all count — got ${suffix.caught.join()}`);
+  const stray = grade(report(['- src/server/routes/notes.ts:20 — fine but verbose', '- src/server/errors.ts:3']), defects);
+  expect(stray.caught.length === 0 && stray.other.join() === 'src/server/routes/notes.ts:20', `eval: a location no defect sits near is counted as other, and a file with no defect is ignored — got ${JSON.stringify(stray)}`);
+  const lateVerdict = grade('Bash was restricted, so here is the review.\n\nVERDICT: REJECTED', defects);
+  expect(lateVerdict.verdict === null && lateVerdict.late === 'REJECTED', 'eval: a verdict below the first line is reported as late — the gate and the snapshot never read it');
+  // A list of lines is two citations; a defect may be pointed at from more than one place.
+  const route = defects.find((d) => d.id === 'service-date-format').at.find((a) => a.file.endsWith('routes/notes.ts'));
+  const listed = grade(report([`- src/server/routes/notes.ts:${at('route-imports-data')},${at('status-200-not-found')}`, `- routes/notes.ts:${route.line}`]), defects);
+  expect(['route-imports-data', 'status-200-not-found', 'service-date-format'].every((id) => listed.caught.includes(id)), `eval: a line list cites each line, and a defect's second anchor counts — got ${listed.caught.join()}`);
+  const block = grade(report([`- src/server/services/notes.ts:${at('owner-check')}-${at('error-swallowed')}`]), defects);
+  expect(block.caught.join() === 'owner-check', `eval: a block is read as its first line, so it cannot catch every defect inside it — got ${block.caught.join()}`);
+  // Equally near two defects: neither is credited, and the line counts as other.
+  const tie = grade(report([`- src/server/routes/notes.ts:${at('console-log') + 1}`]), defects.filter((d) => ['console-log', 'status-200-not-found'].includes(d.id)).map((d) => (d.id === 'status-200-not-found' ? { ...d, at: [{ ...d.at[0], line: at('console-log') + 2 }] } : d)));
+  expect(tie.caught.length === 0 && tie.other.length === 1, `eval: a citation equally near two defects credits neither — got ${JSON.stringify(tie)}`);
+  // A file is credited for a file-level defect only in an issue raised, not where the report lists what it checked.
+  const checked = grade(['VERDICT: REJECTED', 'ISSUES: x', 'Artifacts checked: `src/server/config.ts` is untouched ✅', '- `src/server/services/legacy-archive.ts` ✅ deleted'].join('\n'), defects);
+  const before = grade(['VERDICT: REJECTED', '- `src/server/config.ts` changed', 'ISSUES: x'].join('\n'), defects);
+  expect(checked.caught.length === 0 && before.caught.length === 0, `eval: a file named in a confirmation, or above the issues, is no catch — got ${checked.caught.join()} / ${before.caught.join()}`);
+  const unlocated = grade(report(['- services/notes.ts, around line 45: toggles']), defects);
+  expect(unlocated.caught.length === 0 && unlocated.unlocated.join() === 'services/notes.ts', `eval: a defect's file named without a line is counted apart, not credited — got ${JSON.stringify(unlocated)}`);
+  let threw = false;
+  const doubled = await scratch();
+  await mkdir(join(doubled, 'base'), { recursive: true });
+  await writeFile(join(doubled, 'base', 'a.ts'), 'x\nx\n');
+  await writeFile(join(doubled, 'defects.json'), JSON.stringify({ defects: [{ id: 'd', file: 'a.ts', anchor: 'x', what: '' }] }));
+  try {
+    plantedDefects(doubled);
+  } catch {
+    threw = true;
+  }
+  expect(threw, 'eval: an anchor that matches two lines is refused, since it cannot say which one a citation means');
+
+  // The child never bills per token unless asked: every such credential is stripped from its environment.
+  const saved = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-test';
+  const onLogin = reviewerCommand({});
+  const onApi = reviewerCommand({ api: true });
+  if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
+  else process.env.ANTHROPIC_API_KEY = saved;
+  expect(!('ANTHROPIC_API_KEY' in onLogin.env) && onApi.env.ANTHROPIC_API_KEY === 'sk-test', 'eval: an API key reaches the child only under --api');
+  expect(onLogin.args.includes('dontAsk') && onLogin.args.includes('--no-session-persistence') && onLogin.args.join(' ').includes('--setting-sources project'), 'eval: the child reads only, loads no user settings, and writes no session');
+
+  // End to end without a model: the fixture stages, composes, and the canned report is graded.
+  const { status, out } = run(['eval', '--release', '0.24.0', '--dry-run', '--keep'], { loud: true });
+  expect(status === 0 && out.includes('caught 4/12') && out.includes('never caught:'), `eval: a dry run stages the fixture and grades the sample report — got ${out}`);
+  const kept = /staged in (\S+);/.exec(out)?.[1];
+  const changed = kept ? spawnSync('git', ['status', '--porcelain'], { cwd: kept, encoding: 'utf8' }).stdout.replace(/\n$/, '').split('\n') : [];
+  expect(changed.length === 5 && changed.every((l) => l.startsWith(' M src/')), `eval: the reviewer's diff is the change alone, the composed harness ignored — got ${changed.join(' | ')}`);
+  if (kept) await rm(kept, { recursive: true, force: true });
+
+  // The real path, with a stand-in for claude on the PATH: a review is graded, a failed run is not.
+  const bin = await scratch();
+  const fake = (json) => writeFile(join(bin, 'claude'), `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(json)}\nEOF\n`, { mode: 0o755 });
+  const evalWith = (extra = {}) =>
+    spawnSync(process.execPath, [NINA, 'eval', '--release', '0.24.0'], { encoding: 'utf8', cwd: ROOT, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, ...extra } });
+  const sample = await readFile(join(fixture, 'sample-report.md'), 'utf8');
+  await fake({ type: 'result', subtype: 'success', is_error: false, result: sample, total_cost_usd: 0.5 });
+  const ok = evalWith();
+  expect(ok.status === 0 && ok.stdout.includes('caught 4/12') && ok.stdout.includes('$0.50 API-equivalent'), `eval: a real run's JSON is graded and its cost shown — got ${ok.stdout}${ok.stderr}`);
+  await fake({ type: 'result', subtype: 'error_max_turns', is_error: true, result: '' });
+  const failed = evalWith();
+  expect(failed.status === 1 && failed.stderr.includes('error_max_turns') && !failed.stdout.includes('caught 0/12'), `eval: a run that did not review is a failure, not a review that caught nothing — got ${failed.stdout}${failed.stderr}`);
+  expect(runFailure({ error: Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }) }) === '`claude` is not on the PATH', 'eval: a missing claude is said plainly');
+  const leftovers = async () => (await readdir(tmpdir())).filter((f) => /^nina-eval-(?!reports)/.test(f)).length;
+  const beforeStage = await leftovers();
+  const missing = run(['eval', '--release', '9.9.9'], { loud: true });
+  expect(missing.status === 1 && (await leftovers()) === beforeStage, `eval: a release that cannot be staged leaves no scratch directory behind — got ${missing.out}`);
 }
 
 // ─── 0.21.1: a new project, an adopted one, and the declaration detector ─────────────────

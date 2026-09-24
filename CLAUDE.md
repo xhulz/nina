@@ -597,6 +597,43 @@ that reading said all four small changes had been designed. The reading that sur
 5 of 8 one- and two-file changes ran a planner or architect, 62% of the three-to-nine-file ones did, and
 84% of those of ten files or more — with 29 cycles closed by a qa whose verdict could not be read.
 
+### Evaluating a release
+
+Every rule so far was argued for, shipped, and then read back from a loop-back rate — a number that moves
+with the work as much as with the rule, and that went up after the first two lessons it was asked to
+verify. `nina eval` asks the question as an experiment instead: the same change, carrying the same planted
+defects (`evals/reviewer/`), is reviewed by the reviewer each release composes, and the report counts what
+each one caught.
+
+```bash
+nina eval --release 0.23.0 --release 0.24.0 --repeat 2    # two releases, two runs each
+nina eval --release 0.24.0 --dry-run                       # stage, compose and grade a canned report; no model
+```
+
+It runs `claude -p` as the composed reviewer (`--agent reviewer`) in a throwaway copy of the fixture, on the
+login Claude Code already has — a subscription, never a per-token bill: every credential that would bill
+per token (or route it through a gateway) is removed from the child's environment unless `--api` asks
+otherwise. The child only reads — a tool allowlist under `--permission-mode dontAsk`, so the reviewer runs
+with the typecheck, lint and `harness:check` its spec mandates denied, the same for every release — loads
+no user settings, so no global hook snapshots the eval into the owner's statistics, and writes no session.
+It is not hermetic across machines: user-level agents and skills still load. A run that did not review
+(not logged in, out of turns, `claude` missing) is reported as a failure rather than graded as a review
+that caught nothing.
+
+Grading is deterministic and approximate in both directions, which is why every report is kept beside
+it. A cited line goes to the nearest anchor of a defect in its file, within two lines; a citation equally
+near two defects credits neither, because the planted lines sit one apart and the defect listed first used
+to win. A file-level defect (a file that should not have changed, or should have been deleted) is credited
+only in an issue the report raises — a list item below its `ISSUES` line — because the reviewer's
+"artifacts checked" section names every file the spec lists, often with a ✅, and a ✅ line is never a
+catch. A defect described without a line of its own is missed.
+
+The first real run, on 0.24.0: 11 of 12 caught, the one missed described inside a line range — eleven of
+the twelve map to a rule the composed reviewer carries, and that one is plain correctness; and the
+verdict line was not the report's first line — the reviewer, run as the main agent and denied the
+typecheck, explained that first. The gate and the snapshot would have read no verdict at all, which is the
+kind of thing only running the stage for real could show.
+
 ### The learning cycle
 
 `stats` measures across projects; `nina learn` asks one project whether its pipeline is learning
@@ -665,7 +702,7 @@ measured: mandatory skills were invoked 2 times in 743 runs before anyone counte
 
 ```
 bin/nina.mjs          entry point and command table
-src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats
+src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/wiring.mjs        the hooks and npm scripts a project needs — read by init, wire, check and upgrade
@@ -677,6 +714,7 @@ src/banner.mjs        the startup banner
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to
 fixtures/             projects that exist to be composed and checked
+evals/                a change with planted defects, for `nina eval` to review release against release
 scripts/              this repo's own drift detectors
 ~/.nina/snapshots/    measured pipeline history (NOT in the repo — see Installing)
 ```
