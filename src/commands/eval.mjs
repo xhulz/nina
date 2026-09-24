@@ -44,6 +44,14 @@ const BILLED = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL
 /** What the reviewer may do: read the tree and the diff, nothing else. */
 const TOOLS = ['Read', 'Grep', 'Glob', 'Bash(git diff:*)', 'Bash(git status:*)', 'Bash(git show:*)', 'Bash(git log:*)'];
 
+/**
+ * What the staged repository ignores: the harness composed beside the change, so the diff and the status
+ * the reviewer reads are the change alone. Written by the stage rather than kept in the fixture — a
+ * package drops every `.gitignore` it ships, and an installed NINA staged a repository whose status listed
+ * the whole composed harness as untracked.
+ */
+const IGNORE = ['.claude/*', '!.claude/plans/', '!.claude/code-map.md', '!.claude/architecture.md', '.nina/', 'CLAUDE.md', 'scripts/', ''].join('\n');
+
 /** How far a cited line may sit from a defect's anchor and still be that defect. */
 const TOLERANCE = 2;
 
@@ -176,6 +184,7 @@ async function stage(fixture, core, ctx) {
 /** Fills a scratch directory with the reviewer's world; `stage` removes it if this throws. */
 async function build(dir, fixture, core, ctx) {
   cpSync(join(fixture, 'base'), dir, { recursive: true });
+  writeFileSync(join(dir, '.gitignore'), IGNORE);
   const git = (...args) => spawnSync('git', ['-c', 'user.name=nina-eval', '-c', 'user.email=eval@nina.invalid', ...args], { cwd: dir, encoding: 'utf8' });
   git('init', '-q');
   git('add', '-A');
