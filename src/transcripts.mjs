@@ -490,12 +490,6 @@ async function attachAgentDetail(projectDir, dispatches) {
   const byAgent = new Map();
   for (const record of dispatches.values()) {
     if (!record.agent_id) continue;
-    // A finished run's transcript never changes again, so one read is enough. A run
-    // still in flight has no handback yet — come back for it next time. A record read before
-    // the record learned a field is read once more, if its transcript is still on disk; if it is
-    // not, the record keeps what it had rather than being dropped, which is what a --rebuild
-    // would do to every run older than Claude Code's transcript retention.
-    if (record.agent_read && 'lessons_read' in record) continue;
     if (!byAgent.has(record.agent_id)) byAgent.set(record.agent_id, []);
     byAgent.get(record.agent_id).push(record);
   }
@@ -511,6 +505,15 @@ async function attachAgentDetail(projectDir, dispatches) {
       const agentId = /^agent-([a-f0-9]+)\.jsonl$/.exec(file)?.[1];
       const records = agentId && byAgent.get(agentId);
       if (!records) continue;
+      // A run read in full whose transcript has not grown since has nothing new to say. It was assumed
+      // a finished run's transcript never changes, and 14 in 1,389 did: resumed after reporting, with a
+      // median 42% of their tokens — and their final verdict — written after the first handback, so the
+      // first read froze a partial bill. A run still in flight has no handback yet and is read again;
+      // a record from before a field existed is read once more; and one whose transcript is gone is
+      // never reached here, so it keeps what it had rather than being dropped, which is what a
+      // --rebuild would do to every run older than Claude Code's transcript retention.
+      const size = (await stat(join(dir, file)).catch(() => null))?.size ?? null;
+      if (records.every((r) => r.agent_read && 'lessons_read' in r && 'tokens' in r && r.agent_read_bytes === size)) continue;
 
       const skills = new Set();
       // Lessons this run read, and whether it only listed the directory. Every spec tells its role
@@ -520,11 +523,25 @@ async function attachAgentDetail(projectDir, dispatches) {
       let lessonsListed = false;
       let handback = null;
       let handbackTs = null;
+      /**
+       * Each API message's final usage, by message id. A streamed message is written once per content
+       * block under the same id, and its output count grows until the last copy — summing the rows
+       * counted the same input three or four times over.
+       */
+      const usage = new Map();
 
       const rl = createInterface({ input: createReadStream(join(dir, file)), crlfDelay: Infinity });
       for await (const line of rl) {
         const hasSkill = line.includes('"Skill"');
         const hasHandback = line.includes('SubagentHandback');
+        if (line.includes('"usage"')) {
+          try {
+            const message = JSON.parse(line)?.message;
+            if (message?.id && message.usage) usage.set(message.id, { usage: message.usage, model: message.model ?? null });
+          } catch {
+            // A torn line loses one message's count, not the run's.
+          }
+        }
         const touched = pillReads(line);
         for (const lesson of touched.read) lessonsRead.add(lesson);
         if (touched.listed) lessonsListed = true;
@@ -552,6 +569,12 @@ async function attachAgentDetail(projectDir, dispatches) {
         }
       }
 
+      const spent = tokensOf(usage);
+      // One transcript, one bill: were two records ever to share an agent, the second would count it again.
+      records.forEach((record, i) => {
+        record.tokens = i === 0 ? spent.tokens : null;
+        record.usage_model = spent.model;
+      });
       for (const record of records) {
         record.skills = [...skills];
         record.lessons_read = lessonsRead.size;
@@ -573,10 +596,41 @@ async function attachAgentDetail(projectDir, dispatches) {
             );
           }
           record.agent_read = true;
+          record.agent_read_bytes = size;
         }
       }
     }
   }
+}
+
+/**
+ * What a run spent, from each of its messages' final usage: tokens by kind, and the model that spent
+ * most of them. Metadata — counts and a model id, never a message.
+ *
+ * @param {Map<string, {usage: object, model: string|null}>} usage - Message id → its final usage.
+ * @returns {{tokens: {input: number, output: number, write_5m: number, write_1h: number, read: number}|null, model: string|null}}
+ */
+export function tokensOf(usage) {
+  if (usage.size === 0) return { tokens: null, model: null };
+  const tokens = { input: 0, output: 0, write_5m: 0, write_1h: 0, read: 0 };
+  const byModel = new Map();
+  const n = (v) => (typeof v === 'number' ? v : 0);
+  // A fast-mode message is billed at a premium, and a fallback iteration ran on another model than the
+  // message names; neither is what the model's list price says, so a run with either is left unpriced.
+  let irregular = false;
+  for (const { usage: u, model } of usage.values()) {
+    if (u.speed === 'fast' || (Array.isArray(u.iterations) && u.iterations.some((it) => it?.type && it.type !== 'message'))) irregular = true;
+    tokens.input += n(u.input_tokens);
+    tokens.output += n(u.output_tokens);
+    tokens.read += n(u.cache_read_input_tokens);
+    // The split by TTL, where the transcript has it; otherwise every write is the 5-minute kind.
+    const split = u.cache_creation && typeof u.cache_creation === 'object';
+    tokens.write_1h += split ? n(u.cache_creation.ephemeral_1h_input_tokens) : 0;
+    tokens.write_5m += split ? n(u.cache_creation.ephemeral_5m_input_tokens) : n(u.cache_creation_input_tokens);
+    if (model) byModel.set(model, (byModel.get(model) ?? 0) + 1);
+  }
+  const model = irregular ? null : ([...byModel].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
+  return { tokens, model };
 }
 
 /**
