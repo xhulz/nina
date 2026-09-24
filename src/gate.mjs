@@ -447,6 +447,22 @@ function roleOf(entries, agent) {
 }
 
 /**
+ * A recipient without the ` [ref]` a listing appends: from the first `[` after the last `]` inside the
+ * name, when the name ends in `]`. Found by position rather than by a pattern — the pattern it replaces,
+ * unanchored, took over half a second on 20,000 `[` and grew with the square, in a hook that runs on
+ * every dispatch over whatever the model wrote.
+ *
+ * @param {unknown} to - The `to` of a SendMessage.
+ * @returns {string}
+ */
+function withoutRef(to) {
+  const text = String(to ?? '').trim();
+  if (!text.endsWith(']')) return text;
+  const open = text.indexOf('[', text.lastIndexOf(']', text.length - 2) + 1);
+  return open < 0 ? text : text.slice(0, open).trim();
+}
+
+/**
  * Who a SendMessage goes to: an agent id the ledger has seen, or — since the tool tells the model to
  * prefer names — a name, which in this pipeline is the stage's own, with or without the ` [ref]` a
  * listing appends.
@@ -454,7 +470,7 @@ function roleOf(entries, agent) {
  * @returns {{agent: string|null, role: string|null}}
  */
 function recipient(entries, project, to) {
-  const agent = String(to ?? '').replace(/\s*\[[^\]]*\]\s*$/, '').trim() || null;
+  const agent = withoutRef(to) || null;
   const role = roleOf(entries, agent) ?? (agent && project.graph.stages.has(agent) ? agent : null);
   return { agent, role };
 }
