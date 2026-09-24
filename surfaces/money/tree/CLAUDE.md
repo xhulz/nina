@@ -6,3 +6,6 @@
 
 <!-- nina:slot money.3 -->
 5. **State-machine integrity.** Every money-moving entity has an explicit set of states and legal transitions, declared in `.claude/architecture.md` § *State machines* — not inferred from whatever code happens to exist. Only declared transitions are legal; an illegal one throws and is never silently coerced. **Every transition writes an audit row** (entity, id, from → to, actor, when). Skipping a state, inventing one, or landing a transition with no audit row is a hard reject.
+
+<!-- nina:slot money.4 -->
+- **money movement**: anything that creates, moves, settles or records a balance

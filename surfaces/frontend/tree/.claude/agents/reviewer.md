@@ -17,7 +17,7 @@ For any diff touching `{{APP_DIR}}/**`:
 1. Build and serve it — you already run `pnpm build` for frontend diffs; serve that build locally.
    Every protected screen redirects to `/login` without a session, so a plain static server
    screenshots the login page. Use `scripts/visual-fixture-server.mjs`, which serves the built
-   `dist` AND a canned API from ONE origin (no auth, no DB, no Worker):
+   `dist` AND a canned API from ONE origin (no auth, no DB, no backend):
 
    ```bash
    export PATH=/opt/homebrew/opt/node@22/bin:$PATH

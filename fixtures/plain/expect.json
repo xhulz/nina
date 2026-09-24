@@ -10,7 +10,8 @@
     "KYC",
     "CPF",
     "CNPJ",
-    "PIX"
+    "PIX",
+    "money"
   ],
   "absent": [
     ".claude/agents/dba.md",

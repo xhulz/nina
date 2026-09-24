@@ -42,7 +42,7 @@ it is a deploy built on recall.
 <!-- nina:slot db.2 -->
 <!-- nina:slot edge-cf.4 -->
 6. **Smoke against preview, never prod first.** Exercise the actual changed path — an endpoint, a page render, a webhook — against the preview URL or staging route. A deploy that returns 200 on `/health` is not a smoke test.
-7. **Name the rollback before deploying.** The previous Worker version or Pages deployment to roll back to, and whether the migration is reversible. If a change is not rollable back, say so *before* deploying, not after.
+7. **Name the rollback before deploying.** The previous deployment of each target to roll back to, and whether the migration is reversible. If a change is not rollable back, say so *before* deploying, not after.
 <!-- nina:slot blockchain.2 -->
 <!-- nina:slot frontend.3 -->
 <!-- nina:slot pii.1 -->
@@ -53,7 +53,7 @@ it is a deploy built on recall.
 
 **Preview and staging: deploy on your own.** That is the whole point of the stage.
 
-**Production: never on your own initiative.** A prod deploy on this system moves real money and touches real people's data. It requires {{OWNER}}'s explicit go, in this session, for this change. Report that preview is green and ask. An earlier approval of a different deploy is not an approval of this one.
+**Production: never on your own initiative.** A prod deploy on this system reaches real users and their data. It requires {{OWNER}}'s explicit go, in this session, for this change. Report that preview is green and ask. An earlier approval of a different deploy is not an approval of this one.
 
 ## You MUST NOT
 - Deploy to production without an explicit go for *this* change.

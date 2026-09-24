@@ -43,7 +43,8 @@ There are eleven subagents, and a project gets the ones its risks call for. Ever
 `architect`, `implementer`, `reviewer`, `qa`, `devops` and `secops`. A database adds `dba`, external services
 add `integration-tester`, and smart contracts add `solidity-dev` and `solidity-auditor`, since contract code
 can't be patched once it ships. The chain also scales with the change. A one-file label fix gets a light chain
-or a direct edit, and anything that touches money, the database, auth or an integration goes through every
+or a direct edit, and anything on a critical path (auth, plus what the project's surfaces add: money, the database, an
+integration) goes through every
 gate.
 
 ```mermaid
@@ -111,7 +112,7 @@ Composition gets tested like code. Four fixture projects, one for each shape wor
 properties each: no placeholder survives, every unfilled slot belongs to the project, nothing leaks in from a
 surface the project didn't declare, gated files show up exactly when they should, rule references resolve,
 the notice never lands above a frontmatter block, every agent spec declares its tool allowlist, and the graph
-validates. A ninth check looks at the layers themselves: a surface's technology or role may only be named in
+validates. A ninth check looks at the layers themselves: a surface's technology, role or domain may only be named in
 files gated on that surface. The first time it ran, it found 37 places where ungated core prose handed work
 to a role that only some projects have.
 

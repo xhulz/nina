@@ -1639,7 +1639,11 @@ const dated = (date, status = 'active') =>
   const dir = await scratch();
   run(['init', '--project', dir, '--surfaces', 'money', '--core', 'dev']);
   const todo = await readFile(join(dir, '.nina', 'TODO.md'), 'utf8');
-  const line = todo.split('\n').find((l) => l.includes('adds 33 fragment')) ?? '';
+  // Found by the surface it describes, not by its count: the count moves whenever a fragment is added.
+  const lines = todo.split('\n');
+  const at = lines.findIndex((l) => l.includes('**money**'));
+  expect(at >= 0, 'init: the TODO lists the money surface');
+  const line = at >= 0 ? (lines[at + 1] ?? '') : '';
 
   for (const gated of ['dba', 'integration-tester', 'solidity-dev', 'solidity-auditor']) {
     expect(!line.includes(gated), `init: money's cost must not claim to change ${gated} — got ${line.trim()}`);

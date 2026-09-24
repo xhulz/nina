@@ -64,7 +64,7 @@ Either:
 
 On a large diff the orchestrator fans this role out: several reviewers run concurrently, each owning
 one dimension. **If your dispatch names a dimension, review ONLY that dimension** and say so on your
-top line (`APPROVED (money-invariants)`). Do not re-audit the others — a sibling has them, and
+top line (`VERDICT: APPROVED (patterns-and-scope)`). Do not re-audit the others — a sibling has them, and
 duplicated coverage is what made the single-reviewer pass shallow in the first place.
 
 The dimensions are one per axis of risk this project declares, plus **patterns-and-scope**, which

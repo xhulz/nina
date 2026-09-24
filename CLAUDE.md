@@ -88,7 +88,13 @@ technology may be named only if that file is gated on that surface — `Prisma` 
 `integration-tester` only under `integrations`. A role named in ungated prose is an edge to a stage
 the next project may not have; the audit found 37 of them the first time it looked, including one
 telling a project with neither that "dba and integration-tester run in parallel after the
-implementer". A fixture can only prove what its own profile composes, and a deny
+implementer". And so may a surface's **domain**: `money` only under `money`. It is not a technology,
+but it is the same leak — a project with no money read that under-gating a money movement was a
+protocol violation and that a production deploy moves real money, 19 times, while every fixture
+passed; the heavy-gate list that said "money, the database, auth, an integration" in ten places is now
+one list of **critical paths** in the core `CLAUDE.md`, and each surface adds its own entry by slot. The
+same pass found six Cloudflare names (`Pages`, `Worker`, a capitalised `Wrangler`) the technology list
+had never held. A fixture can only prove what its own profile composes, and a deny
 list matches substrings, which makes a word like `Hono` unusable because it fires on `Honor`. Asking
 the layers asks once, of everything.
 

@@ -13,7 +13,7 @@
 <!-- nina:slot db.5 -->
 - **tenant-and-privacy** — `userId` in every app query ({{AUTH_LIB}} tables are the only exemption);
   no PII or secrets in logs; no cross-tenant read
-  or write reachable through a route, an MCP tool, a webhook, or a DO call.
+  or write reachable through a route, an MCP tool, a webhook, or an RPC between services.
 
 <!-- nina:slot db.6 -->
 - `{{DB_PKG}}/prisma/schema.prisma` touched (Prisma migration in play)

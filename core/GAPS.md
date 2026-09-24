@@ -84,6 +84,22 @@ guard is now a layer audit in `compose:test` — for every core file, a surface'
 named only if the file is gated on that surface. It asks the question once, of everything, instead
 of only of what a fixture happens to compose.
 
+**Money in the core, and the heavy-gate list that carried it.** The extraction closed money's nouns
+(payout, escrow, the state machine) but not the word itself: ten places in the core listed "money, the
+database, auth, an integration" as the changes that are always gated in full, so a project with no
+money was told that under-gating a money movement was a protocol violation, and its devops that a
+production deploy "moves real money". The audit now holds `money` like a technology, and found 19 of
+them. The list is one definition of **critical paths** in `CLAUDE.md` — auth in the core, and the
+database, an integration boundary, money movement, personal data and contract code each added by its
+own surface — and the ten places say "a critical path". Two copies of money's own rules had also
+landed in `surfaces/db` (`BigInt` columns, a money-integrity check in the dba's report), contradicting
+the money surface's integer minor unit; they are gone, since the money surface already says it better.
+The same pass found Cloudflare's `Pages`, `Worker` and a capitalised `Wrangler` in the core and in
+two surfaces, and the leftovers no audit could name: a model called `DestinationAccount` and a spec
+set called `retention-spec1..8` in the router's examples, "all nine stages" where a profile composes
+seven to eleven, `userId` as the name of owner scoping, and "the harness's first three months" told
+as the history of whichever project was reading it.
+
 ## Open
 
 **The core is domain-agnostic, not stack-agnostic — deliberately.** It still names `pnpm` (49),

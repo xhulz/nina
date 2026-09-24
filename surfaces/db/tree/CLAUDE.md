@@ -18,3 +18,6 @@
 
 <!-- nina:slot db.7 -->
 7. **Tenant isolation is enforced in the data layer.** Every Prisma query in app code includes `userId` (the tenant) in the `where` clause. No "global" queries except the {{AUTH_LIB}} system tables. Reviewer rejects any query missing the scope.
+
+<!-- nina:slot db.8 -->
+- **the database**: the schema, a migration, or a query

@@ -23,7 +23,6 @@
 - **Every query in app code includes `userId` in the `where` clause** (or its model-specific equivalent FK). Tenant isolation is in the data layer. The {{AUTH_LIB}} system tables are the only exemption.
 - Migrations reviewed by **dba** for: non-blocking on large tables, index coverage for new query patterns, backward compatibility during rolling deploy.
 - N+1 queries are a bug. Use `include` / `select` deliberately.
-- Monetary columns are `BigInt`. Reject `Decimal` / `Float` / `Int` for money.
 - `Prisma Postgres` is connected only via Accelerate. Local dev uses the same Accelerate URL pointed at a dev DB; never embed a direct connection string in code.
 
 <!-- nina:slot db.6 -->

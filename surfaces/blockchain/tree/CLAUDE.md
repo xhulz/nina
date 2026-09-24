@@ -7,3 +7,6 @@
 <!-- nina:slot blockchain.3 -->
 - **solidity-dev** → write contract sources and their adversarial tests strictly to spec; never deploys, never widens access control to make a test pass
 - **solidity-auditor** → **mandatory gate** on any contract diff; `APPROVED` required before reviewer and before any deploy
+
+<!-- nina:slot blockchain.4 -->
+- **contract code**: a contract source, a deploy script, or the version of a contracts library

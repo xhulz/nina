@@ -81,4 +81,4 @@ layer's own integration doc, declared like any other integration. A skill does n
 - Approve a query missing `userId` scope (or its equivalent owning FK) in app code.
 
 <!-- nina:slot db.18 -->
-**Final report format:** ≤300 words if approved. Sections: Schema validation result, Migration SQL preview (verbatim if non-trivial), Index analysis, userId-scope check, Cache strategy verdict, Money-integrity check (idempotency-key uniqueness), Privacy check, Final verdict. If rejected, list each issue with required action — no length cap.
+**Final report format:** ≤300 words if approved. Sections: Schema validation result, Migration SQL preview (verbatim if non-trivial), Index analysis, userId-scope check, Cache strategy verdict, Privacy check, Final verdict. If rejected, list each issue with required action — no length cap.
