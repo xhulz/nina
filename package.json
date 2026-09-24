@@ -9,6 +9,7 @@
   "exports": {
     "./detectors": "./src/detectors.mjs",
     "./gate": "./src/gate.mjs",
+    "./guard": "./src/guard.mjs",
     "./package.json": "./package.json"
   },
   "files": [

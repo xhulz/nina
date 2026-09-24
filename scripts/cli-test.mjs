@@ -33,6 +33,7 @@ import { defaultVocabulary } from '../src/vocabulary.mjs';
 import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
+import { handleEdit, noticeOf } from '../src/guard.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const NINA = join(ROOT, 'bin', 'nina.mjs');
@@ -2245,6 +2246,71 @@ const dated = (date, status = 'active') =>
 
   if (before === undefined) delete process.env.NINA_DATA;
   else process.env.NINA_DATA = before;
+}
+
+// ─── the edit guard: a composed file is changed in its layer, never in place ─────────────
+{
+  const bed = await sound('plain', 'dev');
+  const edit = (tool, path, extra = {}) => handleEdit({ hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { [tool === 'NotebookEdit' ? 'notebook_path' : 'file_path']: path }, ...extra }, { root: bed });
+  const denied = (answer) => answer?.hookSpecificOutput?.permissionDecision === 'deny';
+
+  const onDoc = await edit('Edit', join(bed, 'CLAUDE.md'));
+  expect(denied(onDoc) && onDoc.hookSpecificOutput.permissionDecisionReason.includes('.nina/project/tree/CLAUDE.md'), `guard: an edit to a composed document is refused, and the refusal names where the change goes — got ${JSON.stringify(onDoc)}`);
+  expect(denied(await edit('Write', join(bed, '.claude', 'agents', 'reviewer.md'))), 'guard: so is a Write over one, below its frontmatter');
+  expect(denied(await edit('MultiEdit', join(bed, 'scripts', 'loop-gate.mjs'))), 'guard: and a composed script, whose notice is a line comment');
+  expect(denied(await edit('Edit', 'CLAUDE.md', { cwd: bed })), 'guard: a relative path is read from the session directory');
+  await symlink(join(bed, 'CLAUDE.md'), join(bed, 'linked.md'));
+  expect(denied(await edit('Edit', join(bed, 'linked.md'))), 'guard: a link to a composed file is the composed file');
+  // A fragment started from a copy of the composed file carries its notice — the adoption path says to
+  // move a file into the layer — and the layer is still where the change goes.
+  await mkdir(join(bed, '.nina', 'project', 'tree'), { recursive: true });
+  await writeFile(join(bed, '.nina', 'project', 'tree', 'CLAUDE.md'), `${(await readFile(join(bed, 'CLAUDE.md'), 'utf8')).split('\n').slice(0, 8).join('\n')}\n<!-- nina:slot project.1 -->\nOurs.\n`);
+  expect((await edit('Edit', join(bed, '.nina', 'project', 'tree', 'CLAUDE.md'))) === null, "guard: the project's own layer is let through, even a fragment that still carries a copied notice");
+  // The integration template composes with a notice and is meant to be copied: the copy is the project's.
+  await mkdir(join(bed, '.claude', 'integrations'), { recursive: true });
+  await writeFile(join(bed, '.claude', 'integrations', 'stripe.md'), `${(await readFile(join(bed, 'CLAUDE.md'), 'utf8')).split('\n').slice(0, 8).join('\n')}\n# Stripe\n`);
+  expect((await edit('Edit', join(bed, '.claude', 'integrations', 'stripe.md'))) === null, 'guard: a copy of a composed template is the project’s own doc, notice and all');
+  await writeFile(join(bed, 'notes.md'), '# Ours\n\nThe harness writes `<!-- nina:generated — ... -->` at the top of what it composes.\n');
+  expect((await edit('Edit', join(bed, 'notes.md'))) === null, 'guard: a file of the project that only quotes the notice is let through');
+  expect((await edit('Write', join(bed, 'new-file.md'))) === null, 'guard: a new file is let through — it carries no notice yet');
+  expect((await edit('NotebookEdit', join(bed, 'notes.md'))) === null, 'guard: a notebook edit is read from its own key');
+  expect((await handleEdit({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: join(bed, 'CLAUDE.md') } }, { root: bed })) === null, 'guard: reading a composed file is not editing it');
+  const elsewhere = await scratch();
+  await writeFile(join(elsewhere, 'x.md'), '<!-- nina:generated — composed elsewhere -->\n');
+  expect((await edit('Edit', join(elsewhere, 'x.md'))) === null, "guard: a file outside the project is not this project's to guard");
+  expect(noticeOf('# Title\n\nplain') === null && noticeOf('see <!-- nina:generated — mid-line -->') === null, 'guard: a notice is only one at the start of a line');
+  expect(noticeOf('#!/usr/bin/env node\n// nina:generated — composed.\n// Edit the layer.\n\ncode') === 'nina:generated — composed. Edit the layer.', 'guard: the notice is read in either comment syntax, as one sentence');
+  // A composed guard outlives the version that composed it: pinned to one that ships no guard, it acts on nothing.
+  const profile = JSON.parse(await readFile(join(bed, '.nina', 'profile.json'), 'utf8'));
+  await writeFile(join(bed, '.nina', 'profile.json'), JSON.stringify({ ...profile, core: '0.25.0' }));
+  expect((await edit('Edit', join(bed, 'CLAUDE.md'))) === null, 'guard: a project pinned to a version with no guard is left alone');
+  await writeFile(join(bed, '.nina', 'profile.json'), JSON.stringify(profile));
+
+  // Installed, but a release behind the pin: the composed guard would import a module the package lacks.
+  const old = await scratch();
+  await mkdir(join(old, 'node_modules', '@xhulz', 'nina'), { recursive: true });
+  await writeFile(join(old, 'package.json'), '{"name":"old","private":true}');
+  await writeFile(join(old, 'node_modules', '@xhulz', 'nina', 'package.json'), JSON.stringify({ name: '@xhulz/nina', version: '0.25.0', exports: { './gate': './gate.mjs', './package.json': './package.json' } }));
+  await writeFile(join(old, 'node_modules', '@xhulz', 'nina', 'gate.mjs'), 'export {};\n');
+  const behind = await missingWiring(old, new Set(['scripts/edit-guard.mjs', 'scripts/loop-gate.mjs']));
+  expect(behind.some((p) => p.includes('has no ./guard') && p.includes('older than the version')) && !behind.some((p) => p.includes('./gate')), `guard: an installed package older than the pin is named as that, not as missing — got ${behind.join(' | ')}`);
+
+  // End to end: the composed script, run by the exact command the wiring writes, answers the hook.
+  const settings = JSON.parse(await readFile(join(bed, '.claude', 'settings.json'), 'utf8'));
+  const command = settings.hooks.PreToolUse.find((g) => g.matcher === 'Edit|Write|MultiEdit|NotebookEdit')?.hooks[0]?.command;
+  expect(Boolean(command) && command.includes('edit-guard.mjs'), `guard: a new project is wired for the guard — got ${JSON.stringify(settings.hooks.PreToolUse)}`);
+  const fired = spawnSync('sh', ['-c', command ?? 'false'], {
+    input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: join(bed, 'CLAUDE.md') } }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: bed },
+  });
+  let answer = null;
+  try {
+    answer = JSON.parse(fired.stdout);
+  } catch {
+    // Reported below.
+  }
+  expect(fired.status === 0 && denied(answer), `guard e2e: the composed script, run by the hook command, refuses the edit — got ${fired.status} ${fired.stdout}${fired.stderr}`);
 }
 
 // ─── the loop gate, end to end: the composed script, run by the exact hook command ───────

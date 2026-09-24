@@ -98,7 +98,8 @@ Each layer mirrors the project's file tree, and `nina compose` merges them:
   project's provider, packages or models. A release can answer a name itself, like the typecheck and test
   commands, and a project declares it only to change it.
 - Every composed file opens with a notice naming the layer to edit instead. Claude Code's `Edit` tool refuses
-  a file the agent hasn't read, so any agent editing an existing file sees the notice first.
+  a file the agent hasn't read, so any agent editing an existing file sees the notice first. Seeing it isn't
+  the same as obeying it, so an edit guard hook refuses the edit and quotes the notice back.
 
 ```mermaid
 flowchart LR

@@ -65,7 +65,7 @@ belongs in a `project.N` slot, or **a rule for every project**, which cannot be 
 | Anything that is not one of the above | `nina where <the path>` — it will say "not harness", which is an answer: the file is ordinary project code and the harness has no opinion about it | whoever is editing it |
 | New subagent role | `.claude/pipeline.md`, `.claude/router.md`, existing `.claude/agents/*.md` | human decision |
 | Package / route / service / RPC method added or removed | `.claude/code-map.md` — update the curated map, then run `pnpm code-map:check` | whoever shipped the change, at the close of the step |
-| Update this map | this file | architect (light) → reviewer |
+| Update this map | the project's slot in it — `nina where .claude/retrieval.md` names it; a row every project needs is a request against the pinned core | architect (light) → reviewer |
 
 ---
 
