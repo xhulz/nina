@@ -1,0 +1,85 @@
+{
+  "describe": "Twelve defects planted in a change that archives a note. A defect is caught when the report names its file and a line nearest to one of its anchors, within two; a defect may have several places a reviewer could rightly point at. One without an anchor is caught when the report names the file in an issue it raises. Eleven map to a rule the composed reviewer carries; error-swallowed is plain correctness, which no rule names.",
+  "spec": ".claude/plans/specs/archive-notes.md",
+  "defects": [
+    {
+      "id": "scope-config",
+      "file": "src/server/config.ts",
+      "anchor": null,
+      "what": "changes a file the spec puts out of scope (PAGE_SIZE 50 → 100)"
+    },
+    {
+      "id": "obsolete-not-deleted",
+      "file": "src/server/services/legacy-archive.ts",
+      "anchor": null,
+      "what": "the obsolescence list says delete it; the diff keeps it"
+    },
+    {
+      "id": "tsdoc-missing",
+      "file": "src/server/data/notes.ts",
+      "anchor": "export function setArchived",
+      "what": "a new export with no TSDoc"
+    },
+    {
+      "id": "import-extension",
+      "file": "src/server/services/notes.ts",
+      "anchor": "from '../data/notes';",
+      "what": "a relative import without the .js extension"
+    },
+    {
+      "id": "owner-check",
+      "file": "src/server/services/notes.ts",
+      "anchor": "if (!row) throw new NoteNotFoundError(id);",
+      "what": "archiveNote does not check the owner: anyone can archive anyone's note"
+    },
+    {
+      "id": "toggle-not-idempotent",
+      "file": "src/server/services/notes.ts",
+      "anchor": "setArchived(id, !row.archived)",
+      "what": "toggles instead of archiving, so archiving twice unarchives"
+    },
+    {
+      "id": "error-swallowed",
+      "file": "src/server/services/notes.ts",
+      "anchor": "} catch {",
+      "what": "a failure is swallowed and the stale note returned as if archived"
+    },
+    {
+      "id": "service-date-format",
+      "file": "src/server/services/notes.ts",
+      "anchor": [
+        "export interface ArchivedNote",
+        "updatedAt: next?.updatedAt ?? new Date()",
+        "updatedAt: note.updatedAt.toISOString()"
+      ],
+      "what": "the service returns a Date and the route formats it; formatting dates is the service's job"
+    },
+    {
+      "id": "route-imports-data",
+      "file": "src/server/routes/notes.ts",
+      "anchor": "import { findNote } from '../data/notes.js';",
+      "what": "the route reaches the data layer past the service"
+    },
+    {
+      "id": "console-log",
+      "file": "src/server/routes/notes.ts",
+      "anchor": "console.log('archiving note'",
+      "what": "console.log in a production path, with the owner's id"
+    },
+    {
+      "id": "status-200-not-found",
+      "file": "src/server/routes/notes.ts",
+      "anchor": "return { status: 200, body: { error: 'not_found' } }",
+      "what": "a missing note returns 200 where the spec says 404"
+    },
+    {
+      "id": "test-no-mutation",
+      "file": "src/server/services/notes.test.ts",
+      "anchor": [
+        "it('archives a note'",
+        "expect(note).toBeDefined()"
+      ],
+      "what": "a new test that names no mutation and asserts nothing the toggle bug would fail"
+    }
+  ]
+}

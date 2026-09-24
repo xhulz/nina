@@ -255,6 +255,15 @@ release freezes, and the upgrade that installs the answer closes the request and
 full cycle has already happened: the three lessons in the second output became harness rules in 0.20.0, and the
 upgrade closed all three requests by itself.
 
+### Evaluating a release
+
+A loop-back rate moves with the work as much as with the rules, so it can't show whether a rule change helped.
+`nina eval` runs an experiment instead. The reviewer each release composes reviews the same change, which
+carries twelve planted defects, and the report counts what each one caught. It runs `claude -p` on the
+Claude Code login, so it uses the subscription and never a per-token key, and the grading is deterministic.
+The first run caught 11 of 12, and it also showed the reviewer writing a sentence before its verdict line,
+which the gate would have read as no verdict at all.
+
 ## What measuring found
 
 None of this showed up until I counted.
@@ -305,6 +314,7 @@ node scripts/cli-test.mjs         # the CLI end to end, in scratch projects
 | [`core/`](core), [`surfaces/`](surfaces) | the harness layers |
 | [`releases/`](releases) | the frozen releases projects pin |
 | [`fixtures/`](fixtures) | projects that exist to be composed and checked |
+| [`evals/`](evals) | a change with planted defects, for comparing one release's reviewer with another's |
 | [`scripts/`](scripts) | the test suites and this repo's own checks |
 
 [`CLAUDE.md`](CLAUDE.md) is the long version: every mechanism, and why it ended up the way it did. It's also

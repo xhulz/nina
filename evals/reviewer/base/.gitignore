@@ -1,0 +1,8 @@
+# The harness the eval composes is not part of the change under review.
+.claude/*
+!.claude/plans/
+!.claude/code-map.md
+!.claude/architecture.md
+.nina/
+CLAUDE.md
+scripts/
