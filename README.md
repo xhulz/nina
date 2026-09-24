@@ -326,7 +326,7 @@ what Claude Code reads when it works on this repo.
 ## Engineering
 
 - Node.js with zero runtime dependencies. About 6.5k lines of source and 2.8k lines of tests.
-- 36 frozen releases so far. The package ships all of them, so an upgrade can compose its target and report the
+- 37 frozen releases so far. The package ships all of them, so an upgrade can compose its target and report the
   cost before it changes anything.
 - The tests check properties over the fixture projects, audit the layers, run the whole CLI in scratch projects,
   and use mutation checks for the rules that matter: undo the rule and some test has to fail.
