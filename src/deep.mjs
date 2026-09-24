@@ -21,7 +21,7 @@ import { createReadStream, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { callsDir, childEnv, forgetProject, runFailure } from './commands/eval.mjs';
-import { PROJECTS_ROOT, isLoopBack } from './transcripts.mjs';
+import { isLoopBack, transcriptsOf } from './transcripts.mjs';
 
 /** Reports per map call, and how much of each is sent: the cause is in the first screen of a report. */
 const BATCH = 15;
@@ -231,4 +231,4 @@ export async function deepLearn({ records, known, projectDir, since, model, api,
 }
 
 /** The transcript directory of a project, where `learn` finds its reports. */
-export const transcriptsOf = (slug) => join(process.env.NINA_TRANSCRIPTS ?? PROJECTS_ROOT, slug);
+export { transcriptsOf };

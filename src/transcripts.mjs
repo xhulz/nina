@@ -20,6 +20,9 @@ import { homedir } from 'node:os';
 /** Root under which Claude Code stores one directory of transcripts per project. */
 export const PROJECTS_ROOT = join(homedir(), '.claude', 'projects');
 
+/** The transcript directory of a project, by its snapshot name; `NINA_TRANSCRIPTS` moves the root, for tests. */
+export const transcriptsOf = (slug) => join(process.env.NINA_TRANSCRIPTS ?? PROJECTS_ROOT, slug);
+
 /**
  * The verdict tokens the agent specs mandate on a report's first line, per role.
  * A stage that declares its verdict this way is read with certainty; everything

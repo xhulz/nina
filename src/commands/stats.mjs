@@ -15,6 +15,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
+import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { isLoopBack } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
@@ -106,6 +107,20 @@ export function decodeProjectDir(encoded) {
     return null;
   };
   return walk('/', 0);
+}
+
+/**
+ * The name a project goes by outside this machine: its directory's, not the flattened path, which carries
+ * the owner's home directory. A directory that is gone cannot be split back into its parts, so the name is
+ * the path below home, flattened as it was.
+ *
+ * @param {string} encoded - A snapshot's project name.
+ * @returns {string}
+ */
+export function projectName(encoded) {
+  const decoded = decodeProjectDir(encoded);
+  const home = `${homedir().replace(/[^A-Za-z0-9]/g, '-')}-`;
+  return decoded ? basename(decoded) : encoded.startsWith(home) ? encoded.slice(home.length) : encoded.replace(/^-+/, '');
 }
 
 /**
