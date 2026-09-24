@@ -77,7 +77,8 @@ must not break.
   here ends at `nina release` and `npm pack`. An answer to a project's request becomes true for it only
   when it installs the release that carries it.
 - **The measurement store is metadata only**: counts, verdicts, timestamps, tokens, never report text,
-  source, PII, an id a model wrote, or dollars.
+  source, PII, an id a model wrote, or dollars. `nina export` sends less than it holds, and each run once:
+  Langfuse keeps what it is first sent.
 - **Nothing here bills per token by accident.** `nina eval` runs on the Claude Code login and strips every
   billing credential from its child unless `--api` asks for it.
 - **The suites are `node scripts/cli-test.mjs`, `node scripts/compose-test.mjs` and
@@ -93,7 +94,7 @@ must not break.
 | `check`, `where` | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
-| `snapshot`, `stats`, cost, proportion, `eval` | [`docs/measurement.md`](docs/measurement.md) |
+| `snapshot`, `stats`, cost, proportion, `eval`, `export` | [`docs/measurement.md`](docs/measurement.md) |
 | `pills`, `learn` and `learn --deep`, `requests` | [`docs/learning.md`](docs/learning.md) |
 
 Each document says why its mechanism ended up the way it did — usually because the obvious version was
@@ -113,6 +114,7 @@ nina pills --project ../thing                 # is the pipeline's own corpus of 
 nina learn --project ../thing [--deep]        # is the pipeline learning? --deep reads why it sent work back
 nina requests                                 # the lessons projects have graduated to the harness
 nina snapshot && nina stats                   # measure what the pipeline did, and what it cost
+nina export --langfuse [--dry-run]            # send that history to Langfuse, metadata only
 nina eval --release <a> --release <b>         # which release's reviewer catches more planted defects
 nina release <version>                        # freeze the working layers; never rewritten
 ```
@@ -121,7 +123,7 @@ nina release <version>                        # freeze the working layers; never
 
 ```
 bin/nina.mjs          entry point and command table
-src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval
+src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval, export
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/guard.mjs         the edit guard: refuses an edit to a composed file, quoting where it belongs
@@ -131,6 +133,7 @@ src/prices.mjs        API list prices by model, dated, for what stats estimates 
 src/transcripts.mjs   the transcript parser (dispatch/verdict/skill extraction)
 src/detectors.mjs     runs a project's drift detectors (imported by its harness-check)
 src/deep.mjs          learn --deep: the loop-back reports read by a model, grouped by cause, set against the pills
+src/langfuse.mjs      export: a snapshot record as an OTLP span and a verdict score
 src/banner.mjs        the startup banner
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to

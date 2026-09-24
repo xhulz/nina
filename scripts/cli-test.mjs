@@ -17,7 +17,7 @@
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeProjectDir } from '../src/commands/stats.mjs';
@@ -36,6 +36,8 @@ import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, set
 import { handleEdit, noticeOf } from '../src/guard.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
+import { exportCommand } from '../src/commands/export.mjs';
+import { BATCH as SPAN_BATCH, spanIdOf } from '../src/langfuse.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const NINA = join(ROOT, 'bin', 'nina.mjs');
@@ -3160,6 +3162,174 @@ const dated = (date, status = 'active') =>
     moved.status === 0 && /applied and verified/.test(moved.out),
     `upgrade: a problem the project already had is not the move's, however many detectors can see it — got ${moved.status}\n${moved.out}`,
   );
+}
+
+// ─── export --langfuse: metadata only, each run sent once ────────────────────────────────────────
+{
+  const saved = { data: process.env.NINA_DATA, pk: process.env.LANGFUSE_PUBLIC_KEY, sk: process.env.LANGFUSE_SECRET_KEY, host: process.env.LANGFUSE_HOST };
+  const data = await scratch();
+  process.env.NINA_DATA = data;
+  process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+  process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+  process.env.LANGFUSE_HOST = 'https://lf.example/';
+  const home = realpathSync(await scratch());
+  const project = join(home, 'Kittens');
+  await mkdir(project);
+  const slug = slugFor(project);
+  const now = new Date('2026-09-24T12:00:00Z');
+  const row = (i, extra = {}) => ({
+    project: slug, dispatch_id: `toolu_${String(i).padStart(4, '0')}`, ts: '2026-09-20T10:00:00.000Z', result_ts: '2026-09-20T10:05:00.000Z',
+    role: 'reviewer', desc: 'SECRET-DESCRIPTION', session: 's1', verdict: 'APPROVED', verdict_source: 'handback', branch: 'main',
+    tokens: { input: 10, output: 20, write_5m: 0, write_1h: 0, read: 30 }, usage_model: 'claude-opus-4-8', files_touched: 2, ...extra,
+  });
+  let rows = [
+    ...Array.from({ length: SPAN_BATCH + 20 }, (_, i) => row(i)),
+    row(900, { verdict: null }),
+    row(901, { ts: '2026-09-24T08:00:00.000Z', result_ts: '2026-09-24T09:00:00.000Z' }),
+  ];
+  const snap = join(data, 'snapshots', `${slug}.jsonl`);
+  const save = () => writeFile(snap, rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  await mkdir(join(data, 'snapshots'), { recursive: true });
+  await save();
+
+  let calls = [];
+  let refuse = () => null;
+  let accepted = () => '{}';
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init, body: JSON.parse(init.body) });
+    const status = refuse(url, JSON.parse(init.body), calls.length);
+    return { ok: !status, status: status ?? 200, text: async () => (status ? 'no' : accepted(url)) };
+  };
+  const quiet = async (fn) => {
+    const out = [];
+    const { log, error } = console;
+    console.log = (...a) => out.push(a.join(' '));
+    console.error = (...a) => out.push(a.join(' '));
+    try {
+      return { code: await fn(), out: out.join('\n') };
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  const exp = (args) => quiet(() => exportCommand(['--langfuse', ...args], { fetch: fakeFetch, now }));
+  const spansSent = () => calls.filter((c) => c.url.endsWith('/otel/v1/traces')).flatMap((c) => c.body.resourceSpans[0].scopeSpans[0].spans);
+  const scoresSent = () => calls.filter((c) => c.url.endsWith('/api/public/scores')).map((c) => c.body);
+
+  const dry = await exp(['--dry-run']);
+  expect(dry.code === 0 && calls.length === 0 && dry.out.includes(`Kittens: would send ${SPAN_BATCH + 21} span(s) and ${SPAN_BATCH + 20} score(s)`) && dry.out.includes('1 run(s) still settling'), `export: a dry run counts, waits for the unsettled, and sends nothing — got ${dry.out}`);
+
+  delete process.env.LANGFUSE_SECRET_KEY;
+  const keyless = await exp([]);
+  process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+  expect(keyless.code === 2 && calls.length === 0, 'export: without keys it sends nothing');
+
+  // The second span batch fails: the first is kept as sent, and no score goes for a span that did not.
+  refuse = (url, body, n) => (url.endsWith('/otel/v1/traces') && n === 2 ? 503 : null);
+  const first = await exp([]);
+  expect(first.code === 1 && first.out.includes('✗ the traces endpoint answered 503') && spansSent().length === SPAN_BATCH + 21 && scoresSent().length === 0, `export: a failed batch stops the run and sends no score — got ${first.out}`);
+  const [head] = calls;
+  const kept = JSON.parse(await readFile(join(data, 'exports', 'langfuse', `${slug}.json`), 'utf8').catch(() => '{"spans":{}}'));
+  expect(Object.keys(kept.spans).length === SPAN_BATCH, `export: the batch that went is kept as sent — got ${Object.keys(kept.spans).length}`);
+  expect(
+    head.url === 'https://lf.example/api/public/otel/v1/traces' && head.init.headers.Authorization === `Basic ${Buffer.from('pk-test:sk-test').toString('base64')}` && head.init.headers['x-langfuse-ingestion-version'] === '4',
+    `export: OTLP to the host's traces endpoint, with basic auth and the v4 header — got ${head.url}`,
+  );
+  const all = JSON.stringify(calls.map((c) => c.body));
+  expect(!all.includes('SECRET-DESCRIPTION') && !all.includes(home), 'export: the dispatch description and the local path never leave the machine');
+  const span = spansSent()[0];
+  const attr = (s, key) => s.attributes.find((a) => a.key === key)?.value;
+  expect(
+    attr(span, 'langfuse.trace.name')?.stringValue === 'Kittens' && attr(span, 'langfuse.observation.type')?.stringValue === 'generation' && JSON.parse(attr(span, 'langfuse.observation.usage_details').stringValue).cache_read_input_tokens === 30 && attr(span, 'langfuse.trace.tags')?.arrayValue?.values?.[0]?.stringValue === 'nina',
+    `export: a run with tokens is a generation, named by its project's directory, tags as an array — got ${JSON.stringify(span.attributes)}`,
+  );
+
+  calls = [];
+  let scoreTarget = null;
+  refuse = (url, body) => {
+    if (!url.endsWith('/api/public/scores')) return null;
+    scoreTarget ??= body.observationId;
+    return body.observationId === scoreTarget ? 500 : null;
+  };
+  const second = await exp([]);
+  const retrySpans = spansSent();
+  expect(second.code === 1 && second.out.includes('1 score(s) refused') && retrySpans.length === 21 && !retrySpans.some((s) => Object.keys(kept.spans).some((id) => spanIdOf({ dispatch_id: id }) === s.spanId)), `export: the retry sends only the spans that did not go — got ${retrySpans.length}\n${second.out}`);
+  const scores = scoresSent();
+  expect(scores.length === SPAN_BATCH + 20 && scores.every((s) => s.dataType === 'CATEGORICAL' && s.value === 'APPROVED' && s.name === 'verdict' && s.traceId && s.observationId && !('timestamp' in s)), `export: a score per verdict, on its observation, and none for a run with no verdict — got ${scores.length}`);
+  const ids = new Set(retrySpans.map((s) => s.spanId));
+  expect(scores.some((s) => ids.has(s.observationId)), 'export: a score goes out beside a span sent in the same run');
+
+  calls = [];
+  refuse = () => null;
+  const third = await exp([]);
+  expect(third.code === 0 && spansSent().length === 0 && scoresSent().length === 1 && scoresSent()[0].observationId === scoreTarget, `export: then only the score that failed — got ${third.out}`);
+
+  // A run whose verdict is read later gets its score, never a second span; one that changed otherwise is said.
+  rows = rows.map((r) => (r.dispatch_id === 'toolu_0900' ? { ...r, verdict: 'REJECTED' } : r.dispatch_id === 'toolu_0001' ? { ...r, files_touched: 9 } : r));
+  await save();
+  calls = [];
+  const fourth = await exp([]);
+  expect(fourth.code === 0 && spansSent().length === 0 && scoresSent().length === 1 && scoresSent()[0].value === 'REJECTED', `export: a verdict read later is a first score, not a second span — got ${fourth.out}`);
+  expect(fourth.out.includes('2 run(s) changed after they were sent'), `export: a record that changed after it went is said — got ${fourth.out}`);
+  calls = [];
+  const fifth = await exp([]);
+  expect(fifth.code === 0 && calls.length === 0 && fifth.out.includes('nothing new'), `export: and nothing goes twice — got ${fifth.out}`);
+  const later = await quiet(() => exportCommand(['--langfuse'], { fetch: fakeFetch, now: new Date('2026-09-26T00:00:00Z') }));
+  expect(later.code === 0 && spansSent().length === 1, 'export: a run is sent once it has settled');
+
+  // A 200 that refused part of the batch: which spans were kept is unknown, so the batch is not sent
+  // again, and its runs get no score.
+  rows = [...rows, row(950), row(951)];
+  await save();
+  calls = [];
+  accepted = (url) => (url.endsWith('/otel/v1/traces') ? JSON.stringify({ partialSuccess: { rejectedSpans: 1, errorMessage: 'bad span' } }) : '{}');
+  const part = await exp([]);
+  accepted = () => '{}';
+  expect(part.code === 1 && part.out.includes('Langfuse refused 1 of 2 span(s) in a batch it took — bad span') && spansSent().length === 2 && scoresSent().length === 0, `export: a batch refused in part is said, and its runs get no score — got ${part.out}`);
+  calls = [];
+  expect((await exp([])).code === 0 && calls.length === 0, 'export: and it is not sent again, nor scored later');
+
+  // Two exports of one project never run at once; a lock left by a process that died is taken over.
+  const lockPath = join(data, 'exports', 'langfuse', `${slug}.lock`);
+  rows = [...rows, row(960)];
+  await save();
+  await writeFile(lockPath, String(process.pid));
+  calls = [];
+  const held = await exp([]);
+  expect(held.code === 1 && held.out.includes('another export of this project is running') && calls.length === 0, `export: a project another export holds is left alone — got ${held.out}`);
+  await writeFile(lockPath, String(spawnSync('true').pid));
+  const took = await exp([]);
+  expect(took.code === 0 && spansSent().length === 1 && !existsSync(lockPath), `export: a dead export's lock is taken over, and released after — got ${took.out}`);
+
+  // A record of what was sent that cannot be read is not read as "nothing was".
+  const cursor = join(data, 'exports', 'langfuse', `${slug}.json`);
+  const good = await readFile(cursor, 'utf8');
+  await writeFile(cursor, good.slice(0, 20));
+  rows = [...rows, row(970), { ...row(980), ts: undefined, result_ts: undefined }];
+  await save();
+  calls = [];
+  const damaged = await exp([]);
+  expect(damaged.code === 1 && damaged.out.includes('is damaged') && calls.length === 0, `export: a damaged record of what was sent sends nothing — got ${damaged.out}`);
+  await rm(cursor);
+  await mkdir(cursor);
+  calls = [];
+  const unreadable = await exp([]);
+  expect(unreadable.code === 1 && unreadable.out.includes('could not be read') && calls.length === 0, `export: one that cannot be read at all sends nothing either — got ${unreadable.out}`);
+  await rm(cursor, { recursive: true });
+  await writeFile(cursor, good);
+  const timeless = await exp(['--dry-run']);
+  expect(timeless.out.includes('1 record(s) have no time to place them at, and are never sent') && !timeless.out.includes('still settling'), `export: a record with no time is said, not counted as settling — got ${timeless.out}`);
+
+  // A project whose directory is gone is named by its path below home, never with the home in it.
+  const gone = `${slugFor(homedir())}-Gone-my-app`;
+  await writeFile(join(data, 'snapshots', `${gone}.jsonl`), `${JSON.stringify({ ...row(1), project: gone })}\n`);
+  const named = await exp(['--dry-run', '--project', 'Gone-my-app']);
+  expect(named.out.includes('  Gone-my-app: would send 1 span(s)') && !named.out.includes(homedir()), `export: a gone directory's name keeps its dashes and drops the home — got ${named.out.slice(0, 300)}`);
+
+  for (const [key, value] of [['NINA_DATA', saved.data], ['LANGFUSE_PUBLIC_KEY', saved.pk], ['LANGFUSE_SECRET_KEY', saved.sk], ['LANGFUSE_HOST', saved.host]]) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 }
 
 for (const f of failures) console.log(`  ✗ ${f}`);
