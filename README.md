@@ -262,7 +262,10 @@ A loop-back rate moves with the work as much as with the rules, so it can't show
 carries twelve planted defects, and the report counts what each one caught. It runs `claude -p` on the
 Claude Code login, so it uses the subscription and never a per-token key, and the grading is deterministic.
 The first run caught 11 of 12, and it also showed the reviewer writing a sentence before its verdict line,
-which the gate would have read as no verdict at all.
+which the gate would have read as no verdict at all. An optional judge, a second model on the same login,
+reads each report for what line numbers can't show, and has to quote the report for every defect it says
+was found. It found the twelfth defect described in words. It's also asked to call each other finding real or
+noise, and before any of that it judges a report that found nothing, which has to come out at zero.
 
 ## What measuring found
 

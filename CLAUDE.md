@@ -608,6 +608,7 @@ each one caught.
 ```bash
 nina eval --release 0.23.0 --release 0.24.0 --repeat 2    # two releases, two runs each
 nina eval --release 0.24.0 --dry-run                       # stage, compose and grade a canned report; no model
+nina eval --regrade <reports dir> --judge                  # read kept reports again, with the judge; no review run
 ```
 
 It runs `claude -p` as the composed reviewer (`--agent reviewer`) in a throwaway copy of the fixture, on the
@@ -633,6 +634,19 @@ the twelve map to a rule the composed reviewer carries, and that one is plain co
 verdict line was not the report's first line — the reviewer, run as the main agent and denied the
 typecheck, explained that first. The gate and the snapshot would have read no verdict at all, which is the
 kind of thing only running the stage for real could show.
+
+`--judge` reads each report the way the grading cannot. A second model, on the same login and with no
+tools, is given the planted defects, the report and the change, and must answer to a JSON schema: for every
+planted defect, found or not, and for each found one a verbatim quote from the report — a claim whose quote
+the report does not hold is not believed, and is counted apart; then each finding outside the planted set,
+real or noise. The defects are listed before the review, which invites a judge to agree, so every judging
+invocation first judges a report that found nothing, once: it must come out 0, or the numbers after it are
+printed as suspect. An answer that leaves a defect uncalled, or calls one with anything but a boolean, is a
+failed judge — never read as a zero it did not give. The review and the change go in as quoted material,
+unable to close their tags. It is a call per report, so it is off by default, and skipped under `--dry-run`;
+`--regrade` runs it over kept reports without reviewing again. On the first real report, before the quote
+and the control existed, it identified all twelve — the swallowed error the grading missed was described in
+words.
 
 ### The learning cycle
 
