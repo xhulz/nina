@@ -127,6 +127,8 @@ a request against the pinned version, quoting the composed file and line, and it
 
 ## Hard rules (non-negotiable)
 
+A rule keeps its number in every project, because other documents cite it as `Hard Rule #N`. A rule this project does not have leaves a gap in the numbers — it was not lost, and the list is not renumbered.
+
 1. **Run the subagent chain proportional to the task (see the pipeline table).** Under-gating a change on a critical path is a protocol violation — those gates are never skipped, and when uncertain whether one is touched, gate it. But small read-only / display / UI-copy changes (≤2 files, no critical path) take the light chain or a direct edit — over-gating them wastes hours and is also a failure.
 <!-- nina:slot db.5 -->
 <!-- nina:slot money.1 -->

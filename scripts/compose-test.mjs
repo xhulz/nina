@@ -5,7 +5,7 @@
  * While the harness was being extracted, the test was that a composition reproduced a live
  * project byte for byte. That oracle is gone: projects now pin a frozen release, so the
  * working core has no running tree to be checked against. What stands in its place is a
- * fixture project per shape worth testing, and six properties that must hold for each:
+ * fixture project per shape worth testing, and nine properties that must hold for each:
  *
  *   1. No `{{PLACEHOLDER}}` survives — the profile's vocabulary covers what the core says.
  *   2. Every unfilled slot belongs to the PROJECT layer. A declared surface that leaves one
@@ -26,6 +26,7 @@
  *   7. Every composed agent spec declares `name:` and `tools:` in its frontmatter. A spec with
  *      no `tools:` is not restricted — the subagent inherits every tool the session has — so a
  *      role told it is read-only is not, and nothing says so.
+ *   9. Every numbered list composes as 1, 2, 3 — except the hard rules, whose numbers are ids.
  *
  * Usage: node scripts/compose-test.mjs [--verbose]
  */
@@ -131,6 +132,15 @@ async function runFixture(name) {
       failures.push(`${rel}: composed script does not open with its shebang`);
     }
 
+    // 9. A numbered list counts 1, 2, 3. Surfaces add items to lists the core starts, so a number
+    //    written in one layer cannot know its neighbours in every profile: the router's rules began
+    //    at 2 in a project with no surface, and the architect's outputs ran …, 9, 11b, 15. The hard
+    //    rules are the exception — other documents cite them as `Hard Rule #N`, so a rule a profile
+    //    lacks leaves a gap by design, and the composed list says so.
+    if (rel.endsWith('.md')) {
+      for (const gap of numberingGaps(text)) failures.push(`${rel}: ${gap}`);
+    }
+
     // 3. Nothing from an undeclared surface leaks in.
     for (const word of expect.deny ?? []) {
       const line = text.split('\n').findIndex((l) => l.includes(word));
@@ -171,6 +181,43 @@ async function runFixture(name) {
   return failures;
 }
 
+
+/**
+ * The numbered lists in a composed document that do not count 1, 2, 3 — one line per list. A `1.`
+ * starts a new list, a heading closes one, and fenced code is not prose. The hard rules are skipped:
+ * their numbers are ids.
+ *
+ * @param {string} text - A composed markdown file.
+ * @returns {string[]}
+ */
+function numberingGaps(text) {
+  const gaps = [];
+  let section = '';
+  let list = [];
+  let fenced = false;
+  const close = () => {
+    const expected = list.map((_, i) => String(i + 1)).join();
+    if (list.length > 0 && list.join() !== expected && !/^Hard rules/.test(section)) {
+      gaps.push(`the numbered list under "${section.slice(0, 40)}" composes as ${list.join(', ')}`);
+    }
+    list = [];
+  };
+  for (const line of text.split('\n')) {
+    if (/^\s*```/.test(line)) fenced = !fenced;
+    if (fenced) continue;
+    if (/^#{1,6} /.test(line)) {
+      close();
+      section = line.replace(/^#+ /, '');
+      continue;
+    }
+    const item = /^(\d+[a-z]?)\. /.exec(line);
+    if (!item) continue;
+    if (item[1] === '1') close();
+    list.push(item[1]);
+  }
+  close();
+  return gaps;
+}
 
 /**
  * A surface's technology may be named only inside that surface, or in a core file gated on it.

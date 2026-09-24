@@ -1,6 +1,6 @@
 <!-- nina:slot db.1 -->
 
-### 4. DBA (mandatory for Prisma)
+### DBA (mandatory for Prisma)
 
 - **Trigger:** any change in `schema.prisma`, any new Prisma query, any migration.
 - **Input:** Prisma diff + application code using the queries.

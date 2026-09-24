@@ -1,6 +1,6 @@
 <!-- nina:slot integrations.1 -->
 
-### 4b. Integration-tester (mandatory for integration boundaries)
+### Integration-tester (mandatory for integration boundaries)
 
 - **Trigger:** any diff touching the boundary module of a declared integration, or adding a call into one.
 - **Input:** architect spec (with its **Integration premises** section) + implementer diff + repo state.

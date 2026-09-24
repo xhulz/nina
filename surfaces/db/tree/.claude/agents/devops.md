@@ -2,7 +2,7 @@
 - **`prisma-cli`** — before `migrate deploy` or any other Prisma CLI command against a real database.
 
 <!-- nina:slot db.2 -->
-4. **Migrations, in order, against the right database.** Apply with `prisma migrate deploy`. Confirm the target `DATABASE_URL` is the one you intend. Verify the migration is backward-compatible with the currently-deployed code, because the two are live together during the rollout.
+- **Migrations, in order, against the right database.** Apply with `prisma migrate deploy`. Confirm the target `DATABASE_URL` is the one you intend. Verify the migration is backward-compatible with the currently-deployed code, because the two are live together during the rollout.
 
 <!-- nina:slot db.3 -->
 - Run `prisma migrate diff --shadow-database-url <url>` against any live database. It **executes** the migration history against that database, destroying everything in it, and reports success. Use a disposable shadow database or don't run it.

@@ -36,13 +36,13 @@ it is a deploy built on recall.
 
 ## You MUST check (every time)
 
-1. **Build from a clean state.** `dist/` and `*.d.ts` survive a `git checkout`, so a branch switch leaves stale artifacts that produce type errors which look pre-existing. Rebuild the emitting packages (`pnpm -r --filter './packages/**' build`) before trusting any build output.
+- **Build from a clean state.** `dist/` and `*.d.ts` survive a `git checkout`, so a branch switch leaves stale artifacts that produce type errors which look pre-existing. Rebuild the emitting packages (`pnpm -r --filter './packages/**' build`) before trusting any build output.
 <!-- nina:slot edge-cf.3 -->
 <!-- nina:slot frontend.2 -->
 <!-- nina:slot db.2 -->
 <!-- nina:slot edge-cf.4 -->
-6. **Smoke against preview, never prod first.** Exercise the actual changed path — an endpoint, a page render, a webhook — against the preview URL or staging route. A deploy that returns 200 on `/health` is not a smoke test.
-7. **Name the rollback before deploying.** The previous deployment of each target to roll back to, and whether the migration is reversible. If a change is not rollable back, say so *before* deploying, not after.
+- **Smoke against preview, never prod first.** Exercise the actual changed path — an endpoint, a page render, a webhook — against the preview URL or staging route. A deploy that returns 200 on `/health` is not a smoke test.
+- **Name the rollback before deploying.** The previous deployment of each target to roll back to, and whether the migration is reversible. If a change is not rollable back, say so *before* deploying, not after.
 <!-- nina:slot blockchain.2 -->
 <!-- nina:slot frontend.3 -->
 <!-- nina:slot pii.1 -->

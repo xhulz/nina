@@ -56,7 +56,7 @@ later phase, against a second project that can check the rewrite.
 Once a project pins a release, the working core is free to move, and that is when the harness
 can be made generic — the extraction's compromises are recorded in `core/GAPS.md`, closed and
 open. What replaces the byte-exact proof is `fixtures/`: one project per shape worth testing,
-and six properties that must hold for each, plus one audit of the layers themselves.
+and nine properties that must hold for each, plus one audit of the layers themselves.
 
 ```bash
 node scripts/compose-test.mjs        # or: pnpm compose:test
@@ -81,6 +81,12 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
 8. The composed `.claude/graph.md` holds for the profile: every stage has a spec and every spec is a
    stage, no edge points at a stage the profile lacks, every verdict a stage can emit goes somewhere,
    every loop-back has a cap, and no spec's prose names a route the graph does not have.
+9. Every numbered list composes as 1, 2, 3. Surfaces add items to lists the core starts, so a number
+   written in one layer cannot know its neighbours in every profile: a project with no surface read
+   router rules that began at 2, and an architect whose outputs ran 1–5, 7, 8, 9, 11b, 15. Those lists
+   are bullets now, or count within one fragment. The hard rules are the exception, and the composed
+   list says so: other documents cite them as `Hard Rule #N`, so the number is an id, and a rule the
+   profile lacks leaves a gap.
 
 The last check reads the layers rather than a fixture's output. For every core file, a surface's
 technology may be named only if that file is gated on that surface — `Prisma` only under `db`,

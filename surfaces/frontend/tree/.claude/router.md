@@ -3,7 +3,7 @@
 
 <!-- nina:slot frontend.2 -->
 
-### 6c. Nothing before devops can see the screen
+### Nothing before devops can see the screen
 The reviewer reads a diff. qa runs vitest in jsdom, which has **no layout engine** — `toHaveClass('flex')`
 passes whether or not a pixel landed anywhere. Every backend invariant is checkable in text, which is why
 the same pipeline lands backend work first time and lets frontend defects through every gate: they were

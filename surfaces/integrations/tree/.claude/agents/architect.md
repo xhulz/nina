@@ -1,5 +1,5 @@
 <!-- nina:slot integrations.1 -->
-12. **Integration premises (MANDATORY when an integration boundary is in scope)** — list every behavior of the dependency the implementation depends on. Each premise is a one-sentence claim followed by the evidence its kind requires:
+- **Integration premises (MANDATORY when an integration boundary is in scope)** — list every behavior of the dependency the implementation depends on. Each premise is a one-sentence claim followed by the evidence its kind requires:
     - `installed-library` → `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>`, from the version installed here
     - `live-api` → a contract-test case, or a response observed against the service and captured verbatim
     - `platform-binding` → behavior observed under the local emulator, plus the platform's installed types

@@ -108,11 +108,11 @@ flowchart LR
     compose --> out["CLAUDE.md · agent specs · graph.md<br/>router.md · hook scripts"]
 ```
 
-Composition gets tested like code. Four fixture projects, one for each shape worth testing, have to pass eight
+Composition gets tested like code. Four fixture projects, one for each shape worth testing, have to pass nine
 properties each: no placeholder survives, every unfilled slot belongs to the project, nothing leaks in from a
 surface the project didn't declare, gated files show up exactly when they should, rule references resolve,
-the notice never lands above a frontmatter block, every agent spec declares its tool allowlist, and the graph
-validates. A ninth check looks at the layers themselves: a surface's technology, role or domain may only be named in
+the notice never lands above a frontmatter block, every agent spec declares its tool allowlist, the graph
+validates, and every numbered list counts 1, 2, 3 in every profile. A tenth check looks at the layers themselves: a surface's technology, role or domain may only be named in
 files gated on that surface. The first time it ran, it found 37 places where ungated core prose handed work
 to a role that only some projects have.
 

@@ -1,6 +1,6 @@
 <!-- nina:slot db.1 -->
 
-### 1. DBA is a guardrail, not a stage
+### DBA is a guardrail, not a stage
 Invoke **dba** any time Prisma is touched — regardless of where you are in the pipeline. No Prisma change merges without dba approval. Reviewer verifies dba ran.
 
 <!-- nina:slot db.2 -->

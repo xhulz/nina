@@ -1,5 +1,5 @@
 <!-- nina:slot money.1 -->
-11. **Money invariants** — if the spec touches distribution, transfer generation, or a send to the payment integration, explicitly confirm the design honors:
+- **Money invariants** — if the spec touches distribution, transfer generation, or a send to the payment integration, explicitly confirm the design honors:
     - Money is integer {{MINOR_UNIT}} end to end; percentages are basis points. Never a floating-point type.
     - A distribution may NEVER exceed the amount → **block** (reject the operation, do not clamp it).
     - A distribution **less** than the amount → **allow**, surface the shortfall, leave the remainder **parked** — never silently distributed.

@@ -18,7 +18,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 ---
 
-### 1. Planner
+### Planner
 
 - **Input:** user request, often ambiguous or multi-step.
 - **Output:** ordered list of subtasks, each tagged with a 1-line goal + scope (S/M/L) + retrieval list + parallelization tag (`SEQUENTIAL` / `PARALLEL-SAFE`).
@@ -26,14 +26,14 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 - **Exit criteria:** each subtask is small enough for an architect to design in a single pass.
 - **Skip if:** task is already small, single-concern, and concrete.
 
-### 2. Architect
+### Architect
 
 - **Input:** one subtask from planner, or a well-scoped direct request.
 - **Output:** technical spec — files to touch, function signatures, data flow, edge cases, tests to add, patterns to follow. Marks which gates in `.claude/graph.md` the change will trigger — the database gate if the schema or a query will be touched, the integration gate if an integration boundary will be — AND, for the latter, includes an **Integration premises** section: every behavior the implementation depends on, each carrying the evidence its kind requires — a `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` citation, a contract-test case, an observed response, or a `P<n>` reference into `.claude/integrations/<slug>.md`. No premise without a citation.
 - **Tools:** Read, Write, Edit, Grep, Glob, WebSearch, WebFetch. **No edits except spec files + `.claude/integrations/**`.**
 - **Exit criteria:** implementer can code without re-planning AND the integration gate, where `.claude/graph.md` has one, can verify each premise / contract case without re-deriving it.
 
-### 3. Implementer
+### Implementer
 
 - **Input:** architect's spec.
 - **Output:** working TS code + tests. `pnpm typecheck`, `pnpm lint`, and (when frontend) `pnpm build` clean for the affected packages. Diff scoped to the spec. **Does NOT run vitest.**
@@ -42,7 +42,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 <!-- nina:slot db.1 -->
 <!-- nina:slot integrations.1 -->
 
-### 5. Reviewer (gate before qa)
+### Reviewer (gate before qa)
 
 - **Input:** implementer's diff + all upstream artifacts.
 - **Output:** approve, or request changes with `path:line` references.
@@ -57,14 +57,14 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 <!-- nina:slot money.1 -->
   - **Preview-first deploy invariant:** a spec that culminates in prod deploy names a preview URL where smoke runs FIRST.
 
-### 6. QA (test execution)
+### QA (test execution)
 
 - **Input:** reviewer's APPROVED verdict + the implementer's touched-package list.
 - **Output:** PASS (ready for deploy) or FAIL (loops back to implementer/architect).
 - **Tools:** Read, Grep, Glob, Bash.
 - Runs vitest **once**, per affected package, **sequentially** (configs enforce single-fork). Kills stray test processes at start and end. See `.claude/agents/qa.md`.
 
-### 7. Devops (deploy)
+### Devops (deploy)
 
 - **Trigger:** qa PASS on a step that changes a deployed surface. Not for test-only, docs-only or harness-only steps.
 - **Input:** qa PASS + the touched-package list + the architect spec's preview-deploy plan.
@@ -77,7 +77,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 ## Handoff discipline
 
-Each stage produces a **written artifact** — spec, diff, review comments. The next stage consumes the artifact, **not** the original user message. If you find yourself re-reading the original user message at stage 3, something is wrong at stage 2.
+Each stage produces a **written artifact** — spec, diff, review comments. The next stage consumes the artifact, **not** the original user message. If the implementer finds itself re-reading the original user message, something is wrong with the spec.
 
 ---
 

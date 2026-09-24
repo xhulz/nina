@@ -37,10 +37,10 @@ The distribution engine lives in `{{CORE_PKG}}`. It is pure and total over integ
 - **One serialization point per balance.** Whatever computes and dispatches against a single balance never runs concurrently with itself. Two concurrent runs over one balance is how a double send happens even when every individual write is correct.
 
 <!-- nina:slot money.4 -->
-6. **Money computation and dispatch go through the serialization point.** Routes, queue consumers and tools never run a distribution or a transfer synchronously in the request path.
+- **Money computation and dispatch go through the serialization point.** Routes, queue consumers and tools never run a distribution or a transfer synchronously in the request path.
 
 <!-- nina:slot money.5 -->
-7. **The distribution engine lives in `{{CORE_PKG}}`.** Services call it as a pure function; they do not embed money logic inline.
+- **The distribution engine lives in `{{CORE_PKG}}`.** Services call it as a pure function; they do not embed money logic inline.
 
 <!-- nina:slot money.6 -->
 - Idempotency on money-moving writes: the record carries an idempotency key, and the serialization point refuses the second attempt *before* the side effect.

@@ -3,7 +3,7 @@
   directly in `tools:` above. Use them; there is nothing to invoke via `Skill`.
 
 <!-- nina:slot frontend.2 -->
-3. **Build-time env.** Vite inlines `VITE_*` at build time, so a variable the deploy platform supplies at RUNTIME never reaches the bundle — it is not late, it is absent. Verify every `VITE_*` the app reads is present in the build environment — a missing one ships a blank page, not an error.
+- **Build-time env.** Vite inlines `VITE_*` at build time, so a variable the deploy platform supplies at RUNTIME never reaches the bundle — it is not late, it is absent. Verify every `VITE_*` the app reads is present in the build environment — a missing one ships a blank page, not an error.
 
 <!-- nina:slot frontend.3 -->
 

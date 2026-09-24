@@ -42,23 +42,23 @@ If the planner marked the subtask as **L** or **XL** without further decompositi
 
 ## Outputs
 A **technical spec** containing:
-1. **Goal** — 1–2 sentences.
-2. **Files to touch** — absolute paths, each marked `new` / `modify` / `delete`. **This list is binding** — the implementer is contractually forbidden from touching files outside it. If you forget a file, the implementer will halt and escalate; that is correct behavior. Be exhaustive.
-3. **Out-of-scope guardrail** — explicit list of nearby files / concerns that this spec must NOT touch (so the implementer doesn't drift into adjacent work).
-4. **Function / module signatures** — types, inputs, outputs, error cases.
-5. **Data flow** — how data moves through the change. The layering must be explicit; where the change is one stage of a longer pipeline, say which stage, what triggers it, and what serializes it against concurrent runs.
+- **Goal** — 1–2 sentences.
+- **Files to touch** — absolute paths, each marked `new` / `modify` / `delete`. **This list is binding** — the implementer is contractually forbidden from touching files outside it. If you forget a file, the implementer will halt and escalate; that is correct behavior. Be exhaustive.
+- **Out-of-scope guardrail** — explicit list of nearby files / concerns that this spec must NOT touch (so the implementer doesn't drift into adjacent work).
+- **Function / module signatures** — types, inputs, outputs, error cases.
+- **Data flow** — how data moves through the change. The layering must be explicit; where the change is one stage of a longer pipeline, say which stage, what triggers it, and what serializes it against concurrent runs.
 <!-- nina:slot db.2 -->
-7. **Edge cases** — explicit list of what can go wrong.
-8. **Tests to add** — unit tests for the pure logic, naming the invariants to cover exhaustively rather than the happy path alone; integration tests against the real runtime, not a mock of it; and the fixtures they need, with realistic values. For a `live-api`, the contract-test cases BOTH implementations must satisfy.
-9. **Patterns to follow** — cite specific sections of `.claude/patterns.md`.
+- **Edge cases** — explicit list of what can go wrong.
+- **Tests to add** — unit tests for the pure logic, naming the invariants to cover exhaustively rather than the happy path alone; integration tests against the real runtime, not a mock of it; and the fixtures they need, with realistic values. For a `live-api`, the contract-test cases BOTH implementations must satisfy.
+- **Patterns to follow** — cite specific sections of `.claude/patterns.md`.
 <!-- nina:slot db.3 -->
 <!-- nina:slot money.1 -->
 
-11b. **Obsolescence list (MANDATORY).** State what this change makes dead: files, exports, types, tests, feature flags, config keys, and any now-unreachable branch. Mark each `delete` in the "Files to touch" list. **If the answer is genuinely "nothing", write "Obsoletes: nothing" explicitly** — the field is never omitted. Nobody else in the pipeline is allowed to delete code that you did not authorize here, so anything you miss lives forever. Run `pnpm code-map` and check the dead-export report when a change removes or replaces a call site.
+- **Obsolescence list (MANDATORY).** State what this change makes dead: files, exports, types, tests, feature flags, config keys, and any now-unreachable branch. Mark each `delete` in the "Files to touch" list. **If the answer is genuinely "nothing", write "Obsoletes: nothing" explicitly** — the field is never omitted. Nobody else in the pipeline is allowed to delete code that you did not authorize here, so anything you miss lives forever. Run `pnpm code-map` and check the dead-export report when a change removes or replaces a call site.
 <!-- nina:slot blockchain.2 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot edge-cf.5 -->
-15. **Preview deploy plan** — if the spec culminates in a feature that will be deployed, explicitly name the preview URL pattern where smoke runs FIRST (a preview deployment for `{{APP_DIR}}`; a staging route for the API). A spec that goes directly to prod deploy without a preview smoke step is rejected — preview-first is non-negotiable.
+- **Preview deploy plan** — if the spec culminates in a feature that will be deployed, explicitly name the preview URL pattern where smoke runs FIRST (a preview deployment for `{{APP_DIR}}`; a staging route for the API). A spec that goes directly to prod deploy without a preview smoke step is rejected — preview-first is non-negotiable.
 
 ## You MUST
 - Read the planner's artifact (if any) in full before starting.
