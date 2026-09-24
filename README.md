@@ -290,6 +290,8 @@ None of this showed up until I counted.
 - A metric for "agents apply their lessons" said 92%, because listing a directory counted as reading. Counting
   only real reads, it's 81%. Even that only measures reading. Nothing in a transcript shows whether an agent
   obeyed.
+- The reviewer sent work back 4% of the time on Sonnet and 39% on Opus 5, at $0.69 and $3.18 a run. Those are
+  different weeks of different work, so it isn't a result. It is the question `nina eval` exists to answer.
 - The first before/after readings went up after their lessons, with every other role as a control. Maybe the
   reviewer got better at catching things, or maybe the lesson didn't help. It isn't proof, but without the
   numbers I couldn't even ask.

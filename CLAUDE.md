@@ -94,7 +94,7 @@ must not break.
 | `check`, `where` | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
-| `snapshot`, `stats`, cost, proportion, `eval`, `export` | [`docs/measurement.md`](docs/measurement.md) |
+| `snapshot`, `stats`, cost, models, proportion, `eval`, `export` | [`docs/measurement.md`](docs/measurement.md) |
 | `pills`, `learn` and `learn --deep`, `requests` | [`docs/learning.md`](docs/learning.md) |
 
 Each document says why its mechanism ended up the way it did — usually because the obvious version was

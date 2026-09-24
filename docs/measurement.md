@@ -82,6 +82,42 @@ than the retention window. A record whose transcript is gone keeps what it had.
 This half exists because every rule the harness could not enforce was invisible until
 measured: mandatory skills were invoked 2 times in 743 runs before anyone counted.
 
+### Which model a stage ran on
+
+A spec's `model:` is the one choice in the harness that moves cost by an order of magnitude, and until
+it was measured it was only ever read. Every record already says what ran (`usage_model`), so `stats`
+reads a stage that ran on more than one model model by model: its runs, the dates, how often it sent
+work back and what a run cost. The first reading, over one project where the reviewer's spec moved from
+`sonnet` to `opus` on 2026-09-04:
+
+```
+  models — a stage that ran on more than one, model by model; different weeks, not an experiment
+    reviewer            claude-sonnet-5        49 run(s)  2026-08-12 → 2026-09-04  loop-back 4% of 49  median $0.69
+                        claude-opus-4-8        72 run(s)  2026-09-05 → 2026-09-10  loop-back 19% of 52  median $0.75
+                        claude-opus-5          55 run(s)  2026-09-16 → 2026-09-22  loop-back 39% of 51  median $3.18
+```
+
+The header says what it is not. Three windows of different work are not an experiment: a reviewer that
+sends back more may be catching more or may be noisier, and nothing in the rate can say which. What the
+table settles is whether a change is worth `nina eval`, which does hold the work still.
+
+The same block asks whether each stage runs on the model its spec declares, where the project's
+directory can be found. An alias names a family, as a whole segment of the id wherever it sits (`sonnet`
+is `claude-sonnet-5` and `claude-3-sonnet` alike), a full id names one model, and `inherit` declares
+nothing to compare with. Only runs made after the `model:` line last changed count, because a spec
+changed today says nothing about yesterday's runs. That date comes from the project's history, the last
+commit that touched the line: the file's own time was the first version, and a review found what moves
+it without the model moving, since `compose` rewrites every composed file and an upgrade changes specs
+whose model it leaves alone. The file's time stands in only where history cannot say: no repository, a
+file it does not track, or a model changed and not yet committed. A difference is an override no spec
+shows: a model named on the dispatch, or one set for every subagent in the environment. Over the project
+it was built on, it reports none, which is what that project's history says.
+
+The per-stage model stays in the spec's frontmatter rather than in `graph.md`, so it is one fact in one
+place. `modelFindings` (in `src/tools.mjs`, beside the check of what a spec's tools grant) requires it to
+be an alias Claude Code knows (`opus`, `sonnet`, `haiku`, `fable`), `inherit`, or a model id; the compose
+suite runs it over every fixture and `nina check` over every project.
+
 ### Sending it to Langfuse: `nina export`
 
 `stats` and `learn` read the store on a terminal. Langfuse reads the same records in a UI that filters,

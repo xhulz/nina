@@ -14,13 +14,13 @@
  * Usage: node scripts/cli-test.mjs
  */
 
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decodeProjectDir } from '../src/commands/stats.mjs';
+import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, scanProject, tokensOf } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
@@ -34,6 +34,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { handleEdit, noticeOf } from '../src/guard.mjs';
+import { modelFindings } from '../src/tools.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
 import { exportCommand } from '../src/commands/export.mjs';
@@ -2760,6 +2761,43 @@ const dated = (date, status = 'active') =>
   // Two reviewer runs of $5 and $15: the median is the upper middle, as the duration column's is.
   expect(/reviewer\s+2\s+\$15\.00\s+\$20\.00\s+80%/.test(out) && /all stages\s+3\s+\$25\.00/.test(out), `cost: stats reports each stage's median, total and share — got ${out}`);
   expect(out.includes('4 of 4 runs have a token record, 1 on a model the price table does not know'), `cost: the header counts the runs it could not price — got ${out}`);
+  expect(/models —/.test(out) && /qa\s+claude-sonnet-5\s+1 run\(s\)\s+2026-09-24 → 2026-09-24\s+loop-back 0% of 1\s+median \$5\.00/.test(out) && /^\s+claude-opus-4-1\s+1 run/m.test(out) && !/reviewer\s+claude-sonnet-5/.test(out), `models: a stage that ran on two models is read model by model, and one that ran on one is not — got ${out}`);
+
+  // Declared against used: only runs after the spec was last written count, and an alias names a family.
+  const home = realpathSync(await scratch());
+  const proj = join(home, 'Bakery');
+  await mkdir(join(proj, '.claude', 'agents'), { recursive: true });
+  const spec = join(proj, '.claude', 'agents', 'reviewer.md');
+  await writeFile(spec, '---\nname: reviewer\ntools: Read\nmodel: opus\n---\nReviews.\n');
+  await utimes(spec, new Date('2026-09-10T00:00:00Z'), new Date('2026-09-10T00:00:00Z'));
+  const ran = (ts, model, role = 'reviewer') => JSON.stringify({ project: slugFor(proj), dispatch_id: `t${Math.random()}`, ts, role, verdict: 'APPROVED', verdict_source: 'declared', usage_model: model });
+  const declared = join(await scratch(), 'snaps');
+  await mkdir(declared, { recursive: true });
+  await writeFile(join(declared, `${slugFor(proj)}.jsonl`), `${[ran('2026-09-01T10:00:00.000Z', 'claude-sonnet-5'), ran('2026-09-11T10:00:00.000Z', 'claude-opus-5'), ran('2026-09-12T10:00:00.000Z', 'claude-sonnet-5'), ran('2026-09-12T11:00:00.000Z', 'claude-haiku-4-5')].join('\n')}\n`);
+  const drifted = run(['stats', '--snapshots', declared, '--all'], { loud: true }).out;
+  expect(drifted.includes('Bakery: reviewer declares opus, and 2 of 3 run(s) since that line last changed ran claude-sonnet-5, claude-haiku-4-5'), `models: a stage running on a model its spec does not declare is said, counting only runs after the spec was written — got ${drifted}`);
+
+  // In a repository the date is when the model line last changed, not when the file was last written:
+  // compose rewrites every spec, and that must not drop the runs before it.
+  const git = (...args) => spawnSync('git', ['-C', proj, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', env: { ...process.env, GIT_COMMITTER_DATE: '2026-09-10T00:00:00Z', GIT_AUTHOR_DATE: '2026-09-10T00:00:00Z' } });
+  git('init', '-q');
+  git('add', '.');
+  git('commit', '-q', '-m', 'spec');
+  await utimes(spec, new Date('2026-09-20T00:00:00Z'), new Date('2026-09-20T00:00:00Z'));
+  const rewritten = run(['stats', '--snapshots', declared, '--all'], { loud: true }).out;
+  expect(rewritten.includes('2 of 3 run(s) since that line last changed'), `models: a spec rewritten since its model changed keeps the date the model did — got ${rewritten}`);
+  // A model line changed and not committed yet: the file's time is the only date there is.
+  await writeFile(spec, '---\nname: reviewer\ntools: Read\nmodel: sonnet\n---\nReviews.\n');
+  await utimes(spec, new Date('2026-09-12T12:00:00Z'), new Date('2026-09-12T12:00:00Z'));
+  const uncommitted = run(['stats', '--snapshots', declared, '--all'], { loud: true }).out;
+  expect(!uncommitted.includes('declares'), `models: an uncommitted change of model counts from the file's own time — got ${uncommitted}`);
+  await writeFile(spec, '---\nname: reviewer\ntools: Read\nmodel: inherit\n---\nReviews.\n');
+  await utimes(spec, new Date('2026-09-10T00:00:00Z'), new Date('2026-09-10T00:00:00Z'));
+  expect(!run(['stats', '--snapshots', declared, '--all'], { loud: true }).out.includes('declares'), 'models: a spec that inherits declares nothing to compare with');
+  expect(modelMatches('opus', 'claude-opus-5') && !modelMatches('opus', 'claude-sonnet-5') && modelMatches('claude-opus-4-8', 'claude-opus-4-8') && modelMatches('inherit', 'x') === null && modelMatches(undefined, 'x') === null, 'models: an alias names a family, a full id names a model');
+  expect(modelMatches('sonnet', 'claude-3-sonnet') && modelMatches('opus', 'claude-opus-4-8[1m]') && modelMatches('Opus', 'claude-opus-5') && !modelMatches('son', 'claude-sonnet-5'), 'models: a family is a whole segment of the id, wherever it sits');
+  const models = modelFindings(new Map([['a', '---\nname: a\nmodel: sonet\n---\n'], ['b', '---\nname: b\nmodel: fable\n---\n'], ['c', '---\nname: c\nmodel: claude-opus-5-5[1m]\n---\n'], ['d', '---\nname: d\n---\nmodel: nonsense in the body\n']]));
+  expect(models.length === 1 && models[0].startsWith('a: `model: sonet`'), `models: a spec's model is an alias or an id, and only its frontmatter is read — got ${JSON.stringify(models)}`);
 }
 
 // ─── nina:why: history kept in the layers, and none of it composed or owed ───────────────
@@ -3149,6 +3187,9 @@ const dated = (date, status = 'active') =>
   const asDetector = run(['check', '--project', bed, '--detector'], { loud: true });
   expect(!byHand.out.includes('docs-writer'), `check: an agent of the project's own is not reported as a missing stage — got ${byHand.out}`);
   expect(byHand.out.includes('nina-absent-skill-xyz') && !asDetector.out.includes('nina-absent-skill-xyz') && asDetector.status === 0, `check --detector: leaves the machine's skills to a check run by hand — got ${asDetector.out}`);
+  await writeFile(reviewerSpec, (await readFile(reviewerSpec, 'utf8')).replace(/^model: .*$/m, 'model: sonet'));
+  const typo = run(['check', '--project', bed, '--detector'], { loud: true });
+  expect(typo.status === 1 && typo.out.includes('model: reviewer: `model: sonet`'), `check: a composed spec on a model that is neither an alias nor an id is a problem — got ${typo.out}`);
 }
 
 // ─── upgrade: a core that adds the declaration detector does not blame the move for old problems ─
