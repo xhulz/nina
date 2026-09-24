@@ -256,6 +256,11 @@ release freezes, and the upgrade that installs the answer closes the request and
 full cycle has already happened: the three lessons in the second output became harness rules in 0.20.0, and the
 upgrade closed all three requests by itself.
 
+Counting loop-backs doesn't say what they were about. `nina learn --deep` reads each loop-back's report and has
+a small model, on the same login, group them by cause and set the causes against the lessons already written.
+It proposes a lesson for each recurring cause that none covers, and it writes nothing itself. The first run,
+over one project's 70 loop-backs, took six calls and proposed five lessons nobody had written.
+
 ### Evaluating a release
 
 A loop-back rate moves with the work as much as with the rules, so it can't show whether a rule change helped.

@@ -33,10 +33,12 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { composeProject } from './compose.mjs';
+import { slugFor } from '../paths.mjs';
+import { PROJECTS_ROOT } from '../transcripts.mjs';
 
 /** Credentials that would make `claude -p` bill per token instead of using the login. */
 const BILLED = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'];
@@ -357,12 +359,58 @@ export function childEnv(api) {
 }
 
 /**
+ * The one empty directory every call that needs no project runs in — the judge, `learn --deep`.
+ *
+ * @returns {string}
+ */
+export function callsDir() {
+  const dir = join(tmpdir(), 'nina-model-calls');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Removes the project Claude Code filed under `~/.claude/projects/` for a directory a call ran in —
+ * but only when all it holds is the title Claude Code gave the run. It files one for every directory it
+ * is started in, session or not, so a scratch directory per eval run, and a temporary one per model call,
+ * left a project behind each time. Anything more than a title — a conversation, a memory — is someone's,
+ * and stays.
+ *
+ * @param {string} dir - The directory the call ran in.
+ */
+export function forgetProject(dir) {
+  try {
+    const project = join(process.env.NINA_TRANSCRIPTS ?? PROJECTS_ROOT, slugFor(realpathSync(dir)));
+    if (!existsSync(project)) return;
+    const onlyTitles = (path) =>
+      readdirSync(path, { withFileTypes: true }).every((entry) => {
+        const full = join(path, entry.name);
+        if (entry.isDirectory()) return onlyTitles(full);
+        if (!entry.name.endsWith('.jsonl')) return statSync(full).size === 0;
+        return readFileSync(full, 'utf8')
+          .split('\n')
+          .filter((l) => l.trim())
+          .every((l) => {
+            try {
+              return JSON.parse(l).type === 'ai-title';
+            } catch {
+              return false;
+            }
+          });
+      });
+    if (onlyTitles(project)) rmSync(project, { recursive: true, force: true });
+  } catch {
+    // Left in place: tidying never fails a run.
+  }
+}
+
+/**
  * Asks a second model to read one report, with no tools and a schema its answer must fit.
  *
  * @returns {{found: string[], real: number, noise: number, unsupported: number, cost: number|null}|{failed: string}}
  */
 function judge(defects, report, diff, options) {
-  const dir = mkdtempSync(join(tmpdir(), 'nina-eval-judge-'));
+  const dir = callsDir();
   try {
     const run = spawnSync(
       'claude',
@@ -376,7 +424,7 @@ function judge(defects, report, diff, options) {
     if (!judged) return { failed: 'the judge did not answer in the shape it was asked for' };
     return { ...judged, cost: typeof out.total_cost_usd === 'number' ? out.total_cost_usd : null };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    forgetProject(dir);
   }
 }
 
@@ -528,6 +576,7 @@ export async function evalCommand(argv, ctx) {
         results.push({ core, n, ...graded, cost, judged });
         console.log(describe(`${core} run ${n}`, graded, defects.length, cost, judged));
       } finally {
+        if (!dry) forgetProject(dir);
         if (!keep) rmSync(dir, { recursive: true, force: true });
       }
     }

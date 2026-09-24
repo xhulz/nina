@@ -33,6 +33,7 @@ import { decodeProjectDir } from './stats.mjs';
 import { snapshot } from './snapshot.mjs';
 import { loadProject, projectGateDir, readLedger, replay } from '../gate.mjs';
 import { GATE, shippedScripts } from '../wiring.mjs';
+import { deepLearn, transcriptsOf } from '../deep.mjs';
 
 /** Loop-backs from one role, since its newest lesson, that make a lesson overdue. */
 export const CAPTURE_AT = 3;
@@ -396,6 +397,48 @@ function gateActivity(target, since) {
 const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
 
 /**
+ * `--deep`: the loop-backs read by a model, grouped by cause, set against the pills already written.
+ *
+ * @returns {Promise<number>}
+ */
+async function deepReport(target, records, known, argv) {
+  const days = argv.includes('--days') ? Number(argv[argv.indexOf('--days') + 1]) || 30 : 30;
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const dry = argv.includes('--dry-run');
+  const result = await deepLearn({
+    records,
+    known,
+    projectDir: transcriptsOf(slugFor(target)),
+    since,
+    model: argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : undefined,
+    api: argv.includes('--api'),
+    dry,
+    progress: (step) => process.stderr.write(`  ${step}…\n`),
+  });
+  console.log(
+    `  deep: ${result.reports} loop-back report(s) since ${since.slice(0, 10)}` +
+      (result.gone ? `, and ${result.gone} more with no transcript or report left to read` : '') +
+      (dry ? ` — would take ${result.calls} call(s) on the login` : result.reports ? ` · ${result.made} of ${result.calls} call(s) made, $${result.cost.toFixed(2)} API-equivalent` : ''),
+  );
+  if (result.uncaused) console.log(`  ${result.uncaused} report(s) the model gave no cause for, so the grouping below never saw them`);
+  if (result.failed) {
+    console.log(`  ✗ ${result.failed}`);
+    return 1;
+  }
+  for (const c of result.clusters ?? []) {
+    const roles = [...new Set(c.refs.map((ref) => ref.replace(/-[^-]+$/, '')))].join(', ');
+    console.log(`    ${String(c.refs.length).padStart(2)}×  ${roles} · ${c.cause}`);
+    if (c.covered_by) console.log(`         covered by ${c.covered_by}`);
+    else if (c.proposal) console.log(`         no pill yet — for ${c.proposal.role}: "${c.proposal.title}" — when ${c.proposal.trigger} — ${c.proposal.lesson}`);
+    else console.log(`         no pill, and none proposed${c.invented ? ` — the model named ${c.invented}, which does not exist` : ' — a one-off, or too broad for one lesson'}`);
+  }
+  if (result.clusters?.some((c) => !c.covered_by && c.proposal)) {
+    console.log('\n  Proposals only: a lesson is filed as a pill by the orchestrator or the owner — .claude/pills/README.md says how.');
+  }
+  return 0;
+}
+
+/**
  * Writes a graduation request: a lesson this project keeps relearning, addressed to the harness.
  *
  * A project cannot change the harness — the core and the surfaces live in another repository, and
@@ -518,6 +561,8 @@ export async function learn(argv, ctx) {
 
   const records = await recorded(target);
   const known = await lessons(target);
+
+  if (argv.includes('--deep')) return deepReport(target, records, known, argv);
 
   if (argv.includes('--graduate')) {
     return graduate(target, profile, resolved.dir, known, argv[argv.indexOf('--graduate') + 1] ?? '');
