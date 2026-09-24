@@ -11,7 +11,7 @@ Read this before writing code. Architects cite it in specs; implementers follow 
 - **Biome** for format + lint. No ESLint / Prettier.
 - **Vitest** for unit tests.
 <!-- nina:slot edge-cf.3 -->
-- **Zod** for runtime validation at all trust boundaries (API ingress, env loading, queue payload, DO RPC, webhook body, integration responses).
+- **Zod** for runtime validation at all trust boundaries (API ingress, env loading, queue payload, an RPC between services, webhook body, integration responses).
 
 ### Relative imports carry a `.js` extension — this is intentional, do NOT "fix" it
 
@@ -85,7 +85,7 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 
 - **Route** (`{{API_DIR}}/src/routes/<resource>.ts`): Zod validation, auth + role extraction, envelope shaping, privacy-safe log, deps construction. Nothing else.
 <!-- nina:slot integrations.1 -->
-- **Service** (`{{API_DIR}}/src/services/<resource>.ts`): business orchestration, userId scoping, Date→ISO mapping, named-error taxonomy. HTTP-agnostic.
+- **Service** (`{{API_DIR}}/src/services/<resource>.ts`): business orchestration, owner scoping (every read and write filtered by who owns the data), Date→ISO mapping, named-error taxonomy. HTTP-agnostic.
 - **Data Objects:** the database client, the platform bindings, and each integration's boundary module.
 
 **Hard rules (reviewer enforces):**
@@ -114,7 +114,7 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 ## SDK / shared package conventions
 
 - **Tree-shakeable:** barrel `index.ts` only re-exports. No side effects at module top level.
-- Works in: modern browsers, Node 20+, Workers.
+- Works in: modern browsers, Node 20+, and every runtime the project deploys to.
 - No `console.log` in production paths. Use a `debug(msg)` helper that's a no-op in prod, and never log PII.
 <!-- nina:slot frontend.1 -->
 

@@ -182,9 +182,12 @@ async function runFixture(name) {
  */
 const SURFACE_TERMS = {
   db: ['Prisma', 'Accelerate', 'Postgres', 'dba', 'DBA'],
-  'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Hono'],
+  'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Hono', 'Pages', 'Worker', 'Workers', 'Wrangler'],
   integrations: ['integration-tester', 'INTEGRATION-TESTER'],
   frontend: ['Playwright', 'playwright'],
+  // A domain, not a technology, but the same leak: a project with no money read that under-gating a
+  // money movement was a protocol violation, and that a production deploy moves real money.
+  money: ['money', 'Money', 'payout', 'Payout', 'escrow', 'Escrow'],
   blockchain: ['solidity-dev', 'solidity-auditor', 'Solidity', 'OpenZeppelin', 'Foundry', 'Hardhat', 'Ethereum', 'EVM', 'ERC20', 'ERC721', 'ERC1155', 'ERC-20', 'ERC-721', 'delegatecall', 'selfdestruct'],
 };
 
@@ -193,7 +196,8 @@ const SURFACE_TERMS = {
  *
  * `Hono` is inside `Honor`, so a plain substring test reports the word every time a rule says
  * "honor the planner's grouping". A following lower-case letter means the match is part of a
- * longer word; anything else — a space, a dot, a backtick, an apostrophe — is the term itself.
+ * longer word, and so does a letter or digit before it — `maxWorkers` is a vitest option, not the
+ * edge runtime; anything else — a space, a dot, a backtick, an apostrophe — is the term itself.
  *
  * @param {string} line - The line to search.
  * @param {string} term - The technology name.
@@ -201,7 +205,7 @@ const SURFACE_TERMS = {
  */
 function names(line, term) {
   for (let i = line.indexOf(term); i !== -1; i = line.indexOf(term, i + 1)) {
-    if (!/[a-z]/.test(line[i + term.length] ?? '')) return true;
+    if (!/[a-z]/.test(line[i + term.length] ?? '') && !/[A-Za-z0-9]/.test(line[i - 1] ?? '')) return true;
   }
   return false;
 }
@@ -230,7 +234,8 @@ async function surfaceLeaks() {
       // into a project that declared no database, which is the guarantee this repo makes in
       // its first paragraph. Reading only the core missed that whole direction.
       const owner = layer.owner ?? (REQUIRES.exec(text)?.[1] ?? null);
-      const lines = text.split('\n');
+      // A slot or a gate names its surface by design (`nina:slot money.1`); only the prose around it counts.
+      const lines = text.split('\n').map((line) => line.replace(/<!-- nina:(?:slot|requires) [^>]*-->/g, ''));
       for (const [surface, terms] of Object.entries(SURFACE_TERMS)) {
         if (owner === surface) continue;
         for (const term of terms) {
@@ -267,7 +272,7 @@ console.log(failed === 0 ? `compose fixtures: ${fixtures.length} ok` : `compose 
 
 const leaks = await surfaceLeaks();
 if (leaks.length === 0) {
-  console.log('surface leaks: none — no layer names a technology it does not own');
+  console.log('surface leaks: none — no layer names a technology or domain it does not own');
 } else {
   failed += 1;
   console.log(`surface leaks: ${leaks.length}`);

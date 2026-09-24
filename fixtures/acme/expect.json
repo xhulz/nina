@@ -13,7 +13,8 @@
     "CNPJ",
     "LGPD",
     "PIX",
-    "KYC"
+    "KYC",
+    "money"
   ],
   "absent": [
     ".claude/agents/solidity-dev.md",

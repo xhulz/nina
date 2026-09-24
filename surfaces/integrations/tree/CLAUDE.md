@@ -12,3 +12,6 @@
 
 <!-- nina:slot integrations.6 -->
 13. **Integration boundaries require the integration-tester gate before reviewer.** Any diff touching a boundary module, or adding a call into one, MUST pass the integration-tester before the reviewer can approve. Unit-test mocks honor the spec, not the dependency — a mock is green because we wrote it that way. Only a run against the real thing, or a contract suite both implementations pass, catches drift.
+
+<!-- nina:slot integrations.7 -->
+- **an integration boundary**: a call to an external service, or a webhook or callback from one

@@ -60,7 +60,7 @@ it.
 <!-- nina:slot blockchain.1 -->
 
 ### 2. Planner only for ambiguous, multi-step, or multi-package work
-If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things). Don't dispatch planner for "change the button color" or "add a `label` field to `DestinationAccount`."
+If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things). Don't dispatch planner for "change the button color" or "add a `label` field to a model."
 
 ### 3. Architect output is a spec, not code
 Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
@@ -105,7 +105,7 @@ When a stage loops back (qa → implementer on a test failure, reviewer rejects 
 
 **The rule that decides everything here: a stage that only reads can always run beside another
 stage that only reads. A stage that writes files owns those files alone.** Most of this pipeline is
-read-only, so most of it can overlap — the default of running all nine stages nose-to-tail is a
+read-only, so most of it can overlap — the default of running every stage nose-to-tail is a
 habit, not a constraint.
 
 Dispatch concurrent agents **in a single message with multiple Agent tool calls**. Separate messages
@@ -117,7 +117,7 @@ run them one after another and buy nothing.
 |---|---|---|
 | **`reviewer` ∥ every gate the diff triggered** after the implementer | all read-only + Bash | the gates stop being a serial prefix to the review |
 | **`reviewer` fanned out by dimension** — one per axis of risk the diff carries, such as tenant isolation, patterns and spec-scope | read-only; they never touch the same output | **the biggest single win.** One reviewer carrying ~15 checklists over a 500-line diff misses things; three narrow ones do not. Faster *and* better |
-| **`architect` across the sibling specs of one milestone** (`retention-spec1..8`) | each writes its own file under `.claude/plans/specs/` | the specs share context, so designing them together is more coherent than one-at-a-time, and the whole milestone is specced in one pass |
+| **`architect` across the sibling specs of one milestone** (`<feature>-spec1..N`) | each writes its own file under `.claude/plans/specs/` | the specs share context, so designing them together is more coherent than one-at-a-time, and the whole milestone is specced in one pass |
 | **`secops` ∥ `qa`** at the end of a milestone | secops is read-only by definition | removes the audit from the critical path |
 | **`devops` ∥ `secops`** at the end of a milestone | devops only reads code; what it writes is a deploy target, not the tree | the audit and the preview deploy stop being sequential |
 | **`Explore` fan-out** for "where does X live" | read-only | one search instead of every stage re-grepping the tree |
@@ -171,4 +171,4 @@ The subagent overhead isn't worth it for sub-5-minute tasks. Do it directly.
 
 ## Quick triage
 
-When dispatch is ambiguous, escalate one notch (heavier chain). The cost of an extra stage is low; the cost of skipping a gate on a money-movement regression is a production incident with real money.
+When dispatch is ambiguous, escalate one notch (heavier chain). The cost of an extra stage is low; the cost of skipping a gate on a critical path is a production incident.

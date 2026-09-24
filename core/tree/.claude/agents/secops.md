@@ -68,8 +68,8 @@ recall-based audit, and you should say so rather than imply coverage you did not
 - You audit only. **You do NOT edit code or tests.** You do not run vitest (memory discipline — that is qa's job). Read-only + Bash for non-destructive inspection (`git`, `grep`, `rg`, reading files, `pnpm typecheck`/`lint` if useful).
 
 ## Severity scale
-- **CRITICAL** — directly exploitable to move money wrongly, take over an account, or expose PII/secrets in prod. BLOCKS the milestone.
-- **HIGH** — a clear security/privacy defect that is exploitable under realistic conditions, or a money-seam that cannot enforce its invariant. BLOCKS the milestone.
+- **CRITICAL** — directly exploitable to act on a critical path without its checks, take over an account, or expose PII/secrets in prod. BLOCKS the milestone.
+- **HIGH** — a clear security/privacy defect that is exploitable under realistic conditions, or a seam on a critical path that cannot enforce its invariant. BLOCKS the milestone.
 - **MEDIUM** — a real weakness needing remediation but not immediately exploitable (e.g. missing rate-limit on a dev route gated off in prod). Does not block, but must be tracked.
 - **LOW / INFO** — hardening opportunity or defense-in-depth note.
 
@@ -84,7 +84,7 @@ recall-based audit, and you should say so rather than imply coverage you did not
 - Edit code or tests (read-only by design).
 - Run vitest in any form (qa owns test execution).
 - Rubber-stamp. If you found nothing in a dimension, say what you checked and why it's clean — don't omit it.
-- Downgrade a money-movement or PII-exposure finding because "the logic is still a stub" — a seam that structurally cannot enforce its invariant is a HIGH now, because Phase 2 will build on it.
+- Downgrade a critical-path or PII-exposure finding because "the logic is still a stub" — a seam that structurally cannot enforce its invariant is a HIGH now, because Phase 2 will build on it.
 - Attack or probe any system outside this repository.
 
 ---

@@ -5,7 +5,7 @@
 <!-- nina:slot project.3 stack -->
 <!-- nina:slot edge-cf.1 -->
 
-> **A subagent can only invoke a skill if `Skill` is in its `tools:` list.** That field is an allowlist, not a hint: for the harness's first three months it omitted `Skill` on all nine roles, so every mandatory-skill rule here was unenforceable and the measured invocation count was 2 in 743 runs — both from built-in agents that carry the full tool set. Any new role that binds a skill must grant `Skill`. The `tools:` field is read when the agent is registered, so a change to it needs a new session; the spec body is re-read on every dispatch.
+> **A subagent can only invoke a skill if `Skill` is in its `tools:` list.** That field is an allowlist, not a hint: an earlier version of this harness omitted `Skill` on every role, so every mandatory-skill rule was unenforceable, and the skills were measured at 2 invocations in 743 runs — both from built-in agents that carry the full tool set. Any new role that binds a skill must grant `Skill`. The `tools:` field is read when the agent is registered, so a change to it needs a new session; the spec body is re-read on every dispatch.
 
 Mandatory triggers:
 
@@ -62,7 +62,16 @@ a request against the pinned version, quoting the composed file and line, and it
 ## ⚠️ Agent pipeline — MANDATORY
 
 > **Dispatch the subagent chain that fits the task's size and blast radius — before executing anything non-trivial.**
-> The pipeline is **proportional, not one-size-fits-all.** Money movement, the database, auth, integration boundaries, and substantial multi-file features get the full chain. Small read-only / display / UI-copy changes get a light chain — or a direct edit. **Under-gating a money/database/auth/integration change is a protocol violation. Over-gating a one-file label or list change wastes hours — that is also a failure.**
+> The pipeline is **proportional, not one-size-fits-all.** A change on a **critical path** (below) and a substantial multi-file feature get the full chain. Small read-only / display / UI-copy changes get a light chain — or a direct edit. **Under-gating a change on a critical path is a protocol violation. Over-gating a one-file label or list change wastes hours — that is also a failure.**
+
+**Critical paths.** A change that touches one is gated in full, and when it is unclear whether a change touches one, it does:
+
+- **auth**: how a credential is issued, checked or revoked, and who may do what
+<!-- nina:slot db.8 -->
+<!-- nina:slot integrations.7 -->
+<!-- nina:slot money.4 -->
+<!-- nina:slot pii.2 -->
+<!-- nina:slot blockchain.4 -->
 
 ### Procedure — follow this every time
 
@@ -72,7 +81,7 @@ a request against the pinned version, quoting the composed file and line, and it
 4. **Run the read-only stages concurrently.** A stage that only reads can run beside any other stage that only reads, so the `reviewer` and every gate the diff triggers go out together after the implementer — in ONE message with multiple Agent calls — and `secops` runs alongside `qa` at a milestone's end. For a diff over ~200 lines, fan the reviewer out by dimension — one reviewer per axis of risk the diff actually carries — instead of asking one agent to carry every checklist. Concurrent **implementers** are the exception: they write, so each needs `isolation: "worktree"`, one per package, with disjoint file lists. `qa` is always alone (vitest memory). Full rules: `.claude/router.md` § *Parallelization*.
 5. The **reviewer** must verify every required stage ran — including the database gate if the schema or a query was touched — before approving.
 6. **Honor the planner's `ONE-SPEC` / `ONE-REVIEW` grouping.** Sibling steps that change no observable behavior on their own get **one** architect spec and **one** reviewer pass over the combined diff, while still being implemented one step at a time. Small steps are good; eight full pipelines to ship one feature are not. This never relaxes a gate — the gates in `.claude/graph.md` fire on the surface touched, however the specs were grouped.
-7. **Right-size before dispatching.** Match the chain to blast radius (see table). A change that touches no money path, no database, no auth or integration surface, and ≤2 files takes the light chain — or a direct edit when a subagent adds nothing (a label, a copy tweak, a list render). Do NOT run planner/architect/secops on that. The money/database/auth/integration gates below are never optional.
+7. **Right-size before dispatching.** Match the chain to blast radius (see table). A change that touches no critical path and ≤2 files takes the light chain — or a direct edit when a subagent adds nothing (a label, a copy tweak, a list render). Do NOT run planner/architect/secops on that. The gates on a critical path are never optional.
 8. **At the END of a spec-SET / milestone** (e.g. all of `6.*`), after the last sub-step's qa, dispatch **secops**. The milestone is not done until secops returns `SECURE`. This is a milestone gate, NOT a per-sub-step stage. **Scope secops to the milestone's diff by default.** A whole-tree sweep surfaces pre-existing debt mid-task and causes scope-creep — run it ONLY when explicitly requested, as a deliberate choice, never as the default.
 
 ### Required chain by task shape
@@ -81,10 +90,10 @@ a request against the pinned version, quoting the composed file and line, and it
 |---|---|
 | Question / exploration / Q&A | none — answer directly |
 | Trivial edit (rename, typo, 1-line log fix) | none — edit directly |
-| **Small read-only / display / UI-copy change** (≤2 files, no money path, no database, no auth or integration boundary) | **implementer → reviewer** — or a direct edit if a subagent adds no value; qa runs ONLY the affected test file. No planner, no secops. |
+| **Small read-only / display / UI-copy change** (≤2 files, no critical path) | **implementer → reviewer** — or a direct edit if a subagent adds no value; qa runs ONLY the affected test file. No planner, no secops. |
 | Single-file bug fix (TS) | **implementer → reviewer → qa** |
 | Refactor TS (no new behavior) | **architect → implementer → reviewer → qa** |
-| New TS feature / multi-file change (money path, schema, auth, or ≥3 files with logic) | **planner → architect → implementer → reviewer → qa** |
+| New TS feature / multi-file change (a critical path, or ≥3 files with logic) | **planner → architect → implementer → reviewer → qa** |
 <!-- nina:slot db.3 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot blockchain.2 -->
@@ -99,7 +108,7 @@ a request against the pinned version, quoting the composed file and line, and it
 <!-- nina:slot project.8 slow-suites -->
 
 ### If you are uncertain which chain applies
-→ If the doubt is whether a **money / database / auth / integration** surface is touched → treat it as the heavier shape and gate it. If the task is clearly none of those and the only question is "how much ceremony" → take the **lighter** chain; an extra planner/secops pass on a display change costs hours, not minutes.
+→ If the doubt is whether a **critical path** is touched → treat it as the heavier shape and gate it. If the task clearly touches no critical path and the only question is "how much ceremony" → take the **lighter** chain; an extra planner/secops pass on a display change costs hours, not minutes.
 
 <!-- nina:slot project.5 roles-heading -->
 
@@ -111,14 +120,14 @@ a request against the pinned version, quoting the composed file and line, and it
 <!-- nina:slot blockchain.3 -->
 - **reviewer** → verify diff matches spec, run typecheck/lint/build (NOT vitest), confirm every gate the diff triggered ran, confirm spec has a preview-deploy plan
 - **qa** → runs vitest once at the END of the pipeline (after reviewer approves) for the affected packages; loops back to implementer on failures
-- **devops** → **deploy owner.** Runs after **qa PASS** on any step that changes a deployed surface. Staging FE goes to Pages `--branch staging` (a preview deploy); `--branch main` is production and needs an explicit go. Smokes the deployed preview for a blank page and a clean console — judging whether the screen is *right* is the reviewer's job, not his. Executes Hard Rule #14: clean build, both targets (staging Worker + Pages), build-time env, migrations in order against the right DB, secret parity, **smoke against preview**, named rollback. Deploys preview/staging on its own; **a production deploy requires an explicit go from {{OWNER}} for that change.** Read-only on code — a failed deploy caused by bad code loops back, it does not get patched here.
+- **devops** → **deploy owner.** Runs after **qa PASS** on any step that changes a deployed surface. Deploys to preview or staging first; production needs an explicit go. Smokes the deployed preview for a blank page and a clean console — judging whether the screen is *right* is the reviewer's job, not his. Executes Hard Rule #14: clean build, every deploy target, build-time env, migrations in order against the right DB, secret parity, **smoke against preview**, named rollback. Deploys preview/staging on its own; **a production deploy requires an explicit go from {{OWNER}} for that change.** Read-only on code — a failed deploy caused by bad code loops back, it does not get patched here.
 - **secops** → **milestone security gate.** Runs once at the END of a completed spec-SET (a numbered milestone like `6.*`, or a phase like one package's build-out), after the last sub-step's qa — NOT per sub-step. Audits as an attacker and a privacy auditor (auth/session, tenant isolation, secrets and config exposure, PII leakage, abuse of any irreversible operation and its idempotency seams, injection/SSRF, dependency and binding posture). **Scoped to the milestone diff by default; a whole-tree sweep runs only on explicit request** (it surfaces pre-existing debt mid-task → scope-creep). Read-only; CRITICAL/HIGH findings in the milestone's own surface BLOCK it and loop back until re-audited.
 
 <!-- nina:slot project.6 doc-pointers -->
 
 ## Hard rules (non-negotiable)
 
-1. **Run the subagent chain proportional to the task (see the pipeline table).** Under-gating a money-movement, database, auth, or integration change is a protocol violation — those gates are never skipped, and when uncertain whether such a surface is touched, gate it. But small read-only / display / UI-copy changes (≤2 files, none of those surfaces) take the light chain or a direct edit — over-gating them wastes hours and is also a failure.
+1. **Run the subagent chain proportional to the task (see the pipeline table).** Under-gating a change on a critical path is a protocol violation — those gates are never skipped, and when uncertain whether one is touched, gate it. But small read-only / display / UI-copy changes (≤2 files, no critical path) take the light chain or a direct edit — over-gating them wastes hours and is also a failure.
 <!-- nina:slot db.5 -->
 <!-- nina:slot money.1 -->
 <!-- nina:slot money.2 -->

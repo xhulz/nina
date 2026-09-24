@@ -50,10 +50,10 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 - **Exit criteria:**
   - `pnpm typecheck`, `pnpm lint` pass; `pnpm build` when frontend touched.
   - Diff matches spec (reject scope creep).
-  - `.claude/patterns.md` conventions followed (TSDoc, layering, naming, `userId` scoping, `BigInt` money, state-machine + idempotency invariants).
+  - `.claude/patterns.md` conventions followed (TSDoc, layering, naming, owner scoping).
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.2 -->
-  - No security / privacy regression (no PII in logs, no leaked secret, no missing `userId` scope).
+  - No security / privacy regression (no PII in logs, no leaked secret, no query missing its owner scope).
 <!-- nina:slot money.1 -->
   - **Preview-first deploy invariant:** a spec that culminates in prod deploy names a preview URL where smoke runs FIRST.
 

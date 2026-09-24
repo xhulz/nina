@@ -63,7 +63,7 @@ context to re-derive the same decisions. That, not the size of the specs, is whe
 So when you split a milestone into siblings, say how they are to be **run**, using this floor:
 
 > A sub-spec is **independently gated** when it changes observable behavior on its own, touches
-> money / the database / auth / an integration, or lands in a different package. Otherwise it is a **sibling
+> a critical path (`CLAUDE.md` § *Critical paths*), or lands in a different package. Otherwise it is a **sibling
 > step** — implemented on its own, but designed and reviewed together with its siblings.
 
 - **Independently gated** → its own architect spec, its own reviewer pass, gates as applicable.
