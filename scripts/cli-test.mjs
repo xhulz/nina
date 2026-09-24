@@ -2692,6 +2692,26 @@ const dated = (date, status = 'active') =>
   expect(out.includes('4 of 4 runs have a token record, 1 on a model the price table does not know'), `cost: the header counts the runs it could not price — got ${out}`);
 }
 
+// ─── nina:why: history kept in the layers, and none of it composed or owed ───────────────
+{
+  // A project fragment carrying a history passage composes without it; one left unclosed is said.
+  const dir = await composed('plain');
+  const fragment = join(dir, '.nina', 'project', 'tree', '.claude', 'agents', 'planner.md');
+  await mkdir(dirname(fragment), { recursive: true });
+  await writeFile(fragment, '<!-- nina:slot project.1 -->\nPlans the work.<!-- nina:why --> We learned this the hard way.<!-- /nina:why -->\n');
+  run(['compose', '--project', dir]);
+  const planner = await readFile(join(dir, '.claude', 'agents', 'planner.md'), 'utf8');
+  expect(planner.includes('Plans the work.') && !planner.includes('hard way') && !planner.includes('nina:why'), 'why: a history passage in a project fragment is not composed');
+  await writeFile(fragment, '<!-- nina:slot project.1 -->\nPlans the work.<!-- nina:why --> never closed\n');
+  const unclosed = run(['compose', '--project', dir, '--check'], { loud: true });
+  expect(unclosed.status === 1 && unclosed.out.includes('a nina:why marker is unclosed'), `why: an unclosed marker fails the check and says where — got ${unclosed.out}`);
+  // Stripped after the pieces were joined, that opener paired with the closer of a core passage forty
+  // lines down, and every rule between them vanished without a word.
+  run(['compose', '--project', dir]);
+  const kept = await readFile(join(dir, '.claude', 'agents', 'planner.md'), 'utf8');
+  expect(kept.includes('never closed') && kept.includes('sibling'), 'why: an unclosed marker in a fragment cannot strip the core text after it');
+}
+
 // ─── proportion: the size of a change against the chain it went through ──────────────────
 {
   const snapshots = join(await scratch(), 'snaps');

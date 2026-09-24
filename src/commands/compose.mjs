@@ -33,6 +33,24 @@ import { defaultVocabulary } from '../vocabulary.mjs';
  */
 export const SLOT = /^<!-- nina:slot ([a-z-]+\.\d+)(?:\s+([^>]*?))?\s*-->$/;
 
+/** A passage that tells why a rule exists as history: kept in the layers, dropped from what is composed. */
+const WHY = /<!-- nina:why -->[\s\S]*?<!-- \/nina:why -->/g;
+
+/**
+ * A layer's text as it composes, less its `nina:why` passages — for every reader of the layers that
+ * should see what a project gets rather than what the harness keeps: the vocabulary a project owes, the
+ * documents it is asked for, the leak audit. Markers are matched as written, not parsed: a fenced code
+ * block is no exception, so a layer does not show the marker as an example.
+ *
+ * @param {string} text - Layer text.
+ * @param {{keepLines?: boolean}} [options] - `keepLines` leaves the newlines a passage held, so a line
+ *   number read from the result is still the layer's.
+ * @returns {string}
+ */
+export function stripWhy(text, { keepLines = false } = {}) {
+  return String(text).replace(WHY, (passage) => (keepLines ? passage.replace(/[^\n]/g, '') : ''));
+}
+
 /**
  * Matches a file's surface precondition, on its first line.
  *
@@ -254,6 +272,8 @@ async function readFragments(path) {
     if (current) buffer.push(line);
   }
   flush();
+  // Each fragment on its own, so a marker left unclosed cannot reach past the slot it was written in.
+  for (const [slot, fragment] of bySlot) bySlot.set(slot, stripWhy(fragment));
   return bySlot;
 }
 
@@ -321,6 +341,8 @@ export async function composeProject(target, ctx, options = {}) {
 
   /** Slots the core expects a declared layer to fill, and no layer did. */
   const unfilled = [];
+  /** Files a `nina:why` marker composed into, unclosed. */
+  const malformed = [];
 
   for (const rel of (await walk(coreTree)).sort()) {
     let core = await readFile(join(coreTree, rel), 'utf8');
@@ -336,6 +358,11 @@ export async function composeProject(target, ctx, options = {}) {
         continue;
       }
     }
+
+    // History is stripped from each piece before the pieces are joined. Joined first, an opener left
+    // unclosed in one layer paired with the closer of a passage in another, and everything between them
+    // — the core's own rules included — was stripped without a word.
+    core = stripWhy(core);
 
     /** Fragments for this file: surfaces in declared order, project layer last (it wins). */
     const fragments = new Map();
@@ -377,7 +404,12 @@ export async function composeProject(target, ctx, options = {}) {
         unfilled.push(`${rel} ${marker[1]}`);
       }
     }
+    // How a rule came to be — the history of the project it was learned in — is for whoever maintains the
+    // harness. It stays in the layers, marked `nina:why`, and every dispatch in a project stops paying
+    // for it: the rule, and the reason that generalizes, are what an agent acts on. Each piece was
+    // stripped on its own above; a marker still here was left unclosed, and is said, like a hole.
     let text = out.join('\n');
+    if (text.includes('nina:why')) malformed.push(rel);
     for (const [name, value] of Object.entries(profile.vocabulary ?? {})) {
       // `null` means "declared but not filled in yet" — leave the placeholder standing so
       // it is reported, rather than composing the rule with a hole where a noun should be.
@@ -406,7 +438,7 @@ export async function composeProject(target, ctx, options = {}) {
     if (previous !== null && previous !== text) differ.push(rel);
   }
 
-  return { written, differ, unfilled, skipped };
+  return { written, differ, unfilled, skipped, malformed };
 }
 
 /**
@@ -449,9 +481,10 @@ export async function compose(argv, ctx) {
     if (owed.length > 12) console.log(`    … and ${owed.length - 12} more`);
   }
   for (const slot of awaited) console.log(`  ${slot} is new in this core and still to fill`);
+  for (const rel of result.malformed) console.log(`  ✗ ${rel}: a nina:why marker is unclosed, and its text was composed`);
 
   if (check) {
-    const bad = result.differ.length + owed.length;
+    const bad = result.differ.length + owed.length + result.malformed.length;
     // The summary line stays exactly `compose: current`, which is what every project's drift
     // detector matches on to stay silent. Widening it here would make each of them speak.
     console.log(

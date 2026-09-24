@@ -5,7 +5,7 @@
 <!-- nina:slot project.3 stack -->
 <!-- nina:slot edge-cf.1 -->
 
-> **A subagent can only invoke a skill if `Skill` is in its `tools:` list.** That field is an allowlist, not a hint: an earlier version of this harness omitted `Skill` on every role, so every mandatory-skill rule was unenforceable, and the skills were measured at 2 invocations in 743 runs — both from built-in agents that carry the full tool set. Any new role that binds a skill must grant `Skill`. The `tools:` field is read when the agent is registered, so a change to it needs a new session; the spec body is re-read on every dispatch.
+> **A subagent can only invoke a skill if `Skill` is in its `tools:` list.** That field is an allowlist, not a hint.<!-- nina:why --> An earlier version of this harness omitted `Skill` on every role, so every mandatory-skill rule was unenforceable, and the skills were measured at 2 invocations in 743 runs — both from built-in agents that carry the full tool set.<!-- /nina:why --> Any new role that binds a skill must grant `Skill`. The `tools:` field is read when the agent is registered, so a change to it needs a new session; the spec body is re-read on every dispatch.
 
 Mandatory triggers:
 

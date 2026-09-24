@@ -16,7 +16,7 @@ import { installedSkills, toolFindings } from '../tools.mjs';
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { REQUIRES, SLOT, layerRootFor, walk } from './compose.mjs';
+import { REQUIRES, SLOT, layerRootFor, stripWhy, walk } from './compose.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
@@ -55,12 +55,12 @@ export async function referencedVocabulary(layerRoot, surfaces, target) {
       const t = await readFile(join(layerRoot, 'surfaces', s, 'tree', rel), 'utf8').catch(() => null);
       if (t !== null) texts.push(t);
     }
-    for (const [, name] of texts.join('\n').matchAll(/\{\{([A-Z_]+)\}\}/g)) found.add(name);
+    for (const [, name] of stripWhy(texts.join('\n')).matchAll(/\{\{([A-Z_]+)\}\}/g)) found.add(name);
   }
   if (target) {
     const projectTree = join(target, HARNESS, 'project', 'tree');
     for (const rel of await walk(projectTree)) {
-      const text = await readFile(join(projectTree, rel), 'utf8');
+      const text = stripWhy(await readFile(join(projectTree, rel), 'utf8'));
       for (const [, name] of text.matchAll(/\{\{([A-Z_]+)\}\}/g)) found.add(name);
     }
   }
@@ -130,7 +130,7 @@ export async function owedDocuments(layerRoot, surfaces) {
   for (const root of roots) {
     for (const rel of await walk(root)) {
       provided.add(rel);
-      texts.push(await readFile(join(root, rel), 'utf8'));
+      texts.push(stripWhy(await readFile(join(root, rel), 'utf8')));
     }
   }
   const owed = new Map();
