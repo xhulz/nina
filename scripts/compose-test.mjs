@@ -27,6 +27,9 @@
  *      no `tools:` is not restricted — the subagent inherits every tool the session has — so a
  *      role told it is read-only is not, and nothing says so.
  *   9. Every numbered list composes as 1, 2, 3 — except the hard rules, whose numbers are ids.
+ *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives.
+ *      Every dispatch pays for what its spec says, so a file that grows past its budget is a decision to
+ *      make in the commit that raises it, not an accretion nobody chose.
  *
  * Usage: node scripts/compose-test.mjs [--verbose]
  */
@@ -38,7 +41,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REQUIRES, composeProject } from '../src/commands/compose.mjs';
+import { REQUIRES, composeProject, stripWhy } from '../src/commands/compose.mjs';
 import { ANSWERED, answers } from '../src/commands/learn.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -86,6 +89,11 @@ async function runFixture(name) {
 
   for (const rel of composed) {
     const text = await readFile(join(work, rel), 'utf8');
+
+    // 10. The file fits its budget, and carries none of the history the layers mark as `nina:why`.
+    if (rel.endsWith('.md') && !(rel in BUDGETS)) failures.push(`${rel}: composed with no size budget — add one to BUDGETS, deliberately`);
+    else if (rel in BUDGETS && text.length > BUDGETS[rel]) failures.push(`${rel}: ${text.length} characters, over its budget of ${BUDGETS[rel]}`);
+    if (text.includes('nina:why')) failures.push(`${rel}: a nina:why passage survived composition`);
 
     // 5. A reference to a rule number that this project does not have.
     for (const match of text.matchAll(/#(\d+)/g)) {
@@ -183,6 +191,36 @@ async function runFixture(name) {
 
 
 /**
+ * The most characters each composed document may hold, in the largest profile a fixture composes: the
+ * size measured when budgets were introduced, with about a tenth of room. Raising one is allowed and is
+ * the point — it is written in the commit that needs it, where a reviewer sees the context grow. The
+ * fixtures have empty project layers, so this bounds the harness's own share of each file; a project's
+ * fragments come on top. Only documents are budgeted: they are what a dispatch reads.
+ */
+const BUDGETS = {
+  '.claude/agents-overview.md': 6000,
+  '.claude/agents/architect.md': 14500,
+  '.claude/agents/dba.md': 12500,
+  '.claude/agents/devops.md': 11500,
+  '.claude/agents/implementer.md': 17000,
+  '.claude/agents/integration-tester.md': 15500,
+  '.claude/agents/planner.md': 10500,
+  '.claude/agents/qa.md': 12500,
+  '.claude/agents/reviewer.md': 20000,
+  '.claude/agents/secops.md': 12500,
+  '.claude/agents/solidity-auditor.md': 9000,
+  '.claude/agents/solidity-dev.md': 8500,
+  '.claude/graph.md': 6500,
+  '.claude/patterns.md': 20000,
+  '.claude/pills/README.md': 10000,
+  '.claude/pipeline.md': 9500,
+  '.claude/retrieval.md': 10500,
+  '.claude/router.md': 16000,
+  '.claude/templates/integration.md': 3000,
+  'CLAUDE.md': 25000,
+};
+
+/**
  * The numbered lists in a composed document that do not count 1, 2, 3 — one line per list. A `1.`
  * starts a new list, a heading closes one, and fenced code is not prose. The hard rules are skipped:
  * their numbers are ids.
@@ -275,7 +313,14 @@ async function surfaceLeaks() {
 
   for (const layer of layers) {
     for (const rel of await walk(layer.dir)) {
-      const text = await readFile(join(layer.dir, rel), 'utf8');
+      const raw = await readFile(join(layer.dir, rel), 'utf8');
+      // A slot inside a history passage is composed and then stripped with it: the project's text for
+      // it disappears, while the notice and `where` still offer the slot to fill.
+      for (const passage of raw.match(/<!-- nina:why -->[\s\S]*?<!-- \/nina:why -->/g) ?? []) {
+        if (passage.includes('nina:slot')) found.push(`${layer.label}/${rel}: a nina:why passage holds a slot, which would compose to nothing`);
+      }
+      // What a project composes is what is audited: history kept in the layers is not composed.
+      const text = stripWhy(raw, { keepLines: true });
       // A core file may name what it is gated on. A surface file owns its own technology, and
       // nothing else: `surfaces/edge-cf` naming Prisma composes a sentence about the database
       // into a project that declared no database, which is the guarantee this repo makes in

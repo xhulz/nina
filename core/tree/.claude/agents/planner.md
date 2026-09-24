@@ -56,9 +56,9 @@ For **trivial** tasks (1–2 files, < 100 LOC, single concern) note explicitly t
 ## The floor: decompose the work, not the ceremony
 
 Small subtasks are right and they stay. What is NOT right is paying a five-stage pipeline for each
-one. A milestone split into eight sub-specs used to mean eight planner→architect→implementer→
+one.<!-- nina:why --> A milestone split into eight sub-specs used to mean eight planner→architect→implementer→
 reviewer→qa runs — roughly forty dispatches to ship one feature, most of them re-reading the same
-context to re-derive the same decisions. That, not the size of the specs, is where the hours went.
+context to re-derive the same decisions. That, not the size of the specs, is where the hours went.<!-- /nina:why -->
 
 So when you split a milestone into siblings, say how they are to be **run**, using this floor:
 

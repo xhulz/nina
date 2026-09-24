@@ -42,6 +42,18 @@ Three mechanisms connect the layers:
   allowlist: when the whole line lived in the frontend surface, every profile without a frontend
   composed a reviewer with no allowlist at all, and moved into core it granted browser tools to
   projects with no browser. Inline, the core owns the base list and the surface appends to it.
+- **`<!-- nina:why -->…<!-- /nina:why -->`** marks a passage that tells how a rule came to be, as the
+  history of the project it was learned in: "it was followed 3% of the time", "2 invocations in 743 runs".
+  That is for whoever maintains the harness; it stays in the layers and is not composed, so no dispatch in
+  a project pays for it. The rule, and a reason that generalizes, stay. Each piece — the core file, each
+  fragment — is stripped on its own before they are joined: stripped after, an opener left unclosed in a
+  project fragment paired with the closer of a core passage forty lines down and deleted every rule between
+  them without a word. A marker still standing after that was left unclosed; it composes as text and
+  `compose` names it, `--check` failing. A slot inside a passage would compose to nothing, so the layer
+  audit refuses one; and the readers that ask what a project owes — vocabulary, documents, the leak audit —
+  read the layers with the passages stripped too. Markers are matched as written, fenced code included.
+  The first six passages marked saved 0.4% of the largest composition — the narrative was mostly already
+  gone — and the size budget beside it is what keeps it from coming back.
 - **`{{VOCABULARY}}`** placeholders are filled from the profile, which is how the core
   states a rule without naming one project's provider, packages or models.
 
@@ -56,7 +68,7 @@ later phase, against a second project that can check the rewrite.
 Once a project pins a release, the working core is free to move, and that is when the harness
 can be made generic — the extraction's compromises are recorded in `core/GAPS.md`, closed and
 open. What replaces the byte-exact proof is `fixtures/`: one project per shape worth testing,
-and nine properties that must hold for each, plus one audit of the layers themselves.
+and ten properties that must hold for each, plus one audit of the layers themselves.
 
 ```bash
 node scripts/compose-test.mjs        # or: pnpm compose:test
@@ -87,6 +99,10 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
    are bullets now, or count within one fragment. The hard rules are the exception, and the composed
    list says so: other documents cite them as `Hard Rule #N`, so the number is an id, and a rule the
    profile lacks leaves a gap.
+10. Every composed file fits its size budget (`BUDGETS` in the suite), and no `nina:why` passage
+   survives. Every dispatch pays for what its spec says, so a file that outgrows its budget is a decision
+   made in the commit that raises it, where a reviewer sees the context grow — not an accretion nobody
+   chose.
 
 The last check reads the layers rather than a fixture's output. For every core file, a surface's
 technology may be named only if that file is gated on that surface — `Prisma` only under `db`,

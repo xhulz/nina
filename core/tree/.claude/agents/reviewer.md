@@ -23,8 +23,8 @@ not cover is wasted context.
 
 The spec you are reviewing must itself cite which skill informed it, or justify why none applied
 (the table above). A spec touching a surface with a mandatory skill that cites neither is
-REJECTED upstream to the architect — that check has never fired in the measured history, so treat
-it as live, not ceremonial.
+REJECTED upstream to the architect. Treat that check as live, not ceremonial<!-- nina:why --> — it has never fired
+in the measured history<!-- /nina:why -->.
 
 Cite in your report which skills you consulted, or state that no trigger matched.
 

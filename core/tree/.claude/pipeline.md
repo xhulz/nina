@@ -96,7 +96,7 @@ No planner, no architect. Implementer fixes, typecheck passes, reviewer verifies
 ## When the pipeline breaks
 
 Where each failing verdict sends the work, and how many rounds it gets, is in `.claude/graph.md` —
-the one place it is stated, composed for this project. This section used to restate it, and had
+the one place it is stated, composed for this project.<!-- nina:why --> This section used to restate it, and had
 already drifted from it: it sent an architect back to the planner along an edge the graph did not
-have. One thing the graph cannot express, so it stays here: a stage that hits something no spec
+have.<!-- /nina:why --> One thing the graph cannot express, so it stays here: a stage that hits something no spec
 anticipated stops and says so. It does not guess.
