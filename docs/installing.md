@@ -86,6 +86,15 @@ before anything else, and the hooks whose silence would hide it say it themselve
 and cannot even start answers the hook with that sentence, to the person on `Stop` and to the model on
 `UserPromptSubmit`.
 
+On a terminal, `init` interviews: a few sentences on what the project is, kept in `.nina/BRIEF.md`, then
+one yes-or-no question per surface. The questions are numbered, and asked in the order projects need
+them, `db` and `frontend` first and `blockchain` last: asked alphabetically, the first thing a web app was
+asked was whether it deploys immutable code, and the header never said the questions were the surfaces.
+Each says what a yes brings in what a person would recognise, roles, hard rules and agents changed,
+rather than the count of fragments the harness measures it by, which it falls back to only for a surface
+that brings none of those. A surface a file already confirms says so, and an
+empty answer keeps it. Colour follows the banner: on a terminal only, and never under `NO_COLOR`.
+
 `init` writes `.nina/profile.json` and `.nina/TODO.md`, and **deliberately writes no stub
 fragments.**
 

@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, scanProject, tokensOf } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
+import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
 import { byVersion, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
@@ -84,16 +85,16 @@ const expect = (ok, what) => {
   // broke this test without a line of it changing. Build the answers from the surfaces, and the
   // assertion goes back to describing the rule: what you answer is what lands in the profile.
   const newest = (await readdir(join(ROOT, 'releases'))).sort(byVersion).at(-1);
-  const available = (await readdir(join(ROOT, 'releases', newest, 'surfaces'), { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
-    .sort();
+  const available = askOrder(
+    (await readdir(join(ROOT, 'releases', newest, 'surfaces'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name),
+  );
   const want = ['db', 'integrations', 'money'];
   const said = available.map((s) => (want.includes(s) ? 'y' : 'n'));
   const answers = `A lottery that registers tickets and pays winners.\n\n${said.join('\n')}\n`;
 
-  const { status } = run(['init', '--project', dir, '--ask'], { input: answers });
+  const { status, out: asked } = run(['init', '--project', dir, '--ask'], { input: answers });
   expect(status === 0, 'init: exited non-zero on an empty directory');
+  expect(asked.includes(`1/${available.length}  db`) && asked.indexOf('  db\n') < asked.indexOf('  blockchain\n') && !asked.includes('\x1b['), `init: the questions are numbered, the common surfaces first, and plain when not on a terminal — got ${asked}`);
 
   const profile = JSON.parse(await readFile(join(dir, '.nina', 'profile.json'), 'utf8'));
   expect(
@@ -123,6 +124,7 @@ const expect = (ok, what) => {
 
   const todo = await readFile(join(dir, '.nina', 'TODO.md'), 'utf8');
   expect(todo.includes('BRIEF.md'), 'init: TODO.md should send the reader to the brief first');
+  expect(todo.indexOf('**db**') > -1 && todo.indexOf('**db**') < todo.indexOf('**blockchain**') && brief.indexOf('**db**') > -1 && brief.indexOf('**db**') < brief.indexOf('**blockchain**'), 'init: the TODO and the brief list the surfaces in the order they were asked');
   expect(todo.includes('`project.1` — **title**'), 'init: TODO.md should name a slot, not only place it');
   expect(
     !/- \[ \] `project\.\d+`\n/.test(todo),
@@ -149,7 +151,16 @@ const expect = (ok, what) => {
   const { out } = run(['init', '--project', dir, '--core', (await readdir(join(ROOT, 'releases'))).sort(byVersion)[0], '--ask'], {
     input: 'x\n\nn\nn\nn\nn\nn\nn\n',
   });
-  expect(!/—\s*$/m.test(out), 'init: an older core must never render an empty question');
+  expect(/\d\/\d+ {2}\S+\n {7}\S/.test(out) && !/\d\/\d+ {2}\S+\n\s*\n/.test(out), `init: an older core must never render an empty question — got ${out}`);
+  expect(JSON.stringify(askOrder(['blockchain', 'x-new', 'db', 'money'])) === JSON.stringify(['db', 'money', 'blockchain', 'x-new']), 'init: the common surfaces are asked first, and one the order does not know goes last');
+
+  // A surface a file already confirms says so, and an empty answer keeps it.
+  const prisma = await scratch();
+  await mkdir(join(prisma, 'prisma'), { recursive: true });
+  await writeFile(join(prisma, 'prisma', 'schema.prisma'), 'datasource db {}\n');
+  const kept = run(['init', '--project', prisma, '--ask'], { input: `x\n\n\n${'n\n'.repeat(10)}` });
+  const keptProfile = JSON.parse(await readFile(join(prisma, '.nina', 'profile.json'), 'utf8'));
+  expect(kept.out.includes('already here: a Prisma schema') && keptProfile.surfaces.includes('db'), `init: a surface a file confirms is said, and Enter keeps it — got ${keptProfile.surfaces}`);
 }
 
 // ─── check: a project that still has the directory under its old name ──────────────────
