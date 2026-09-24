@@ -1976,6 +1976,43 @@ const dated = (date, status = 'active') =>
   );
   expect(replay(stuck.slice(0, 4).flat(), loops, forward).rounds.map((r) => r.round).join() === '1,2', 'gate: the replay lists the rounds the dispatches made');
 
+  // Counted per issue where every report names its issues. The graph always said a different issue on
+  // the same edge starts its own count; counting the edge, the gate asked about a review that found a new
+  // problem each round exactly as about a fix that was not converging.
+  const named = (...ids) => report('reviewer', 'REJECTED', { issues: ids });
+  expect(next([named('a'), fix(), named('b'), fix(), named('c')]) === 1, 'gate: a new issue each round starts its own count — the edge alone would say 3');
+  expect(next([named('a'), fix(), named('a'), fix(), named('a')]) === 3, 'gate: the same issue a third time is round 3');
+  expect(next([named('a', 'b'), fix(), named('b'), fix(), named('b')]) === 3, 'gate: an issue keeps its count while the others around it are fixed');
+  expect(next([named('a'), fix(), named('b'), fix(), named('a')]) === 2, 'gate: an issue that comes back counts the round it was in before');
+  expect(next([named('a'), fix(), named('a'), spoke, named('a')]) === 1, 'gate: the owner speaking starts every issue over too');
+  expect(next([named('a'), fix(), report('reviewer', 'APPROVED'), named('a'), fix(), named('a')]) === 2, 'gate: a review that passed closes the issues with the loop');
+  // A renamed issue restarts its count, so the edge keeps counting beside it: at twice the cap it asks anyway.
+  const renamed = roundsFor([named('a'), fix(), named('b'), fix(), named('c'), fix(), named('d'), fix(), named('e')].flat(), 'implementer', loops, forward)[0];
+  expect(renamed?.round === 1 && renamed.edgeRound === 5 && renamed.ceiling === 4 && renamed.issue === 'e', `gate: five rounds of new names are round 1 of the last, and round 5 of an edge whose ceiling is 4 — got ${JSON.stringify(renamed)}`);
+  // One report in the round named nothing: nothing says what it was about, so the edge counts it, as before ids.
+  const half = () => together(named('a'), report('reviewer', 'REJECTED'));
+  expect(next([half(), fix(), half(), fix(), half()]) === 3, 'gate: a round acting on a report that named nothing is counted by its edge');
+  expect(roundsFor(stuck.flat(), 'implementer', loops, forward)[0]?.ceiling === 2, 'gate: and an edge counted by itself asks at its cap, not twice it');
+  // A round that named nothing advanced no issue's count, so it would buy the loop an extra silent round
+  // if the next named one went back to counting by issue. From there the edge counts, until the loop closes.
+  expect(next([named('a'), fix(), report('reviewer', 'REJECTED'), fix(), named('a')]) === 3, 'gate: once a round names nothing, the edge counts the rest of the loop');
+  expect(next([named('a'), fix(), report('reviewer', 'REJECTED'), fix(), report('reviewer', 'APPROVED'), named('a')]) === 1, 'gate: and a review that passed starts it over, counted by issue again');
+  // A late sibling's rejection belongs to the round it was running in, and so do the issues it named.
+  const [la, lb] = [named('a'), named('b')];
+  expect(next([la[0], lb[0], la[1], fix(), lb[1], fix(), named('b'), fix(), named('b')]) === 3, "gate: a late sibling's issue is counted in the round it belongs to");
+  const [ua, ub] = [named('a'), report('reviewer', 'REJECTED')];
+  expect(next([ua[0], ub[0], ua[1], fix(), ub[1], fix(), named('c'), fix(), named('d')]) === 3, 'gate: a late sibling that named nothing makes its round, and the rest of the loop, the edge\'s');
+  expect(next([named('a'), fix(), named('a'), report('qa', 'PASS'), named('a')]) === 1, 'gate: qa passing closes the issues with the loop it came through');
+  // An edge capped at 1: one repeat asks, two new names do not, a third does — the ceiling is twice the cap.
+  const cappedAtOne = loopEdges(parseGraph('## Stages\n\n- `reviewer` — r\n- `implementer` — i\n\n## Edges\n\n- `reviewer` → `implementer` on `REJECTED` — x · max 1\n'));
+  const atOne = (entries) => roundsFor(entries.flat(), 'implementer', cappedAtOne, new Map())[0];
+  const repeat = atOne([named('a'), fix(), named('a')]);
+  const two = atOne([named('a'), fix(), named('b')]);
+  const three = atOne([named('a'), fix(), named('b'), fix(), named('c')]);
+  expect(repeat.round === 2 && repeat.max === 1, 'gate: on an edge capped at 1, the same issue twice is past the cap');
+  expect(two.round === 1 && two.edgeRound === 2 && two.ceiling === 2, 'gate: two different issues are not');
+  expect(three.edgeRound === 3 && three.ceiling === 2, 'gate: and a third round of new names is past the ceiling');
+
   const reviewerTokens = new Set(['APPROVED', 'REJECTED']);
   expect(declaredVerdict('VERDICT: REJECTED\nbecause', reviewerTokens) === 'REJECTED', 'gate: a declared verdict is read from the first line');
   expect(declaredVerdict('\n  VERDICT: APPROVED', reviewerTokens) === 'APPROVED', 'gate: leading blank lines and indentation do not hide it');
@@ -2147,6 +2184,36 @@ const dated = (date, status = 'active') =>
   handle({ hook_event_name: 'SubagentStop', session_id: 's-issues', agent_type: 'reviewer', agent_id: 'n4', last_assistant_message: 'Handed back.', agent_transcript_path: transcript, stop_hook_active: false }, { root: project });
   const stopped = readLedger(ledgerPath(project, 's-issues')).filter((e) => e.k === 'verdict').map((e) => e.issues?.join()).slice(2).join('|');
   expect(stopped === 'from-the-stop|from-the-transcript', `gate: ids are recorded from a stop and from a handback read back — got ${stopped}`);
+
+  // The decision, per issue: a third round of one issue asks and names it; a third round of new ones does not.
+  const loop = (sid, reports) => {
+    const h = (event, fields = {}) => handle({ hook_event_name: event, session_id: sid, ...fields }, { root: project });
+    let answer = null;
+    reports.forEach((report, i) => {
+      const agent = `${sid}-r${i}`;
+      h('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: `${sid}-u${i}` });
+      h('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: `${sid}-u${i}`, tool_response: { agentId: agent } });
+      h('PostToolUse', { tool_name: 'SubagentHandback', agent_id: agent, agent_type: 'reviewer', tool_input: { message: report } });
+      answer = h('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer' }, tool_use_id: `${sid}-f${i}` });
+      if (!answer) h('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer' }, tool_use_id: `${sid}-f${i}`, tool_response: { agentId: `${sid}-i${i}` } });
+    });
+    return answer;
+  };
+  const same = loop('s-same', ['a', 'b', 'c'].map(() => 'VERDICT: REJECTED\nISSUES: null-check-missing\nstill missing'));
+  expect(
+    same?.hookSpecificOutput?.permissionDecision === 'ask' && same.hookSpecificOutput.permissionDecisionReason.includes('round 3 of the issue `null-check-missing`'),
+    `gate: a third round of one named issue goes to the owner, and the question names the issue — got ${JSON.stringify(same)}`,
+  );
+  expect(
+    readLedger(ledgerPath(project, 's-same')).some((e) => e.k === 'ask' && e.issue === 'null-check-missing' && e.edge_round === 3),
+    'gate: the ask is written down with the issue that decided it',
+  );
+  expect(loop('s-new', ['a', 'b', 'c'].map((id) => `VERDICT: REJECTED\nISSUES: problem-${id}`)) === null, 'gate: a third round of new issues goes out without asking');
+  const ceiling = loop('s-ceiling', ['a', 'b', 'c', 'd', 'e'].map((id) => `VERDICT: REJECTED\nISSUES: problem-${id}`));
+  expect(
+    ceiling?.hookSpecificOutput?.permissionDecision === 'ask' && ceiling.hookSpecificOutput.permissionDecisionReason.includes('No issue has passed the cap of 2'),
+    `gate: the fifth round of new names asks anyway, and says why — got ${JSON.stringify(ceiling)}`,
+  );
 
   // It fails open, and writes the failure where the selftest looks.
   const broken = await scratch();

@@ -24,17 +24,21 @@ The stages, and the edges between them, are in `.claude/graph.md` — the one pl
 **Every loop has a cap.** Before dispatching a loop-back, count the rounds the SAME issue has already made on that edge. At the cap `.claude/graph.md` gives it, do not dispatch again: stop and hand {{OWNER}} the report from every round. A third attempt at a fix that failed twice is rarely different from the second, each round costs minutes to hours, and until this rule existed nothing in the pipeline could stop a loop at all. A different issue on the same edge starts its own count. A stage that sends work back names each issue on the `ISSUES` line under its verdict; when you dispatch a round — the fix, and the check of the fix — copy that line into both dispatches, so the stage that checks can keep the id of an issue that is still open. That id is what your count is of.
 
 Where the project wires the **loop gate** (`scripts/loop-gate.mjs`, run by hooks — `nina wire` puts them
-in place), the cap is held for you. It counts a round when a dispatch acts on a loop-back a stage declared
-on its `VERDICT` line; several dispatches acting on the same verdicts are one round; a review that saw
-the fix and passed closes the loop, while a sibling that approved alongside a rejection releases
-nothing; and {{OWNER}}'s next message starts every count over. The dispatch past the cap goes to
-{{OWNER}} to confirm. If they refuse it, do what the graph says — hand them each round's report and ask
-how to proceed — and do not route around the refusal by resuming the fixer or making the fix yourself.
+in place), the cap is held for you. It counts a round when a dispatch acts on a loop-back a stage
+declared on its `VERDICT` line — per issue, while every report the loop's rounds act on named its issues
+on the `ISSUES` line, and per edge from the first round one did not until the loop closes; several
+dispatches acting on the same verdicts are one round; a review that saw the fix and passed closes the
+loop, while a sibling that approved alongside a rejection releases nothing; and {{OWNER}}'s next message
+starts every count over. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
+what the graph says — hand them each round's report and ask how to proceed — and do not route around the
+refusal by resuming the fixer or making the fix yourself.
 
-The gate sees verdicts and dispatches, not "the same issue", and it does not see a fix you make without a
-subagent — so keep your own count as well, gate or no gate. When you dispatch a second round on an edge,
-say "round 2 of max 2 on <edge>" in the dispatch itself, so the count is in the transcript and the next
-reader of it — you after a compaction, or `nina stats` — can see it.
+The gate trusts the ids it is given: an issue renamed between rounds starts its count over, so an edge
+still goes to {{OWNER}} once it has gone round more than twice its cap with no approval between. It does
+not see a fix you make without a subagent — so keep your own count as well, gate or no gate. When you
+dispatch a second round on an edge, say "round 2 of max 2 on <edge>" in the dispatch itself, so the
+count is in the transcript and the next reader of it — you after a compaction, or `nina stats` — can see
+it.
 
 ### Milestone gate
 

@@ -167,8 +167,8 @@ sequenceDiagram
     end
 ```
 
-It asks instead of denying because it can't be sure two rounds are about the same issue. From outside the
-conversation that's a judgment call, and a wrong count should cost one click.
+It asks instead of denying because it can't be sure two rounds are about the same issue. The stages now name
+their issues, but a model can rename one between rounds, so a wrong count should still cost one click.
 
 I worked out what counts as a round by replaying six weeks of a real project's history. The obvious rule was to
 count a dispatch to an edge's target after a loop-back from its source. It hit a cap 8 times, and 7 of those
@@ -177,7 +177,10 @@ were different issues that happened to travel the same edge. The rules that repl
 - a round is a dispatch that acts on a declared loop-back;
 - parallel dispatches acting on the same verdicts count as one round;
 - a pass cancels a rejection only if a fix went out in between;
-- when the owner speaks, every count starts over.
+- when the owner speaks, every count starts over;
+- while every report in a loop names its issues, each issue gets its own count, and the edge still asks once it
+  goes past twice its cap, in case an issue was renamed along the way. One report that names nothing puts the rest of
+  that loop back on the edge's count.
 
 Three separate reviews each found a case the counting still got wrong before it shipped.
 

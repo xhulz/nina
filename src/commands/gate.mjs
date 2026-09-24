@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
-import { loadProject, projectGateDir, runGate } from '../gate.mjs';
+import { loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
 import { layerRootFor } from './compose.mjs';
 
 /**
@@ -78,7 +78,13 @@ function writable(target) {
  * Runs the gate the way Claude Code runs it — the command in this project's own settings, through
  * `sh` and whatever `node` is on the PATH — over a whole loop in the shapes Claude Code sends: each
  * round's reviewer launched, its report handed back, the stop after it, the fixer launched; and then the
- * round past the cap. It must stay silent until that last dispatch and send it to the owner. Runs in a
+ * round past the cap. Three loops per edge, each of which must stay silent until its last dispatch and
+ * send exactly that one to the owner: every report naming the same issue, at the round past the cap;
+ * every report naming none, at the same round, counted by the edge; and every report naming a new
+ * issue, only at the round past twice the cap — counted per issue each is its first round, so the rounds
+ * in between going out unasked is what proves the count by issue is live in the gate this project's
+ * hooks actually run, and the last one asking proves the edge's ceiling is. Each loop's answer is read
+ * from its own session's ledger, so a shape that asks in place of another cannot pass for it. Runs in a
  * scratch data directory, so no real ledger is touched.
  *
  * @param {string} target - The project directory.
@@ -93,25 +99,34 @@ function dryRun(target) {
   }
   if (edges.length === 0) return null;
 
-  // Every capped edge, each in its own session, all in one run: the first edge alone was a planner loop
-  // in every profile, and a dry run that never walks the reviewer's loop proves little about it.
+  // Every capped edge, each shape in its own session, all in one run: the first edge alone was a planner
+  // loop in every profile, and a dry run that never walks the reviewer's loop proves little about it.
+  const shapes = [
+    { name: 'same', what: 'a loop naming one issue', rounds: (max) => max + 1, line: () => '\nISSUES: selftest-same-issue', issue: () => 'selftest-same-issue' },
+    { name: 'none', what: 'a loop naming no issue', rounds: (max) => max + 1, line: () => '', issue: () => undefined },
+    { name: 'new', what: 'a loop naming a new issue each round', rounds: (max) => 2 * max + 1, line: (i) => `\nISSUES: selftest-issue-${i}`, issue: (max) => `selftest-issue-${2 * max + 1}` },
+  ];
+  const loops = [];
   const events = [];
-  edges.forEach((edge, n) => {
+  edges.forEach((edge, e) => shapes.forEach((shape) => {
+    const n = `${e}-${shape.name}`;
     const session = `selftest-${n}`;
+    const rounds = shape.rounds(edge.max);
+    loops.push({ edge, shape, session, rounds });
     const launch = (role, id, agent) => [
       { hook_event_name: 'PreToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: role }, tool_use_id: id },
       { hook_event_name: 'PostToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: role }, tool_use_id: id, tool_response: { agentId: agent } },
     ];
-    for (let i = 1; i <= edge.max + 1; i += 1) {
+    for (let i = 1; i <= rounds; i += 1) {
       const agent = `selftest-${n}-${edge.source}-${i}`;
       events.push(...launch(edge.source, `selftest-${n}-review-${i}`, agent));
-      events.push({ hook_event_name: 'PostToolUse', session_id: session, tool_name: 'SubagentHandback', agent_id: agent, agent_type: edge.source, tool_input: { message: `VERDICT: ${edge.token}\nthe fix did not hold` } });
+      events.push({ hook_event_name: 'PostToolUse', session_id: session, tool_name: 'SubagentHandback', agent_id: agent, agent_type: edge.source, tool_input: { message: `VERDICT: ${edge.token}${shape.line(i)}\nthe fix did not hold` } });
       events.push({ hook_event_name: 'SubagentStop', session_id: session, agent_id: agent, agent_type: edge.source, stop_hook_active: false, last_assistant_message: 'done' });
-      if (i > edge.max) break;
+      if (i === rounds) break;
       events.push(...launch(edge.to, `selftest-${n}-fix-${i}`, `selftest-${n}-fixer-${i}`));
     }
     events.push({ hook_event_name: 'PreToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: edge.to }, tool_use_id: `selftest-${n}-last` });
-  });
+  }));
 
   let settings = null;
   try {
@@ -139,13 +154,20 @@ function dryRun(target) {
           return { unreadable: l.slice(0, 120) };
         }
       });
-    const asked = answers.filter((a) => a?.hookSpecificOutput?.permissionDecision === 'ask');
-    if (answers.length === edges.length && asked.length === edges.length) return null;
-    const logged = join(data, 'gate', slugFor(realpathSync(target)), 'errors.jsonl');
+    const ledgers = join(data, 'gate', slugFor(realpathSync(target)));
+    const wrong = loops.find(({ edge, shape, session, rounds }) => {
+      const asks = readLedger(join(ledgers, `${session}.jsonl`)).filter((x) => x.k === 'ask');
+      return asks.length !== 1 || asks[0].edge_round !== rounds || asks[0].issue !== shape.issue(edge.max);
+    });
+    const asked = answers.filter((a) => a?.hookSpecificOutput?.permissionDecision === 'ask').length;
+    if (!wrong && asked === loops.length && answers.length === loops.length) return null;
+    const logged = join(ledgers, 'errors.jsonl');
     const why =
       (existsSync(logged) && readFileSync(logged, 'utf8').trim().split('\n').at(-1)) ||
       String(run.stderr || '').trim().split('\n')[0] ||
-      `it put ${asked.length} of ${edges.length} rounds past a cap to the owner, and answered ${answers.length} time(s) in all (exit ${run.status})`;
+      (wrong
+        ? `on ${wrong.edge.source} → ${wrong.edge.to} (${wrong.edge.token}), ${wrong.shape.what} should reach the owner once, at round ${wrong.rounds}, and did not (exit ${run.status})`
+        : `it answered ${answers.length} time(s), ${asked} of them to the owner, where ${loops.length} were expected (exit ${run.status})`);
     return `in a dry run through the hook command, the gate did not hold every capped edge in .claude/graph.md: ${why}`;
   } finally {
     rmSync(data, { recursive: true, force: true });

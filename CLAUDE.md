@@ -345,7 +345,18 @@ source — reached a cap eight times, and seven were different issues on the sam
   that stage ran after the source last reported and the source was not sent out again since, because
   the graph sends the reviewer out beside every gate, and its approval says nothing about the dba's
   rejection;
-- the owner speaking starts every count over; a verdict guessed from prose never counts.
+- the owner speaking starts every count over; a verdict guessed from prose never counts;
+- where every report a round acts on named its issues — the `ISSUES` line every spec puts under a verdict
+  that sends work back — the round is counted per issue, not per edge. The graph always said a different
+  issue on the same edge starts its own count, and the gate could not see issues, so it counted the edge:
+  a review that found a new problem each round asked the owner exactly like a fix that was not
+  converging. The re-check keeps the id of an issue still open, because the orchestrator carries the line
+  into its dispatch. An id is a model's word, and a renamed issue restarts its count, so the edge keeps
+  counting beside it and still asks once it has gone round more than twice its cap with no approval
+  between. A round acting on any report that named nothing is counted by its edge, as before — and so is
+  the rest of that loop until it closes, because that round advanced no issue's count, and going back to
+  counting by issue would buy the loop a silent round. A late sibling's issues are counted in the round it
+  belongs to, like its rejection.
 
 The one real repeat in that history still reaches its cap. Reading "the stage that owns the fix" off a
 report's second line was tried and removed: in real reports it named the wrong stage, and a named owner
