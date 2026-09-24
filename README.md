@@ -342,8 +342,8 @@ this repo, with a table of which document to read before changing what.
 
 ## Engineering
 
-- Node.js with zero runtime dependencies. About 8.9k lines of source and 3.8k lines of tests.
-- 39 frozen releases so far. The package ships all of them, so an upgrade can compose its target and report the
+- Node.js with zero runtime dependencies. About 9.5k lines of source and 4k lines of tests.
+- 40 frozen releases so far. The package ships all of them, so an upgrade can compose its target and report the
   cost before it changes anything.
 - The tests check properties over the fixture projects, audit the layers, run the whole CLI in scratch projects,
   and use mutation checks for the rules that matter: undo the rule and some test has to fail.
