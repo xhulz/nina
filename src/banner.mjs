@@ -16,7 +16,7 @@ const ART = [
 ];
 
 /** The one pink — the deepest tone of the gradient this replaced. */
-const PINK = [225, 45, 130];
+export const PINK = [225, 45, 130];
 
 /**
  * Palettes, one color per line of the art.
@@ -47,7 +47,7 @@ const PALETTES = {
 };
 
 /** True when the terminal should be given escape codes at all. */
-const useColor = () => Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+export const useColor = () => Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
 
 /**
  * Wraps text in a 24-bit foreground color.

@@ -21,6 +21,7 @@ import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, layerRootFor, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
+import { PINK, useColor } from '../banner.mjs';
 
 /** Surfaces a repository reveals by its files. The rest are claims about the domain. */
 const DETECTABLE = [
@@ -59,6 +60,29 @@ const QUESTIONS = {
 function questionFor(surface) {
   return QUESTIONS[surface] ?? `Does this project have a "${surface}" surface?`;
 }
+
+/**
+ * The order the interview asks in: the surfaces most projects have first, the rare ones last. Asked
+ * alphabetically, the first question a web app met was whether it deploys immutable code.
+ */
+const ASK_ORDER = ['db', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'blockchain'];
+
+/**
+ * The surfaces a core offers, in the order the interview asks them; one it does not know goes last.
+ *
+ * @param {string[]} available
+ * @returns {string[]}
+ */
+export function askOrder(available) {
+  const rank = (s) => (ASK_ORDER.includes(s) ? ASK_ORDER.indexOf(s) : ASK_ORDER.length);
+  return [...available].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+}
+
+/** The interview's colors — the banner's pink, on a terminal that takes color, and plain everywhere else. */
+const tint = (code, text) => (useColor() ? `\x1b[${code}m${text}\x1b[0m` : text);
+const strong = (text) => tint(`1;38;2;${PINK.join(';')}`, text);
+const faint = (text) => tint('2', text);
+const found = (text) => tint('32', text);
 
 /**
  * What declaring a surface actually adds, counted from the layer rather than described.
@@ -182,11 +206,11 @@ async function lineReader() {
  * months later costs an afternoon and gets it slightly wrong.
  *
  * @param {string[]} available - The surfaces the pinned core offers.
- * @param {string[]} detected - Surfaces the files already confirm.
+ * @param {{surface: string, why: string}[]} matched - The surfaces the files already confirm, and by what.
  * @param {Record<string, {fragments: number, rules: number, agents: string[]}>} impacts
  * @returns {Promise<{scope: string, surfaces: string[]}>}
  */
-async function interview(available, detected, impacts) {
+async function interview(available, matched, impacts) {
   const rl = await lineReader();
   try {
     console.log('  Describe the scope of your project. What is it for, who uses it, what does it');
@@ -199,22 +223,27 @@ async function interview(available, detected, impacts) {
     }
     const scope = lines.join(' ');
 
-    console.log(`\n  Now ${available.length} questions. Each one turns on rules that would be noise without it,`);
-    console.log('  so answer for what this project actually does — not what it might do later.\n');
+    const order = available;
+    console.log(`\n  ${strong('Surfaces')} — ${order.length} yes-or-no questions, one per surface.`);
+    console.log('  A surface is a part of the harness only some projects need: its rules, its checks, sometimes a');
+    console.log('  whole role. Answer for what the project does today; one can be added later in .nina/profile.json.\n');
     const surfaces = [];
-    for (const s of available) {
+    for (const [n, s] of order.entries()) {
       const i = impacts[s];
-      const already = detected.includes(s);
-      const cost = [
-        `${i.fragments} fragments`,
-        ...(i.rules ? [`${i.rules} hard rule${i.rules > 1 ? 's' : ''}`] : []),
+      const reason = matched.find((d) => d.surface === s)?.why;
+      // What a yes brings, in what a person would recognise: roles, rules, agents. The count of
+      // fragments is how the harness measures it, and says nothing to someone choosing.
+      const brings = [
         ...(i.roles.length ? [`the ${i.roles.join(' and ')} role${i.roles.length > 1 ? 's' : ''}`] : []),
+        ...(i.rules ? [`${i.rules} hard rule${i.rules > 1 ? 's' : ''}`] : []),
         ...(i.agents.length ? [`changes to ${i.agents.length} agent${i.agents.length > 1 ? 's' : ''}`] : []),
-      ].join(', ');
-      console.log(`  ${s} — ${questionFor(s)}`);
-      console.log(`    adds ${cost}${already ? '  · already confirmed by a file here' : ''}`);
-      const answer = (await rl.next(`    [${already ? 'Y/n' : 'y/N'}] `)).trim().toLowerCase();
-      const yes = answer === '' ? already : answer.startsWith('y') || answer.startsWith('s');
+      ];
+      console.log(`  ${faint(`${n + 1}/${order.length}`)}  ${strong(s)}`);
+      console.log(`       ${questionFor(s)}`);
+      console.log(faint(`       if yes: ${brings.length ? brings.join(' · ') : `guidance in ${i.fragments} places`}`));
+      if (reason) console.log(found(`       already here: ${reason}`));
+      const answer = (await rl.next(`       ${reason ? `${strong('Y')}/n` : `y/${strong('N')}`} › `)).trim().toLowerCase();
+      const yes = answer === '' ? Boolean(reason) : answer.startsWith('y') || answer.startsWith('s');
       if (yes) surfaces.push(s);
       console.log('');
     }
@@ -265,9 +294,10 @@ export async function init(argv, ctx) {
   // Everything below is read from the version this profile will pin — the surfaces that
   // exist, what each one costs, and the slots to fill — so the checklist describes the
   // harness the project is actually going to compose, not whatever the working tree says.
-  const available = (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  // In the order the interview asks them, so the TODO, the brief and the hints list them as it did.
+  const available = askOrder(
+    (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name),
+  );
   const unknown = surfaces.filter((s) => !available.includes(s));
   if (unknown.length > 0) {
     console.error(`  core ${core} has no surface: ${unknown.join(', ')} — it has ${available.join(', ')}\n`);
@@ -282,7 +312,7 @@ export async function init(argv, ctx) {
   // down — they are in TODO.md § Surfaces either way, so nothing depends on a terminal.
   const canAsk = !asked && (process.stdin.isTTY || argv.includes('--ask')) && !argv.includes('--no-ask');
   if (canAsk) {
-    const answers = await interview(available, detected, impacts);
+    const answers = await interview(available, matched, impacts);
     scope = answers.scope;
     surfaces = answers.surfaces;
   }
