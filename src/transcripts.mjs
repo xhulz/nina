@@ -107,6 +107,80 @@ export function classifyVerdict(result, role) {
   return { verdict: 'UNCLEAR', source: 'none' };
 }
 
+/** The line under a declared verdict that names what the report sends back. */
+const ISSUES = /^\s*ISSUES:(.*)$/;
+
+/** The longest issue id kept, and the most ids kept from one report: labels, never the report. */
+const ISSUE_ID_MAX = 40;
+const ISSUES_MAX = 20;
+
+/** Ids that say there is nothing to name. */
+const NO_ISSUE = new Set(['none', 'na', 'n-a', 'null', 'nil']);
+
+/** A list item under an `ISSUES:` line left empty — models write a list as bullets as readily as with commas. */
+const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/;
+
+/**
+ * The issues a report names on the line under its verdict — `ISSUES: missing-null-check, wrong-status`.
+ *
+ * A loop-back is capped per issue, and whether two rounds are about the same one could not be seen
+ * from outside the conversation: the gate counted the edge instead, so a review that found a new
+ * problem each round looked exactly like a fix that was not converging. The stage that checks is the
+ * one that knows, so it says — the verdict line went from 0% to 100% declared the day it was asked
+ * for, and this is the same move. An id is written by the model, so it is read leniently (case,
+ * accents, spaces, stray backticks, a bulleted list instead of commas) and kept short; the position
+ * is read strictly, like the verdict's — a report that puts another line between the two loses its
+ * ids, and the gate counts that round by its edge, as it did before any id existed.
+ *
+ * @param {unknown} text - A report.
+ * @returns {string[]|null} The ids, normalized and without repeats, or null when the report has no
+ *   declared verdict or no `ISSUES` line directly under it.
+ */
+export function declaredIssues(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const at = lines.findIndex((l) => l.trim());
+  if (at < 0 || !DECLARED.test(lines[at])) return null;
+  const below = lines.findIndex((l, i) => i > at && l.trim());
+  const line = below < 0 ? null : ISSUES.exec(lines[below]);
+  if (!line) return null;
+  let raw = line[1].split(/[,;]/);
+  if (!line[1].trim()) {
+    raw = [];
+    for (const next of lines.slice(below + 1)) {
+      const item = BULLET.exec(next);
+      if (!item) break;
+      raw.push(item[1]);
+    }
+  }
+  const ids = raw.map((id) =>
+    id
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[\s_/]+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, ISSUE_ID_MAX)
+      .replace(/-$/, ''),
+  );
+  return [...new Set(ids.filter((id) => id && !NO_ISSUE.has(id)))].slice(0, ISSUES_MAX);
+}
+
+/**
+ * How many issues a report named, for a snapshot record: a count, never the ids — the record is
+ * metadata. Null unless the verdict was declared and sends work back, since only then is the line asked for.
+ *
+ * @param {string} text - The report.
+ * @param {string} verdict - Its verdict, as classified.
+ * @param {string} source - How the verdict was found.
+ * @returns {number|null}
+ */
+function issueCount(text, verdict, source) {
+  if (source !== 'declared' || !LOOP_BACK.has(verdict)) return null;
+  return declaredIssues(text)?.length ?? 0;
+}
+
 /** A pill file, as a path fragment: `.claude/pills/<role>/<name>.md` or a glob over a directory. */
 const PILL_PATH = /\.claude\/pills\/[^\s"'`;|&)]*/g;
 
@@ -323,6 +397,7 @@ export async function scanProject(projectDir, prior = {}) {
             session: row.sessionId ?? null,
             verdict: null,
             verdict_source: null,
+            issues: null,
             result_ts: null,
             duration_s: null,
             result_chars: null,
@@ -375,6 +450,7 @@ export async function scanProject(projectDir, prior = {}) {
       record.result_chars = result.length;
       record.verdict = verdict;
       record.verdict_source = source;
+      record.issues = issueCount(result, verdict, source);
       if (record.ts && record.result_ts) {
         record.duration_s = Math.round((Date.parse(record.result_ts) - Date.parse(record.ts)) / 1000);
       }
@@ -484,6 +560,7 @@ async function attachAgentDetail(projectDir, dispatches) {
           const { verdict, source } = classifyVerdict(handback, record.role);
           record.verdict = verdict;
           record.verdict_source = source === 'declared' ? 'handback' : `handback:${source}`;
+          record.issues = issueCount(handback, verdict, source);
           record.result_chars = handback.length;
           record.result_ts = record.result_ts ?? handbackTs;
           if (record.ts && record.result_ts) {

@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeProjectDir } from '../src/commands/stats.mjs';
-import { ROLE_TOKENS, classifyVerdict, isLoopBack, pillReads, scanProject } from '../src/transcripts.mjs';
+import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, scanProject } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
@@ -800,6 +800,39 @@ async function sound(fixture, core) {
   }
 }
 
+// ─── issues: a report that sends work back names what it sends back ─────────────────────
+{
+  const ids = (text) => JSON.stringify(declaredIssues(text));
+  expect(ids('VERDICT: REJECTED\nISSUES: missing-null-check, wrong-error-status\nbody') === '["missing-null-check","wrong-error-status"]', 'issues: the line under the verdict is read');
+  // The id is written by a model: the same issue spelled a little differently is still the same issue.
+  expect(ids('VERDICT: FAIL\n\nISSUES: Order Total_Test red; `order-total-test-red`') === '["order-total-test-red"]', 'issues: case, spaces, backticks and repeats do not make a new id');
+  expect(declaredIssues(`VERDICT: REJECTED\nISSUES: ${'x'.repeat(30)}-${'y'.repeat(30)}`)[0].length <= 40, 'issues: an id is a label, and is cut to one');
+  expect(ids('VERDICT: REJECTED\nISSUES:') === '[]', 'issues: an empty line names nothing');
+  // The position is read as strictly as the verdict's: a line further down is prose, not a declaration.
+  expect(declaredIssues('VERDICT: REJECTED\nthe owner is implementer\nISSUES: a') === null, 'issues: only the line directly under the verdict counts');
+  expect(declaredIssues('Rejected.\nISSUES: a') === null, 'issues: a report with no declared verdict declares no issues');
+  expect(ids('VERDICT: REJECTED\r\nISSUES: a, b\r\nbody') === '["a","b"]', 'issues: a report with CRLF line ends reads the same');
+  expect(ids('VERDICT: REJECTED\nISSUES:\n- missing-null-check\n* wrong status\n1. índice-ausente\n\nbody\n- not-an-issue') === '["missing-null-check","wrong-status","indice-ausente"]', 'issues: a bulleted list under an empty ISSUES line is read, up to the first line that is not an item');
+  expect(ids('VERDICT: REJECTED\nISSUES: none') === '[]' && ids('VERDICT: FAIL\nISSUES: n/a') === '[]', 'issues: "none" names nothing');
+  expect(declaredIssues(`VERDICT: REJECTED\nISSUES: ${Array.from({ length: 30 }, (_, i) => `i${i}`).join(', ')}`).length === 20, 'issues: a report keeps at most 20 ids — labels, not the report');
+  // Decisions recorded as tests: a header in another order, or in bold, declares nothing — as for the verdict.
+  expect(declaredIssues('VERDICT: REJECTED\nOwner: implementer\nISSUES: a') === null, 'issues: an owner line put first hides the ids (the round is counted by its edge)');
+  expect(declaredIssues('VERDICT: REJECTED\n**ISSUES:** a') === null, 'issues: a bold ISSUES line is not the declared one');
+
+  // Every spec asks for the line under the verdict that sends work back, with an example the parser reads
+  // as written — a format the specs teach and the parser does not read would be followed and then lost.
+  for (const file of await readdir(join(ROOT, 'core', 'tree', '.claude', 'agents'))) {
+    const role = file.replace(/\.md$/, '');
+    const spec = await readFile(join(ROOT, 'core', 'tree', '.claude', 'agents', file), 'utf8');
+    const back = (ROLE_TOKENS[role] ?? []).find(isLoopBack);
+    const example = new RegExp(`^VERDICT: ${back}\\n(ISSUES: .+)$`, 'm').exec(spec);
+    expect(Boolean(example), `issues: ${role}'s spec shows the ISSUES line under \`VERDICT: ${back}\``);
+    if (!example) continue;
+    const written = example[1].slice('ISSUES: '.length).split(', ');
+    expect(ids(`VERDICT: ${back}\n${example[1]}`) === JSON.stringify(written), `issues: ${role}'s example ids read back exactly as written — got ${ids(`VERDICT: ${back}\n${example[1]}`)}`);
+  }
+}
+
 // ─── learn: the cycle, link by link ─────────────────────────────────────────────────────
 {
   // apply: only a read counts as a read. Shapes taken from real subagent transcripts, including the
@@ -1370,8 +1403,9 @@ source: the 2026-09-01 review
  *
  * @param {string} snapshots - Where the stream lands.
  * @param {string} project - The encoded project name.
- * @param {{role: string, verdict: string, ts: string, source?: string}[]} rows - The dispatches;
- *   `source` is the verdict's provenance, which decides whether it was declared or inferred.
+ * @param {{role: string, verdict: string, ts: string, source?: string, issues?: number|null}[]} rows - The
+ *   dispatches; `source` is the verdict's provenance, which decides whether it was declared or inferred,
+ *   and `issues` how many issues a loop-back named, left out for a record from before the field.
  */
 async function history(snapshots, project, rows) {
   await mkdir(snapshots, { recursive: true });
@@ -1386,6 +1420,7 @@ async function history(snapshots, project, rows) {
       duration_s: 60,
       agent_id: null,
       skills: [],
+      ...(r.issues === undefined ? {} : { issues: r.issues }),
     }),
   );
   await writeFile(join(snapshots, `${project}.jsonl`), `${lines.join('\n')}\n`);
@@ -1427,6 +1462,21 @@ const dated = (date, status = 'active') =>
   expect(out.includes('1 pill(s) carry no date'), 'stats: an undated pill should be reported, not silently dropped');
   expect(out.includes('1 of 4 pill(s) retired'), `stats: should count the graduated pill — got ${out.trim()}`);
   expect(!out.includes('no correction has ever graduated'), 'stats: should not claim nothing graduated when one did');
+  expect(!out.includes('named their issues'), 'stats: records from before the ISSUES line are not counted as naming none');
+}
+
+// Whether loop-backs name their issues: only records that learned the field are asked.
+{
+  const dir = await composed('acme');
+  const snapshots = join(await scratch(), 'snaps');
+  await history(snapshots, dir.replace(/\//g, '-'), [
+    ...TWELVE_RUNS,
+    { role: 'reviewer', verdict: 'REJECTED', ts: '2026-01-20', issues: 2 },
+    { role: 'qa', verdict: 'FAIL', ts: '2026-01-21', issues: 0 },
+    { role: 'qa', verdict: 'PASS', ts: '2026-01-22', issues: null },
+  ]);
+  const { out } = run(['stats', '--snapshots', snapshots]);
+  expect(out.includes('1 of 2 declared loop-back(s) (50%) named their issues'), `stats: counts the loop-backs that named their issues — got ${out.trim()}`);
 }
 
 // Nothing learned at all is the state worth naming, not a zero in a table.
@@ -2080,6 +2130,24 @@ const dated = (date, status = 'active') =>
     'gate: a project pinned to a version with no gate is left alone, whatever is on disk',
   );
 
+  // The ids a report gave its issues go into the ledger with its verdict; a pass records none.
+  const named = (agent, report) =>
+    handle({ hook_event_name: 'PostToolUse', session_id: 's-issues', tool_name: 'SubagentHandback', agent_id: agent, agent_type: 'reviewer', tool_input: { message: report } }, { root: project });
+  named('n1', 'VERDICT: REJECTED\nISSUES: Missing Null Check, wrong-status\nbody');
+  named('n2', 'VERDICT: APPROVED\nISSUES: leftover\nbody');
+  const [rejected, approved] = readLedger(ledgerPath(project, 's-issues')).filter((e) => e.k === 'verdict');
+  expect(JSON.stringify(rejected?.issues) === '["missing-null-check","wrong-status"]', `gate: a rejection's issue ids are recorded with it — got ${JSON.stringify(rejected)}`);
+  expect(approved && !('issues' in approved), 'gate: a pass records no issues, whatever it wrote under its verdict');
+  // The same ids arrive by the other two ways a report reaches the gate: the stop's last message, and the
+  // handback read back from the subagent's own transcript when its last message was a comment.
+  hook('PreToolUse', { session_id: 's-issues', tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: 'toolu_s1' });
+  handle({ hook_event_name: 'SubagentStop', session_id: 's-issues', agent_type: 'reviewer', agent_id: 'n3', last_assistant_message: 'VERDICT: REJECTED\nISSUES: from-the-stop', stop_hook_active: false }, { root: project });
+  const transcript = join(await scratch(), 'agent-n4.jsonl');
+  await writeFile(transcript, `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\nISSUES: from-the-transcript' } }] } })}\n`);
+  handle({ hook_event_name: 'SubagentStop', session_id: 's-issues', agent_type: 'reviewer', agent_id: 'n4', last_assistant_message: 'Handed back.', agent_transcript_path: transcript, stop_hook_active: false }, { root: project });
+  const stopped = readLedger(ledgerPath(project, 's-issues')).filter((e) => e.k === 'verdict').map((e) => e.issues?.join()).slice(2).join('|');
+  expect(stopped === 'from-the-stop|from-the-transcript', `gate: ids are recorded from a stop and from a handback read back — got ${stopped}`);
+
   // It fails open, and writes the failure where the selftest looks.
   const broken = await scratch();
   await cp(join(project, '.nina'), join(broken, '.nina'), { recursive: true });
@@ -2373,6 +2441,31 @@ const dated = (date, status = 'active') =>
   );
   const { records } = await scanProject(dir, {});
   expect(records.length === 3 && records.every((r) => r.status === 'denied'), `snapshot: a dispatch denied by a hook, a rule or the person is marked denied — got ${records.map((r) => r.status).join()}`);
+}
+
+// ─── snapshot: how many issues a loop-back named, and never which ─────────────────────────
+{
+  const dir = await scratch();
+  const dispatch = (id, role) => JSON.stringify({ type: 'assistant', uuid: `${id}-d`, timestamp: '2026-09-24T10:00:00.000Z', sessionId: 's', message: { content: [{ type: 'tool_use', id, name: 'Agent', input: { subagent_type: role } }] } });
+  const result = (id, report) => JSON.stringify({ type: 'user', uuid: `${id}-r`, timestamp: '2026-09-24T10:05:00.000Z', message: { content: `<task-notification>\n<tool-use-id>${id}</tool-use-id>\n<status>completed</status>\n<result>${report}</result>\n</task-notification>` } });
+  await writeFile(
+    join(dir, 'session.jsonl'),
+    [
+      dispatch('toolu_n', 'reviewer'),
+      result('toolu_n', 'VERDICT: REJECTED\nISSUES: missing-null-check, wrong-status\nbody'),
+      dispatch('toolu_z', 'reviewer'),
+      result('toolu_z', 'VERDICT: REJECTED\nthe null check is missing'),
+      dispatch('toolu_p', 'qa'),
+      result('toolu_p', 'VERDICT: PASS\nISSUES: none'),
+      '',
+    ].join('\n'),
+  );
+  const { records } = await scanProject(dir, {});
+  const by = Object.fromEntries(records.map((r) => [r.dispatch_id, r.issues]));
+  expect(by.toolu_n === 2, `snapshot: a loop-back that named two issues records 2 — got ${by.toolu_n}`);
+  expect(by.toolu_z === 0, `snapshot: one that named none records 0, so the gap is countable — got ${by.toolu_z}`);
+  expect(by.toolu_p === null, `snapshot: a pass is not asked for issues, and records none — got ${by.toolu_p}`);
+  expect(!JSON.stringify(records).includes('missing-null-check'), 'snapshot: the ids themselves never reach the record');
 }
 
 // ─── 0.21.1: a new project, an adopted one, and the declaration detector ─────────────────

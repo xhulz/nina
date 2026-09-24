@@ -73,7 +73,7 @@ Vitest is the heaviest tool in the stack — ~2–3 GB per worker even with sing
 
 ## Report format
 
-**Top line:** the verdict line — `VERDICT: PASS` or `VERDICT: FAIL` (see above).
+**Top line:** the verdict line — `VERDICT: PASS` or `VERDICT: FAIL` (see above), with the `ISSUES` line under a `FAIL`.
 
 **If PASS:** ≤200 words. Per-package result table:
 ```
@@ -119,11 +119,23 @@ VERDICT: <TOKEN>
 ```
 
 where `<TOKEN>` is one of `PASS` or `FAIL`. Nothing before it — no preamble, no heading, no
-markdown emphasis. Your report proper starts on the second line.
+markdown emphasis. Your report proper starts on the second line — or on the third when the verdict is `FAIL`, because the
+second line then names each issue by an id:
 
-`FAIL` loops back to the implementer; the next line names the failing test files.
+```
+VERDICT: FAIL
+ISSUES: order-total-test-red
+```
 
-This line is machine-read: it measures how often each stage sends work back, and where the project
+An id is lowercase words joined by hyphens, at most 40 characters, and it names the defect rather than
+where it was found or which round this is: `order-total-test-red`, not `issue-1`. When your dispatch carries the
+`ISSUES` line of an earlier round, an issue that is still open keeps its id exactly as written there, and
+a new issue gets a new id. Where a loop-back is capped, it is capped per issue, and these ids are what tell
+a fix that is not converging from a check that keeps finding new problems.
+
+`FAIL` loops back to the implementer; the line after `ISSUES` names the failing test files.
+
+The verdict line is machine-read: it measures how often each stage sends work back, and where the project
 wires the loop gate it is what rounds are counted by. A report without it counts as no verdict at all,
 which makes the stage invisible to both.
 

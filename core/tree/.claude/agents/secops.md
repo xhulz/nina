@@ -74,7 +74,7 @@ recall-based audit, and you should say so rather than imply coverage you did not
 - **LOW / INFO** — hardening opportunity or defense-in-depth note.
 
 ## Final report format
-- **Top line:** the verdict line — `VERDICT: SECURE` (no CRITICAL/HIGH) or `VERDICT: BLOCKED` (≥1 CRITICAL/HIGH).
+- **Top line:** the verdict line — `VERDICT: SECURE` (no CRITICAL/HIGH) or `VERDICT: BLOCKED` (≥1 CRITICAL/HIGH), with the `ISSUES` line under a `BLOCKED`.
 - **Scope audited:** the commit range / files / specs covered, and each threat-model dimension with a one-line verdict (checked → clean / finding).
 - **Findings:** numbered, each with `severity · title · path:line · exploit narrative · remediation`. Order by severity.
 - **What I could not verify:** anything needing runtime/deploy (e.g. real cookie flags only observable on a live response) — name it and hand it to the integration gate where `.claude/graph.md` has one, or to the staging smoke.
@@ -98,10 +98,22 @@ VERDICT: <TOKEN>
 ```
 
 where `<TOKEN>` is one of `SECURE` or `BLOCKED`. Nothing before it — no preamble, no heading, no
-markdown emphasis. Your report proper starts on the second line.
+markdown emphasis. Your report proper starts on the second line — or on the third when the verdict is `BLOCKED`, because the
+second line then names each issue by an id:
 
-`BLOCKED` holds the milestone; the next line names each CRITICAL/HIGH and the stage that owns it.
+```
+VERDICT: BLOCKED
+ISSUES: session-not-rotated-on-login
+```
 
-This line is machine-read: it measures how often each stage sends work back, and where the project
+An id is lowercase words joined by hyphens, at most 40 characters, and it names the defect rather than
+where it was found or which round this is: `session-not-rotated-on-login`, not `issue-1`. When your dispatch carries the
+`ISSUES` line of an earlier round, an issue that is still open keeps its id exactly as written there, and
+a new issue gets a new id. Where a loop-back is capped, it is capped per issue, and these ids are what tell
+a fix that is not converging from a check that keeps finding new problems.
+
+`BLOCKED` holds the milestone; the line after `ISSUES` names each CRITICAL/HIGH and the stage that owns it.
+
+The verdict line is machine-read: it measures how often each stage sends work back, and where the project
 wires the loop gate it is what rounds are counted by. A report without it counts as no verdict at all,
 which makes the stage invisible to both.

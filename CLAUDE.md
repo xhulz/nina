@@ -307,8 +307,10 @@ that could end a loop.
 **The loop gate holds the caps.** For a while the cap was an instruction the orchestrator kept by
 counting its own rounds. `core/tree/scripts/loop-gate.mjs` is a composed script the project's hooks run,
 and it keeps the count instead: a ledger per session under `~/.nina/gate/`, metadata only — which stage
-reported which verdict token, which dispatch launched which agent and when, when the owner spoke —
-written by the hooks that see each fact as it happens. A stage's report comes from `PostToolUse` on
+reported which verdict token and the ids it gave its issues, which dispatch launched which agent and
+when, when the owner spoke — written by the hooks that see each fact as it happens. An issue id is the
+one thing in it a model wrote: a label of at most 40 characters from the `ISSUES` line every spec puts
+under a verdict that sends work back, never a sentence of the report. A stage's report comes from `PostToolUse` on
 `SubagentHandback`, verbatim, or from `SubagentStop` when the report was the last message; launches from
 `PreToolUse` and `PostToolUse` on `Agent|Task|SendMessage`; the owner from `UserPromptSubmit` and an
 `AskUserQuestion` answer. `PreToolUse` decides.
@@ -530,8 +532,8 @@ read as a zero — in a report about something not happening, a silent miss and 
 identical.
 
 `~/.nina/snapshots/` holds **metadata only** — role, verdict, timestamps, duration, branch,
-which skills were invoked, how many pills the run opened. No report text, no source, no PII, not
-even a pill's path. Keep it that way.
+which skills were invoked, how many pills the run opened, how many issues a loop-back named. No report
+text, no source, no PII, not even a pill's path or an issue's id. Keep it that way.
 
 ### The learning cycle
 

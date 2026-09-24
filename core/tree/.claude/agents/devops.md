@@ -66,7 +66,7 @@ it is a deploy built on recall.
 
 ## Final report format
 
-**Top line:** the verdict line — `VERDICT: DEPLOYED` or `VERDICT: BLOCKED` (see below).
+**Top line:** the verdict line — `VERDICT: DEPLOYED` or `VERDICT: BLOCKED` (see below), with the `ISSUES` line under a `BLOCKED`.
 
 - **Targets:** each target deployed, with the URL and the version/deployment id.
 <!-- nina:slot db.5 -->
@@ -85,12 +85,24 @@ VERDICT: <TOKEN>
 ```
 
 where `<TOKEN>` is one of `DEPLOYED` or `BLOCKED`. Nothing before it — no preamble, no heading, no
-markdown emphasis. Your report proper starts on the second line.
+markdown emphasis. Your report proper starts on the second line — or on the third when the verdict is `BLOCKED`, because the
+second line then names each issue by an id:
 
-`BLOCKED` means the change is not running anywhere it should be; the next line names what stopped it
+```
+VERDICT: BLOCKED
+ISSUES: preview-smoke-500
+```
+
+An id is lowercase words joined by hyphens, at most 40 characters, and it names the defect rather than
+where it was found or which round this is: `preview-smoke-500`, not `issue-1`. When your dispatch carries the
+`ISSUES` line of an earlier round, an issue that is still open keeps its id exactly as written there, and
+a new issue gets a new id. Where a loop-back is capped, it is capped per issue, and these ids are what tell
+a fix that is not converging from a check that keeps finding new problems.
+
+`BLOCKED` means the change is not running anywhere it should be; the line after `ISSUES` names what stopped it
 and which stage owns the fix.
 
-This line is machine-read: it measures how often each stage sends work back, and where the project
+The verdict line is machine-read: it measures how often each stage sends work back, and where the project
 wires the loop gate it is what rounds are counted by. A report without it counts as no verdict at all,
 which makes the stage invisible to both.
 

@@ -239,6 +239,17 @@ export async function stats(argv, ctx) {
       ' Those stages need a verdict token on the report\'s first line.',
   );
 
+  // Whether the stages that send work back say what they send back. Counted only over reports read
+  // since the record learned the field, and only over declared loop-backs, which are all it asks of.
+  const named = records.filter((r) => typeof r.issues === 'number');
+  if (named.length > 0) {
+    const withIds = named.filter((r) => r.issues > 0).length;
+    console.log(
+      `  ${withIds} of ${named.length} declared loop-back(s) (${pct(withIds, named.length)}) named their issues` +
+        ' on the `ISSUES` line under the verdict.',
+    );
+  }
+
   const withSkills = records.filter((r) => r.agent_id && r.skills?.length > 0);
   // Only a run whose own transcript could be located says anything about skill use.
   const observable = records.filter((r) => r.agent_id).length;
