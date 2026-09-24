@@ -27,6 +27,13 @@
  * issue" cannot be seen from outside the conversation, and three reviews of this code each found a shape
  * the count got wrong; a confirmation makes a wrong count cost one click instead of a stopped pipeline.
  *
+ * So the stages say. A report that sends work back names its issues on the line under its verdict, and
+ * where every verdict a round acts on did, the round is counted per issue: a review that finds a new
+ * problem each round no longer looks like a fix that is not converging. An id is a model's word, and a
+ * renamed issue restarts its count, so the edge keeps its own count beside them and still asks once it
+ * has gone round more than twice its cap. A round acting on any verdict that named nothing is counted
+ * by its edge alone, as every round was before the ids existed.
+ *
  * What counts as a round was replayed over six weeks of one project before it was written, where a count
  * of "a dispatch to the stage an edge points at, after a loop-back" was wrong seven times in eight. So:
  * a round is a dispatch that ACTS ON a declared loop-back; several dispatches acting on the same verdicts
@@ -74,6 +81,15 @@ const AGENT_TAIL = 512 * 1024;
 /** How long a project's ledgers are kept, and its error log's lines, in days. */
 const KEEP_DAYS = 30;
 const KEEP_ERROR_DAYS = 7;
+
+/**
+ * How many times its cap an edge may go round, while every round since the loop last closed named its
+ * issues, before it asks anyway. Each issue is held at the cap; this is only for the one way a count by
+ * id misses a loop — the same problem given a new name each round — and it waits long enough that a
+ * review finding genuinely new problems is not what trips it. Once a round names nothing, the edge's
+ * own cap holds again.
+ */
+const EDGE_CEILING = 2;
 
 /** The tools a dispatch goes out through. `Task` is what `Agent` used to be called. */
 const DISPATCH = new Set(['Agent', 'Task', 'SendMessage']);
@@ -246,13 +262,18 @@ function append(path, entry) {
  *   that round, and makes no new one;
  * - the rest make this dispatch a round on the edge: one more than the rounds since the loop last
  *   closed, which is when a review that began after the latest fix passed with no rejection running
- *   beside it;
+ *   beside it. Where every one of them named its issues, and every round since the loop last closed did
+ *   too, the round's number is its most-repeated issue's instead — one more than the rounds that issue
+ *   was in since then — and the edge's own number is kept beside it, against a ceiling of twice the cap.
+ *   A late sibling's issues are counted in the round it belongs to;
  * - a pass from the stage the source hands passing work on to closes the source's loops outright.
  *
  * @param {object[]} entries - The ledger, oldest first.
  * @param {ReturnType<typeof loopEdges>} loops - The capped loop-back edges.
  * @param {Map<string, Set<string>>} [forward] - Stage → the sources that hand passing work on to it.
  * @returns {{effect: (to: string) => {rounds: object[]}, rounds: object[]}}
+ *   A round is `{source, target, token, round, max, edgeRound, ceiling, agents}`, plus `issue` (the id
+ *   that decides it) and `issues` (every id with its count) when it was counted by issue.
  *   `effect` says what a dispatch to a stage would make now, without making it; `rounds` is every round
  *   the recorded dispatches made.
  */
@@ -276,9 +297,15 @@ export function replay(entries, loops, forward = new Map()) {
   const targetsOf = (source) => new Set([...(loops.get(source)?.values() ?? [])].flatMap((targets) => [...targets.keys()]));
   const fixBetween = (source, from, to) => [...targetsOf(source)].some((role) => (sent.get(role) ?? []).some((at) => at > from && at < to));
 
-  /** @type {Map<string, {completion: string, agent: string, verdict: string, at: number, launch: number}[]>} */
+  /** @type {Map<string, {completion: string, agent: string, verdict: string, issues: string[]|null, at: number, launch: number}[]>} */
   const pending = new Map();
-  /** @type {Map<string, {n: number, agents: string[], at: number}>} `${source}|${to}|${token}` → rounds since the loop last closed */
+  /**
+   * `${source}|${to}|${token}` → the edge's rounds since the loop last closed, and whether any of them was
+   * counted by the edge (`blind`: one of its reports named nothing, so no issue count covers that round);
+   * `${source}|${to}|${token}|${issue}` → the rounds that issue was in, and the edge round it was last in.
+   *
+   * @type {Map<string, {n: number, agents?: string[], at?: number, blind?: boolean, edge?: number}>}
+   */
   const streak = new Map();
   /** Where each source's latest round went out: a pass must begin after it to say the fix passed. */
   const lastFix = new Map();
@@ -305,14 +332,42 @@ export function replay(entries, loops, forward = new Map()) {
         const last = streak.get(`${source}|${to}|${v.verdict}`);
         return closes || !last || v.launch > last.at;
       });
+      // A late sibling belongs to the round it was running in, so its issues do too: each is counted in
+      // that round, once, and one that named nothing makes that round the edge's. Worked out here rather
+      // than when the dispatch is replayed, because this is also what a dispatch about to go out is asked.
+      const adopted = new Map();
+      const blinded = new Set();
+      for (const v of routed.filter((r) => !fresh.includes(r))) {
+        const key = `${source}|${to}|${v.verdict}`;
+        const edge = streak.get(key);
+        if (!edge) continue;
+        if (!(v.issues?.length > 0)) blinded.add(key);
+        for (const id of v.issues ?? []) {
+          const had = adopted.get(`${key}|${id}`) ?? streak.get(`${key}|${id}`);
+          if (!had || had.edge < edge.n) adopted.set(`${key}|${id}`, { n: (had?.n ?? 0) + 1, edge: edge.n });
+        }
+      }
       if (fresh.length > 0) {
         const token = fresh.at(-1).verdict;
         const key = `${source}|${to}|${token}`;
+        const max = byToken.get(token).get(to);
         const before = closes ? { n: 0, agents: [] } : (streak.get(key) ?? { n: 0, agents: [] });
-        const agents = [...new Set([...before.agents, ...fresh.map((v) => v.agent)])];
-        rounds.push({ key, source, target: to, token, round: before.n + 1, max: byToken.get(token).get(to), agents, at });
+        const agents = [...new Set([...(before.agents ?? []), ...fresh.map((v) => v.agent)])];
+        // Counted by issue only while every round since the loop last closed named its issues: a round
+        // that named nothing advanced no issue's count, so from then on only the edge's count is whole.
+        const named = !before.blind && !blinded.has(key) && fresh.every((v) => v.issues?.length > 0);
+        const round = { key, source, target: to, token, round: before.n + 1, max, edgeRound: before.n + 1, ceiling: max, blind: !named, agents, at };
+        if (named) {
+          const issues = [...new Set(fresh.flatMap((v) => v.issues))].map((id) => ({
+            id,
+            round: (closes ? 0 : ((adopted.get(`${key}|${id}`) ?? streak.get(`${key}|${id}`))?.n ?? 0)) + 1,
+          }));
+          const worst = issues.reduce((a, b) => (b.round > a.round ? b : a));
+          Object.assign(round, { round: worst.round, issue: worst.id, issues, ceiling: max * EDGE_CEILING });
+        }
+        rounds.push(round);
       }
-      outcome.push({ source, keep: live.filter((v) => !routed.includes(v)), closes, fixed: routed.length > 0 });
+      outcome.push({ source, keep: live.filter((v) => !routed.includes(v)), closes, fixed: routed.length > 0, adopted, blinded });
     }
     return { rounds, outcome };
   };
@@ -344,7 +399,7 @@ export function replay(entries, loops, forward = new Map()) {
       const completion = `${e.agent}@${launchOf(e.agent, i)}`;
       if (spent.has(completion)) return;
       const batch = (pending.get(e.role) ?? []).filter((v) => v.completion !== completion);
-      pending.set(e.role, [...batch, { completion, agent: e.agent, verdict: e.verdict, at: i, launch: launchOf(e.agent, i) }]);
+      pending.set(e.role, [...batch, { completion, agent: e.agent, verdict: e.verdict, issues: e.issues ?? null, at: i, launch: launchOf(e.agent, i) }]);
       return;
     }
     if (e.k === 'dispatch' && e.role) {
@@ -355,9 +410,12 @@ export function replay(entries, loops, forward = new Map()) {
         if (o.fixed) lastFix.set(o.source, at);
         for (const v of pending.get(o.source) ?? []) if (!o.keep.includes(v)) spent.add(v.completion);
         pending.set(o.source, o.keep);
+        for (const [key, issue] of o.adopted) streak.set(key, issue);
+        for (const key of o.blinded) streak.set(key, { ...streak.get(key), blind: true });
       }
       for (const r of rounds) {
-        streak.set(r.key, { n: r.round, agents: r.agents, at: r.at });
+        streak.set(r.key, { n: r.edgeRound, agents: r.agents, at: r.at, blind: r.blind });
+        for (const issue of r.issues ?? []) streak.set(`${r.key}|${issue.id}`, { n: issue.round, edge: r.edgeRound });
         made.push({ ...r, at: e.at });
       }
     }
@@ -372,7 +430,8 @@ export function replay(entries, loops, forward = new Map()) {
  * @param {string} target - The stage about to be dispatched.
  * @param {ReturnType<typeof loopEdges>} loops - The capped loop-back edges.
  * @param {Map<string, Set<string>>} [forward] - Stage → the sources that hand passing work on to it.
- * @returns {{source: string, target: string, token: string, round: number, max: number, agents: string[]}[]}
+ * @returns {{source: string, target: string, token: string, round: number, max: number, edgeRound: number,
+ *   ceiling: number, agents: string[], issue?: string, issues?: {id: string, round: number}[]}[]}
  */
 export function roundsFor(entries, target, loops, forward) {
   return replay(entries, loops, forward).effect(target).rounds.map(({ key, at, ...round }) => round);
@@ -513,6 +572,9 @@ function onPost(input, project, path, at) {
   return null;
 }
 
+/** How far a round is past what holds it: its issue's cap, or its edge's ceiling. Above zero asks. */
+const excess = (r) => Math.max(r.round - r.max, r.edgeRound - r.ceiling);
+
 /**
  * The answer for a dispatch past its cap: Claude Code asks the owner to allow it or not. Allowed, it is
  * one more round, and the next one asks again; refused, the model is told the owner said no, and the
@@ -520,12 +582,21 @@ function onPost(input, project, path, at) {
  */
 function confirmation(r) {
   const from = r.agents.length > 0 ? ` The rounds so far came from ${r.agents.join(', ')}.` : '';
+  const edge = `${r.source} → ${r.target} (${r.token})`;
+  let why = `this would be round ${r.round} on ${edge}, and .claude/graph.md caps that loop at ${r.max}.`;
+  if (r.issue && r.round > r.max) {
+    why = `this would be round ${r.round} of the issue \`${r.issue}\` on ${edge}, and .claude/graph.md caps that loop at ${r.max}.`;
+  } else if (r.issue) {
+    why =
+      `this would be round ${r.edgeRound} on ${edge} with no approval between them. No issue has passed the cap of ${r.max}, ` +
+      'but the edge has gone round more than twice it, and an issue given a new name each round is the one loop a count by issue cannot see.';
+  }
   return {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'ask',
       permissionDecisionReason:
-        `NINA loop gate: this would be round ${r.round} on ${r.source} → ${r.target} (${r.token}), and .claude/graph.md caps that loop at ${r.max}.${from} ` +
+        `NINA loop gate: ${why}${from} ` +
         'Allow it for one more round — the next one asks again — or refuse it, and the model stops to hand you the reports.',
     },
   };
@@ -541,11 +612,22 @@ function onPre(input, project, path, at) {
   // it is the moment the fixer was sent — which is what a later review has to begin after.
   append(path, { k: 'pre', at, role, id: input.tool_use_id ?? null });
   const over = roundsFor(entries, role, project.loops, project.forward)
-    .filter((r) => r.round > r.max)
-    .sort((a, b) => b.round - b.max - (a.round - a.max));
+    .filter((r) => excess(r) > 0)
+    .sort((a, b) => excess(b) - excess(a));
   if (over.length === 0) return null;
   const worst = over[0];
-  append(path, { k: 'ask', at, role, source: worst.source, token: worst.token, round: worst.round, max: worst.max, id: input.tool_use_id ?? null });
+  append(path, {
+    k: 'ask',
+    at,
+    role,
+    source: worst.source,
+    token: worst.token,
+    round: worst.round,
+    max: worst.max,
+    edge_round: worst.edgeRound,
+    ...(worst.issue ? { issue: worst.issue } : {}),
+    id: input.tool_use_id ?? null,
+  });
   return confirmation(worst);
 }
 
