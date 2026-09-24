@@ -288,8 +288,10 @@ export async function check(argv, ctx) {
   if (missing.length > 0) problems.push(`${missing.length} project slot(s) have no fragment — see .nina/TODO.md`);
   for (const s of awaited) notes.push(`project slot ${s} is new in this core and still to fill`);
 
+  const unwritten = new Set();
   for (const [doc, refs] of await owedDocuments(resolved.dir, surfaces)) {
     if (existsSync(join(target, doc))) continue;
+    unwritten.add(doc);
     problems.push(`${doc} does not exist, and the chosen layers tell an agent to read it ${refs} time(s)`);
   }
   for (const s of orphan) notes.push(`project fragment ${s} fills a slot core ${profile.core} does not have`);
@@ -331,6 +333,22 @@ export async function check(argv, ctx) {
     }
   }
 
+  // A list of problems says what is missing, not where to begin, and a new project's first session met
+  // eighteen of them at the same weight — while the brief that says what the project is sat unread. The
+  // order is read off the work itself: until the architecture is written, it comes first, because most
+  // of the vocabulary and the slots are decisions it makes; once it is, the order says nothing more. A
+  // first version read it off the directory instead, and never noticed the architecture being written.
+  if (problems.length > 0) {
+    const brief = existsSync(join(target, HARNESS, 'BRIEF.md'));
+    if (unwritten.has(join('.claude', 'architecture.md'))) {
+      console.log(
+        `  → start with the architecture, in this order: ${brief ? 'read `.nina/BRIEF.md`, the owner\'s description of the project, then ' : ''}` +
+          'write `.claude/architecture.md` with the owner. The vocabulary and most project slots are decisions that architecture makes — fill them from it, then `nina compose`.',
+      );
+    } else if (brief) {
+      console.log("  → `.nina/BRIEF.md` is the owner's description of the project — read it before filling anything below.");
+    }
+  }
   for (const p of problems) console.log(`  ✗ ${p}`);
   for (const n of notes) console.log(`  · ${n}`);
   if (problems.length === 0 && notes.length === 0) console.log('  ✓ profile, vocabulary, integrations and project layer all check out');

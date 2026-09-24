@@ -54,7 +54,15 @@ For a long time that was the only mode, so every detector — drift, a stale map
 to the one reader who was not about to act on it, and closing any loop meant the person relaying it.
 `--context` emits `additionalContext` for a UserPromptSubmit hook, which Claude Code puts in the model's
 own context before it answers. A project wants both: the Stop hook tells the person what the turn left
-behind, the prompt hook tells the model before the next one. Hooks are the project's own
+behind, the prompt hook tells the model before the next one. They are not told alike. The model gets
+every finding in full, before every message, since that is what it acts on. The person gets one line
+per detector, its own summary (`declaration — 18 problem(s)`), and gets it once per session: the same
+line is not repeated under the next answer, one that clears and comes back is told again, and a second
+session open on the same project is told its own. What is compared is the line itself, so a change in a
+detail it does not show is not news to the person; the model has the detail. The
+first new project showed why: the model relayed its eighteen pending items in a paragraph, and the Stop
+hook then printed the same eighteen raw, twenty-two lines prefixed `Stop says:`, under every answer
+until the project was filled in. What the hook last said is kept per project under `~/.nina/hooks/`. Hooks are the project's own
 `.claude/settings.json` — NINA composes no settings — so `nina init` writes them where there is no
 settings file yet and never edits one that exists, `nina check` asks for whatever is missing, and
 `nina wire --apply` merges exactly what is missing into settings that already exist (see *Starting a
@@ -102,7 +110,14 @@ It **composes**, holes and all, so the hooks it wires have something to run from
 core's detector list carries a `declaration` detector — `nina check --detector` — so before the model's
 first answer in a new project it is told what is still missing and where to fill it from:
 `.nina/TODO.md` for the items, `.nina/BRIEF.md` (when the interview wrote one) for what the project is.
-The first conversation starts by filling the project in, with nobody having to ask. The composition
+The first conversation starts by filling the project in, with nobody having to ask. A list says what is
+missing and not where to begin, and the first new project's model met eighteen items at one weight and
+offered to read the brief "if it exists". So until `.claude/architecture.md` is written, the check opens
+with the order: read the brief, write the architecture with the owner, and fill the vocabulary and slots
+from it, since most of them are decisions that architecture makes. Once it is written the order is done,
+and the check points at the brief alone. The order is read off that one document, not off the directory:
+a first version judged the project new by its files, never noticed the architecture being written, and
+dropped the order when an editor's settings folder appeared. The composition
 detector runs `compose --check --drift` beside it, which reports hand edits and nothing else: both used
 to report the unfilled slots, and a new project's first prompt got the same fact twice, the second time
 as 57 lines under a hint about hand edits.
