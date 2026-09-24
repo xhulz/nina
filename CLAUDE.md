@@ -541,7 +541,8 @@ back.
 
 ```bash
 nina snapshot    # append new dispatches to ~/.nina/snapshots/<project>.jsonl
-nina stats       # loop-back rate per stage, what each stage costs, and what the pipeline learned
+nina stats       # loop-back rate per stage, what each stage costs, how the size of a change sat
+                 # against its chain, and what the pipeline learned
 ```
 
 `stats` closes with a **learning** block, because a loop-back is the raw material and a pill is the
@@ -563,8 +564,8 @@ read as a zero — in a report about something not happening, a silent miss and 
 identical.
 
 `~/.nina/snapshots/` holds **metadata only** — role, verdict, timestamps, duration, branch,
-which skills were invoked, how many pills the run opened, how many issues a loop-back named, and the
-tokens the run spent by kind with the model that spent them. No report text, no source, no PII, not
+which skills were invoked, how many pills the run opened, how many issues a loop-back named, how many
+distinct files the run wrote, and the tokens the run spent by kind with the model that spent them. No report text, no source, no PII, not
 even a pill's path or an issue's id — and no dollars: a price is a fact about a date, so `stats`
 prices the tokens when it reads them, at the list prices in `src/prices.mjs`, and says which date's.
 Those are API-equivalent figures; a subscription pays nothing per token, and the unit is still the
@@ -580,6 +581,21 @@ tokens and their final verdict written after the first handback. `usage_model` i
 actually spent the tokens; the record's older `model` is the one the dispatch asked for, which is the
 orchestrator's own when it named none. A fast-mode or fallback run is left unpriced rather than priced
 as the model it names.
+
+`stats` also sets the size of each change against the chain that carried it — the core's first hard
+rule, which nothing had measured. A cycle is a session's dispatches up to the verdict that closes one
+(qa `PASS`, devops `DEPLOYED`, secops `SECURE`), or up to the next design stage after code was written
+unless a loop-back sent the work there; a closing stage whose verdict cannot be read closes it too, and
+is counted. It is sized by the most files any one writer wrote in it — through the edit tools, so a
+shell-written file is missed and the size is a floor — and the report is a distribution rather than a
+list of violations: a critical path is gated in full at any size and cannot be seen in a file count,
+and one spec legitimately covers sibling steps. Two boundaries were wrong before this one. The owner's
+prompts gave 22 "undesigned" large changes of which 18 came right after a spec — every "pode seguir"
+cut a pipeline in two. Closing stages alone left the light chain, which has no qa, to be absorbed by
+the design that followed, and let a qa with no readable verdict hold a dozen pipelines in one cycle:
+that reading said all four small changes had been designed. The reading that survived, over 132 cycles:
+5 of 8 one- and two-file changes ran a planner or architect, 62% of the three-to-nine-file ones did, and
+84% of those of ten files or more — with 29 cycles closed by a qa whose verdict could not be read.
 
 ### The learning cycle
 

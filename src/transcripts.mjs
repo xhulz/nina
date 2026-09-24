@@ -107,6 +107,9 @@ export function classifyVerdict(result, role) {
   return { verdict: 'UNCLEAR', source: 'none' };
 }
 
+/** The tools that write a file, and where each names it. */
+const WRITES = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' };
+
 /** The line under a declared verdict that names what the report sends back. */
 const ISSUES = /^\s*ISSUES:(.*)$/;
 
@@ -513,7 +516,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       // never reached here, so it keeps what it had rather than being dropped, which is what a
       // --rebuild would do to every run older than Claude Code's transcript retention.
       const size = (await stat(join(dir, file)).catch(() => null))?.size ?? null;
-      if (records.every((r) => r.agent_read && 'lessons_read' in r && 'tokens' in r && r.agent_read_bytes === size)) continue;
+      if (records.every((r) => r.agent_read && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && r.agent_read_bytes === size)) continue;
 
       const skills = new Set();
       // Lessons this run read, and whether it only listed the directory. Every spec tells its role
@@ -529,11 +532,23 @@ async function attachAgentDetail(projectDir, dispatches) {
        * counted the same input three or four times over.
        */
       const usage = new Map();
+      /** The files the run wrote through the edit tools. Only their number is kept. */
+      const written = new Set();
 
       const rl = createInterface({ input: createReadStream(join(dir, file)), crlfDelay: Infinity });
       for await (const line of rl) {
         const hasSkill = line.includes('"Skill"');
         const hasHandback = line.includes('SubagentHandback');
+        if (/"name":"(Edit|Write|MultiEdit|NotebookEdit)"/.test(line)) {
+          try {
+            for (const block of JSON.parse(line)?.message?.content ?? []) {
+              const path = block?.type === 'tool_use' ? block.input?.[WRITES[block.name]] : null;
+              if (typeof path === 'string') written.add(path);
+            }
+          } catch {
+            // A torn line loses one edit, not the run's.
+          }
+        }
         if (line.includes('"usage"')) {
           try {
             const message = JSON.parse(line)?.message;
@@ -574,6 +589,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       records.forEach((record, i) => {
         record.tokens = i === 0 ? spent.tokens : null;
         record.usage_model = spent.model;
+        record.files_touched = written.size;
       });
       for (const record of records) {
         record.skills = [...skills];
