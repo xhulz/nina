@@ -2732,6 +2732,12 @@ const dated = (date, status = 'active') =>
 {
   const fixture = join(ROOT, 'evals', 'reviewer');
   const defects = plantedDefects(fixture);
+  // Every fixture file on disk is one git tracks: an ignore rule meant for the repo root once matched the
+  // fixture's own `data/` directory, and a fresh clone staged a project that could not resolve its imports.
+  const tracked = new Set(spawnSync('git', ['ls-files', 'evals'], { cwd: ROOT, encoding: 'utf8' }).stdout.split('\n').filter(Boolean));
+  const onDisk = (await walk(join(ROOT, 'evals'))).map((rel) => join('evals', rel));
+  const untracked = onDisk.filter((rel) => !tracked.has(rel));
+  expect(tracked.size > 0 && untracked.length === 0, `eval: every fixture file is tracked, so a clone has the whole fixture — not tracked: ${untracked.join(', ')}`);
   expect(defects.length === 12 && defects.every((d) => d.line === null || d.line > 0), `eval: every planted defect resolves, each anchor to one line — got ${defects.length}`);
   const at = (id) => defects.find((d) => d.id === id).line;
 
