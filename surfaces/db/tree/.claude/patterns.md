@@ -2,13 +2,13 @@
 - **Database table/column names** (Prisma `@map` / `@@map`): `snake_case` in SQL, `camelCase` in TS.
 
 <!-- nina:slot db.2 -->
-1. Routes must NOT import query functions (`list*`, `find*`, `get*`, `upsert*`, `delete*`) from `{{DB_PKG_NAME}}`. Only `createDbClient` and error classes.
+- Routes must NOT import query functions (`list*`, `find*`, `get*`, `upsert*`, `delete*`) from `{{DB_PKG_NAME}}`. Only `createDbClient` and error classes.
 
 <!-- nina:slot db.3 -->
-4. `cacheStrategy` lives in `{{DB_PKG}}`. Services do not add, strip, or override cache policies.
+- `cacheStrategy` lives in `{{DB_PKG}}`. Services do not add, strip, or override cache policies.
 
 <!-- nina:slot db.4 -->
-5. **Every service query includes `userId` (tenant scope) in the `where` clause.** Missing scope = automatic CHANGES REQUESTED.
+- **Every service query includes `userId` (tenant scope) in the `where` clause.** Missing scope = automatic CHANGES REQUESTED.
 
 <!-- nina:slot db.5 -->
 

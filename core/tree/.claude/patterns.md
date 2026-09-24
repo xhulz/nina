@@ -91,8 +91,8 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 **Hard rules (reviewer enforces):**
 
 <!-- nina:slot db.2 -->
-2. Routes must NOT call `.toISOString()` on service results — services do that.
-3. Services must NOT import the HTTP framework's request context, shape a response, or reference status codes.
+- Routes must NOT call `.toISOString()` on service results — services do that.
+- Services must NOT import the HTTP framework's request context, shape a response, or reference status codes.
 <!-- nina:slot db.3 -->
 <!-- nina:slot db.4 -->
 <!-- nina:slot money.4 -->

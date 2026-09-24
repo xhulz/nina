@@ -2,7 +2,7 @@
 - **Queue** (`{{API_DIR}}/src/queues/<q>.ts`) / **Webhook** (`{{API_DIR}}/src/routes/<source>-webhook.ts`): same discipline — validate the input, build deps, call one service function.
 
 <!-- nina:slot integrations.2 -->
-8. **Every integration is reached through its boundary module.** Services import the boundary's typed interface; they never construct an HTTP client, an SDK instance or a binding handle themselves.
+- **Every integration is reached through its boundary module.** Services import the boundary's typed interface; they never construct an HTTP client, an SDK instance or a binding handle themselves.
 
 <!-- nina:slot integrations.3 -->
 

@@ -18,17 +18,17 @@ Before acting, read `.claude/pills/planner/*.md` and any `.claude/pills/shared/*
 
 ## Outputs
 A written plan containing:
-1. **Goal** — 2–3 sentences restating what the user actually wants (disambiguated).
-2. **Subtasks** — ordered list. Each item:
+- **Goal** — 2–3 sentences restating what the user actually wants (disambiguated).
+- **Subtasks** — ordered list. Each item:
    - 1-line goal
    - files/packages likely involved
    - estimated scope (S / M / L / XL — see size heuristic below)
    - **spec gate**: every subtask that produces code MUST flow through an architect spec before reaching the implementer. Note this explicitly per subtask. There is no shortcut from planner directly to implementer for non-trivial work.
-3. **Risks & unknowns** — things the architect will need to resolve.
+- **Risks & unknowns** — things the architect will need to resolve.
 <!-- nina:slot db.1 -->
 <!-- nina:slot integrations.1 -->
-6. **Retrieval list** — which sections of `.claude/architecture.md` / `.claude/patterns.md` each subtask will need (see `.claude/retrieval.md`).
-7. **Parallelization map** — flag every subtask as either:
+- **Retrieval list** — which sections of `.claude/architecture.md` / `.claude/patterns.md` each subtask will need (see `.claude/retrieval.md`).
+- **Parallelization map** — flag every subtask as either:
    - **`SEQUENTIAL`** — has a hard dependency on a prior subtask's output (e.g., consumes types it exports).
    - **`PARALLEL-SAFE`** — can be dispatched concurrently with other parallel-safe siblings because file scopes do not overlap and there is no API surface dependency.
 

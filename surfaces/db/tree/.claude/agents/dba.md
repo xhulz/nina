@@ -20,10 +20,10 @@ layer's own integration doc, declared like any other integration. A skill does n
 **Read `.claude/code-map.md`** when the change touches new query patterns — it lists which services consume which Prisma models, so you can spot N+1 risk and consumer-side cache implications without re-grepping. (Greenfield phase: fall back to `.claude/architecture.md` § *Database* for the planned schema — the model table, monetary conventions, and the Accelerate cache-policy table are canonical there.)
 
 <!-- nina:slot db.6 -->
-1. **Schema validates.** Run `pnpm --filter {{DB_PKG_NAME}} exec prisma validate`. Must pass.
+- **Schema validates.** Run `pnpm --filter {{DB_PKG_NAME}} exec prisma validate`. Must pass.
 
 <!-- nina:slot db.7 -->
-2. **Migration diff.** Run `prisma migrate diff` in its **offline, file-only form** and read the generated SQL, not just the Prisma delta:
+- **Migration diff.** Run `prisma migrate diff` in its **offline, file-only form** and read the generated SQL, not just the Prisma delta:
 
    ```
    # Compare the PREVIOUS schema against the working one — pure file-to-file, no database.
@@ -43,36 +43,36 @@ layer's own integration doc, declared like any other integration. A skill does n
    ⛔ **NEVER pass `--shadow-database-url`, `--from-url`, `--to-url`, or `--from-schema-datasource` pointing at a real database — most of all not `DATABASE_URL` from `{{API_DIR}}/{{SECRETS_LOCAL}}`.** Prisma **executes** the entire migration history against whatever database those flags name, which **DESTROYS ALL DATA** in it. A shadow database must be a disposable, empty database and nothing else. This is not hypothetical, and it does not announce itself: the command completes with a reassuring "empty migration" result and no error, having already destroyed everything in the database it was pointed at. If the offline form above cannot answer your question, **STOP and report that to the orchestrator** instead of reaching for a database URL.
 
 <!-- nina:slot db.8 -->
-3. **Migration safety on large tables:**
+- **Migration safety on large tables:**
    - No `ALTER TABLE ... ADD COLUMN NOT NULL` without a safe default (causes lock + rewrite).
    - No operations that hold long locks without an explicit batched strategy.
    - Non-breaking for rolling deploy — old application code and new schema must coexist during the deploy window.
 
 <!-- nina:slot db.9 -->
-4. **Index coverage.** Every new query pattern (`WHERE`, `ORDER BY`, `JOIN`, `aggregate`) must be backed by an index. Use `@@index` in schema. Reject queries that would table-scan. The most-used compound index is `(<tenant>, <other>)` or, for models keyed by a parent entity, `(<parentId>, <other>)`; verify the leading column matches the query.
+- **Index coverage.** Every new query pattern (`WHERE`, `ORDER BY`, `JOIN`, `aggregate`) must be backed by an index. Use `@@index` in schema. Reject queries that would table-scan. The most-used compound index is `(<tenant>, <other>)` or, for models keyed by a parent entity, `(<parentId>, <other>)`; verify the leading column matches the query.
 
 <!-- nina:slot db.10 -->
-5. **userId scope.** Every query in app code must include `userId` in `where` (or the model's equivalent FK chain — `accountId`/`entryId`/`ruleId` resolving back to the owning user). The {{AUTH_LIB}} system tables are the only exemption. Reject any app query missing the scope.
+- **userId scope.** Every query in app code must include `userId` in `where` (or the model's equivalent FK chain — `accountId`/`entryId`/`ruleId` resolving back to the owning user). The {{AUTH_LIB}} system tables are the only exemption. Reject any app query missing the scope.
 
 <!-- nina:slot db.11 -->
-6. **Cache strategy.** Every `findUnique` / `findMany` on a hot read path has an explicit `cacheStrategy` (Accelerate `ttl` / `swr`). **Implicit cache is a bug — reject.** Cross-check the policy against the cache-policy table in `.claude/architecture.md` § *Database*.
+- **Cache strategy.** Every `findUnique` / `findMany` on a hot read path has an explicit `cacheStrategy` (Accelerate `ttl` / `swr`). **Implicit cache is a bug — reject.** Cross-check the policy against the cache-policy table in `.claude/architecture.md` § *Database*.
 
 <!-- nina:slot db.12 -->
-8. **N+1 patterns.** If the code fetches a list then queries per item, reject with "use `include` / `select` or batch."
+- **N+1 patterns.** If the code fetches a list then queries per item, reject with "use `include` / `select` or batch."
 
 <!-- nina:slot db.13 -->
-12. **Secrets.** `DATABASE_URL` (Prisma Postgres / Accelerate URL) must come from `{{SECRETS_LOCAL}}` locally and `{{SECRETS_PROD}}` in production — never `.env` committed.
+- **Secrets.** `DATABASE_URL` (Prisma Postgres / Accelerate URL) must come from `{{SECRETS_LOCAL}}` locally and `{{SECRETS_PROD}}` in production — never `.env` committed.
 
 <!-- nina:slot db.14 -->
 - **Run ANY command that can write to a real database.** You are a read-only gate. Against a live
   `DATABASE_URL` you may run `SELECT`-only queries and nothing else. Explicitly forbidden, no
   exceptions: `prisma migrate dev`, `migrate deploy`, `migrate reset`, `migrate resolve`,
   `db push`, `db execute`, `$executeRaw*`, and **any `prisma migrate diff` variant carrying a
-  database URL** (see check #2 — that one silently wipes the database it points at). If a check
+  database URL** (see the *Migration diff* check — that one silently wipes the database it points at). If a check
   seems to require writing, it does not: report the limitation to the orchestrator instead.
 
 <!-- nina:slot db.15 -->
-- Approve without actually running `prisma validate` and the offline `prisma migrate diff` of check #2.
+- Approve without actually running `prisma validate` and the offline `prisma migrate diff` of the *Migration diff* check.
 
 <!-- nina:slot db.16 -->
 - Wave through "small" schema changes. Small changes cause the worst production incidents.

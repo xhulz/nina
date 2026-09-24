@@ -59,19 +59,19 @@ it.
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot blockchain.1 -->
 
-### 2. Planner only for ambiguous, multi-step, or multi-package work
+### Planner only for ambiguous, multi-step, or multi-package work
 If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things). Don't dispatch planner for "change the button color" or "add a `label` field to a model."
 
-### 3. Architect output is a spec, not code
+### Architect output is a spec, not code
 Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
 
-### 4. Reviewer audits; QA runs tests
+### Reviewer audits; QA runs tests
 Reviewer runs `pnpm typecheck` / `pnpm lint` (and `pnpm build` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
 
-### 5. Pipeline is not sacred
+### Pipeline is not sacred
 If reviewer finds a design flaw, loop back to the architect. Don't paper over with implementation hacks.
 
-### 6. Plugin skills are part of the pipeline
+### Plugin skills are part of the pipeline
 <!-- nina:slot edge-cf.7 -->
 Retrieval-first skills registered for this stack are inherited by every subagent — invoke via the `Skill` tool. Mandatory triggers (mirrors CLAUDE.md):
 
@@ -91,11 +91,11 @@ Retrieval-first skills registered for this stack are inherited by every subagent
 The architect cites which skill informed the spec. The reviewer rejects a spec touching a surface with a mandatory skill that doesn't cite one OR justify why it wasn't needed. Same rigor as the `node_modules:<line>` premise rule.
 <!-- nina:slot edge-cf.6 -->
 
-### 6b. Devops owns the deploy
+### Devops owns the deploy
 Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change.**
 <!-- nina:slot frontend.2 -->
 
-### 7. Look at every loop-back for a lesson
+### Look at every loop-back for a lesson
 
 When a stage loops back (qa → implementer on a test failure, reviewer rejects a diff, a gate blocks) **or** the user corrects something, the orchestrator asks one question: **would this happen again?** If it would, the lesson goes into a pill under `.claude/pills/<role>/` (or `shared/` if it spans roles) so the responsible agent does not repeat it. If it would not — a typo, a flake, a one-off — say so in one line and move on. The question is not optional; the pill is its answer when the answer is yes. The rule used to be "a pill on every loop-back", and it was followed 3% of the time: a rule that demands a lesson from a typo trains everyone to skip the ones that were lessons. `harness:check` now watches the outcome instead of the ritual — a role sent back three times since its newest lesson is reported every turn until one is written (`nina learn`). Skip it only if the lesson is really a code convention (→ `patterns.md`/`CLAUDE.md`) or a library premise (→ `integrations/<lib>.md`) — those surfaces own it, and a recurring pill should eventually **graduate** there and be marked `retired`. If the lesson already has a pill, do **not** write a second one — increment that pill's `occurrences` and set `last_seen` to today — the counter that decides when a correction has recurred often enough to graduate into a rule. At three, `harness:check` sends it to the harness on its own; commit the request it writes together with the pill. Each subagent already reads its own pills before acting, and `nina pills` checks that what was written is well formed and filed where its audience will actually read it (see `.claude/pills/README.md`).
 

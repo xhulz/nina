@@ -6,10 +6,10 @@
 - **`cloudflare:cloudflare`** — when the deploy touches R2, KV, Queues or Durable Object bindings.
 
 <!-- nina:slot edge-cf.3 -->
-2. **Both targets, or neither.** A change to the API surface needs the **staging Worker** (`wrangler deploy --env staging`) *and* **Pages** (`pnpm --filter {{PKG_SCOPE}}/app deploy`). Deploying the frontend alone against an old API is the failure that renders new fields as "—". State explicitly which targets this change requires and why.
+- **Both targets, or neither.** A change to the API surface needs the **staging Worker** (`wrangler deploy --env staging`) *and* **Pages** (`pnpm --filter {{PKG_SCOPE}}/app deploy`). Deploying the frontend alone against an old API is the failure that renders new fields as "—". State explicitly which targets this change requires and why.
 
 <!-- nina:slot edge-cf.4 -->
-5. **Secret and variable parity.** Everything the new code reads via `env.*` exists in the target environment (`wrangler secret list`). A missing secret fails at request time, not at deploy time.
+- **Secret and variable parity.** Everything the new code reads via `env.*` exists in the target environment (`wrangler secret list`). A missing secret fails at request time, not at deploy time.
 
 <!-- nina:slot edge-cf.5 -->
 
