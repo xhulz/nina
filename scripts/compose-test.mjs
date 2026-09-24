@@ -25,7 +25,8 @@
  *      the graph does not have. See src/graph.mjs.
  *   7. Every composed agent spec declares `name:` and `tools:` in its frontmatter. A spec with
  *      no `tools:` is not restricted — the subagent inherits every tool the session has — so a
- *      role told it is read-only is not, and nothing says so.
+ *      role told it is read-only is not, and nothing says so. A `model:` it declares is an alias
+ *      or a model id.
  *   9. Every numbered list composes as 1, 2, 3 — except the hard rules, whose numbers are ids.
  *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives.
  *      Every dispatch pays for what its spec says, so a file that grows past its budget is a decision to
@@ -36,7 +37,7 @@
 
 import { cp, mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
-import { toolFindings } from '../src/tools.mjs';
+import { modelFindings, toolFindings } from '../src/tools.mjs';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -179,6 +180,7 @@ async function runFixture(name) {
   // 7, continued. Having a `tools:` line is not the same as it granting what the spec asks for —
   // `Skill` was missing from every role while the specs made skills mandatory.
   for (const finding of toolFindings(specs, null)) failures.push(`tools: ${finding}`);
+  for (const finding of modelFindings(specs)) failures.push(`model: ${finding}`);
 
   for (const rel of expect.present ?? []) {
     if (!existsSync(join(work, rel))) failures.push(`expected ${rel} to be composed`);

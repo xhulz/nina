@@ -12,7 +12,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
-import { installedSkills, toolFindings } from '../tools.mjs';
+import { installedSkills, modelFindings, toolFindings } from '../tools.mjs';
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -327,6 +327,7 @@ export async function check(argv, ctx) {
       // Which skills are installed is a fact about one machine, not about the project, so the detector —
       // which speaks before every prompt — leaves that half to a `nina check` run by hand.
       for (const finding of toolFindings(specs, detector ? null : await installedSkills(target))) problems.push(`tools: ${finding}`);
+      for (const finding of modelFindings(specs)) problems.push(`model: ${finding}`);
     }
   }
 

@@ -112,3 +112,25 @@ export function toolFindings(specs, installed) {
   }
   return out;
 }
+
+/** The model values a spec may declare: an alias Claude Code knows, `inherit`, or a full model id. */
+const MODEL_VALUE = /^(opus|sonnet|haiku|fable|inherit|claude-[a-z0-9.-]+(\[[a-z0-9]+\])?)$/;
+
+/**
+ * Every spec whose `model:` is none of those. The model is a stage's largest cost decision, and
+ * `nina stats` reads it back against what ran; a typo there is a stage on a model nobody chose.
+ *
+ * @param {Map<string, string>} specs - Role → composed spec text.
+ * @returns {string[]}
+ */
+export function modelFindings(specs) {
+  const out = [];
+  for (const [role, spec] of [...specs].sort(([a], [b]) => a.localeCompare(b))) {
+    const front = spec.startsWith('---\n') ? spec.slice(4, spec.indexOf('\n---', 4)) : '';
+    const model = /^model:[ \t]*(.*)$/m.exec(front)?.[1].trim();
+    if (model !== undefined && !MODEL_VALUE.test(model)) {
+      out.push(`${role}: \`model: ${model}\` is neither an alias (opus, sonnet, haiku, fable, inherit) nor a model id`);
+    }
+  }
+  return out;
+}

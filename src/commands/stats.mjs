@@ -12,9 +12,10 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { createReadStream, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { isLoopBack } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { snapshotsDir } from '../paths.mjs';
@@ -177,6 +178,115 @@ function costReport(records) {
     );
   }
   console.log(`    ${'all stages'.padEnd(20)}${String([...byRole.values()].flat().length).padStart(6)}${''.padStart(10)}${money(total).padStart(10)}`);
+}
+
+/**
+ * Whether a model a run used is the one a spec declares: an alias (`opus`) names a family — a whole
+ * segment of the id, wherever it sits, so `claude-3-sonnet` is a sonnet — anything else names a model
+ * outright, and `inherit` runs on whatever the session does, so it declares nothing.
+ *
+ * @param {string} declared - A spec's `model:` value.
+ * @param {string} used - The model the run's messages came from.
+ * @returns {boolean|null} Null when the spec declares nothing to compare with.
+ */
+export function modelMatches(declared, used) {
+  const want = String(declared ?? '').toLowerCase();
+  if (!want || want === 'inherit') return null;
+  const model = used.toLowerCase();
+  return /^[a-z]+$/.test(want) ? model.replace(/\[.*$/, '').split('-').includes(want) : model.startsWith(want);
+}
+
+/**
+ * When a spec's `model:` line last changed. The file's own time will not do: `compose` rewrites every
+ * composed file, and an upgrade changes specs whose model it leaves alone, so either would move the
+ * date and drop the runs before it from the comparison. The project's history says when that one line
+ * last changed; the file's time stands in only where the history cannot say — no repository, a file
+ * it does not track, or a model line changed and not yet committed.
+ *
+ * @param {string} dir - The project.
+ * @param {string} rel - The spec, relative to it.
+ * @param {string} declared - The model the spec declares now.
+ * @returns {number} Milliseconds since the epoch.
+ */
+function declaredSince(dir, rel, declared) {
+  const git = (...args) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+  const committed = frontmatter(git('show', `HEAD:./${rel}`).stdout ?? '')?.model;
+  const when = Date.parse(git('log', '-1', '--format=%cI', '-G', '^model:', '--', rel).stdout?.trim() ?? '');
+  return committed === declared && Number.isFinite(when) ? when : statSync(join(dir, rel)).mtimeMs;
+}
+
+/**
+ * What each stage ran on. A spec's `model:` is the one choice here that changes cost by an order of
+ * magnitude, and it had only ever been read, never measured: the model a run used is on every record,
+ * so a stage that ran on more than one can be read model by model — its runs, when, how often it sent
+ * work back, and what a run cost. That is a comparison across different weeks of different work, not
+ * an experiment; what it can settle is whether a change is worth an eval.
+ *
+ * Where a project's directory can be found it also asks whether each stage runs on the model its spec
+ * declares, counting only the runs made after the spec was last written — a spec changed today says
+ * nothing about yesterday's runs. A difference there is an override: a model on the dispatch, or one
+ * set for every subagent in the environment, which no spec shows.
+ *
+ * @param {object[]} records - The runs in the window.
+ */
+function modelReport(records) {
+  const ran = records.filter((r) => typeof r.usage_model === 'string' && r.usage_model);
+  /** @type {Map<string, Map<string, object[]>>} */
+  const byRole = new Map();
+  for (const r of ran) {
+    if (!PIPELINE_ROLES.has(r.role)) continue;
+    const models = byRole.get(r.role) ?? new Map();
+    models.set(r.usage_model, [...(models.get(r.usage_model) ?? []), r]);
+    byRole.set(r.role, models);
+  }
+  const changed = [...byRole].filter(([, models]) => models.size > 1).sort(([a], [b]) => a.localeCompare(b));
+
+  const money = (n) => `$${n.toFixed(2)}`;
+  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const lines = [];
+  for (const [role, models] of changed) {
+    const ordered = [...models].sort(([, a], [, b]) => String(a[0].ts).localeCompare(String(b[0].ts)));
+    for (const [i, [model, runs]] of ordered.entries()) {
+      const clear = runs.filter((r) => r.verdict && r.verdict !== 'UNCLEAR' && r.verdict !== 'NONE');
+      const loops = clear.filter((r) => isLoopBack(r.verdict)).length;
+      const costs = runs.map((r) => (r.tokens ? costOf(r.tokens, r.usage_model) : null)).filter((c) => c !== null);
+      const dates = runs.map((r) => String(r.ts).slice(0, 10)).sort();
+      lines.push(
+        `    ${(i === 0 ? role : '').padEnd(20)}${model.padEnd(20)}${String(runs.length).padStart(5)} run(s)  ${dates[0]} → ${dates.at(-1)}` +
+          (clear.length ? `  loop-back ${pct(loops, clear.length)} of ${clear.length}` : '  no readable verdict') +
+          (costs.length ? `  median ${money(median(costs))}` : ''),
+      );
+    }
+  }
+
+  // Declared against used, per project and stage, over the runs since the spec's model last changed.
+  // Every spec the project has is asked, its own agents included: they declare a model too.
+  const drift = [];
+  const byProject = new Map();
+  for (const r of ran) byProject.set(r.project, [...(byProject.get(r.project) ?? []), r]);
+  for (const [project, runs] of byProject) {
+    const dir = decodeProjectDir(project);
+    if (!dir) continue;
+    for (const role of new Set(runs.map((r) => r.role))) {
+      const rel = join('.claude', 'agents', `${role}.md`);
+      if (!existsSync(join(dir, rel))) continue;
+      const declared = frontmatter(readFileSync(join(dir, rel), 'utf8'))?.model;
+      if (modelMatches(declared, '') === null) continue;
+      const written = declaredSince(dir, rel, declared);
+      const since = runs.filter((r) => r.role === role && Date.parse(r.ts) > written);
+      const other = since.filter((r) => modelMatches(declared, r.usage_model) === false);
+      if (other.length === 0) continue;
+      const used = [...new Set(other.map((r) => r.usage_model))].join(', ');
+      drift.push(
+        `    ${basename(dir)}: ${role} declares ${declared}, and ${other.length} of ${since.length} run(s) since that line last changed ran ${used} — an override no spec shows`,
+      );
+    }
+  }
+
+  if (lines.length === 0 && drift.length === 0) return;
+  console.log('\n  models — a stage that ran on more than one, model by model; different weeks, not an experiment');
+  for (const line of lines) console.log(line);
+  for (const line of drift) console.log(line);
 }
 
 /** The verdicts that close a pipeline cycle: the change passed its tests, reached preview, or cleared the audit. */
@@ -424,6 +534,7 @@ export async function stats(argv, ctx) {
   }
 
   costReport(records.filter((r) => r.status !== 'denied'));
+  modelReport(records.filter((r) => r.status !== 'denied'));
   proportionReport(records.filter((r) => r.status !== 'denied'));
 
   // What the pipeline learned, against what it had to learn from. A loop-back is the raw
