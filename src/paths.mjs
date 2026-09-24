@@ -37,6 +37,15 @@ export function gateDir() {
 }
 
 /**
+ * Where the Stop hook remembers what it last told the person, per project, so it does not tell them again.
+ *
+ * @returns {string}
+ */
+export function hookStateDir() {
+  return process.env.NINA_DATA ? join(process.env.NINA_DATA, 'hooks') : join(homedir(), '.nina', 'hooks');
+}
+
+/**
  * Where `nina export` keeps what it has sent, per destination and project — beside the snapshots it reads.
  *
  * @returns {string}

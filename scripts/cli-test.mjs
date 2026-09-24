@@ -468,6 +468,13 @@ async function sound(fixture, core) {
     context.includes('declaration:') && context.includes('.nina/TODO.md') && context.includes('project slot(s) have no fragment') && !context.includes('slot(s) have no fragment in a declared layer'),
     `init: the first prompt is told what to fill and where from, once — got ${context || told.stdout + told.stderr}`,
   );
+  expect(context.includes('start with the architecture, in this order') && context.includes('write `.claude/architecture.md` with the owner') && !context.includes('read `.nina/BRIEF.md`'), `init: a project with no architecture yet is told where to begin — got ${context}`);
+  await writeFile(join(first, '.nina', 'BRIEF.md'), '# Brief\n\nA lottery.\n');
+  const withBrief = run(['check', '--project', first, '--detector'], { loud: true }).out;
+  expect(withBrief.includes("read `.nina/BRIEF.md`, the owner's description of the project, then write"), `init: and to read the brief first when there is one — got ${withBrief}`);
+  await writeFile(join(first, '.claude', 'architecture.md'), '# Architecture\n');
+  const started = run(['check', '--project', first, '--detector'], { loud: true }).out;
+  expect(!started.includes('start with the architecture') && started.includes('read it before filling anything below'), `init: once the architecture is written, the order is done and only the brief is pointed at — got ${started}`);
   if (before === undefined) delete process.env.NINA_DATA;
   else process.env.NINA_DATA = before;
 
@@ -1141,7 +1148,7 @@ async function sound(fixture, core) {
   await writeFile(join(dir, 'package.json'), '{"name":"d","scripts":{}}');
   await writeFile(join(dir, 'fail.mjs'), "console.log('the map is stale'); process.exit(1);\n");
   await writeFile(join(dir, 'pass.mjs'), 'process.exit(0);\n');
-  const mode = (script, flag) =>
+  const mode = (script, flag, session) =>
     spawnSync(
       process.execPath,
       [
@@ -1150,7 +1157,7 @@ async function sound(fixture, core) {
         `import { runDetectors } from ${JSON.stringify(join(ROOT, 'src', 'detectors.mjs'))};` +
           `process.exit(runDetectors([{ name: 'map', script: '${script}', args: [] }], { root: ${JSON.stringify(dir)}, ${flag}: true }));`,
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', input: session ? JSON.stringify({ session_id: session, hook_event_name: 'Stop' }) : '' },
     );
 
   const told = mode('fail.mjs', 'context');
@@ -1167,7 +1174,25 @@ async function sound(fixture, core) {
     `detectors: --context hands the finding to the model as UserPromptSubmit additionalContext — got ${told.stdout}`,
   );
   expect(mode('pass.mjs', 'context').stdout === '', 'detectors: --context says nothing when there is nothing to say');
-  expect(JSON.parse(mode('fail.mjs', 'hook').stdout).systemMessage?.includes('the map is stale'), 'detectors: --hook is unchanged');
+  expect(JSON.parse(mode('fail.mjs', 'hook').stdout).systemMessage?.includes('the map is stale'), 'detectors: --hook tells the person');
+
+  // The person is told once, in a line per detector; the model is handed the whole finding every time.
+  expect(mode('fail.mjs', 'hook').stdout === '', 'detectors: --hook does not tell the person the same finding again');
+  expect(mode('fail.mjs', 'context').stdout.includes('the map is stale'), 'detectors: while the model is still told it before every message');
+  mode('pass.mjs', 'hook');
+  expect(JSON.parse(mode('fail.mjs', 'hook').stdout || '{}').systemMessage?.includes('the map is stale'), 'detectors: a finding that comes back after it was cleared is told again');
+  await writeFile(join(dir, 'many.mjs'), "console.log('first thing\\nsecond thing\\nthird thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");
+  const short = JSON.parse(mode('many.mjs', 'hook').stdout || '{}').systemMessage ?? '';
+  expect(short.includes('map — 3 stale entries') && !short.includes('second thing') && short.split('\n').length === 2, `detectors: --hook is the detector's own summary, not its lines — got ${short}`);
+  const nested = JSON.parse(mode('many.mjs', 'context').stdout).hookSpecificOutput.additionalContext;
+  expect(nested.includes('  map:\n    first thing\n    second thing'), `detectors: --context sets a finding's lines under its detector's name — got ${nested}`);
+  // What is compared is the line the person reads: a detail it does not show is not news.
+  await writeFile(join(dir, 'many.mjs'), "console.log('another first thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");
+  expect(mode('many.mjs', 'hook').stdout === '', 'detectors: a change only in the detail does not tell the person again');
+  // Each session's person is told once: a second session on the same project is not left out.
+  expect(JSON.parse(mode('many.mjs', 'hook', 'session-a').stdout || '{}').systemMessage?.includes('3 stale entries'), 'detectors: a session is told');
+  expect(mode('many.mjs', 'hook', 'session-a').stdout === '', 'detectors: once');
+  expect(JSON.parse(mode('many.mjs', 'hook', 'session-b').stdout || '{}').systemMessage?.includes('3 stale entries'), 'detectors: and another session on the same project is told too');
 }
 
 // ─── pills: a composed project to plant corrections in ──────────────────────────────────

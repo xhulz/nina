@@ -21,7 +21,9 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { hookStateDir, slugFor } from './paths.mjs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -107,6 +109,93 @@ function declaredIn(root) {
 }
 
 /**
+ * The line a finding comes down to: its detector's own summary — the last line, `check: 18 problem(s)`
+ * — or its first line when it has none.
+ *
+ * @param {string} detail
+ * @returns {string}
+ */
+function summaryOf(detail) {
+  const lines = String(detail || 'stale').split('\n').map((l) => l.trim()).filter(Boolean);
+  const summary = [...lines].reverse().find((l) => /^[a-z][\w -]*: /i.test(l));
+  return summary ? summary.replace(/^[a-z][\w -]*: /i, '') : lines[0] ?? 'stale';
+}
+
+/** Where the Stop hook keeps what it last said in each session of a project. */
+const stopState = (root) => join(hookStateDir(), `${slugFor(root)}.stop.json`);
+
+/** Sessions remembered per project; the oldest is forgotten past this. */
+const SESSIONS_KEPT = 20;
+
+/**
+ * The session a Stop hook runs in, from the payload Claude Code writes to its stdin. What was said is
+ * kept per session: kept per project, a second session open on the same project found the finding
+ * already told — to the first session's person — and told its own nothing.
+ *
+ * @returns {string}
+ */
+function hookSession() {
+  if (process.stdin.isTTY) return '-';
+  try {
+    return String(JSON.parse(readFileSync(0, 'utf8'))?.session_id ?? '-');
+  } catch {
+    return '-';
+  }
+}
+
+/** What was said, per session, for a project. */
+function readStops(root) {
+  try {
+    return JSON.parse(readFileSync(stopState(root), 'utf8')) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/** A digest of what was said, so the same thing is recognised the next time. */
+const digestOf = (text) => createHash('sha256').update(text).digest('hex').slice(0, 16);
+
+/**
+ * What the Stop hook tells the person, or null for nothing. The model is handed every finding in full
+ * before the person's next message, and tells them; the person needs to know that something is pending,
+ * not to read the same eighteen lines under every answer. So a finding the person was already told,
+ * unchanged, is not told again — and when it is, it is one line per detector. A detector that could not
+ * run, or is missing, is said in full: that is rare, and it is about the check itself.
+ *
+ * @returns {string|null}
+ */
+function stopMessage(drift, errored, missing, text) {
+  if (!text) return null;
+  const lines = [];
+  if (drift.length > 0) {
+    lines.push(`⚠️  harness: ${drift.map((r) => `${r.name} — ${summaryOf(r.detail)}`).join('; ')}`);
+    lines.push('   the model is given the whole list before your next message; `harness:check` shows it here');
+  }
+  for (const r of [...errored, ...missing]) lines.push(`🔧 harness: ${r.name} — ${r.detail}`);
+  return lines.join('\n');
+}
+
+/**
+ * Remembers what was said in a session, or forgets it once there is nothing to say, so a finding that
+ * returns is told again. The oldest sessions are dropped, so the file stays small.
+ */
+function rememberStop(root, session, message) {
+  try {
+    const stops = readStops(root);
+    if (message) stops[session] = { digest: digestOf(message), at: new Date().toISOString() };
+    else delete stops[session];
+    const kept = Object.entries(stops)
+      .sort(([, a], [, b]) => String(b.at).localeCompare(String(a.at)))
+      .slice(0, SESSIONS_KEPT);
+    mkdirSync(hookStateDir(), { recursive: true });
+    if (kept.length === 0) rmSync(stopState(root), { force: true });
+    else writeFileSync(stopState(root), JSON.stringify(Object.fromEntries(kept)));
+  } catch {
+    // A hook that cannot remember says the same thing again next turn, which is what it did before.
+  }
+}
+
+/**
  * Runs every detector a project declares and reports what each one found.
  *
  * @param {{name: string, declaredBy: string, script?: string, bin?: string, args: string[], hint?: string, ignore?: RegExp}[]} detectors
@@ -133,7 +222,10 @@ export function runDetectors(detectors, options) {
     parts.push('⚠️  harness check — something needs acting on:');
     for (const r of drift) {
       const hint = detectors.find((d) => d.name === r.name)?.hint;
-      parts.push(`  ${r.name}: ${r.detail || 'stale'}${hint ? `\n  → ${hint}` : ''}`);
+      // A finding of several lines sits under its detector's name, so a reader can tell whose it is.
+      const lines = String(r.detail || 'stale').split('\n').filter((l) => l.trim());
+      const body = lines.length === 1 ? ` ${lines[0].trim()}` : `\n${lines.map((l) => `    ${l.trim()}`).join('\n')}`;
+      parts.push(`  ${r.name}:${body}${hint ? `\n  → ${hint}` : ''}`);
     }
   }
   if (errored.length > 0) {
@@ -152,7 +244,13 @@ export function runDetectors(detectors, options) {
   const text = parts.length > 0 ? parts.join('\n') : null;
 
   if (hook) {
-    if (text) process.stdout.write(`${JSON.stringify({ systemMessage: text })}\n`);
+    // What is compared is what the person would read: a change in a detail the line does not show is
+    // not news to them, and the model gets the detail anyway.
+    const message = stopMessage(drift, errored, missing, text);
+    const session = hookSession();
+    const told = message && readStops(root)[session]?.digest === digestOf(message);
+    if (message && !told) process.stdout.write(`${JSON.stringify({ systemMessage: message })}\n`);
+    rememberStop(root, session, message);
     return 0;
   }
 
