@@ -37,7 +37,7 @@ const COMMANDS = {
   compose: { run: compose, help: 'rebuild a project\'s .claude/ from core + its surfaces' },
   where: { run: where, help: 'say which layer owns a path, and where a change to it goes' },
   pills: { run: pills, help: 'validate the corrections the pipeline wrote about itself' },
-  learn: { run: learn, help: 'is the pipeline learning from its own runs? observe, capture, apply, graduate, verify' },
+  learn: { run: learn, help: 'is the pipeline learning from its own runs? observe, capture, apply, graduate, verify; --deep reads why' },
   requests: { run: requests, help: "the lessons projects have graduated to the harness — this repo's inbox" },
   wire: { run: wire, help: "merge the hooks and npm scripts a project's harness needs to run" },
   gate: { run: gate, help: 'the loop gate: is it wired, and would it still hold a loop past its cap?' },

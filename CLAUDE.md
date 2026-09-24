@@ -94,7 +94,7 @@ must not break.
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
 | `snapshot`, `stats`, cost, proportion, `eval` | [`docs/measurement.md`](docs/measurement.md) |
-| `pills`, `learn`, `requests` | [`docs/learning.md`](docs/learning.md) |
+| `pills`, `learn` and `learn --deep`, `requests` | [`docs/learning.md`](docs/learning.md) |
 
 Each document says why its mechanism ended up the way it did — usually because the obvious version was
 tried first and failed on real data. Read the reason before undoing it.
@@ -110,7 +110,7 @@ nina wire --project ../thing [--apply]        # merge the hooks and npm scripts 
 nina upgrade --project ../thing --to <v> [--apply]   # what a move costs, then the whole move
 nina gate --selftest --project ../thing       # would the loop gate still hold a loop past its cap?
 nina pills --project ../thing                 # is the pipeline's own corpus of corrections sound?
-nina learn --project ../thing                 # is the pipeline learning from its runs, link by link?
+nina learn --project ../thing [--deep]        # is the pipeline learning? --deep reads why it sent work back
 nina requests                                 # the lessons projects have graduated to the harness
 nina snapshot && nina stats                   # measure what the pipeline did, and what it cost
 nina eval --release <a> --release <b>         # which release's reviewer catches more planted defects
@@ -130,6 +130,7 @@ src/vocabulary.mjs    the vocabulary a release answers itself, from core/vocabul
 src/prices.mjs        API list prices by model, dated, for what stats estimates a run cost
 src/transcripts.mjs   the transcript parser (dispatch/verdict/skill extraction)
 src/detectors.mjs     runs a project's drift detectors (imported by its harness-check)
+src/deep.mjs          learn --deep: the loop-back reports read by a model, grouped by cause, set against the pills
 src/banner.mjs        the startup banner
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to

@@ -76,3 +76,34 @@ pills. **Graduate** had never fired and could not: no pill had ever had `occurre
   and small samples swing, and the first two readings went UP after their lessons, which may mean
   a reviewer that catches more rather than one that learned less. Without it, though, the question
   could not even be asked.
+
+## Reading the loop-backs: `learn --deep`
+
+`learn` counts: a role sent back three times since its newest lesson is owed one. It cannot say what the
+three were about, whether they were one mistake or three, or whether a pill on disk already covers them —
+and capture ran at 8% of loop-backs on 2026-09-24 (3% in the window first measured), so most of what the pipeline could have learned was never written
+down. `nina learn --deep` reads the reports themselves, from each run's own transcript — its
+`SubagentHandback`, or its last message for a run from before that tool existed — and asks a model in a
+few calls: map, one sentence per report on what the upstream stage got wrong and whether it would happen
+again; reduce, which causes are the same, which pill already covers each, and a proposed pill for a
+recurring cause none does.
+
+```bash
+nina learn --project ../thing --deep [--days 30] [--model haiku] [--dry-run] [--api]
+```
+
+It proposes and writes nothing: a lesson becomes a pill when the orchestrator or the owner files it. It
+runs on the Claude Code login, never a per-token key unless `--api` asks for one — the billing credentials
+are stripped as `eval` strips them, from the same function — with no tools, on a small model by default, answering to a JSON
+schema. What it says is believed only as far as it can be checked: a ref it did not read is dropped, and
+a pill it names that is not on disk covers nothing and is named as invented. The reports go to the model
+and nowhere else; the snapshot keeps no report text, and neither does this. Nor does a call leave a project behind: Claude
+Code files every `claude -p` under `~/.claude/projects/` by its working directory, session or not, so each
+call runs in one shared directory and removes that entry afterwards when it holds nothing but a title.
+
+The first reading, over one project's 70 loop-backs in thirty days, took 6 calls and $0.56 API-equivalent
+on the login. Its largest causes were test assertions not updated when rendering changed (7), an
+implementer omitting part of the spec (6), and tests that needed live credentials with no mock (5); it
+proposed five pills, among them "a test assertion must be able to fail" and a database client's
+`updateMany` with empty `data` not touching the update timestamp.
+
