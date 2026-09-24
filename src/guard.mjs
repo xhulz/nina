@@ -86,9 +86,13 @@ export function noticeOf(text) {
       block.push(line.replace(/^\/\/ ?/, ''));
     }
   } else {
+    // The notice's own delimiters, taken off by position: this reads text the compiler wrote, it filters
+    // nothing, and a pattern for it read to a scanner as an HTML sanitizer that misses `--!>`.
     for (const line of lines.slice(at)) {
-      block.push(line.replace(/^<!-- /, '').replace(/ ?-->$/, ''));
-      if (line.includes('-->')) break;
+      const open = line.startsWith('<!-- ') ? line.slice('<!-- '.length) : line;
+      const end = open.lastIndexOf('-->');
+      block.push(end >= 0 ? open.slice(0, end) : open);
+      if (end >= 0) break;
     }
   }
   return block.map((l) => l.trim()).join(' ');
