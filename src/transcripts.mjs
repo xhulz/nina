@@ -117,8 +117,12 @@ const ISSUES_MAX = 20;
 /** Ids that say there is nothing to name. */
 const NO_ISSUE = new Set(['none', 'na', 'n-a', 'null', 'nil']);
 
-/** A list item under an `ISSUES:` line left empty — models write a list as bullets as readily as with commas. */
-const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/;
+/**
+ * The marker of a list item under an `ISSUES:` line left empty — models write a list as bullets as readily
+ * as with commas. Only the marker is matched and the item is the rest of the line: a pattern that also
+ * captured the item backtracked polynomially on a line of spaces, and reports are a model's output.
+ */
+const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/;
 
 /**
  * The issues a report names on the line under its verdict — `ISSUES: missing-null-check, wrong-status`.
@@ -147,9 +151,9 @@ export function declaredIssues(text) {
   if (!line[1].trim()) {
     raw = [];
     for (const next of lines.slice(below + 1)) {
-      const item = BULLET.exec(next);
-      if (!item) break;
-      raw.push(item[1]);
+      const marker = BULLET.exec(next);
+      if (!marker) break;
+      raw.push(next.slice(marker[0].length));
     }
   }
   const ids = raw.map((id) =>
