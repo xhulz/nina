@@ -22,6 +22,7 @@ import { join } from 'node:path';
 /** The composed scripts the hooks run. */
 export const CHECK = 'scripts/harness-check.mjs';
 export const GATE = 'scripts/loop-gate.mjs';
+export const GUARD = 'scripts/edit-guard.mjs';
 
 /** The npm scripts the detectors hang off: the reviewer runs one, the other is a detector itself. */
 export const SCRIPTS = {
@@ -64,11 +65,27 @@ export function packageInstalled(target) {
   }
 }
 
+/**
+ * Whether the installed package exports a module the composed scripts import.
+ *
+ * @param {string} target - The project directory.
+ * @param {string} module - `gate`, `guard`, …
+ * @returns {boolean}
+ */
+export function packageExports(target, module) {
+  try {
+    createRequire(join(target, 'package.json')).resolve(`@xhulz/nina/${module}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The command a hook ran before it could say its script did not start — what `wire` updates. */
 const previousCommand = (h) => command(h.script, h.mode);
 
 /** What a hook says when its script cannot start: the likeliest cause, and the one command that fixes it. */
-const CANNOT_START = 'is @xhulz/nina installed in this project? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)';
+const CANNOT_START = 'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)';
 
 /**
  * Every hook a project's settings should carry, in the order a fresh settings file lists them. `why` is
@@ -100,6 +117,10 @@ export const HOOKS = [
   },
   { event: 'PostToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion|SubagentHandback', script: GATE, timeout: 10, why: 'the gate never learns which rounds went out, or that the owner answered' },
   { event: 'SubagentStop', script: GATE, timeout: 10, why: 'the gate misses the verdict of a stage that wrote its report as its last message' },
+  {
+    event: 'PreToolUse', matcher: 'Edit|Write|MultiEdit|NotebookEdit', script: GUARD, timeout: 10, why: 'a hand edit to a composed file is found only after the turn, as drift, and the next compose overwrites it',
+    crash: { systemMessage: `NINA: the edit guard could not start, so composed files can be edited in place — ${CANNOT_START}` },
+  },
 ];
 
 /** Where a project's hooks can live: Claude Code reads both, so a hook kept in the local file counts. */
@@ -221,11 +242,23 @@ function settingsHooks(hooks) {
 export async function missingWiring(target, shipped) {
   const out = [];
   // First, because nothing below matters without it: the composed scripts import the package.
-  if ((shipped.has(CHECK) || shipped.has(GATE)) && !packageInstalled(target)) {
+  if ((shipped.has(CHECK) || shipped.has(GATE) || shipped.has(GUARD)) && !packageInstalled(target)) {
     out.push(
       '@xhulz/nina is not installed in this project, so the composed scripts cannot load and every hook fails — ' +
         'pnpm add -D file:vendor/xhulz-nina-<version>.tgz, with the .tgz `npm pack` makes in the NINA repo',
     );
+  } else {
+    // Installed, but older than the pin: a composed script imports a module the installed package does
+    // not export, and its hook fails on every call — found when a linked checkout moved a project whose
+    // vendored package was a release behind.
+    for (const [script, module] of [[GATE, 'gate'], [GUARD, 'guard']]) {
+      if (shipped.has(script) && !packageExports(target, module)) {
+        out.push(
+          `the installed @xhulz/nina has no ./${module}, so ${script} cannot load — it is older than the version .nina/profile.json pins; ` +
+            'install the .tgz of that version',
+        );
+      }
+    }
   }
   if (shipped.has(CHECK)) {
     const pkgPath = join(target, 'package.json');

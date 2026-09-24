@@ -42,6 +42,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REQUIRES, composeProject, stripWhy } from '../src/commands/compose.mjs';
+import { NOTICE_HEAD } from '../src/guard.mjs';
 import { ANSWERED, answers } from '../src/commands/learn.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -116,6 +117,9 @@ async function runFixture(name) {
     //    nothing, which is the failure a marker meant to prevent hand edits would have caused.
     if (!text.includes('nina:generated')) {
       failures.push(`${rel}: composed without the nina:generated notice`);
+    } else if (text.split('\n').findIndex((l) => /^(<!--|\/\/) nina:generated/.test(l)) >= NOTICE_HEAD) {
+      // The edit guard reads only a file's head for the notice: one below it guards nothing.
+      failures.push(`${rel}: the nina:generated notice sits below line ${NOTICE_HEAD}, out of the edit guard's reach`);
     }
     if (rel.startsWith(join('.claude', 'agents') + sep) && !text.startsWith('---\n')) {
       failures.push(`${rel}: agent spec does not open with frontmatter — it cannot be dispatched`);

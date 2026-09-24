@@ -158,7 +158,8 @@ Measured history does not live in the install. It is the user's, it spans every 
 `NINA_DATA` to point it elsewhere.
 
 The package also exports `@xhulz/nina/detectors`, which is the runner behind every project's
-`pnpm harness:check`, and `@xhulz/nina/gate`, the loop gate the composed `scripts/loop-gate.mjs` runs. That mechanism used to be a script copied into each project, and the copies
+`pnpm harness:check`, `@xhulz/nina/gate`, the loop gate the composed `scripts/loop-gate.mjs` runs, and
+`@xhulz/nina/guard`, the edit guard `scripts/edit-guard.mjs` runs. That mechanism used to be a script copied into each project, and the copies
 had already drifted — one had learned to run a detector that is a binary on PATH and the other
 never did, in the file whose job is to detect drift. It cannot live in a layer either, because this
 repo cannot compose itself: composing would overwrite its own `CLAUDE.md`, which is about the
@@ -224,8 +225,8 @@ still reports. In every mode, only the specs the harness composed are stages: a 
 of its own beside them.
 
 It also writes the **wiring**, because without it the scripts it composes are never run:
-`.claude/settings.json` with every hook the pinned version's scripts need — the harness check's and
-the loop gate's — when the project has no settings file, and the `harness:check` and
+`.claude/settings.json` with every hook the pinned version's scripts need — the harness check's, the
+loop gate's and the edit guard's — when the project has no settings file, and the `harness:check` and
 `harness:compose:check` scripts added to an existing `package.json`. Both files belong to the project
 and carry far more than the harness, so `init` never edits settings that exist and a manifest only
 gains what it lacks. Whatever `init` could not write is §4 of the TODO, `nina wire --apply` merges it,
@@ -279,10 +280,25 @@ goes. `Edit` and `Write` both refuse a file they have not read, so it reaches ev
 already exists. It does **not** reach a brand-new file, which needs no prior read, nor a shell edit
 through `sed` or a heredoc, nor an agent that only reports. For a change proposed in a report rather
 than written, the routing lives in the composed `.claude/retrieval.md`, whose meta-tasks table is
-consulted by task type — and that is guidance, not enforcement. The mechanism that would enforce it is
-a `PreToolUse` hook on the edit tools. NINA composes no `.claude/settings.json` — `init` and `wire` write
-hooks into it from `src/wiring.mjs`, and the loop gate is one — but no hook checks where an edit goes.
-That is a real limit, recorded here rather than papered over.
+consulted by task type — and that is guidance, not enforcement.
+
+**The edit guard enforces it where it can.** Reaching an agent is not stopping it: one that read the
+notice and edited anyway was found only after the turn, as drift, and the next compose wrote over its
+work. `core/tree/scripts/edit-guard.mjs` runs on `PreToolUse` for `Edit|Write|MultiEdit|NotebookEdit`
+and refuses an edit to a file that carries the `nina:generated` notice — in either comment syntax, below
+a frontmatter or a shebang — at a path the pinned version composes, with the notice itself as the reason,
+so the refusal names the layer and the slot the change belongs in. The path is half the test: the
+integration template composes with a notice and is meant to be copied into `.claude/integrations/`, and
+refused on the notice alone every copy was "composed", and the project's own doc could only be edited
+through the shell. The compose suite holds every composed notice within the lines the guard reads, and
+`check` names an installed package too old to export the guard, which otherwise failed every edit's hook
+with a message blaming a missing install. It denies rather than asks: the loop gate asks because it cannot be sure two
+rounds are one issue, and here nothing is uncertain. The project's own layer under `.nina/`, files with
+no notice, and anything outside the project are let through; it fails open, and acts only where the
+pinned version ships it, like the gate. Its hook is in `src/wiring.mjs`, so `init` writes it, `wire`
+merges it and `upgrade` waits for it. What it still does not reach is a brand-new file at a composed path
+and a shell edit (`sed -i`, a heredoc) — the first carries no notice to read, the second never passes
+through an edit tool — and an agent that only reports, for whom `retrieval.md` stays guidance.
 
 ```bash
 nina compose --project ../Spliter          # rebuild that project's harness files
@@ -735,6 +751,7 @@ bin/nina.mjs          entry point and command table
 src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
+src/guard.mjs         the edit guard: refuses an edit to a composed file, quoting where it belongs
 src/wiring.mjs        the hooks and npm scripts a project needs — read by init, wire, check and upgrade
 src/vocabulary.mjs    the vocabulary a release answers itself, from core/vocabulary.json
 src/prices.mjs        API list prices by model, dated, for what stats estimates a run cost
