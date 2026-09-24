@@ -2084,6 +2084,11 @@ const dated = (date, status = 'active') =>
       hook('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'implementer [3fa9c1]' } })?.hookSpecificOutput?.permissionDecision === 'ask',
     'gate: and so does resuming it by name, as a listing prints it or not',
   );
+  // The recipient is whatever the model wrote, read on every dispatch: its ` [ref]` is found by position,
+  // because the pattern that did it took half a second on 20,000 `[` and grew with the square.
+  const slow = Date.now();
+  hook('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: '['.repeat(60_000) } });
+  expect(Date.now() - slow < 1000, `gate: a recipient of 60,000 \`[\` is read in linear time — took ${Date.now() - slow}ms`);
   expect(send('architect', 'a1') === null, 'gate: the cap holds one edge — the design route is still open');
   expect(hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore' } }) === null, 'gate: an agent that is not a stage is never held');
   expect(
