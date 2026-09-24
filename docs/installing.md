@@ -55,14 +55,16 @@ to the one reader who was not about to act on it, and closing any loop meant the
 `--context` emits `additionalContext` for a UserPromptSubmit hook, which Claude Code puts in the model's
 own context before it answers. A project wants both: the Stop hook tells the person what the turn left
 behind, the prompt hook tells the model before the next one. They are not told alike. The model gets
-every finding in full, before every message, since that is what it acts on. The person gets one line
-per detector, its own summary (`declaration — 18 problem(s)`), and gets it once per session: the same
-line is not repeated under the next answer, one that clears and comes back is told again, and a second
-session open on the same project is told its own. What is compared is the line itself, so a change in a
-detail it does not show is not news to the person; the model has the detail. The
-first new project showed why: the model relayed its eighteen pending items in a paragraph, and the Stop
-hook then printed the same eighteen raw, twenty-two lines prefixed `Stop says:`, under every answer
-until the project was filled in. What the hook last said is kept per project under `~/.nina/hooks/`. Hooks are the project's own
+every finding in full, before every message, since that is what it acts on. The person hears only what
+the turn itself left behind: the prompt hook records, per session, which findings it handed the model,
+and the Stop hook says nothing about those, because the model already had them and relayed them. A
+finding the turn produced (a hand edit to a composed file, a lesson owed after it) is one line, the
+detector's own summary (`lessons — 1 role(s) keep being sent back`), said once; one that clears and comes
+back is told again. The first new project showed why. The model relayed its eighteen pending items in a
+paragraph, and the Stop hook then printed the same eighteen raw, twenty-two lines prefixed `Stop says:`,
+under every answer; cut to one line said once per session, it was still the harness talking about what
+the person had just been told. Without a record from the prompt hook, every finding counts as new. The
+records are kept per project under `~/.nina/hooks/`, a session each. Hooks are the project's own
 `.claude/settings.json` — NINA composes no settings — so `nina init` writes them where there is no
 settings file yet and never edits one that exists, `nina check` asks for whatever is missing, and
 `nina wire --apply` merges exactly what is missing into settings that already exist (see *Starting a
@@ -112,10 +114,16 @@ first answer in a new project it is told what is still missing and where to fill
 `.nina/TODO.md` for the items, `.nina/BRIEF.md` (when the interview wrote one) for what the project is.
 The first conversation starts by filling the project in, with nobody having to ask. A list says what is
 missing and not where to begin, and the first new project's model met eighteen items at one weight and
-offered to read the brief "if it exists". So until `.claude/architecture.md` is written, the check opens
-with the order: read the brief, write the architecture with the owner, and fill the vocabulary and slots
-from it, since most of them are decisions that architecture makes. Once it is written the order is done,
-and the check points at the brief alone. The order is read off that one document, not off the directory:
+offered to read the brief "if it exists". So until `.claude/architecture.md` is written, the detector
+opens by telling the model the list is not the conversation: read the brief before answering (or, with
+no brief, what the project already says about itself, its README and code, asking the owner only when
+there is nothing to read), open with what the project is, propose writing the architecture together, ask
+the first question it raises, and do not recite the list, which is in the TODO and mostly decided by that
+architecture. Given only the order,
+the model still led with the inventory; given this, it answered a new project's "hello" by summing up the
+brief and asking what the scoring engine it names actually is. A person running `nina check` by hand gets
+the order instead. Once the architecture is written the order is done, and the check points at the brief
+alone. The order is read off that one document, not off the directory:
 a first version judged the project new by its files, never noticed the architecture being written, and
 dropped the order when an editor's settings folder appeared. The composition
 detector runs `compose --check --drift` beside it, which reports hand edits and nothing else: both used

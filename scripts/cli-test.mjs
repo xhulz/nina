@@ -468,13 +468,15 @@ async function sound(fixture, core) {
     context.includes('declaration:') && context.includes('.nina/TODO.md') && context.includes('project slot(s) have no fragment') && !context.includes('slot(s) have no fragment in a declared layer'),
     `init: the first prompt is told what to fill and where from, once — got ${context || told.stdout + told.stderr}`,
   );
-  expect(context.includes('start with the architecture, in this order') && context.includes('write `.claude/architecture.md` with the owner') && !context.includes('read `.nina/BRIEF.md`'), `init: a project with no architecture yet is told where to begin — got ${context}`);
+  expect(context.includes('the list below is not the conversation') && context.includes('read what the project already says about itself') && context.includes('if there is nothing to read, ask the owner') && context.includes('Do not recite the list'), `init: a project with no architecture yet tells the model to open with the project, not the inventory — got ${context}`);
   await writeFile(join(first, '.nina', 'BRIEF.md'), '# Brief\n\nA lottery.\n');
   const withBrief = run(['check', '--project', first, '--detector'], { loud: true }).out;
-  expect(withBrief.includes("read `.nina/BRIEF.md`, the owner's description of the project, then write"), `init: and to read the brief first when there is one — got ${withBrief}`);
+  expect(withBrief.includes("Before you answer, read `.nina/BRIEF.md`, the owner's own description of the project, and open with it"), `init: and to read the brief before answering when there is one — got ${withBrief}`);
+  const byHandFirst = run(['check', '--project', first], { loud: true }).out;
+  expect(byHandFirst.includes("start with the architecture, in this order: read `.nina/BRIEF.md`, the owner's description of the project, then write") && !byHandFirst.includes('Before you answer'), `init: a person running check is given the order, not the model's instruction — got ${byHandFirst}`);
   await writeFile(join(first, '.claude', 'architecture.md'), '# Architecture\n');
   const started = run(['check', '--project', first, '--detector'], { loud: true }).out;
-  expect(!started.includes('start with the architecture') && started.includes('read it before filling anything below'), `init: once the architecture is written, the order is done and only the brief is pointed at — got ${started}`);
+  expect(!started.includes('start with the architecture') && !started.includes('not the conversation') && started.includes('read it before filling anything below'), `init: once the architecture is written, the order is done and only the brief is pointed at — got ${started}`);
   if (before === undefined) delete process.env.NINA_DATA;
   else process.env.NINA_DATA = before;
 
@@ -1183,12 +1185,18 @@ async function sound(fixture, core) {
   expect(JSON.parse(mode('fail.mjs', 'hook').stdout || '{}').systemMessage?.includes('the map is stale'), 'detectors: a finding that comes back after it was cleared is told again');
   await writeFile(join(dir, 'many.mjs'), "console.log('first thing\\nsecond thing\\nthird thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");
   const short = JSON.parse(mode('many.mjs', 'hook').stdout || '{}').systemMessage ?? '';
-  expect(short.includes('map — 3 stale entries') && !short.includes('second thing') && short.split('\n').length === 2, `detectors: --hook is the detector's own summary, not its lines — got ${short}`);
+  expect(short.includes('map — 3 stale entries') && !short.includes('second thing') && short.split('\n').length === 1, `detectors: --hook is the detector's own summary, not its lines — got ${short}`);
   const nested = JSON.parse(mode('many.mjs', 'context').stdout).hookSpecificOutput.additionalContext;
   expect(nested.includes('  map:\n    first thing\n    second thing'), `detectors: --context sets a finding's lines under its detector's name — got ${nested}`);
-  // What is compared is the line the person reads: a detail it does not show is not news.
+  // The person hears what the turn left behind: what the model was handed before it, it relayed.
   await writeFile(join(dir, 'many.mjs'), "console.log('another first thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");
-  expect(mode('many.mjs', 'hook').stdout === '', 'detectors: a change only in the detail does not tell the person again');
+  mode('many.mjs', 'context', 'turn');
+  expect(mode('many.mjs', 'hook', 'turn').stdout === '', 'detectors: a finding the model was given before the turn is not repeated to the person after it');
+  await writeFile(join(dir, 'many.mjs'), "console.log('another first thing\\na hand edit made this turn\\n\\nmap: 4 stale entries'); process.exit(1);\n");
+  const left = JSON.parse(mode('many.mjs', 'hook', 'turn').stdout || '{}').systemMessage ?? '';
+  expect(left.includes('map — 4 stale entries') && !left.includes('\n'), `detectors: one the turn left behind is told, in one line — got ${left}`);
+  expect(mode('many.mjs', 'hook', 'turn').stdout === '', 'detectors: once');
+  await writeFile(join(dir, 'many.mjs'), "console.log('first thing\\nsecond thing\\nthird thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");
   // Each session's person is told once: a second session on the same project is not left out.
   expect(JSON.parse(mode('many.mjs', 'hook', 'session-a').stdout || '{}').systemMessage?.includes('3 stale entries'), 'detectors: a session is told');
   expect(mode('many.mjs', 'hook', 'session-a').stdout === '', 'detectors: once');

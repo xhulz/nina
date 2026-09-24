@@ -156,34 +156,48 @@ function readStops(root) {
 const digestOf = (text) => createHash('sha256').update(text).digest('hex').slice(0, 16);
 
 /**
- * What the Stop hook tells the person, or null for nothing. The model is handed every finding in full
- * before the person's next message, and tells them; the person needs to know that something is pending,
- * not to read the same eighteen lines under every answer. So a finding the person was already told,
- * unchanged, is not told again — and when it is, it is one line per detector. A detector that could not
- * run, or is missing, is said in full: that is rare, and it is about the check itself.
+ * A finding's lines, as keys to recognise them by: its own, less the summary a count moves and the
+ * advice under it.
  *
- * @returns {string|null}
+ * @param {{name: string, detail: string}} result
+ * @returns {string[]}
  */
-function stopMessage(drift, errored, missing, text) {
-  if (!text) return null;
-  const lines = [];
-  if (drift.length > 0) {
-    lines.push(`⚠️  harness: ${drift.map((r) => `${r.name} — ${summaryOf(r.detail)}`).join('; ')}`);
-    lines.push('   the model is given the whole list before your next message; `harness:check` shows it here');
-  }
-  for (const r of [...errored, ...missing]) lines.push(`🔧 harness: ${r.name} — ${r.detail}`);
-  return lines.join('\n');
+function findingKeys(result) {
+  const lines = String(result.detail || 'stale').split('\n').map((l) => l.trim()).filter(Boolean);
+  const summary = [...lines].reverse().find((l) => /^[a-z][\w -]*: /i.test(l));
+  return lines.filter((l) => l !== summary && !l.startsWith('→')).map((l) => digestOf(`${result.name}|${l}`));
 }
 
 /**
- * Remembers what was said in a session, or forgets it once there is nothing to say, so a finding that
- * returns is told again. The oldest sessions are dropped, so the file stays small.
+ * What the Stop hook tells the person, or null for nothing: one line, for the findings the turn itself
+ * left behind. A detector that could not run, or is missing, is said in full: that is rare, and it is
+ * about the check itself.
+ *
+ * @returns {string|null}
  */
-function rememberStop(root, session, message) {
+function stopMessage(fresh, errored, missing) {
+  const lines = [];
+  if (fresh.length > 0) {
+    lines.push(`⚠️  harness: ${fresh.map((r) => `${r.name} — ${summaryOf(r.detail)}`).join('; ')} · the model is told before your next message`);
+  }
+  for (const r of [...errored, ...missing]) lines.push(`🔧 harness: ${r.name} — ${r.detail}`);
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
+/**
+ * Records what a session's hooks did: the findings the model was handed before the turn (`given`), and
+ * what the person was last told (`digest`). A session with nothing left to record is forgotten, so a
+ * finding that returns is told again. The oldest sessions are dropped, so the file stays small.
+ */
+function remember(root, session, change) {
   try {
     const stops = readStops(root);
-    if (message) stops[session] = { digest: digestOf(message), at: new Date().toISOString() };
+    const next = { ...stops[session], ...change, at: new Date().toISOString() };
+    if (next.digest === undefined) delete next.digest;
+    if (next.digest || next.given?.length) stops[session] = next;
     else delete stops[session];
+    // Unlocked: two sessions writing at once can lose one's record, which makes its Stop hook repeat
+    // something once. It cannot hide anything, since a missing record counts every finding as new.
     const kept = Object.entries(stops)
       .sort(([, a], [, b]) => String(b.at).localeCompare(String(a.at)))
       .slice(0, SESSIONS_KEPT);
@@ -244,13 +258,19 @@ export function runDetectors(detectors, options) {
   const text = parts.length > 0 ? parts.join('\n') : null;
 
   if (hook) {
-    // What is compared is what the person would read: a change in a detail the line does not show is
-    // not news to them, and the model gets the detail anyway.
-    const message = stopMessage(drift, errored, missing, text);
+    // The person hears what the turn left behind, and nothing else. What was pending before it, the
+    // model was handed before it answered, and told them: a new project's first answer was a paragraph
+    // of its pending items, followed by the same items again from this hook. So a finding the model was
+    // given is not repeated; one it was not — a hand edit made during the turn, a lesson owed after it —
+    // is one line. Without a record from the prompt hook, every finding is new, as it was before.
     const session = hookSession();
-    const told = message && readStops(root)[session]?.digest === digestOf(message);
-    if (message && !told) process.stdout.write(`${JSON.stringify({ systemMessage: message })}\n`);
-    rememberStop(root, session, message);
+    const state = readStops(root)[session] ?? {};
+    const given = Array.isArray(state.given) ? new Set(state.given) : null;
+    const fresh = given ? drift.filter((r) => findingKeys(r).some((k) => !given.has(k))) : drift;
+    const message = stopMessage(fresh, errored, missing);
+    // What is compared is what the person would read, so the same line is not repeated either.
+    if (message && state.digest !== digestOf(message)) process.stdout.write(`${JSON.stringify({ systemMessage: message })}\n`);
+    remember(root, session, { digest: message ? digestOf(message) : undefined, ...(text ? {} : { given: [] }) });
     return 0;
   }
 
@@ -261,6 +281,7 @@ export function runDetectors(detectors, options) {
   // is put in the model's own context before it answers, which is where a finding can change
   // what happens next.
   if (context) {
+    remember(root, hookSession(), { given: drift.flatMap(findingKeys) });
     if (text) {
       process.stdout.write(
         `${JSON.stringify({
