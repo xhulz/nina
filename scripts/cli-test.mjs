@@ -2640,8 +2640,21 @@ const dated = (date, status = 'active') =>
     rows.map((u) => JSON.stringify({ type: 'assistant', message: { id: u.id, model: u.model, usage: u.usage, content: [] } })).concat(['']).join('\n'),
   );
   const agentFile = join(dir, 's1', 'subagents', 'agent-abc123.jsonl');
-  await writeFile(agentFile, `${await readFile(agentFile, 'utf8')}${JSON.stringify({ type: 'assistant', message: { id: 'h1', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\\nISSUES: a' } }] } })}\n`);
+  // Three writes to two files, and a read that writes nothing.
+  const tool = (name, input) => JSON.stringify({ type: 'assistant', message: { id: `w${Math.random()}`, content: [{ type: 'tool_use', name, input }] } });
+  await writeFile(
+    agentFile,
+    `${await readFile(agentFile, 'utf8')}${[
+      tool('Edit', { file_path: '/p/a.ts', old_string: 'x', new_string: 'y' }),
+      tool('Write', { file_path: '/p/b.ts', content: '' }),
+      tool('MultiEdit', { file_path: '/p/a.ts', edits: [] }),
+      tool('Read', { file_path: '/p/c.ts' }),
+      JSON.stringify({ type: 'assistant', message: { id: 'h1', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\\nISSUES: a' } }] } }),
+    ].join('\n')}\n`,
+  );
   const [record] = (await scanProject(dir, {})).records;
+  expect(record?.files_touched === 2, `proportion: a run counts the distinct files it wrote, not its edits or its reads — got ${record?.files_touched}`);
+  expect(!JSON.stringify(record).includes('/p/a.ts'), 'proportion: and keeps the number, never the paths');
   expect(record?.tokens?.output === 600 && record.usage_model === 'claude-sonnet-5', `cost: the snapshot record carries the run's tokens and model — got ${JSON.stringify(record)}`);
   // A record read before it learned the field is read once more while its transcript is on disk —
   // how 825 runs recorded before tokens existed got theirs — and one already carrying it is not.
@@ -2650,6 +2663,10 @@ const dated = (date, status = 'active') =>
   const [backfilled] = (await scanProject(dir, { cursors: {}, records: [before] })).records;
   expect(backfilled?.tokens?.output === 600, `cost: a record from before the field gets its tokens on the next snapshot — got ${JSON.stringify(backfilled?.tokens)}`);
   // Read in full and unchanged since: not read again. A sentinel survives the next scan only if it was skipped.
+  const withoutFiles = { ...record };
+  delete withoutFiles.files_touched;
+  const [counted] = (await scanProject(dir, { cursors: {}, records: [withoutFiles] })).records;
+  expect(counted?.files_touched === 2, `proportion: a record from before files were counted gets its count on the next snapshot — got ${counted?.files_touched}`);
   const [kept] = (await scanProject(dir, { cursors: {}, records: [{ ...record, tokens: { output: -1 } }] })).records;
   expect(kept?.tokens?.output === -1, 'cost: a run read in full whose transcript has not grown is not read again');
   // Resumed after it reported: the transcript grew, with more spend and a new verdict, and both are read.
@@ -2672,6 +2689,42 @@ const dated = (date, status = 'active') =>
   // Two reviewer runs of $5 and $15: the median is the upper middle, as the duration column's is.
   expect(/reviewer\s+2\s+\$15\.00\s+\$20\.00\s+80%/.test(out) && /all stages\s+3\s+\$25\.00/.test(out), `cost: stats reports each stage's median, total and share — got ${out}`);
   expect(out.includes('4 of 4 runs have a token record, 1 on a model the price table does not know'), `cost: the header counts the runs it could not price — got ${out}`);
+}
+
+// ─── proportion: the size of a change against the chain it went through ──────────────────
+{
+  const snapshots = join(await scratch(), 'snaps');
+  await mkdir(snapshots, { recursive: true });
+  let clock = 0;
+  const run_ = (session, role, verdict, files) =>
+    JSON.stringify({ project: '-p', dispatch_id: `t${(clock += 1)}`, ts: `2026-09-24T10:${String(clock).padStart(2, '0')}:00.000Z`, session, role, verdict, verdict_source: 'declared', ...(files === undefined ? {} : { files_touched: files }) });
+  const rows = [
+    // A: a designed one-file change, closed by qa. B: two files, no design, its fix round kept in the cycle — sized 2, not 4.
+    run_('s1', 'architect', 'SPEC-READY'), run_('s1', 'implementer', 'DIFF-READY', 1), run_('s1', 'reviewer', 'APPROVED'), run_('s1', 'qa', 'PASS'),
+    run_('s1', 'implementer', 'DIFF-READY', 2), run_('s1', 'reviewer', 'REJECTED'), run_('s1', 'implementer', 'DIFF-READY', 2), run_('s1', 'qa', 'PASS'),
+    // C: designed by a planner alone, closed by a deploy. D: three files after it, no design.
+    run_('s2', 'planner', 'PLAN-READY'), run_('s2', 'implementer', 'DIFF-READY', 12), run_('s2', 'devops', 'DEPLOYED'),
+    run_('s2', 'implementer', 'DIFF-READY', 3), run_('s2', 'qa', 'PASS'),
+    // E: designed, closed by a clear audit. F: four files after it, still open when the record ends.
+    run_('s3', 'architect', 'SPEC-READY'), run_('s3', 'implementer', 'DIFF-READY', 5), run_('s3', 'secops', 'SECURE'),
+    run_('s3', 'implementer', 'DIFF-READY', 4),
+    // G: a light chain with no qa, ended by the design that follows it. H: that design's twelve files.
+    run_('s4', 'implementer', 'DIFF-READY', 2), run_('s4', 'reviewer', 'APPROVED'), run_('s4', 'architect', 'SPEC-READY'), run_('s4', 'implementer', 'DIFF-READY', 12), run_('s4', 'qa', 'PASS'),
+    // I: closed by a qa whose verdict could not be read.
+    run_('s5', 'implementer', 'DIFF-READY', 3), run_('s5', 'qa', 'UNCLEAR'),
+    // J: one cycle — a rejection sent the work back to the architect, which the graph routes, so it is no new change.
+    run_('s6', 'architect', 'SPEC-READY'), run_('s6', 'implementer', 'DIFF-READY', 3), run_('s6', 'reviewer', 'REJECTED'), run_('s6', 'architect', 'SPEC-READY'), run_('s6', 'implementer', 'DIFF-READY', 3), run_('s6', 'qa', 'PASS'),
+  ];
+  await writeFile(join(snapshots, '-p.jsonl'), `${rows.join('\n')}\n`);
+  const { out } = run(['stats', '--snapshots', snapshots, '--all'], { loud: true });
+  expect(
+    out.includes('proportion — 10 cycle(s) that wrote code') && out.includes('1 closed by a run whose verdict could not be read') && out.includes('1 still open'),
+    `proportion: cycles close at qa, a deploy, a clear audit, an unreadable closer or the next design, and the header says which were unreadable or open — got ${out}`,
+  );
+  expect(
+    /1–2 files\s+3\s+1 \(33%\)/.test(out) && /3–9 files\s+5\s+2 \(40%\)/.test(out) && /10\+ files\s+2\s+2 \(100%\)/.test(out),
+    `proportion: each cycle is sized by its largest write and marked by whether it was designed — got ${out}`,
+  );
 }
 
 // ─── 0.21.1: a new project, an adopted one, and the declaration detector ─────────────────
