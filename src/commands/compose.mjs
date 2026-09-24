@@ -21,6 +21,7 @@ import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { defaultVocabulary } from '../vocabulary.mjs';
 
 /**
  * Matches a slot marker on its own line, with an optional label.
@@ -307,6 +308,7 @@ export async function composeProject(target, ctx, options = {}) {
   const resolved = layerRootFor(ctx.root, profile.core);
   if (resolved.error) return { error: resolved.error, written, differ, unfilled: [], skipped };
   const layerRoot = resolved.dir;
+  const defaults = defaultVocabulary(layerRoot);
 
   const coreTree = join(layerRoot, 'core', 'tree');
   const layers = [
@@ -380,6 +382,12 @@ export async function composeProject(target, ctx, options = {}) {
       // `null` means "declared but not filled in yet" — leave the placeholder standing so
       // it is reported, rather than composing the rule with a hole where a noun should be.
       if (value === null || value === undefined) continue;
+      text = text.split(`{{${name}}}`).join(value);
+    }
+    // What the project did not declare, the release may: a default fills only a name the profile
+    // does not mention at all, so declaring one — even as null, "not filled yet" — takes it over.
+    for (const [name, value] of Object.entries(defaults)) {
+      if (name in (profile.vocabulary ?? {})) continue;
       text = text.split(`{{${name}}}`).join(value);
     }
 

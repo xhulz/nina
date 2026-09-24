@@ -91,13 +91,13 @@ dispatch names no dimension, you own every one of them, as usual.
 **You DO NOT run vitest.** Test execution is centralized to the QA subagent that runs AFTER you approve. Vitest is memory-heavy (~2–3 GB per worker), so concurrent invocations blow up the workspace machine; keeping it in a single end-of-pipeline stage is the safeguard. Your job is auditing the diff and the cheaper checks.
 
 You DO run (when appropriate to the change):
-- `pnpm typecheck` for the affected packages
-- `pnpm lint` (Biome) on the touched files (negligible)
+- `{{TYPECHECK_CMD}}` for the affected packages
+- `{{LINT_CMD}}` on the touched files (negligible)
 <!-- nina:slot frontend.3 -->
 - `pnpm harness:check` (~1s, not vitest — every drift detector this repo declares)
 
 You DO NOT run:
-- `pnpm test`
+- `{{TEST_CMD}}`
 - `pnpm exec vitest` (any form, any flags)
 - Any command that would spawn vitest workers
 

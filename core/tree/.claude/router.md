@@ -66,7 +66,7 @@ If the task fits in one head and lives in a single package, skip to architect (o
 Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
 
 ### Reviewer audits; QA runs tests
-Reviewer runs `pnpm typecheck` / `pnpm lint` (and `pnpm build` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
+Reviewer runs `{{TYPECHECK_CMD}}` / `{{LINT_CMD}}` (and `{{BUILD_CMD}}` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
 
 ### Pipeline is not sacred
 If reviewer finds a design flaw, loop back to the architect. Don't paper over with implementation hacks.

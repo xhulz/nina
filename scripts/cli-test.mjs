@@ -29,6 +29,7 @@ import { byVersion, generatedNotice, layerRootFor, stamp, walk } from '../src/co
 import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
+import { defaultVocabulary } from '../src/vocabulary.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -2542,6 +2543,61 @@ const dated = (date, status = 'active') =>
   expect(by.toolu_z === 0, `snapshot: one that named none records 0, so the gap is countable — got ${by.toolu_z}`);
   expect(by.toolu_p === null, `snapshot: a pass is not asked for issues, and records none — got ${by.toolu_p}`);
   expect(!JSON.stringify(records).includes('missing-null-check'), 'snapshot: the ids themselves never reach the record');
+}
+
+// ─── vocabulary: a release answers for its own stack, and a project declares a name to change it ───
+{
+  expect(JSON.stringify(defaultVocabulary(join(ROOT, 'releases', '0.22.0'))) === '{}', 'vocabulary: a release from before the defaults supplies none, as it always did');
+  expect(defaultVocabulary(ROOT).TYPECHECK_CMD === 'pnpm typecheck', 'vocabulary: the working core supplies the stack commands');
+
+  const dir = await scratch();
+  run(['init', '--project', dir, '--surfaces', 'frontend', '--core', 'dev']);
+  const profilePath = join(dir, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  expect(!('TYPECHECK_CMD' in profile.vocabulary) && !('TEST_CMD' in profile.vocabulary), `vocabulary: init asks for no name the release answers — got ${Object.keys(profile.vocabulary).join(', ')}`);
+  const todo = await readFile(join(dir, '.nina', 'TODO.md'), 'utf8');
+  expect(todo.includes('- `TYPECHECK_CMD` — `pnpm typecheck`'), 'vocabulary: the TODO says what each default is, so a project on another stack can change it');
+  const reviewer = () => readFile(join(dir, '.claude', 'agents', 'reviewer.md'), 'utf8');
+  expect((await reviewer()).includes('- `pnpm typecheck` for the affected packages'), 'vocabulary: a name the project did not declare composes as the default');
+  expect(!run(['check', '--project', dir], { loud: true }).out.includes('TYPECHECK_CMD'), 'vocabulary: check does not ask for a name that has a default');
+
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, TYPECHECK_CMD: 'uv run mypy .' } }, null, 2));
+  run(['compose', '--project', dir]);
+  expect((await reviewer()).includes('- `uv run mypy .` for the affected packages'), 'vocabulary: a project that declares a name changes it');
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, TYPECHECK_CMD: null } }, null, 2));
+  run(['compose', '--project', dir]);
+  expect((await reviewer()).includes('{{TYPECHECK_CMD}}'), 'vocabulary: declaring one as null takes it over, and it stands until filled');
+  expect(run(['check', '--project', dir], { loud: true }).out.includes('{{TYPECHECK_CMD}} is declared but not filled in'), 'vocabulary: and check says so, as compose leaves it');
+
+  // A pinned project composes its release's defaults, never the working tree's — the release froze them.
+  const nina = await scratch();
+  await cp(join(ROOT, 'bin'), join(nina, 'bin'), { recursive: true });
+  await cp(join(ROOT, 'src'), join(nina, 'src'), { recursive: true });
+  await writeFile(join(nina, 'package.json'), `${JSON.stringify({ name: '@xhulz/nina', version: '0.0.0', type: 'module' }, null, 2)}\n`);
+  await mkdir(join(nina, 'surfaces'), { recursive: true });
+  await mkdir(join(nina, 'core', 'tree'), { recursive: true });
+  await writeFile(join(nina, 'core', 'tree', 'CLAUDE.md'), '# Bed\n\nRun `{{TYPECHECK_CMD}}`.\n');
+  await writeFile(join(nina, 'core', 'vocabulary.json'), JSON.stringify({ TYPECHECK_CMD: 'as-released typecheck' }));
+  const log = console.log;
+  console.log = () => {};
+  await release(['1.0.0'], { root: nina });
+  console.log = log;
+  await writeFile(join(nina, 'core', 'vocabulary.json'), JSON.stringify({ TYPECHECK_CMD: 'working-tree typecheck' }));
+  const composedWith = async (core) => {
+    const bed = await scratch();
+    await mkdir(join(bed, '.nina'), { recursive: true });
+    await writeFile(join(bed, '.nina', 'profile.json'), JSON.stringify({ core, surfaces: [], vocabulary: {} }));
+    spawnSync(process.execPath, [join(nina, 'bin', 'nina.mjs'), 'compose', '--project', bed, '--quiet'], { encoding: 'utf8' });
+    return readFile(join(bed, 'CLAUDE.md'), 'utf8').catch(() => '');
+  };
+  expect((await composedWith('1.0.0')).includes('Run `as-released typecheck`.'), 'vocabulary: a project pinned to a release composes that release\'s default');
+  expect((await composedWith('dev')).includes('Run `working-tree typecheck`.'), 'vocabulary: and one tracking the working tree composes the working tree\'s');
+
+  // A project on a release before the defaults, looking at a move onto one: the defaulted names are not owed.
+  const old = await scratch();
+  run(['init', '--project', old, '--surfaces', 'frontend', '--core', '0.22.0']);
+  const preview = run(['upgrade', '--project', old, '--to', 'dev'], { loud: true }).out;
+  expect(!preview.includes('TYPECHECK_CMD'), `vocabulary: an upgrade onto a release with defaults does not ask for them — got ${preview}`);
 }
 
 // ─── 0.21.1: a new project, an adopted one, and the declaration detector ─────────────────

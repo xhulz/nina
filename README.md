@@ -95,7 +95,8 @@ Each layer mirrors the project's file tree, and `nina compose` merges them:
 - `<!-- nina:requires db -->` on a file's first line makes the whole file conditional. That's why a
   frontend-only project gets seven agent specs instead of eleven.
 - `{{PLACEHOLDERS}}` get filled from the project's profile, so the core can state a rule without naming one
-  project's provider, packages or models.
+  project's provider, packages or models. A release can answer a name itself, like the typecheck and test
+  commands, and a project declares it only to change it.
 - Every composed file opens with a notice naming the layer to edit instead. Claude Code's `Edit` tool refuses
   a file the agent hasn't read, so any agent editing an existing file sees the notice first.
 

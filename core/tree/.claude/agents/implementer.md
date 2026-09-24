@@ -36,24 +36,24 @@ Cite in your report which skills you consulted, or state that no trigger matched
 - Working code in the files specified by the spec.
 - Unit tests and integration tests WRITTEN per the spec (but NOT executed — that is the QA stage's job).
 - TSDoc on every new declaration (function, type, interface, class, method, enum) — exported or not.
-- Passing `pnpm typecheck`, `pnpm lint`, and (when applicable) `pnpm build` for the affected packages locally.
+- Passing `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when applicable) `{{BUILD_CMD}}` for the affected packages locally.
 - A short diff summary for the reviewer, including an explicit note if the database, or any integration boundary, was touched.
 - **Any divergence between the spec and the tree**, named rather than worked around in silence (Hard Rule #17). The spec's line ranges and file lists were derived before you opened the files, and the two cases are not the same. A wrong **range inside a file the spec lists**: use the range the tree has, and report what the spec had wrong. A divergence that needs a **file the spec does not list**: the Single-spec scope rule governs, unchanged — stop, do not touch it, escalate to the architect. Widening your own file list produces correct code, leaves the next spec just as wrong, and breaks the disjoint file lists concurrent implementers depend on.
 
 ## Test execution policy (HARD)
 
-You **DO NOT run vitest**. Not `pnpm test`, not `pnpm exec vitest`, not any test command. Vitest is memory-heavy (~2-3 GB per worker even with single-fork enforcement), so test execution is centralized in the **qa** stage — running it across multiple pipeline stages risks crashing the workspace machine.
+You **DO NOT run vitest**. Not `{{TEST_CMD}}`, not `pnpm exec vitest`, not any test command. Vitest is memory-heavy (~2-3 GB per worker even with single-fork enforcement), so test execution is centralized in the **qa** stage — running it across multiple pipeline stages risks crashing the workspace machine.
 
 The pipeline is: implementer writes code + tests → reviewer audits diff → **qa runs tests once** → deploy.
 
 You DO:
 - Write the test files specified by the spec.
-- Validate they compile by running `pnpm typecheck` (cheap, ~500MB).
-- Validate lint with `pnpm biome lint <touched files>`.
-- Validate the production build with `pnpm build` (when frontend changes are involved).
+- Validate they compile by running `{{TYPECHECK_CMD}}` (cheap, ~500MB).
+- Validate lint with `{{LINT_CMD}}` on the touched files.
+- Validate the production build with `{{BUILD_CMD}}` (when frontend changes are involved).
 
 You do NOT:
-- Run `pnpm test` or `pnpm exec vitest` for any reason.
+- Run `{{TEST_CMD}}` or `pnpm exec vitest` for any reason.
 - Run `--pool=forks --singleFork` workarounds. The config enforces single-fork; you don't need the flag, and you still don't run vitest.
 - "Just check that one test" — that one test costs ~2GB and isn't your job. Trust the QA stage.
 
@@ -81,7 +81,7 @@ When in doubt: **smaller diff, escalate sooner.**
   declaration.
 <!-- nina:slot project.3 conventions -->
 - Scope the diff to exactly what is in the spec — no "while I was here" cleanup, no new abstractions the spec did not authorize.
-- Run `pnpm typecheck`, `pnpm lint`, and (when frontend code changed) `pnpm build` for the affected packages before declaring the task done. **DO NOT run `pnpm test` or any vitest invocation** — that is the QA stage's job (see Test execution policy above).
+- Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done. **DO NOT run `{{TEST_CMD}}` or any vitest invocation** — that is the QA stage's job (see Test execution policy above).
 - If the spec is wrong, ambiguous, or you hit an unknown, **STOP and escalate** — do not guess. Loop back to architect.
 - **If a spec premise about an external library looks wrong while you're writing code that depends on it** (e.g., the cited line says X but the function clearly does Y), STOP — do not silently work around it. Loop back to architect to re-verify the citation. Premises in the spec are the contract; if the contract is wrong, do not paper over.
 - If the spec is too large to implement without losing fidelity (you find yourself losing track of the spec's invariants while coding), **STOP and escalate to the planner** for further decomposition. Better to pause than to ship a 700-line diff that the reviewer cannot audit cleanly.

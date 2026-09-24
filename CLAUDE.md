@@ -227,6 +227,14 @@ Two things it can work out rather than ask:
 - **The vocabulary.** Whatever `{{PLACEHOLDER}}` the chosen core and surfaces actually reference is
   what this project must define, and nothing else. A `null` value means "declared, not filled": the
   placeholder stays standing in the composed output instead of quietly becoming an empty string.
+  A name the release answers itself is not asked for: `core/vocabulary.json` holds defaults, frozen
+  with each release, for what is the same in every project on this stack — the typecheck, lint and
+  build commands a stage is told to run, and the test command every stage but qa is told NOT to run.
+  qa's own targeted vitest run stays literal: it is the stack's substance, not a command name. The
+  core names them as placeholders, a project that declares none composes
+  `pnpm typecheck` exactly as before, and one on another stack declares four lines instead of editing
+  a core it cannot reach. Declaring a name takes it over, `null` included; `init`'s TODO lists each
+  default so there is something to change it from. A release with no such file supplies nothing.
 
 `init` reads the layers from the version it is about to pin, so the checklist describes the harness
 the project will actually compose rather than whatever the working tree says today.
@@ -630,6 +638,7 @@ src/commands/         init, compose, check, where, pills, learn, wire, gate, upg
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/wiring.mjs        the hooks and npm scripts a project needs — read by init, wire, check and upgrade
+src/vocabulary.mjs    the vocabulary a release answers itself, from core/vocabulary.json
 src/transcripts.mjs   the transcript parser (dispatch/verdict/skill extraction)
 src/detectors.mjs     runs a project's drift detectors (imported by its harness-check)
 src/banner.mjs        the startup banner

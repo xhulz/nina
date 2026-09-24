@@ -43,7 +43,7 @@ Either:
   cd <package-path> && pnpm exec vitest run [--reporter=verbose] > /tmp/qa-<dir>.txt 2>&1; echo "EXIT=$?"
   ```
   `<dir>` is the package's directory name, not its npm name — a scoped name has a `/` in it, and the redirect fails.
-  The `vitest.config.ts` in each package already enforces single-fork. **DO NOT pass `--pool` or `--singleFork` flags** — the config handles it. **DO NOT use `pnpm test` from the workspace root** unless the diff truly touches every package; the per-package invocation gives clearer failure attribution.
+  The `vitest.config.ts` in each package already enforces single-fork. **DO NOT pass `--pool` or `--singleFork` flags** — the config handles it. **DO NOT use `{{TEST_CMD}}` from the workspace root** unless the diff truly touches every package; the per-package invocation gives clearer failure attribution.
 - **The exit code is the verdict; the pass count is not.** Never pipe the run into anything: `vitest run | tail` reports `tail`'s status, which is 0 whatever vitest did. Capture to a file as above, print `$?` on its own line, then read the file. A run whose every assertion passed and whose exit is non-zero is a **FAIL** — something failed outside an assertion (an unhandled rejection, a throw in teardown), and that is the finding. Find it (`grep -iE "unhandled (rejection|error)"` over the captured output) and hand its text to the implementer. It is never made to pass by silencing unhandled errors for the whole project; a suite may absorb one *known* rejection only through a handler scoped to that suite, matching its exact message and failing the suite on anything else. Reading the count in place of the code has produced a false green three times — twice with every assertion passing over a process that failed.
 - For each test run, capture: the `EXIT=` line, pass count, fail count, and (when failing) the failing test names with their assertion messages.
 - After the run completes (pass or fail), verify no test workers are lingering:
@@ -57,7 +57,7 @@ Either:
 ## You MUST NOT
 - Edit any source or test file. Read-only + Bash by design.
 - Run tests in parallel across packages. The configs enforce single-worker; running multiple invocations concurrently spawns multiple runtime processes (~2 GB each).
-- Run `pnpm test` at the workspace root unless the diff truly justifies it. The root script chains turbo across all packages.
+- Run `{{TEST_CMD}}` at the workspace root unless the diff truly justifies it. The root script chains turbo across all packages.
 - Ignore lingering test processes. Always kill them at start AND exit.
 - Run other tools (typecheck, lint, build) — those are the implementer's and reviewer's job already.
 - Approve a deploy if tests are flaky — investigate root cause and loop back. Flaky tests are tests that should be made deterministic, not retried.

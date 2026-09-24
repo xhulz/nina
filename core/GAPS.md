@@ -102,8 +102,12 @@ as the history of whichever project was reading it.
 
 ## Open
 
-**The core is domain-agnostic, not stack-agnostic — deliberately.** It still names `pnpm` (49),
-`vitest` (50), `TSDoc` (12), `TypeScript` (6), `Biome` (4) and `turbo` (4). That is the single track
+**The core is domain-agnostic, not stack-agnostic — deliberately.** The stack's own commands are
+vocabulary now, with the release's defaults (`core/vocabulary.json`): the typecheck, lint and build
+commands a spec tells a stage to run, and the test command every stage but qa is told not to run. qa's
+own targeted `vitest run` stays literal. What remains is the stack's substance, not its commands:
+`vitest` and its memory discipline, `TSDoc`, `TypeScript`, `turbo`, and `pnpm` wherever a sentence
+describes the workspace rather than a command to run. That is the single track
 this harness is for, and most of it is load-bearing: the qa spec's memory discipline is a fact about
 vitest, not about testing. Unlike the surface leak above, this is not a defect — there is no
 `pnpm` surface a project could decline. It becomes a gap only when a project on another stack
