@@ -14,7 +14,7 @@
  * Usage: node scripts/cli-test.mjs
  */
 
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -37,8 +37,9 @@ import { handleEdit, noticeOf } from '../src/guard.mjs';
 import { modelFindings } from '../src/tools.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
-import { exportCommand } from '../src/commands/export.mjs';
+import { MAX_BODY, exportCommand } from '../src/commands/export.mjs';
 import { BATCH as SPAN_BATCH, spanIdOf } from '../src/langfuse.mjs';
+import { redact } from '../src/agentrun.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const NINA = join(ROOT, 'bin', 'nina.mjs');
@@ -3207,6 +3208,9 @@ const dated = (date, status = 'active') =>
 
 // ─── export --langfuse: metadata only, each run sent once ────────────────────────────────────────
 {
+  // What context mode masks, and what it leaves.
+  const masked = redact(`API_KEY=abcd1234xyz password: "hunter2x" max_tokens: 100000 Authorization: Bearer ${'t'.repeat(20)} sk-ant-api03-${'A'.repeat(24)} -----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY----- kept`);
+  expect(masked === 'API_KEY=[redacted] password: "[redacted]" max_tokens: 100000 Authorization: Bearer [redacted] [redacted] [redacted private key] kept', `redact: secrets masked, a count of tokens left alone — got ${masked}`);
   const saved = { data: process.env.NINA_DATA, pk: process.env.LANGFUSE_PUBLIC_KEY, sk: process.env.LANGFUSE_SECRET_KEY, host: process.env.LANGFUSE_HOST };
   const data = await scratch();
   process.env.NINA_DATA = data;
@@ -3226,7 +3230,7 @@ const dated = (date, status = 'active') =>
   let rows = [
     ...Array.from({ length: SPAN_BATCH + 20 }, (_, i) => row(i)),
     row(900, { verdict: null }),
-    row(901, { ts: '2026-09-24T08:00:00.000Z', result_ts: '2026-09-24T09:00:00.000Z' }),
+    row(901, { ts: '2026-09-24T11:40:00.000Z', result_ts: '2026-09-24T11:50:00.000Z' }),
   ];
   const snap = join(data, 'snapshots', `${slug}.jsonl`);
   const save = () => writeFile(snap, rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
@@ -3236,9 +3240,20 @@ const dated = (date, status = 'active') =>
   let calls = [];
   let refuse = () => null;
   let accepted = () => '{}';
+  let refuseScore = () => false;
   const fakeFetch = async (url, init) => {
-    calls.push({ url, init, body: JSON.parse(init.body) });
-    const status = refuse(url, JSON.parse(init.body), calls.length);
+    const body = JSON.parse(init.body);
+    calls.push({ url, init, body });
+    const status = refuse(url, body, calls.length);
+    // Langfuse answers a batch of scores event by event, with a 207.
+    if (!status && url.endsWith('/api/public/ingestion')) {
+      const answer = { successes: [], errors: [] };
+      for (const e of body.batch) {
+        if (refuseScore(e.body)) answer.errors.push({ id: e.id, status: 400, message: 'bad score' });
+        else answer.successes.push({ id: e.id, status: 201 });
+      }
+      return { ok: true, status: 207, text: async () => JSON.stringify(answer) };
+    }
     return { ok: !status, status: status ?? 200, text: async () => (status ? 'no' : accepted(url)) };
   };
   const quiet = async (fn) => {
@@ -3255,10 +3270,10 @@ const dated = (date, status = 'active') =>
   };
   const exp = (args) => quiet(() => exportCommand(['--langfuse', ...args], { fetch: fakeFetch, now }));
   const spansSent = () => calls.filter((c) => c.url.endsWith('/otel/v1/traces')).flatMap((c) => c.body.resourceSpans[0].scopeSpans[0].spans);
-  const scoresSent = () => calls.filter((c) => c.url.endsWith('/api/public/scores')).map((c) => c.body);
+  const scoresSent = () => calls.flatMap((c) => (c.url.endsWith('/api/public/ingestion') ? c.body.batch.map((e) => e.body) : c.url.endsWith('/api/public/scores') ? [c.body] : []));
 
   const dry = await exp(['--dry-run']);
-  expect(dry.code === 0 && calls.length === 0 && dry.out.includes(`Kittens: would send ${SPAN_BATCH + 21} span(s) and ${SPAN_BATCH + 20} score(s)`) && dry.out.includes('1 run(s) still settling'), `export: a dry run counts, waits for the unsettled, and sends nothing — got ${dry.out}`);
+  expect(dry.code === 0 && calls.length === 0 && dry.out.includes(`Kittens: would send ${SPAN_BATCH + 21} trace(s) and ${SPAN_BATCH + 20} score(s)`) && dry.out.includes('1 run(s) still running, or returned under 15 minutes ago'), `export: a dry run counts, waits for the unsettled, and sends nothing — got ${dry.out}`);
 
   delete process.env.LANGFUSE_SECRET_KEY;
   const keyless = await exp([]);
@@ -3281,16 +3296,16 @@ const dated = (date, status = 'active') =>
   const span = spansSent()[0];
   const attr = (s, key) => s.attributes.find((a) => a.key === key)?.value;
   expect(
-    attr(span, 'langfuse.trace.name')?.stringValue === 'Kittens' && attr(span, 'langfuse.observation.type')?.stringValue === 'generation' && JSON.parse(attr(span, 'langfuse.observation.usage_details').stringValue).cache_read_input_tokens === 30 && attr(span, 'langfuse.trace.tags')?.arrayValue?.values?.[0]?.stringValue === 'nina',
-    `export: a run with tokens is a generation, named by its project's directory, tags as an array — got ${JSON.stringify(span.attributes)}`,
+    attr(span, 'langfuse.trace.name')?.stringValue === 'reviewer' && attr(span, 'langfuse.trace.metadata.project')?.stringValue === 'Kittens' && attr(span, 'langfuse.observation.type')?.stringValue === 'generation' && JSON.parse(attr(span, 'langfuse.observation.usage_details').stringValue).cache_read_input_tokens === 30 && attr(span, 'langfuse.trace.tags')?.arrayValue?.values?.map((v) => v.stringValue).join() === 'nina,Kittens',
+    `export: a run is a trace named for its role, in a project named by its directory, a generation when it spent tokens — got ${JSON.stringify(span.attributes)}`,
   );
 
   calls = [];
   let scoreTarget = null;
-  refuse = (url, body) => {
-    if (!url.endsWith('/api/public/scores')) return null;
-    scoreTarget ??= body.observationId;
-    return body.observationId === scoreTarget ? 500 : null;
+  refuse = () => null;
+  refuseScore = (score) => {
+    scoreTarget ??= score.observationId;
+    return score.observationId === scoreTarget;
   };
   const second = await exp([]);
   const retrySpans = spansSent();
@@ -3301,7 +3316,7 @@ const dated = (date, status = 'active') =>
   expect(scores.some((s) => ids.has(s.observationId)), 'export: a score goes out beside a span sent in the same run');
 
   calls = [];
-  refuse = () => null;
+  refuseScore = () => false;
   const third = await exp([]);
   expect(third.code === 0 && spansSent().length === 0 && scoresSent().length === 1 && scoresSent()[0].observationId === scoreTarget, `export: then only the score that failed — got ${third.out}`);
 
@@ -3329,6 +3344,76 @@ const dated = (date, status = 'active') =>
   expect(part.code === 1 && part.out.includes('Langfuse refused 1 of 2 span(s) in a batch it took — bad span') && spansSent().length === 2 && scoresSent().length === 0, `export: a batch refused in part is said, and its runs get no score — got ${part.out}`);
   calls = [];
   expect((await exp([])).code === 0 && calls.length === 0, 'export: and it is not sent again, nor scored later');
+
+  // Where the batched endpoint is gone, scores go one by one, and the first refusal — the free plan's rate
+  // limit — stops them until the next run.
+  // Past one batch of scores, so the stop must hold across groups, not only inside one.
+  rows = [...rows, ...Array.from({ length: 105 }, (_, i) => row(2000 + i))];
+  await save();
+  calls = [];
+  let direct = 0;
+  refuse = (url) => (url.endsWith('/api/public/ingestion') ? 404 : url.endsWith('/api/public/scores') && ++direct >= 2 ? 429 : null);
+  const limited = await exp([]);
+  refuse = () => null;
+  const oneByOne = calls.filter((c) => c.url.endsWith('/api/public/scores')).length;
+  expect(limited.code === 1 && limited.out.includes('answered 429') && oneByOne === 2 && spansSent().length === 105, `export: without the batched endpoint, scores go one by one and stop at the first refusal — got ${oneByOne}\n${limited.out}`);
+  calls = [];
+  const rest = await exp([]);
+  expect(rest.code === 0 && scoresSent().length === 104 && spansSent().length === 0, `export: and the rest go on the next run — got ${scoresSent().length}\n${rest.out}`);
+
+  // With its context on, a stage is a tree: the agent with its prompt and report, a generation per message
+  // carrying that message's tokens, a tool per call with what went in and came back — secrets masked, the
+  // home directory as ~, and the usage only on the messages, so nothing is counted twice.
+  const transcripts = await scratch();
+  const savedT = process.env.NINA_TRANSCRIPTS;
+  process.env.NINA_TRANSCRIPTS = transcripts;
+  const runDir = join(transcripts, slug, 's1', 'subagents');
+  await mkdir(runDir, { recursive: true });
+  const at = (s) => `2026-09-20T10:00:0${s}.000Z`;
+  await writeFile(join(runDir, 'agent-c0ffee.jsonl'), [
+    { type: 'user', timestamp: at(0), message: { content: `Review the change in ${homedir()}/work` } },
+    { type: 'user', timestamp: at(0), isMeta: true, message: { content: '<system-reminder>injected</system-reminder>' } },
+    { type: 'assistant', timestamp: at(1), message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 10, output_tokens: 5 }, content: [{ type: 'text', text: 'Reading the config.' }] } },
+    { type: 'assistant', timestamp: at(2), message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 10, output_tokens: 40 }, content: [{ type: 'tool_use', id: 'tu1', name: 'Read', input: { file_path: '.env' } }] } },
+    { type: 'user', timestamp: at(3), message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'DATABASE_PASSWORD=hunter2hunter2\nPORT=3000' }] } },
+    { type: 'assistant', timestamp: at(4), message: { id: 'm2', model: 'claude-opus-5', usage: { input_tokens: 20, output_tokens: 8 }, content: [{ type: 'tool_use', id: 'tu2', name: 'SubagentHandback', input: { message: 'VERDICT: APPROVED' } }] } },
+  ].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  await mkdir(join(data, 'exports'), { recursive: true });
+  await writeFile(join(data, 'exports', 'langfuse.json'), JSON.stringify({ projects: { [slug]: { content: true, since: '' } } }));
+  // A stage too large for a request even with its texts cut hardest: thousands of calls.
+  await writeFile(join(runDir, 'agent-b16.jsonl'), [
+    { type: 'user', timestamp: at(0), message: { content: 'Do a great deal.' } },
+    ...Array.from({ length: 1500 }, (_, i) => [
+      { type: 'assistant', timestamp: at(1), message: { id: `b${i}`, model: 'claude-opus-5', content: [{ type: 'tool_use', id: `c${i}`, name: 'Read', input: { file_path: `f${i}.ts` } }] } },
+      { type: 'user', timestamp: at(2), message: { content: [{ type: 'tool_result', tool_use_id: `c${i}`, content: 'x'.repeat(2000) }] } },
+    ]).flat(),
+  ].map((r) => JSON.stringify(r)).join('\n') + '\n');
+  rows = [...rows, row(990, { agent_id: 'c0ffee' }), row(991, { agent_id: 'gone' }), row(992, { agent_id: 'b16' })];
+  await save();
+  calls = [];
+  const withContext = await exp([]);
+  const tree = spansSent().filter((s) => s.traceId === spansSent().find((x) => x.spanId === spanIdOf({ dispatch_id: 'toolu_0990' }))?.traceId);
+  const typeOf = (s) => attr(s, 'langfuse.observation.type')?.stringValue;
+  const rootSpan = tree.find((s) => !s.parentSpanId);
+  const gens = tree.filter((s) => typeOf(s) === 'generation');
+  const toolSpans = tree.filter((s) => typeOf(s) === 'tool');
+  const text = JSON.stringify(tree);
+  expect(
+    typeOf(rootSpan) === 'agent' && attr(rootSpan, 'langfuse.observation.input')?.stringValue === 'Review the change in ~/work' && attr(rootSpan, 'langfuse.observation.output')?.stringValue === 'VERDICT: APPROVED' && !attr(rootSpan, 'langfuse.observation.usage_details'),
+    `export --content: the root is the agent, its prompt in and report out, with no usage of its own — got ${JSON.stringify(rootSpan?.attributes)}`,
+  );
+  expect(gens.length === 2 && JSON.parse(attr(gens[0], 'langfuse.observation.usage_details').stringValue).output === 40 && tree.every((s) => s === rootSpan || s.parentSpanId === rootSpan.spanId), `export --content: a generation per message, with that message's final usage, under the agent — got ${gens.length}`);
+  expect(toolSpans.length === 2 && attr(toolSpans[0], 'langfuse.observation.input')?.stringValue.includes('.env') && attr(toolSpans[0], 'langfuse.observation.output')?.stringValue === 'DATABASE_PASSWORD=[redacted]\nPORT=3000', `export --content: a tool per call, its result with the secret masked — got ${toolSpans.map((s) => attr(s, 'langfuse.observation.output')?.stringValue).join(' | ')}`);
+  expect(!text.includes('hunter2') && !text.includes(homedir()) && !text.includes('injected'), 'export --content: no secret, no home directory, no injected reminder');
+  const bareRoot = spansSent().find((s) => s.spanId === spanIdOf({ dispatch_id: 'toolu_0991' }));
+  expect(typeOf(bareRoot) === 'generation' && withContext.out.includes('1 went without their context — the transcript was gone'), `export --content: a run whose transcript is gone goes as metadata, and is said — got ${withContext.out}`);
+  const huge = spansSent().filter((s) => s.traceId === spansSent().find((x) => x.spanId === spanIdOf({ dispatch_id: 'toolu_0992' }))?.traceId);
+  expect(huge.length === 1 && typeOf(huge[0]) === 'generation' && withContext.out.includes('1 went without their context — too large for a request even cut down') && calls.filter((c) => c.url.endsWith('/otel/v1/traces')).every((c) => c.init.body.length <= MAX_BODY + 1000), `export --content: a stage too large even cut down goes as its record alone, never blocking the rest — got ${huge.length} ${withContext.out}`);
+  const request = calls.find((c) => c.url.endsWith('/otel/v1/traces'));
+  expect(request && tree.every((s) => request.body.resourceSpans[0].scopeSpans[0].spans.some((x) => x.spanId === s.spanId)), 'export --content: a stage goes whole, in one request');
+  if (savedT === undefined) delete process.env.NINA_TRANSCRIPTS;
+  else process.env.NINA_TRANSCRIPTS = savedT;
+  await rm(join(data, 'exports', 'langfuse.json'));
 
   // Two exports of one project never run at once; a lock left by a process that died is taken over.
   const lockPath = join(data, 'exports', 'langfuse', `${slug}.lock`);
@@ -3365,9 +3450,121 @@ const dated = (date, status = 'active') =>
   const gone = `${slugFor(homedir())}-Gone-my-app`;
   await writeFile(join(data, 'snapshots', `${gone}.jsonl`), `${JSON.stringify({ ...row(1), project: gone })}\n`);
   const named = await exp(['--dry-run', '--project', 'Gone-my-app']);
-  expect(named.out.includes('  Gone-my-app: would send 1 span(s)') && !named.out.includes(homedir()), `export: a gone directory's name keeps its dashes and drops the home — got ${named.out.slice(0, 300)}`);
+  expect(named.out.includes('  Gone-my-app: would send 1 trace(s)') && !named.out.includes(homedir()), `export: a gone directory's name keeps its dashes and drops the home — got ${named.out.slice(0, 300)}`);
 
   for (const [key, value] of [['NINA_DATA', saved.data], ['LANGFUSE_PUBLIC_KEY', saved.pk], ['LANGFUSE_SECRET_KEY', saved.sk], ['LANGFUSE_HOST', saved.host]]) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
+// ─── langfuse: the keys once, and a project that sends its runs after every turn ──────────────────
+{
+  const { createServer } = await import('node:http');
+  const got = [];
+  let failTraces = false;
+  const good = `Basic ${Buffer.from('pk-lf-test:sk-lf-test').toString('base64')}`;
+  const server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => {
+      got.push({ method: req.method, url: req.url, body });
+      if (req.headers.authorization !== good) return res.writeHead(401).end('{"message":"bad keys"}');
+      if (req.url === '/api/public/projects') return res.writeHead(200).end(JSON.stringify({ data: [{ name: 'Bakery' }] }));
+      if (req.url === '/api/public/otel/v1/traces' && failTraces) return res.writeHead(500).end('down');
+      return res.writeHead(200).end('{}');
+    });
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const saved = { pk: process.env.LANGFUSE_PUBLIC_KEY, sk: process.env.LANGFUSE_SECRET_KEY, host: process.env.LANGFUSE_HOST };
+  const until = async (ok, ms = 20000) => {
+    const end = Date.now() + ms;
+    while (!(await ok()) && Date.now() < end) await new Promise((done) => setTimeout(done, 100));
+    return ok();
+  };
+  const configFile = join(process.env.NINA_DATA, 'exports', 'langfuse.json');
+  // `run` blocks this process, and the server answering the CLI lives in it: a command that waits on the
+  // server has to be run without blocking.
+  const { spawn: start } = await import('node:child_process');
+  const runAsync = (args) =>
+    new Promise((done) => {
+      const child = start(process.execPath, [NINA, ...args], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      child.stdout.on('data', (chunk) => (out += chunk));
+      child.stderr.on('data', (chunk) => (out += chunk));
+      child.on('close', (status) => done({ status, out }));
+    });
+
+  // Keys that Langfuse refuses are not kept; keys it accepts are, readable by the owner only.
+  process.env.LANGFUSE_HOST = `http://127.0.0.1:${server.address().port}`;
+  process.env.LANGFUSE_PUBLIC_KEY = 'pk-lf-test';
+  process.env.LANGFUSE_SECRET_KEY = 'sk-lf-wrong';
+  const refused = await runAsync(['langfuse', 'login']);
+  expect(refused.status === 1 && refused.out.includes('nothing was saved') && !existsSync(configFile), `langfuse login: keys Langfuse refuses are not kept — got ${refused.out}`);
+  process.env.LANGFUSE_SECRET_KEY = 'sk-lf-test';
+  const login = await runAsync(['langfuse', 'login']);
+  const mode = existsSync(configFile) ? (await stat(configFile)).mode & 0o777 : 0;
+  expect(login.status === 0 && login.out.includes('"Bakery"') && mode === 0o600, `langfuse login: keys it accepts are kept, readable by the owner only — got ${mode.toString(8)} ${login.out}`);
+  // From here on the keys come from the file, as they would in a hook.
+  delete process.env.LANGFUSE_PUBLIC_KEY;
+  delete process.env.LANGFUSE_SECRET_KEY;
+  delete process.env.LANGFUSE_HOST;
+
+  const bed = await composed('plain');
+  const slug = slugFor(bed);
+  expect(run(['langfuse', 'on', '--project', bed], { loud: true }).status === 0, 'langfuse on: turns a project on');
+  // Turned on "now"; moved back so the runs below fall after it.
+  const config = JSON.parse(await readFile(configFile, 'utf8'));
+  config.projects[slug].since = '2026-09-01T00:00:00.000Z';
+  await writeFile(configFile, JSON.stringify(config));
+  const ran = (id, ts) => ({ project: slug, dispatch_id: `toolu_lf${id}`, ts, result_ts: ts, role: 'qa', session: 's9', verdict: 'PASS', verdict_source: 'handback' });
+  const snap = join(process.env.NINA_DATA, 'snapshots', `${slug}.jsonl`);
+  const write = (rows) => writeFile(snap, `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`);
+  const rows = [ran(0, '2026-08-20T10:00:00.000Z'), ran(1, '2026-09-10T10:00:00.000Z')];
+  await write(rows);
+  const traces = () => got.filter((g) => g.url === '/api/public/otel/v1/traces');
+  const sentIds = () => traces().flatMap((g) => JSON.parse(g.body).resourceSpans[0].scopeSpans[0].spans.map((s) => s.spanId));
+  const statusFile = join(process.env.NINA_DATA, 'exports', 'langfuse', `${slug}.status.json`);
+  const status = async () => JSON.parse(await readFile(statusFile, 'utf8').catch(() => 'null'));
+
+  const turn = run(['learn', '--check', '--project', bed], { loud: true });
+  const arrived = await until(async () => (await status())?.spans === 1);
+  expect(turn.status === 0 && arrived, `langfuse: the lessons detector sends a project's runs after a turn, with nobody running an export — got ${turn.out}`);
+  expect(sentIds().length === 1 && sentIds()[0] === spanIdOf({ dispatch_id: 'toolu_lf1' }), `langfuse: only the runs from after the project was turned on — got ${JSON.stringify(sentIds())}`);
+  expect(got.some((g) => g.url === '/api/public/ingestion' && g.body.includes('score-create')), 'langfuse: with its verdict');
+
+  // A failure is said once, by the detector, and not again for the same failure.
+  failTraces = true;
+  await write([...rows, ran(2, '2026-09-11T10:00:00.000Z')]);
+  run(['learn', '--check', '--project', bed]);
+  await until(async () => Boolean((await status())?.error));
+  const told = run(['learn', '--check', '--project', bed], { loud: true });
+  expect(told.status === 1 && told.out.includes('the export to Langfuse failed') && told.out.includes('answered 500'), `langfuse: a failed export is reported by the detector — got ${told.out}`);
+  await until(async () => (await status())?.reported === true);
+  await new Promise((done) => setTimeout(done, 1500));
+  const again = run(['learn', '--check', '--project', bed], { loud: true });
+  expect(!again.out.includes('the export to Langfuse failed'), `langfuse: the same failure is not reported every turn — got ${again.out}`);
+  failTraces = false;
+  await until(async () => {
+    run(['learn', '--check', '--project', bed]);
+    await new Promise((done) => setTimeout(done, 500));
+    return sentIds().includes(spanIdOf({ dispatch_id: 'toolu_lf2' }));
+  });
+  expect(sentIds().includes(spanIdOf({ dispatch_id: 'toolu_lf2' })), 'langfuse: and it goes once Langfuse is back');
+
+  const scored = got.filter((g) => g.url === '/api/public/ingestion').flatMap((g) => JSON.parse(g.body).batch).filter((e) => e.body.observationId === spanIdOf({ dispatch_id: 'toolu_lf1' }));
+  expect(scored.length === 1, `langfuse: a verdict Langfuse took without a word is not sent again on the next turn — got ${scored.length}`);
+  const shown = run(['langfuse', 'status'], { loud: true });
+  expect(shown.out.includes('pk-lf-test') && shown.out.includes(`${bed.split('/').at(-1)}: metadata only`), `langfuse status: the keys and the projects that send — got ${shown.out}`);
+  expect(run(['langfuse', 'off', '--project', bed]).status === 0 && !JSON.parse(await readFile(configFile, 'utf8')).projects[slug], 'langfuse off: turns it off');
+  const before = got.length;
+  await write([...rows, ran(3, '2026-09-12T10:00:00.000Z')]);
+  run(['learn', '--check', '--project', bed]);
+  await new Promise((done) => setTimeout(done, 1500));
+  expect(got.length === before, 'langfuse: a project turned off sends nothing');
+
+  server.close();
+  for (const [key, value] of [['LANGFUSE_PUBLIC_KEY', saved.pk], ['LANGFUSE_SECRET_KEY', saved.sk], ['LANGFUSE_HOST', saved.host]]) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }

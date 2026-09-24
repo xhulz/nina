@@ -34,6 +34,7 @@ import { snapshot } from './snapshot.mjs';
 import { loadProject, projectGateDir, readLedger, replay } from '../gate.mjs';
 import { GATE, shippedScripts } from '../wiring.mjs';
 import { deepLearn, transcriptsOf } from '../deep.mjs';
+import { autoExport } from './export.mjs';
 
 /** Loop-backs from one role, since its newest lesson, that make a lesson overdue. */
 export const CAPTURE_AT = 3;
@@ -579,6 +580,15 @@ export async function learn(argv, ctx) {
       console.log('learn: current');
       return 0;
     }
+    // A project sending its runs to Langfuse sends them from here, where it was just snapshotted — in the
+    // background, and said here only when the last attempt failed. Like a request that cannot be written,
+    // an export that cannot even start is a finding, not a detector that throws.
+    let exported = null;
+    try {
+      exported = await autoExport(slugFor(target), records);
+    } catch (error) {
+      exported = `the export to Langfuse could not start — ${error.message}`;
+    }
     // A lesson at three occurrences used to be reported here with the command that files it, and
     // then it waited for someone to type that command. Filing decides nothing — the request is a
     // proposal the harness maintainer accepts or declines — so the detector files it and says so
@@ -597,7 +607,7 @@ export async function learn(argv, ctx) {
         stuck.push({ lesson, why: `could not be written to ${HARNESS}/requests/ — ${error.message}`, fix: `make it writable, or send it by hand: \`nina learn --graduate ${lesson.rel}\`` });
       }
     }
-    if (late.length === 0 && sent.length === 0 && stuck.length === 0) {
+    if (late.length === 0 && sent.length === 0 && stuck.length === 0 && !exported) {
       console.log('learn: current');
       return 0;
     }
@@ -618,11 +628,13 @@ export async function learn(argv, ctx) {
       console.log(`  ${s.lesson.rel} has recurred ${s.lesson.occurrences} times and ${s.why}`);
       console.log(`    → ${s.fix}`);
     }
+    if (exported) console.log(`  ${exported}`);
     console.log(
       `learn: ${[
         late.length && `${late.length} role(s) keep being sent back with nothing written down`,
         sent.length && `${sent.length} lesson(s) sent to the harness`,
         stuck.length && `${stuck.length} lesson(s) cannot be sent`,
+        exported && 'the Langfuse export needs a look',
       ]
         .filter(Boolean)
         .join('; ')}`,

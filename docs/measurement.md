@@ -118,56 +118,97 @@ place. `modelFindings` (in `src/tools.mjs`, beside the check of what a spec's to
 be an alias Claude Code knows (`opus`, `sonnet`, `haiku`, `fable`), `inherit`, or a model id; the compose
 suite runs it over every fixture and `nina check` over every project.
 
-### Sending it to Langfuse: `nina export`
+### Sending it to Langfuse: `nina langfuse`
 
-`stats` and `learn` read the store on a terminal. Langfuse reads the same records in a UI that filters,
+`stats` and `learn` read the store on a terminal. Langfuse reads the same runs in a UI that filters,
 groups and charts them, beside whatever else a project already sends it.
 
 ```bash
-nina export --langfuse --dry-run                 # what would go, and one span as it would be sent
-nina export --langfuse [--project Spliter]       # LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+nina langfuse login                  # asks for a project's keys, checks them against Langfuse, keeps them
+nina langfuse on [--content]         # in a project: send its runs after every turn, with each stage's context
+nina langfuse status                 # the keys, the projects that send, how the last send went
+nina export --langfuse [--dry-run]   # by hand: the history from before a project was turned on
 ```
 
-Each Claude Code session becomes a trace, named by the project's directory, and each dispatch an
-observation on it: a generation when the run spent tokens, with its model, usage and the cost `stats`
-would estimate, and a span otherwise. The verdict goes beside it as a categorical score. What goes is the
-store's metadata and less: each span is built field by field, so the description the orchestrator gave a
-dispatch stays behind, and so does the flattened path that names the owner's home directory. The
-credentials come from the environment, never a flag, since a flag lands in shell history.
+Once a project is on, nobody exports anything. The `lessons` detector every composed project runs already
+snapshots the project on each turn; after the snapshot it starts the export in the background when a run
+is ready to go, and it never waits on the network itself, since the detector runs before the person sees
+the answer. A failed export is reported by the same detector, once: the same failure again is not news.
+The first version was a command somebody had to remember to run, which is the failure this harness
+exists to remove.
+
+The keys are asked for, never passed as a flag (a flag lands in shell history), checked against Langfuse
+before they are kept, and kept in `~/.nina/exports/langfuse.json`, readable by the owner only;
+`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` override them. Which projects send is kept
+there too, not in the project's profile: sending a project's history to a service is the decision of
+whoever runs it on this machine, and a committed profile would make it for every clone. A project sends
+the runs it makes from the moment it is turned on; its history goes only when `nina export` is asked.
+
+Each dispatch becomes a trace named for its role, the session id setting a pipeline's stages side by side
+in Langfuse's sessions view, and its verdict a categorical score beside it. Without `--content` the trace
+is one observation: a generation with the run's model, usage and the cost `stats` would estimate, or a
+span when it spent no tokens. The description the orchestrator gave the dispatch stays behind, and so does
+the flattened path that names the owner's home directory: the project goes by its directory's name.
+
+With `--content`, the trace is the stage's own run, read from its transcript at the moment of sending and
+never kept, so the store stays metadata only: the agent at the root, its prompt in and its report out; a
+generation per message it wrote, with that message's tokens and cost; and a tool observation per call,
+with what went in and what came back. The usage sits on the messages and not on the root, so no sum
+counts a token twice. Every text is cut (20,000 characters for a prompt, a report or a message, 8,000 for
+a tool's input or result), the owner's home directory is written `~`, and obvious secrets are masked:
+private keys, the token formats of the common providers, an `Authorization` value, and anything assigned
+to a name that says it is a secret. That is a floor, not a promise. A secret that looks like none of them
+goes as it is, and so does every line of code a stage read, which is why context is a switch per project.
+
+It is also far more data. Over one project's 826 runs, context meant 70,863 observations and 166 MB,
+against 826 observations without it. Langfuse bills every trace, observation and score as a unit, and its
+free plan includes 50,000 a month.
 
 Observations go over OpenTelemetry (`/api/public/otel/v1/traces`, OTLP/HTTP as JSON), which is how
-Langfuse's v4 data model takes them; its `/ingestion` endpoint stops accepting them in November 2026. No
+Langfuse's v4 data model takes them. Scores go in batches, as `score-create` events to
+`/api/public/ingestion`: the scores endpoint takes one per request and sits in the general API bucket, 30
+requests a minute on the free plan, so a first export's few hundred verdicts would be refused after
+thirty. The batched endpoint is deprecated for everything else and keeps taking score events past November
+2026; where it is gone, scores go one by one, the run stops at the first refusal, and the next turn sends
+the rest. Requests are packed by size as well as count, at most 1 MB where Langfuse takes 5, and a stage is
+never split across two, so a failure never leaves half a stage behind for a retry to send again. One too
+large alone has its texts cut harder; one that still does not fit, because it made thousands of calls, goes
+as its record alone and the export says so. Refused instead, it would fail on every turn and hold back
+every run after it. A request gives up after 30 seconds, and a batch of spans after 120, because a host that
+stops answering would otherwise hold the project's lock, and every later export would find it taken. No
 dependency: `fetch` is enough.
 
 The design was settled by one fact found before anything was sent: Langfuse keeps what it is first sent.
 The first version resent a record whenever the snapshot changed it, on the reading that an id derived
 from the dispatch would make the second send an update. It would have made it a second observation, and
 every sum over the project would have counted both. A score is replaced only when its id, name and date
-all match, and the scores endpoint takes no date, it stamps the day it is called. So each run is sent
-once: its span when it has **settled**, 24 hours after its last known moment, because the snapshot fills
-a record in after the fact (a verdict read from a resumed run, tokens from a transcript that grew); and
-its score once it has a verdict and its span is there. A verdict read after the span went still gets its
-score, since that is a first score and not a second span. A record that changes after it went is counted
-and said, not sent again.
+all match, and no endpoint lets the date be chosen. So each run is sent once: its trace when it has
+**settled**, 15 minutes after it returned (or 24 hours after it was dispatched, for one that never did),
+because the snapshot fills a record in after the fact (a verdict read from a resumed run, tokens from a
+transcript that grew); and its score once it has a verdict and its trace is there. A verdict read after
+the trace went still gets its score, since that is a first score and not a second span. A record that
+changes after it went is counted and said, not sent again.
 
 What was sent is kept per project under `~/.nina/exports/langfuse/`, written after every request that
 succeeds, so a failure or an interruption leaves a retry only what did not go. The one way a span can
-still go twice is a request Langfuse took whose answer never arrived. Everything else that could send
-twice is refused instead:
+still go twice is a request Langfuse took whose answer never arrived, a timeout included, which is why a
+request is kept small and a batch of spans is given two minutes. Everything else that could send twice is
+refused instead:
 
 - A batch Langfuse did not take is sent again later, and its runs' scores wait with it, so no score
   points at an observation Langfuse does not have.
 - A batch it took while refusing part of it (OTLP's `partialSuccess`, which counts the spans refused and
   does not name them) is recorded as sent, since sending it again would double the ones it kept, and its
   runs get no score, since any of them may be one it refused.
+- A batch of scores that comes back with no word on an event counts that event as taken, since a score
+  sent again on another day is a second score; only one Langfuse names as refused is sent again.
 - Two exports of one project do not run at once: each would read what was sent before the other wrote.
   A lock names its process, so one left by a run that died is taken over.
 - A record of what was sent that cannot be read stops that project's export. Read as empty, it would
   send the whole history again.
 
-One refused score does not hold back the rest, or a single bad one would block every later run's; a
-whole group refused means the endpoint is down, and the run stops. A record with no time cannot be
-placed on a trace and is never sent, and the export says how many there are.
+A record with no time cannot be placed on a trace and is never sent, and the export says how many there
+are.
 
 ### Evaluating a release
 
