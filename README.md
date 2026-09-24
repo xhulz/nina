@@ -320,9 +320,10 @@ node scripts/cli-test.mjs         # the CLI end to end, in scratch projects
 | [`fixtures/`](fixtures) | projects that exist to be composed and checked |
 | [`evals/`](evals) | a change with planted defects, for comparing one release's reviewer with another's |
 | [`scripts/`](scripts) | the test suites and this repo's own checks |
+| [`docs/`](docs) | every mechanism, and why it ended up the way it did |
 
-[`CLAUDE.md`](CLAUDE.md) is the long version: every mechanism, and why it ended up the way it did. It's also
-what Claude Code reads when it works on this repo.
+[`docs/`](docs) is the long version. [`CLAUDE.md`](CLAUDE.md) is the short one Claude Code reads when it works on
+this repo, with a table of which document to read before changing what.
 
 ## Engineering
 
