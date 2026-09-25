@@ -158,20 +158,21 @@ calls that gathered it. The reviewer went the same way, 4.5k a run on Opus 4.8 a
 65k on Opus 5.5 at `xhigh`. And `opus` itself had moved twice under the harness, to Opus 5 and then to
 Opus 5.5, with no release in between.
 
-So each spec names a model id and an effort level, from four defaults in `core/vocabulary.json`:
-`DEEP_MODEL` (`claude-opus-5-5`) and `DEEP_EFFORT` (`high`) for the stages that design and judge (the
-architect, the reviewer, secops, devops, and the two that write and audit immutable code), and
-`WORK_MODEL` (`claude-sonnet-5`) and `WORK_EFFORT` (`xhigh`) for the stages that carry a spec out. `high`
-for the first is one level below where they ran and one above Opus 5.5's own default, `medium`. `xhigh` for
-the second is where they always ran, and none of them wrote more than it had. A model moves when a release
-moves it, and a project declares any of the four to change it: a provider with its own model ids, or a
-level it has measured and prefers. The record keeps the effort beside the model, `stats` reads one model at
+So each spec names a model id and an effort level, from defaults in `core/vocabulary.json`:
+`DEEP_MODEL` (`claude-opus-5-5`) and `DEEP_EFFORT` (`high`) for the stages that judge (the reviewer,
+secops, devops, and the two that write and audit immutable code), and `WORK_MODEL` (`claude-sonnet-5`) and
+`WORK_EFFORT` (`xhigh`) for the stages that carry a spec out. `high` for the first is one level below where
+they ran and one above Opus 5.5's own default, `medium`. `xhigh` for the second is where they always ran,
+and none of them wrote more than it had. The architect runs on `DEEP_MODEL` at its own level,
+`ARCHITECT_EFFORT` (`xhigh`): the owner had seen it specify worse at a lower one, and a spec is what every
+later stage builds on, so what it writes is cut in the spec's text instead. A model moves when a release
+moves it, and a project declares any of these to change it: a provider with its own model ids, or a level
+it has measured and prefers. The record keeps the effort beside the model, `stats` reads one model at
 two levels as two lines, and Langfuse gets it as metadata. A record from before the field is read once more
 while its transcript is on disk.
 
-What this cannot say yet is whether the architect at `high` specifies as well. The next runs will show what
-it writes; whether the reviewer still catches what it caught is a question for `nina eval`, run on the
-release that names the level against the one before it.
+What this cannot say yet is whether the reviewer at `high` still catches what it caught at `xhigh`. That is
+a question for `nina eval`, run on the release that names the level against the one before it.
 
 ### Sending it to Langfuse: `nina langfuse`
 
