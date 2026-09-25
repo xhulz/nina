@@ -1,6 +1,6 @@
 {
   "name": "@xhulz/nina",
-  "version": "0.28.6",
+  "version": "0.28.7",
   "description": "Composes an agent harness into a project from a versioned core, its surfaces, and the project's own layer.",
   "type": "module",
   "bin": {
