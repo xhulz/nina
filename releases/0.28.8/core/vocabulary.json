@@ -1,0 +1,7 @@
+{
+  "BUILD_CMD": "pnpm build",
+  "LINT_CMD": "pnpm lint",
+  "STEP_FILES": "15",
+  "TEST_CMD": "pnpm test",
+  "TYPECHECK_CMD": "pnpm typecheck"
+}
