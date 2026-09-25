@@ -23,10 +23,10 @@
  *      spec and every spec is a stage, no edge points at a stage the profile lacks, every verdict a
  *      stage can emit goes somewhere, every loop-back has a cap, and no spec's prose names a route
  *      the graph does not have. See src/graph.mjs.
- *   7. Every composed agent spec declares `name:` and `tools:` in its frontmatter. A spec with
- *      no `tools:` is not restricted — the subagent inherits every tool the session has — so a
- *      role told it is read-only is not, and nothing says so. A `model:` it declares is an alias
- *      or a model id.
+ *   7. Every composed agent spec declares `name:`, `description:` and `tools:` in its frontmatter.
+ *      Claude Code does not load a spec with no description at all; and one with no `tools:` is not
+ *      restricted — the subagent inherits every tool the session has — so a role told it is
+ *      read-only is not, and nothing says so. A `model:` it declares is an alias or a model id.
  *   9. Every numbered list composes as 1, 2, 3 — except the hard rules, whose numbers are ids.
  *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives.
  *      Every dispatch pays for what its spec says, so a file that grows past its budget is a decision to
@@ -37,12 +37,12 @@
 
 import { cp, mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
-import { modelFindings, toolFindings } from '../src/tools.mjs';
+import { frontmatterFindings, modelFindings, toolFindings } from '../src/tools.mjs';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REQUIRES, composeProject, stripWhy } from '../src/commands/compose.mjs';
+import { REQUIRES, SLOT, composeProject, defaultsTree, stripWhy } from '../src/commands/compose.mjs';
 import { NOTICE_HEAD } from '../src/guard.mjs';
 import { ANSWERED, answers } from '../src/commands/learn.mjs';
 
@@ -126,19 +126,6 @@ async function runFixture(name) {
       failures.push(`${rel}: agent spec does not open with frontmatter — it cannot be dispatched`);
     }
 
-    // 7. The frontmatter says who the agent is and what it may touch. Opening with `---` is not
-    //    enough: the reviewer's whole `tools:` line was supplied by the frontend surface, so every
-    //    profile without a frontend composed a reviewer with no allowlist at all — which Claude
-    //    Code reads as "every tool", Edit and Write included, on the one role whose spec says it
-    //    is read-only. Placement was checked and passed; contents were never checked.
-    if (rel.startsWith(join('.claude', 'agents') + sep) && text.startsWith('---\n')) {
-      const front = text.slice(4, text.indexOf('\n---', 4));
-      for (const key of ['name', 'tools']) {
-        if (!new RegExp(`^${key}:\\s*\\S`, 'm').test(front)) {
-          failures.push(`${rel}: frontmatter has no \`${key}:\` — ${key === 'tools' ? 'the agent inherits every tool the session has' : 'it cannot be dispatched by name'}`);
-        }
-      }
-    }
     // Same hazard one file type over: a `#!` line that is not at byte 0 is a comment, and the
     // script stops being executable by the hook that runs it every turn.
     if (/\.(mjs|cjs|js)$/.test(rel) && !text.startsWith('#!')) {
@@ -177,8 +164,15 @@ async function runFixture(name) {
     );
     for (const problem of validateGraph(parseGraph(graphText), specs, roles)) failures.push(`graph: ${problem}`);
   }
-  // 7, continued. Having a `tools:` line is not the same as it granting what the spec asks for —
-  // `Skill` was missing from every role while the specs made skills mandatory.
+  // 7. The frontmatter says who the agent is, when to use it, and what it may touch. Opening with `---`
+  //    is not enough: the reviewer's whole `tools:` line was supplied by the frontend surface, so every
+  //    profile without a frontend composed a reviewer with no allowlist at all — which Claude Code reads
+  //    as "every tool", Edit and Write included, on the one role whose spec says it is read-only. And
+  //    `description:` went unasked while seven roles left it to the project: these fixtures, which fill
+  //    no project slot, composed a reviewer Claude Code would not load, and passed.
+  for (const finding of frontmatterFindings(specs)) failures.push(`frontmatter: ${finding}`);
+  // Having a `tools:` line is not the same as it granting what the spec asks for — `Skill` was missing
+  // from every role while the specs made skills mandatory.
   for (const finding of toolFindings(specs, null)) failures.push(`tools: ${finding}`);
   for (const finding of modelFindings(specs)) failures.push(`model: ${finding}`);
 
@@ -309,8 +303,14 @@ function names(line, term) {
 async function surfaceLeaks() {
   const found = [];
 
-  /** Every layer to audit: the core, gated or not, and each surface as its own owner. */
-  const layers = [{ dir: join(ROOT, 'core', 'tree'), owner: null, label: 'core' }];
+  /**
+   * Every layer to audit: the core, gated or not, and each surface as its own owner. The core's defaults
+   * for project slots compose into every project the core file does, so they answer to that file's gate.
+   */
+  const layers = [
+    { dir: join(ROOT, 'core', 'tree'), owner: null, label: 'core' },
+    { dir: defaultsTree(ROOT), owner: null, label: 'core defaults', gatedAs: join(ROOT, 'core', 'tree') },
+  ];
   for (const entry of await readdir(join(ROOT, 'surfaces'), { withFileTypes: true })) {
     if (entry.isDirectory()) {
       layers.push({ dir: join(ROOT, 'surfaces', entry.name, 'tree'), owner: entry.name, label: entry.name });
@@ -331,7 +331,8 @@ async function surfaceLeaks() {
       // nothing else: `surfaces/edge-cf` naming Prisma composes a sentence about the database
       // into a project that declared no database, which is the guarantee this repo makes in
       // its first paragraph. Reading only the core missed that whole direction.
-      const owner = layer.owner ?? (REQUIRES.exec(text)?.[1] ?? null);
+      const gated = layer.gatedAs ? await readFile(join(layer.gatedAs, rel), 'utf8').catch(() => '') : text;
+      const owner = layer.owner ?? (REQUIRES.exec(gated)?.[1] ?? null);
       // A slot or a gate names its surface by design (`nina:slot money.1`); only the prose around it counts.
       const lines = text.split('\n').map((line) => line.replace(/<!-- nina:(?:slot|requires) [^>]*-->/g, ''));
       for (const [surface, terms] of Object.entries(SURFACE_TERMS)) {
@@ -344,6 +345,33 @@ async function surfaceLeaks() {
           });
         }
       }
+    }
+  }
+  return found;
+}
+
+/**
+ * Every default the core keeps for a project slot that is not one: a default for a slot the core file
+ * does not have composes nowhere, and one for a surface's slot would fill it in a project that never
+ * declared the surface.
+ *
+ * @returns {Promise<string[]>}
+ */
+async function defaultProblems() {
+  const found = [];
+  const tree = defaultsTree(ROOT);
+  for (const rel of await walk(tree)) {
+    const core = await readFile(join(ROOT, 'core', 'tree', rel), 'utf8').catch(() => null);
+    if (core === null) {
+      found.push(`core/defaults/tree/${rel}: no core file at that path`);
+      continue;
+    }
+    const slots = new Set(core.split('\n').map((l) => SLOT.exec(l)?.[1]).filter(Boolean));
+    for (const line of (await readFile(join(tree, rel), 'utf8')).split('\n')) {
+      const id = SLOT.exec(line)?.[1];
+      if (!id) continue;
+      if (!id.startsWith('project.')) found.push(`core/defaults/tree/${rel}: ${id} is a surface's slot — a default is for a project slot`);
+      else if (!slots.has(id)) found.push(`core/defaults/tree/${rel}: ${id} is not a slot of core/tree/${rel}`);
     }
   }
   return found;
@@ -376,6 +404,15 @@ if (leaks.length === 0) {
   console.log(`surface leaks: ${leaks.length}`);
   for (const l of leaks.slice(0, Number(process.env.NINA_MAX ?? 25))) console.log(`      ${l}`);
   if (leaks.length > Number(process.env.NINA_MAX ?? 25)) console.log(`      … and ${leaks.length - 25} more`);
+}
+
+const defaulted = await defaultProblems();
+if (defaulted.length === 0) {
+  console.log('slot defaults: every one fills a project slot of the core file at its path');
+} else {
+  failed += 1;
+  console.log(`slot defaults: ${defaulted.length} problem(s)`);
+  for (const d of defaulted) console.log(`      ${d}`);
 }
 
 // The harness's answers to project requests travel in every release, and an upgrade tells a project

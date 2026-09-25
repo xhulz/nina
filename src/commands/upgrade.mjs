@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { HARNESS, legacyHint } from '../paths.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { composeProject, composedPaths, layerRootFor } from './compose.mjs';
+import { composeProject, composedPaths, defaultedSlots, layerRootFor } from './compose.mjs';
 import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
 import { EXPECT_ENV } from '../expected.mjs';
 import { closeAnswered } from './learn.mjs';
@@ -214,7 +214,9 @@ export async function upgrade(argv, ctx) {
   const defaultsAfter = defaultVocabulary(onto.dir);
   const needed = [...vocabAfter].filter((v) => (!(v in declared) && !(v in defaultsAfter)) || declared[v] === null).sort();
   const unused = Object.keys(declared).filter((v) => !vocabAfter.has(v)).sort();
-  const newSlots = [...slotsAfter].filter((s) => !slotsBefore.has(s) && !filled.has(s)).sort();
+  // A slot the new release fills itself is not asked of the project: it composes as the release wrote it.
+  const defaultedAfter = await defaultedSlots(onto.dir);
+  const newSlots = [...slotsAfter].filter((s) => !slotsBefore.has(s) && !filled.has(s) && !defaultedAfter.has(s)).sort();
   const stranded = [...filled].filter((s) => !slotsAfter.has(s)).sort();
 
   console.log(`  ${profile.core} → ${to}\n`);

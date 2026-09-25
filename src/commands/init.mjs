@@ -18,7 +18,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { applyWiring, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, layerRootFor, walk } from './compose.mjs';
+import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { PINK, useColor } from '../banner.mjs';
@@ -323,6 +323,9 @@ export async function init(argv, ctx) {
   const vocabulary = new Set();
   /** Every project slot, with where it lands and what surrounds it. */
   const slots = [];
+  /** The project slots this release writes itself until the project does: listed, not owed. */
+  const tailorable = [];
+  const released = await defaultedSlots(resolved.dir);
   for (const { rel, core, fragments } of files) {
     const lines = core.split('\n');
     for (const [, name] of [core, ...fragments].join('\n').matchAll(/\{\{([A-Z_]+)\}\}/g)) {
@@ -339,7 +342,7 @@ export async function init(argv, ctx) {
     lines.forEach((line, i) => {
       const marker = SLOT.exec(line);
       if (!marker || !marker[1].startsWith('project.')) return;
-      slots.push({
+      (released.has(`${rel} ${marker[1]}`) ? tailorable : slots).push({
         rel,
         slot: marker[1],
         label: marker[2] || null,
@@ -436,6 +439,13 @@ export async function init(argv, ctx) {
     `under \`.nina/project/tree/\` at the SAME path as its target, put the marker on its own line,`,
     `and write the text under it.`,
     '',
+    ...(tailorable.length > 0
+      ? [
+          `${tailorable.length} more have text from this release until the project writes its own, and are written only`,
+          `to tailor it: ${tailorable.map((t) => `\`${t.rel}\` \`${t.slot}\`${t.label ? ` (${t.label})` : ''}`).join(', ')}.`,
+          '',
+        ]
+      : []),
     ...Object.entries(
       slots.reduce((acc, s) => ((acc[s.rel] ??= []).push(s), acc), {}),
     ).flatMap(([rel, group]) => [

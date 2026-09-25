@@ -278,6 +278,34 @@ async function readFragments(path) {
 }
 
 /**
+ * Where a release keeps its own text for a project slot the file cannot do without, as fragments in the
+ * same form a project writes. The one that needed it is an agent spec's `description:` line: the core left
+ * it to the project, and until the project wrote it the spec composed with no description — which Claude
+ * Code reads as no agent at all, so a new project had no reviewer, qa or secops, and nothing said so. The
+ * project's own fragment still wins; the release's composes only until there is one.
+ *
+ * @param {string} layerRoot - The release, or the working tree.
+ * @returns {string}
+ */
+export const defaultsTree = (layerRoot) => join(layerRoot, 'core', 'defaults', 'tree');
+
+/**
+ * The project slots a release fills itself until the project does, as `<relative path> <slot id>`.
+ * A release from before there were any has none.
+ *
+ * @param {string} layerRoot - The release, or the working tree.
+ * @returns {Promise<Set<string>>}
+ */
+export async function defaultedSlots(layerRoot) {
+  const tree = defaultsTree(layerRoot);
+  const out = new Set();
+  for (const rel of await walk(tree)) {
+    for (const id of (await readFragments(join(tree, rel))).keys()) out.add(`${rel} ${id}`);
+  }
+  return out;
+}
+
+/**
  * The files a version composes into a project with these surfaces: every core file, less the ones gated
  * on a surface the project does not declare — the same selection `composeProject` makes. `upgrade`
  * needs it because compose writes and never deletes, so a file the old version composed and the new
@@ -333,6 +361,7 @@ export async function composeProject(target, ctx, options = {}) {
   const coreTree = join(layerRoot, 'core', 'tree');
   const layers = [
     ...surfaces.map((s) => join(layerRoot, 'surfaces', s, 'tree')),
+    defaultsTree(layerRoot),
     join(target, HARNESS, 'project', 'tree'),
   ];
 

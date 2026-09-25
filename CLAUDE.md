@@ -29,7 +29,7 @@ Surfaces today: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `bl
 declares the ones it has in `.nina/profile.json`, along with a `vocabulary` — its own
 names for the things the core talks about generically.
 
-Three mechanisms connect the layers:
+These mechanisms connect the layers:
 
 - **`<!-- nina:slot <surface>.<n> -->`** in a core file marks a hole. The surface (or
   project) file at the same relative path fills it. A slot whose surface the project does
@@ -54,6 +54,9 @@ Three mechanisms connect the layers:
   read the layers with the passages stripped too. Markers are matched as written, fenced code included.
   The first six passages marked saved 0.4% of the largest composition — the narrative was mostly already
   gone — and the size budget beside it is what keeps it from coming back.
+- **`core/defaults/tree/**`** holds the release's own text for a project slot the file cannot do without:
+  an agent's `description:`, which Claude Code needs to load the agent at all. The project's fragment still
+  wins; until it writes one, the default composes, and the slot is not counted as owed.
 - **`{{VOCABULARY}}`** placeholders are filled from the profile, which is how the core
   states a rule without naming one project's provider, packages or models.
 
