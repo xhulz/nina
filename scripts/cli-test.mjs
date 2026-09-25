@@ -507,6 +507,19 @@ async function sound(fixture, core) {
   expect(!run(['check', '--project', first], { loud: true }).out.includes('frontmatter:'), 'check: and a description of its own is sound');
   const whereQa = run(['where', '.claude/agents/qa.md', '--project', first], { loud: true }).out;
   expect(whereQa.includes("◐ project.1 description  ← the release's text; write one to tailor it") && !whereQa.includes('project.1 description  ← open'), `where: a slot with the release's text is not open — got ${whereQa}`);
+
+  // The integration recipe told the project to add its skill to each agent's skills table, and the table
+  // came whole from the harness. It ends in a `skills` slot now, empty by default: no line at all, since a
+  // blank one ends a table, and nothing owed. A row the project writes there is in the table, and is a skill.
+  expect((await reviewerSpec()).includes('|---|---|\n\nThe spec you are reviewing'), `compose: an empty default composes to no line, and the table is whole — got ${(await reviewerSpec()).slice(0, 1500)}`);
+  expect(firstTodo.includes('`.claude/agents/reviewer.md` `project.3` (skills)'), 'init: the skills slot is listed to tailor, not owed');
+  await writeFile(tailored, '<!-- nina:slot project.1 -->\ndescription: Use after the implementer, for this project.\n<!-- nina:slot project.3 -->\n| `nina-row-skill-xyz` | the diff touches the one integration |\n');
+  run(['compose', '--project', first]);
+  expect(
+    (await reviewerSpec()).includes('|---|---|\n| `nina-row-skill-xyz` | the diff touches the one integration |\n\nThe spec you are reviewing'),
+    `compose: a row the project writes lands in the table — got ${(await reviewerSpec()).slice(0, 1500)}`,
+  );
+  expect(run(['check', '--project', first], { loud: true }).out.includes('reviewer: names skill `nina-row-skill-xyz`, which is not installed'), 'check: and is read as a skill the reviewer consults');
   if (before === undefined) delete process.env.NINA_DATA;
   else process.env.NINA_DATA = before;
 

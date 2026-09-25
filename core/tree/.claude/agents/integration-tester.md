@@ -26,6 +26,7 @@ not cover is wasted context.
 <!-- nina:slot edge-cf.2 -->
 <!-- nina:slot edge-cf.3 -->
 <!-- nina:slot db.1 -->
+<!-- nina:slot project.5 skills -->
 
 Cite in your report which skills you consulted, or state that no trigger matched.
 
