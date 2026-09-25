@@ -61,6 +61,7 @@ it.
 
 ### Planner only for ambiguous, multi-step, or multi-package work
 If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things). Don't dispatch planner for "change the button color" or "add a `label` field to a model."
+One package is not one step, though: the architect still splits a long file list into steps (see *A spec's steps are passes of their own*).
 
 ### Architect output is a spec, not code
 Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
@@ -134,10 +135,19 @@ Two implementers writing the same checkout will clobber each other. If you want 
   check possible.
 - The orchestrator sequences the merge. Never let two agents merge.
 
+### A spec's steps are passes of their own
+
+When the architect splits a spec into steps, each step is its own pass from the implementer on: an
+implementer for that step alone, then the reviewer and every gate its diff triggers, then qa. The next
+step's implementer goes out only once the pass before it closed, so no step is built on one that was sent
+back. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
+steps: that spec goes back to the architect to be split. `ONE-SPEC` and `ONE-REVIEW` are the planner's
+groupings of sibling steps, and never merge an architect's steps into one run.
+
 ### Keep these serial
 
 - **`qa`.** Vitest is ~2–3 GB per worker; concurrent invocations take the machine down. One run, at
-  the end. This is not negotiable and is not a speed problem — the suites are seconds, except the
+  the end of each pass. This is not negotiable and is not a speed problem — the suites are seconds, except the
   `{{API_DIR}}` integration suite, which is slow for its own reasons (real DB).
 - **The merge**, always.
 - **A loop-back.** When a stage rejects, fix and re-run that stage; do not fan out around a failure.

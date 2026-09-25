@@ -13,13 +13,15 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { isLoopBack } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
-import { snapshotsDir } from '../paths.mjs';
+import { HARNESS, snapshotsDir } from '../paths.mjs';
+import { defaultVocabulary } from '../vocabulary.mjs';
+import { layerRootFor } from './compose.mjs';
 import { PRICES_AS_OF, costOf } from '../prices.mjs';
 
 /**
@@ -334,7 +336,7 @@ const DESIGNERS = new Set(['planner', 'architect']);
  *
  * @param {object[]} records - The runs in the window.
  */
-function proportionReport(records) {
+function proportionReport(records, stepLimit = () => null) {
   const measured = records.filter((r) => WRITERS.has(r.role) && typeof r.files_touched === 'number');
   if (measured.length === 0) return;
   /** @type {Map<string, object[]>} */
@@ -395,6 +397,52 @@ function proportionReport(records) {
     console.log(`    ${row.label.padEnd(16)}${String(row.cycles).padStart(8)}${`${row.designed} (${pct(row.designed, row.cycles)})`.padStart(30)}`);
   }
   console.log('    A shape, not a verdict: a critical path is gated in full at any size, and one spec may cover sibling steps.');
+
+  // The one size the harness does limit: what one implementer run writes. A run re-reads the context it
+  // has built on every turn, so its cost grows faster than its size — measured over two projects, the
+  // cache read per file held near 1M up to 19 files and was 6.9M in a 52-file run. Asked only of a project
+  // whose pinned release states the limit.
+  const over = records.filter((r) => {
+    if (r.role !== 'implementer' || typeof r.files_touched !== 'number') return false;
+    const limit = stepLimit(r.project);
+    return limit !== null && r.files_touched > limit;
+  });
+  if (over.length > 0) {
+    const largest = over.reduce((a, b) => (b.files_touched > a.files_touched ? b : a));
+    const read = typeof largest.tokens?.read === 'number' ? `, ${Math.round(largest.tokens.read / 1e6)}M tokens read from cache` : '';
+    console.log(
+      `    ${over.length} implementer run(s) wrote more files than one step may (${stepLimit(largest.project)}); the largest wrote ${largest.files_touched}${read}. The architect splits such a spec into steps.`,
+    );
+  }
+}
+
+/**
+ * The most files one implementer run may write in each measured project, as its pinned release states it
+ * (`{{STEP_FILES}}`, which the project may declare to change), or null where the release has no such
+ * limit or the project cannot be found.
+ *
+ * @param {{root: string}} ctx - CLI context, for the releases.
+ * @returns {(project: string) => number|null}
+ */
+function stepLimitOf(ctx) {
+  const known = new Map();
+  return (project) => {
+    if (!known.has(project)) {
+      let limit = null;
+      try {
+        const found = decodeProjectDir(project);
+        const profile = found ? JSON.parse(readFileSync(join(found, HARNESS, 'profile.json'), 'utf8')) : null;
+        const layers = profile ? layerRootFor(ctx.root, profile.core) : null;
+        const value = profile?.vocabulary?.STEP_FILES ?? (layers?.dir ? defaultVocabulary(layers.dir).STEP_FILES : undefined);
+        const n = Number(value);
+        limit = value !== undefined && value !== null && value !== '' && Number.isFinite(n) && n > 0 ? n : null;
+      } catch {
+        limit = null;
+      }
+      known.set(project, limit);
+    }
+    return known.get(project);
+  };
 }
 
 /** Formats a median duration in minutes from a list of seconds. */
@@ -415,8 +463,34 @@ export async function stats(argv, ctx) {
   const dir = argv.includes('--snapshots') ? argv[argv.indexOf('--snapshots') + 1] : snapshotsDir();
   const since = argv.includes('--since') ? argv[argv.indexOf('--since') + 1] : null;
   const project = argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : null;
+  const includeAll = argv.includes('--all');
+  // Run inside a project, the report is that project's: the store holds every project on the machine,
+  // and a new project's owner who asked in its directory read six weeks of another project's history as
+  // its own. `--project` names another, and `--all` asks for every one.
+  // Matched by the directory a record's name decodes to, not by the name: a path reached through a
+  // symlink flattens to another name.
+  const here = !project && !includeAll && existsSync(join(process.cwd(), HARNESS, 'profile.json')) ? realpathSync(process.cwd()) : null;
+  const sameDir = new Map();
+  const isHere = (p) => {
+    if (!sameDir.has(p)) {
+      const found = decodeProjectDir(p);
+      let same = p === here.replace(/[^A-Za-z0-9]/g, '-');
+      try {
+        same ||= found !== null && realpathSync(found) === here;
+      } catch {
+        // A directory that is gone is not this one.
+      }
+      sameDir.set(p, same);
+    }
+    return sameDir.get(p);
+  };
 
-  const all = await load(dir, { since, project });
+  const loaded = await load(dir, { since, project });
+  const all = here ? loaded.filter((r) => isHere(r.project)) : loaded;
+  if (here && all.length === 0) {
+    console.error(`no dispatch recorded for this project yet — \`nina stats --all\` reports every project`);
+    return 1;
+  }
   if (all.length === 0) {
     console.error('no snapshot data — run `nina snapshot` first');
     return 1;
@@ -429,11 +503,16 @@ export async function stats(argv, ctx) {
     if (!PIPELINE_ROLES.has(r.role)) continue;
     pipelineCount.set(r.project, (pipelineCount.get(r.project) ?? 0) + 1);
   }
+  // A project that declares a profile runs the harness however few dispatches it has made: counted by
+  // dispatches alone, a new project with five was hidden as not running it.
+  const declares = (p) => {
+    const found = decodeProjectDir(p);
+    return Boolean(found && existsSync(join(found, HARNESS, 'profile.json')));
+  };
   const harnessProjects = new Set(
-    [...pipelineCount].filter(([, n]) => n >= MIN_PIPELINE_DISPATCHES).map(([p]) => p),
+    [...new Set(all.map((r) => r.project))].filter((p) => (pipelineCount.get(p) ?? 0) >= MIN_PIPELINE_DISPATCHES || declares(p)),
   );
-  const includeAll = argv.includes('--all');
-  const records = (includeAll ? all : all.filter((r) => harnessProjects.has(r.project))).sort((a, b) =>
+  const records = (includeAll || here ? all : all.filter((r) => harnessProjects.has(r.project))).sort((a, b) =>
     String(a.ts).localeCompare(String(b.ts)),
   );
 
@@ -472,6 +551,7 @@ export async function stats(argv, ctx) {
   console.log(
     `  ${records.length} dispatches · ${projectCount} project${projectCount === 1 ? '' : 's'} · ` +
       `${span[0]} → ${span[1]}` +
+      (here ? '  (this project; --all for every project)' : '') +
       (skipped > 0 ? `  (${skipped} non-harness project${skipped === 1 ? '' : 's'} hidden, --all to include)` : '') +
       (held > 0 ? `  · ${held} dispatch(es) denied by a hook, not counted as runs` : '') +
       '\n',
@@ -550,7 +630,7 @@ export async function stats(argv, ctx) {
 
   costReport(records.filter((r) => r.status !== 'denied'));
   modelReport(records.filter((r) => r.status !== 'denied'));
-  proportionReport(records.filter((r) => r.status !== 'denied'));
+  proportionReport(records.filter((r) => r.status !== 'denied'), stepLimitOf(ctx));
 
   // What the pipeline learned, against what it had to learn from. A loop-back is the raw
   // material and a pill is the product, so the two numbers belong on the same screen: the
@@ -567,7 +647,8 @@ export async function stats(argv, ctx) {
     );
   } else {
     console.log(
-      `    ${loopBacks} loop-back(s) in the window → ${inWindow} pill(s) written (${pct(inWindow, loopBacks)})` +
+      // A share over 100% says nothing: the pills were written for something other than these loop-backs.
+      `    ${loopBacks} loop-back(s) in the window → ${inWindow} pill(s) written${inWindow <= loopBacks ? ` (${pct(inWindow, loopBacks)})` : ''}` +
         ' — every loop-back is looked at for a lesson; `nina learn` shows which roles are owed one.' +
         (pills.undated > 0 ? ` ${pills.undated} pill(s) carry no date and cannot be placed.` : ''),
     );

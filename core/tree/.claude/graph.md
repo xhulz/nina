@@ -42,7 +42,7 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 - `architect` → `human` on `BLOCKED` — an unverifiable premise or a missing decision
 - `architect` → `planner` on `BLOCKED` — the plan itself is wrong, not the design · max 1
 - `implementer` → `reviewer` on `DIFF-READY`
-- `implementer` → `architect` on `BLOCKED` — the spec is wrong, or needs a file it does not list · max 2
+- `implementer` → `architect` on `BLOCKED` — the spec is wrong, needs a file it does not list, or asks one run for more files than a step may write · max 2
 - `implementer` → `planner` on `BLOCKED` — the spec is too large for one step · max 1
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.2 -->

@@ -178,8 +178,11 @@ Two things it can work out rather than ask:
   qa's own targeted vitest run stays literal: it is the stack's substance, not a command name. The
   core names them as placeholders, a project that declares none composes
   `pnpm typecheck` exactly as before, and one on another stack declares four lines instead of editing
-  a core it cannot reach. Declaring a name takes it over, `null` included; `init`'s TODO lists each
-  default so there is something to change it from. A release with no such file supplies nothing.
+  a core it cannot reach. `STEP_FILES`, the most files one implementer run may write (15), is a default
+  for the same reason: the limit is the harness's, and a project whose files are unusually small or
+  large moves it without editing a rule. `nina stats` reads the same value. Declaring a name takes it
+  over, `null` included; `init`'s TODO lists each default so there is something to change it from. A
+  release with no such file supplies nothing.
 
 `init` reads the layers from the version it is about to pin, so the checklist describes the harness
 the project will actually compose rather than whatever the working tree says today.
