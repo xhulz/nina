@@ -181,7 +181,7 @@ Two things it can work out rather than ask:
   a core it cannot reach. `STEP_FILES`, the most files one implementer run may write (15), is a default
   for the same reason: the limit is the harness's, and a project whose files are unusually small or
   large moves it without editing a rule. `nina stats` reads the same value. The model and effort level each
-  stage runs at are four more (`DEEP_MODEL`, `DEEP_EFFORT`, `WORK_MODEL`, `WORK_EFFORT`): with an alias and
+  stage runs at are five more (`DEEP_MODEL`, `DEEP_EFFORT`, `ARCHITECT_EFFORT`, `WORK_MODEL`, `WORK_EFFORT`): with an alias and
   no level, a stage ran on whatever the alias pointed to that week, at whatever the session was set to
   (see [measurement](measurement.md#at-what-effort)). Declaring a name takes it
   over, `null` included; `init`'s TODO lists each default so there is something to change it from. A

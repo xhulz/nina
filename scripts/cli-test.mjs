@@ -3161,8 +3161,10 @@ const dated = (date, status = 'active') =>
   const spec = async (role) => readFile(join(dir, '.claude', 'agents', `${role}.md`), 'utf8');
   const front = (text) => text.slice(4, text.indexOf('\n---', 4));
   expect(
-    /^model: claude-opus-5-5\neffort: high$/m.test(front(await spec('architect'))) && /^model: claude-sonnet-5\neffort: xhigh$/m.test(front(await spec('implementer'))),
-    'compose: a stage runs on the model and at the effort level its release names',
+    /^model: claude-opus-5-5\neffort: xhigh$/m.test(front(await spec('architect'))) &&
+      /^model: claude-opus-5-5\neffort: high$/m.test(front(await spec('reviewer'))) &&
+      /^model: claude-sonnet-5\neffort: xhigh$/m.test(front(await spec('implementer'))),
+    'compose: a stage runs on the model and at the effort level its release names, the architect at its own',
   );
   const roles = (await readdir(join(dir, '.claude', 'agents'))).map((f) => f.replace(/\.md$/, ''));
   const unnamed = [];
@@ -3178,7 +3180,7 @@ const dated = (date, status = 'active') =>
   await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, DEEP_EFFORT: 'extreme' } }));
   run(['compose', '--project', dir]);
   const checked = run(['check', '--project', dir], { loud: true }).out;
-  expect(checked.includes('architect: `effort: extreme` is not one of low, medium, high, xhigh, max'), `check: an effort level Claude Code has no such level for is named — got ${checked}`);
+  expect(checked.includes('reviewer: `effort: extreme` is not one of low, medium, high, xhigh, max') && !checked.includes('architect: `effort:'), `check: an effort level Claude Code has no such level for is named — got ${checked}`);
   const levels = modelFindings(new Map([['a', '---\nname: a\neffort: max\n---\n'], ['b', '---\nname: b\neffort: {{DEEP_EFFORT}}\n---\n'], ['c', '---\nname: c\n---\neffort: nonsense in the body\n']]));
   expect(levels.length === 1 && levels[0].startsWith('b: `effort: {{DEEP_EFFORT}}`'), `models: a level left undeclared is named, and only the frontmatter is read — got ${JSON.stringify(levels)}`);
 

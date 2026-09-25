@@ -1,4 +1,5 @@
 {
+  "ARCHITECT_EFFORT": "xhigh",
   "BUILD_CMD": "pnpm build",
   "DEEP_EFFORT": "high",
   "DEEP_MODEL": "claude-opus-5-5",
