@@ -3069,6 +3069,70 @@ const dated = (date, status = 'active') =>
   );
 }
 
+// ─── stats: whose history it is ─────────────────────────────────────────────────────────
+{
+  // A project with a profile runs the harness however few dispatches it has made; one with neither a
+  // profile nor ten pipeline dispatches is hidden. Counted by dispatches alone, a new project with five
+  // was hidden as not running the harness.
+  // Named by the path Claude Code ran in, which may pass through a symlink (on macOS the temporary
+  // directory does), while the process asking stands in the real directory.
+  const named = await composed('plain');
+  const young = realpathSync(named);
+  const flat = (dir) => dir.replace(/[^A-Za-z0-9]/g, '-');
+  const snapshots = join(await scratch(), 'snaps');
+  await mkdir(snapshots, { recursive: true });
+  let n = 0;
+  const line = (project, role, verdict, extra = {}) =>
+    JSON.stringify({ project, dispatch_id: `s${(n += 1)}`, ts: `2026-09-25T10:${String(n).padStart(2, '0')}:00.000Z`, session: 'x', role, verdict, verdict_source: 'declared', ...extra });
+  await writeFile(
+    join(snapshots, `${flat(named)}.jsonl`),
+    `${[
+      line(flat(named), 'architect', 'SPEC-READY'),
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 20, tokens: { read: 90_000_000 } }),
+      line(flat(named), 'reviewer', 'REJECTED'),
+    ].join('\n')}\n`,
+  );
+  await writeFile(join(snapshots, '-elsewhere.jsonl'), `${[line('-elsewhere', 'reviewer', 'APPROVED'), line('-elsewhere', 'qa', 'PASS')].join('\n')}\n`);
+  const everywhere = run(['stats', '--snapshots', snapshots], { loud: true }).out;
+  expect(everywhere.includes('3 dispatches · 1 project') && everywhere.includes('1 non-harness project hidden'), `stats: a project with a profile is a harness project at three dispatches — got ${everywhere}`);
+
+  // Run inside a project, the report is that project's, and says so; `--all` is every project.
+  const inside = (args) => {
+    const r = spawnSync(process.execPath, [NINA, 'stats', '--snapshots', snapshots, ...args], { encoding: 'utf8', cwd: young });
+    return `${r.stdout}${r.stderr}`;
+  };
+  const own = inside([]);
+  expect(own.includes('3 dispatches · 1 project') && own.includes('(this project; --all for every project)'), `stats: inside a project it reports that project — got ${own}`);
+  expect(inside(['--all']).includes('5 dispatches · 2 projects'), 'stats: and --all reports every project in the store');
+
+  // One implementer run past the files one step may write is named, against the limit the project's
+  // release states; a project that raises the limit is held to its own.
+  expect(
+    own.includes('1 implementer run(s) wrote more files than one step may (15); the largest wrote 20, 90M tokens read from cache'),
+    `stats: an implementer run past the step limit is named — got ${own}`,
+  );
+  // The limit is the rule the composed pipeline states: the architect splits past it, the implementer
+  // refuses past it, and the orchestrator runs each step as its own pass.
+  const spec = async (rel) => readFile(join(young, '.claude', rel), 'utf8');
+  expect(
+    (await spec('agents/architect.md')).includes('One implementer run writes at most 15 files') &&
+      (await spec('agents/implementer.md')).includes('**Write at most 15 files in one run.**') &&
+      (await spec('router.md')).includes("### A spec's steps are passes of their own"),
+    'compose: the step limit is stated where the spec is written, where it is implemented, and where it is dispatched',
+  );
+  const profilePath = join(young, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, STEP_FILES: '25' } }));
+  expect(!inside([]).includes('wrote more files than one step may'), 'stats: a project that declares a larger step is held to it');
+  run(['compose', '--project', young]);
+  expect((await spec('agents/implementer.md')).includes('**Write at most 25 files in one run.**'), 'compose: and its own limit is the one its pipeline is told');
+
+  // More pills than loop-backs: a share over 100% says nothing, so it is not printed.
+  for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
+  const learned = inside([]);
+  expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');

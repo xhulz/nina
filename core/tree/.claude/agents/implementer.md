@@ -86,6 +86,7 @@ When in doubt: **smaller diff, escalate sooner.**
 - If the spec is wrong, ambiguous, or you hit an unknown, **STOP and escalate** — do not guess. Loop back to architect.
 - **If a spec premise about an external library looks wrong while you're writing code that depends on it** (e.g., the cited line says X but the function clearly does Y), STOP — do not silently work around it. Loop back to architect to re-verify the citation. Premises in the spec are the contract; if the contract is wrong, do not paper over.
 - If the spec is too large to implement without losing fidelity (you find yourself losing track of the spec's invariants while coding), **STOP and escalate to the planner** for further decomposition. Better to pause than to ship a 700-line diff that the reviewer cannot audit cleanly.
+- **Write at most {{STEP_FILES}} files in one run.** If this dispatch asks for more (a spec with no steps, or several of its steps at once), return `BLOCKED` to the architect before writing any, with the count: the spec needs steps. A run re-reads its own growing context on every turn, so past that size its cost per file multiplies. When the spec has steps, write only the step you were dispatched for, reading the spec and that step's file.
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot edge-cf.5 -->

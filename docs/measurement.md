@@ -66,6 +66,25 @@ that reading said all four small changes had been designed. The reading that sur
 5 of 8 one- and two-file changes ran a planner or architect, 62% of the three-to-nine-file ones did, and
 84% of those of ten files or more — with 29 cycles closed by a qa whose verdict could not be read.
 
+That is a shape, and the one size the harness does limit is narrower: what one implementer run writes.
+The first project started from nothing specified a spike as one 49-file step; one implementer wrote it in
+a single 68-minute run and read 357M tokens from cache. Over the implementer runs of both projects, the
+cache read per file held near 1M up to 19 files (0.9M at one to three, 1.1M at ten to nineteen), was 2.6M
+at twenty or more, and 6.9M in that run: a run re-reads the context it has built on every turn, so its
+cost grows faster than its size, and in the implementer 76% of the spend is cache read. So the architect
+splits a spec past `{{STEP_FILES}}` files (15 by default) into steps, each in its own file, the
+orchestrator runs each step as its own pass from the implementer on, and an implementer handed more
+returns `BLOCKED`. `stats` names every implementer run past the limit its project's release states, with
+the largest and what it read, and says nothing for a release that states none.
+
+`stats` reports the projects that run the harness: one whose directory holds `.nina/profile.json`, or
+failing that one with ten pipeline dispatches, which is how it was told before profiles existed. Counted
+by dispatches alone, the first new project, five dispatches in, was hidden among the projects that do not
+run it. Run inside a project, it reports that project only, and says so, because the store holds every
+project on the machine and that project's owner read six weeks of another's history as its own; `--project`
+names another, and `--all` reports every project in the store, harness or not. A learning share over 100%
+is not printed: more pills than loop-backs means the pills answer something else.
+
 The measurement store is the only copy of history older than Claude Code's transcript retention, so a
 snapshot must never make a record worse. A dispatch already on record is never re-created, and a
 notification already read is not read twice — re-walking bytes after a cursor went back used to blank a
