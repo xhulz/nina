@@ -428,7 +428,9 @@ export async function composeProject(target, ctx, options = {}) {
       // expects text there. Left silent it composes a file with a gap in the middle of a
       // rule, which reads like an editing accident rather than a missing layer.
       if (fragments.has(marker[1])) {
-        out.push(fragments.get(marker[1]));
+        // An empty fragment is a slot left empty on purpose — the release's default for rows a project
+        // may add to a table — and composes to no line at all: a blank line inside a table ends it.
+        if (fragments.get(marker[1]) !== '') out.push(fragments.get(marker[1]));
       } else if (declared.has(marker[1].split('.')[0])) {
         unfilled.push(`${rel} ${marker[1]}`);
       }

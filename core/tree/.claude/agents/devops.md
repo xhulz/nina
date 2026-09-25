@@ -20,6 +20,7 @@ Before acting, read `.claude/pills/devops/*.md` and any `.claude/pills/shared/*.
 <!-- nina:slot db.1 -->
 <!-- nina:slot frontend.1 -->
 <!-- nina:slot blockchain.1 -->
+<!-- nina:slot project.4 skills -->
 
 Cite in your report which skill informed the deploy. A deploy that ran the platform CLI without consulting
 it is a deploy built on recall.

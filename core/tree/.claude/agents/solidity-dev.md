@@ -21,6 +21,7 @@ not cover is wasted context.
 <!-- nina:slot blockchain.1 -->
 <!-- nina:slot blockchain.2 -->
 <!-- nina:slot blockchain.3 -->
+<!-- nina:slot project.5 skills -->
 
 Cite in your report which skills you consulted, or state that no trigger matched.
 

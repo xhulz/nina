@@ -92,6 +92,15 @@ the reviewer's may not. `check` asks the frontmatter question of the project's c
 project's own fragment can still take the description out: it is the same `frontmatterFindings` the suite
 runs. A default is for a line the file is broken without, not for prose a project has not written yet.
 
+The other use is an empty default, for a place a project may add to and need not. The integration recipe
+told the project to add its skill's row to the *Skills you MUST consult* table of every agent that touches
+the integration, and those tables came whole from the core and the surfaces: the instruction could not be
+followed, and the `skill` field it asked for in the profile was read by nothing. Every agent with a skills
+section now ends it in a `skills` slot, with an empty default, so it is not owed and a project that writes
+nothing composes exactly as before. An empty fragment composes to no line at all, because a blank line
+inside a table ends it. Each such slot took the file's next unused number, not a gap: `secops` skipped
+`project.5`, and an old fragment still carrying that id would have landed in the new slot.
+
 ## How to change a rule
 
 Edit the layer that owns it, then recompose. Never edit the output.

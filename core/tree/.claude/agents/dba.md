@@ -19,6 +19,7 @@ not cover is wasted context.
 | Skill | Invoke when… |
 |---|---|
 <!-- nina:slot db.1 -->
+<!-- nina:slot project.4 skills -->
 
 <!-- nina:slot db.2 -->
 

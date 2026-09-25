@@ -20,6 +20,7 @@ not cover is wasted context.
 <!-- nina:slot edge-cf.1 -->
 <!-- nina:slot edge-cf.2 -->
 <!-- nina:slot db.1 -->
+<!-- nina:slot project.3 skills -->
 
 The spec you are reviewing must itself cite which skill informed it, or justify why none applied
 (the table above). A spec touching a surface with a mandatory skill that cites neither is

@@ -30,6 +30,7 @@ classes and apply them here.
 Cite in your report which reference files informed the audit. An audit that consulted none is a
 recall-based audit, and you should say so rather than imply coverage you did not have.
 
+<!-- nina:slot project.7 skills -->
 ## When you run
 - After the LAST sub-step of a milestone (a numbered set like `6.*`, or one package's build-out) passes qa, BEFORE the milestone is declared complete.
 - On demand when {{OWNER}} asks for a security pass.
