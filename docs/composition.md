@@ -31,8 +31,9 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
    block rather than above one. A subagent spec whose `---` is not at byte 0 stops being
    dispatchable and says nothing about it — the notice exists to prevent silent damage, so it
    must not be able to cause some.
-7. Every composed agent spec declares `name:` and `tools:`. A spec with no `tools:` is not
-   restricted — the subagent inherits every tool the session has. The reviewer's whole line once
+7. Every composed agent spec declares `name:`, `description:` and `tools:`. Claude Code does not load a
+   spec with no description, and a spec with no `tools:` is not restricted — the subagent inherits every
+   tool the session has. The reviewer's whole line once
    lived in the frontend surface, so every profile without a frontend composed a "read-only" reviewer
    that could edit anything; the check that its frontmatter opened the file passed the whole time.
 8. The composed `.claude/graph.md` holds for the profile: every stage has a spec and every spec is a
@@ -64,6 +65,32 @@ same pass found six Cloudflare names (`Pages`, `Worker`, a capitalised `Wrangler
 had never held. A fixture can only prove what its own profile composes, and a deny
 list matches substrings, which makes a word like `Hono` unusable because it fires on `Honor`. Asking
 the layers asks once, of everything.
+
+## A slot the file cannot do without: `core/defaults/`
+
+Every project slot is the project's to write, and until it does, `check` counts it as owed and the slot
+composes to nothing. For prose that is the point: a stub composes clean while saying nothing. For one
+kind of line it was a defect nobody saw. Seven roles (reviewer, qa, secops, dba, integration-tester, and
+the two blockchain roles) left the `description:` in their frontmatter to the project, and
+Claude Code does not load an agent with no description. Every new project therefore had no reviewer, qa
+or secops until it wrote them. The graph still named those stages, and the main session either skipped
+them or improvised an agent that ran none of their rules. Nothing reported it: the four fixtures fill no
+project slot, so they composed the same broken specs, and property 7 asked for `name:` and `tools:` but
+not `description:`. The first project to start from nothing found it by noticing the agents were missing.
+
+`core/defaults/tree/**` holds the release's own text for a project slot like that, as fragments in the
+same form a project writes, at the path of the core file they fill. `compose` reads it after the surfaces
+and before the project layer, so the project's own fragment still wins, and a project that already wrote
+one composes exactly as before. A slot with a default is not owed: `check`, `upgrade` and the TODO leave
+it out of what is still to fill, the TODO lists it as something to tailor, and `where` marks it `◐`. A
+release from before there were any defaults has no such directory and composes as it always did.
+
+The suite audits the defaults twice. Each must fill a project slot the core file at its path really has,
+never a surface's slot, which would fill it in a project that never declared the surface. And each is read
+by the leak audit as core text under that file's gate, so the default for `dba.md` may name the database and
+the reviewer's may not. `check` asks the frontmatter question of the project's composed specs too, since a
+project's own fragment can still take the description out: it is the same `frontmatterFindings` the suite
+runs. A default is for a line the file is broken without, not for prose a project has not written yet.
 
 ## How to change a rule
 

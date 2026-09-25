@@ -113,6 +113,37 @@ export function toolFindings(specs, installed) {
   return out;
 }
 
+/** What each frontmatter key a spec must carry does, said when it is missing. */
+const REQUIRED_KEYS = {
+  name: 'it cannot be dispatched by name',
+  description: 'Claude Code does not load an agent without one, so the pipeline has no such stage, and nothing says so',
+  tools: 'the agent inherits every tool the session has',
+};
+
+/**
+ * Every spec whose frontmatter lacks what Claude Code needs to load it as it is meant to run. The
+ * `description` was the silent one: seven roles left it to the project, every new project composed them
+ * without it, and the main session simply had no reviewer, qa or secops to dispatch — the stages stayed
+ * in the graph, and an agent improvised in their place ran none of their rules.
+ *
+ * @param {Map<string, string>} specs - Role → composed spec text.
+ * @returns {string[]}
+ */
+export function frontmatterFindings(specs) {
+  const out = [];
+  for (const [role, spec] of [...specs].sort(([a], [b]) => a.localeCompare(b))) {
+    if (!spec.startsWith('---\n')) {
+      out.push(`${role}: does not open with frontmatter — Claude Code does not load it`);
+      continue;
+    }
+    const front = spec.slice(4, spec.indexOf('\n---', 4));
+    for (const [key, why] of Object.entries(REQUIRED_KEYS)) {
+      if (!new RegExp(`^${key}:\\s*\\S`, 'm').test(front)) out.push(`${role}: frontmatter has no \`${key}:\` — ${why}`);
+    }
+  }
+  return out;
+}
+
 /** The model values a spec may declare: an alias Claude Code knows, `inherit`, or a full model id. */
 const MODEL_VALUE = /^(opus|sonnet|haiku|fable|inherit|claude-[a-z0-9.-]+(\[[a-z0-9]+\])?)$/;
 

@@ -22,7 +22,7 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { HARNESS, legacyHint } from '../paths.mjs';
-import { REQUIRES, SLOT, generatedNotice, layerRootFor } from './compose.mjs';
+import { REQUIRES, SLOT, defaultedSlots, generatedNotice, layerRootFor } from './compose.mjs';
 import { filledSlots, owedDocuments } from './check.mjs';
 import { roleGates } from './pills.mjs';
 
@@ -120,15 +120,20 @@ to get it: add "${gate}" to ${HARNESS}/profile.json and run \`nina compose\`.`);
     mine.sort(byNumber);
 
     const filled = await filledSlots(target);
-    const open = mine.filter((slot) => !filled.has(`${rel} ${slot.split(' ')[0]}`));
+    const defaulted = await defaultedSlots(resolved.dir);
+    const own = (slot) => filled.has(`${rel} ${slot.split(' ')[0]}`);
+    // A slot the release writes itself until the project does is not open: it composes as written there.
+    const fromRelease = mine.filter((slot) => !own(slot) && defaulted.has(`${rel} ${slot.split(' ')[0]}`));
+    const open = mine.filter((slot) => !own(slot) && !fromRelease.includes(slot));
     block(`generated — from core ${profile.core}${from.size > 0 ? `, with fragments from ${[...from].sort().join(', ')}` : ''}`);
     if (mine.length === 0) {
       block('no project slot — every line of it comes from the harness');
     } else {
-      block(`${mine.length} project slot(s), ${mine.length - open.length} filled:`);
+      block(`${mine.length} project slot(s), ${mine.length - open.length - fromRelease.length} filled${fromRelease.length > 0 ? `, ${fromRelease.length} with the release's text until the project writes its own` : ''}:`);
       for (const slot of mine) {
         const isOpen = open.includes(slot);
-        console.log(`    ${isOpen ? '○' : '●'} ${slot}${isOpen ? '  ← open' : ''}`);
+        const released = fromRelease.includes(slot);
+        console.log(`    ${isOpen ? '○' : released ? '◐' : '●'} ${slot}${isOpen ? '  ← open' : released ? "  ← the release's text; write one to tailor it" : ''}`);
       }
     }
     console.log('');

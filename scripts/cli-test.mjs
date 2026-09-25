@@ -26,7 +26,7 @@ import { applied, closeAnswered, overdue, slugFor, verified } from '../src/comma
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
-import { byVersion, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
+import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
 import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
@@ -326,7 +326,9 @@ async function sound(fixture, core) {
 
   const { dir: layers } = layerRootFor(ROOT, core);
   const done = await filledSlots(dir);
-  const open = [...(await projectSlots(layers, profile.surfaces ?? []))].filter((s) => !done.has(s));
+  // A slot the release writes itself is not owed, and prose in it would take a line the frontmatter needs.
+  const given = await defaultedSlots(layers);
+  const open = [...(await projectSlots(layers, profile.surfaces ?? []))].filter((s) => !done.has(s) && !given.has(s));
   const byFile = new Map();
   for (const s of open) {
     const cut = s.lastIndexOf(' ');
@@ -477,6 +479,34 @@ async function sound(fixture, core) {
   await writeFile(join(first, '.claude', 'architecture.md'), '# Architecture\n');
   const started = run(['check', '--project', first, '--detector'], { loud: true }).out;
   expect(!started.includes('start with the architecture') && !started.includes('not the conversation') && started.includes('read it before filling anything below'), `init: once the architecture is written, the order is done and only the brief is pointed at — got ${started}`);
+
+  // A new project's agents load before it has written a word. Seven roles left their description to the
+  // project, and Claude Code does not load an agent without one: every new project had no reviewer, qa
+  // or secops until it wrote them, and nothing said so. The release writes it; the project's replaces it.
+  const reviewerSpec = () => readFile(join(first, '.claude', 'agents', 'reviewer.md'), 'utf8');
+  expect(/^description: Use after the implementer produces a diff/m.test(await reviewerSpec()), `init: a new project's reviewer composes with the release's description — got ${(await reviewerSpec()).slice(0, 300)}`);
+  const firstTodo = await readFile(join(first, '.nina', 'TODO.md'), 'utf8');
+  expect(
+    firstTodo.includes('more have text from this release until the project writes its own') && firstTodo.includes('`.claude/agents/reviewer.md` `project.1` (description)') && !firstTodo.includes('`project.1` — **description**'),
+    `init: a slot the release writes is listed to tailor, not owed — got ${firstTodo.slice(firstTodo.indexOf('## 2.'), firstTodo.indexOf('## 2.') + 900)}`,
+  );
+  const openBefore = /(\d+) project slot\(s\) have no fragment/.exec(run(['check', '--project', first], { loud: true }).out)?.[1];
+  const tailored = join(first, '.nina', 'project', 'tree', '.claude', 'agents', 'reviewer.md');
+  await mkdir(dirname(tailored), { recursive: true });
+  await writeFile(tailored, '<!-- nina:slot project.1 -->\nReviews the diff, for this project.\n');
+  run(['compose', '--project', first]);
+  const broken = run(['check', '--project', first], { loud: true }).out;
+  expect(
+    broken.includes('frontmatter: reviewer: frontmatter has no `description:` — Claude Code does not load an agent without one') &&
+      /(\d+) project slot\(s\) have no fragment/.exec(broken)?.[1] === openBefore,
+    `check: a project's fragment that takes the description out of the frontmatter is named, and filling a slot with a default changes nothing owed — got ${broken}`,
+  );
+  await writeFile(tailored, '<!-- nina:slot project.1 -->\ndescription: Use after the implementer, for this project.\n');
+  run(['compose', '--project', first]);
+  expect(/^description: Use after the implementer, for this project\.$/m.test(await reviewerSpec()) && !(await reviewerSpec()).includes('Use after the implementer produces a diff'), 'compose: the project\'s own fragment replaces the release\'s');
+  expect(!run(['check', '--project', first], { loud: true }).out.includes('frontmatter:'), 'check: and a description of its own is sound');
+  const whereQa = run(['where', '.claude/agents/qa.md', '--project', first], { loud: true }).out;
+  expect(whereQa.includes("◐ project.1 description  ← the release's text; write one to tailor it") && !whereQa.includes('project.1 description  ← open'), `where: a slot with the release's text is not open — got ${whereQa}`);
   if (before === undefined) delete process.env.NINA_DATA;
   else process.env.NINA_DATA = before;
 
@@ -608,8 +638,11 @@ async function sound(fixture, core) {
   // The move that introduces a slot the project cannot possibly have filled yet.
   await writeFile(
     join(nina, 'core', 'tree', 'CLAUDE.md'),
-    '# Bed\n\n<!-- nina:slot project.1 intro -->\n\n<!-- nina:slot project.2 added -->\n',
+    '# Bed\n\n<!-- nina:slot project.1 intro -->\n\n<!-- nina:slot project.2 added -->\n\n<!-- nina:slot project.3 given -->\n',
   );
+  // And one the release writes itself until the project does, which the move does not ask for.
+  await mkdir(join(nina, 'core', 'defaults', 'tree'), { recursive: true });
+  await writeFile(join(nina, 'core', 'defaults', 'tree', 'CLAUDE.md'), '<!-- nina:slot project.3 -->\nThe release says this until the project does.\n');
   await quiet('1.1.0');
 
   const dir = await scratch();
@@ -665,6 +698,10 @@ async function sound(fixture, core) {
     'deadlock: the pin should have moved',
   );
   expect(moved.out.includes('CLAUDE.md project.2'), 'deadlock: the move should name what is still owed');
+  expect(
+    !moved.out.includes('CLAUDE.md project.3') && (await readFile(join(dir, 'CLAUDE.md'), 'utf8')).includes('The release says this until the project does.'),
+    `upgrade: a new slot the release writes itself composes, and is not asked of the project — got ${moved.out}`,
+  );
 
   // The exemption lasts exactly as long as the move: the next run reports the slot again.
   const after = spawnSync(process.execPath, [join(dir, 'scripts', 'harness-check.mjs')], {

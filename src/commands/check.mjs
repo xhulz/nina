@@ -12,11 +12,11 @@ import { readFile, readdir } from 'node:fs/promises';
 import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
-import { installedSkills, modelFindings, toolFindings } from '../tools.mjs';
+import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { REQUIRES, SLOT, layerRootFor, stripWhy, walk } from './compose.mjs';
+import { REQUIRES, SLOT, defaultedSlots, layerRootFor, stripWhy, walk } from './compose.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
@@ -281,7 +281,10 @@ export async function check(argv, ctx) {
 
   const slots = await projectSlots(resolved.dir, surfaces);
   const filled = await filledSlots(target);
-  const open = [...slots].filter((s) => !filled.has(s));
+  // A slot the release fills itself until the project does is not owed: it composes, and a project writes
+  // one only to tailor it.
+  const defaulted = await defaultedSlots(resolved.dir);
+  const open = [...slots].filter((s) => !filled.has(s) && !defaulted.has(s));
   const missing = open.filter((s) => !expected.has(s));
   const awaited = open.filter((s) => expected.has(s));
   const orphan = [...filled].filter((s) => !slots.has(s));
@@ -330,6 +333,8 @@ export async function check(argv, ctx) {
       // which speaks before every prompt — leaves that half to a `nina check` run by hand.
       for (const finding of toolFindings(specs, detector ? null : await installedSkills(target))) problems.push(`tools: ${finding}`);
       for (const finding of modelFindings(specs)) problems.push(`model: ${finding}`);
+      // A project's own fragment can still take a line Claude Code needs out of the frontmatter.
+      for (const finding of frontmatterFindings(specs)) problems.push(`frontmatter: ${finding}`);
     }
   }
 
