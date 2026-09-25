@@ -3152,6 +3152,59 @@ const dated = (date, status = 'active') =>
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
 }
 
+// ─── snapshot: a notification that points at the handback ───────────────────────────────
+{
+  // Claude Code 2.1.282 writes one completion notification up to three times — queued, then taken off the
+  // queue or absorbed mid-turn, and delivered as a message — and when the run handed its report back the
+  // notification says only that. Read as a report, it replaced the verdict the handback declared with none
+  // and counted each copy as a resume.
+  const dir = await scratch();
+  const main = join(dir, 'session.jsonl');
+  const note = (ms, tokens) =>
+    `<task-notification>\n<task-id>def456</task-id>\n<tool-use-id>toolu_n</tool-use-id>\n<status>completed</status>\n` +
+    `<result>This agent's report was delivered to you as a message from "def456" (its SubagentHandback call). Read it there; it is not repeated here.\n</result>\n` +
+    `<usage><subagent_tokens>${tokens}</subagent_tokens><tool_uses>9</tool_uses><duration_ms>${ms}</duration_ms></usage>\n</task-notification>`;
+  const copies = (ms, tokens, at) => [
+    JSON.stringify({ type: 'queue-operation', operation: 'enqueue', timestamp: `2026-09-25T20:${at}:20.000Z`, sessionId: 's1', content: note(ms, tokens) }),
+    JSON.stringify({ type: 'attachment', uuid: `a${at}`, timestamp: `2026-09-25T20:${at}:20.000Z`, sessionId: 's1', attachment: { type: 'queued_command', prompt: note(ms, tokens) } }),
+    JSON.stringify({ type: 'queue-operation', operation: 'remove', timestamp: `2026-09-25T20:${at}:53.000Z`, sessionId: 's1', content: note(ms, tokens), reason: 'absorbed_mid_turn' }),
+    JSON.stringify({ type: 'user', uuid: `u${at}`, timestamp: `2026-09-25T20:${at}:55.000Z`, sessionId: 's1', message: { content: note(ms, tokens) } }),
+  ];
+  await writeFile(
+    main,
+    `${[
+      JSON.stringify({ type: 'assistant', uuid: 'n1', timestamp: '2026-09-25T19:22:00.000Z', sessionId: 's1', message: { content: [{ type: 'tool_use', id: 'toolu_n', name: 'Agent', input: { subagent_type: 'architect' } }] } }),
+      JSON.stringify({ type: 'user', uuid: 'n2', timestamp: '2026-09-25T19:22:01.000Z', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_n', content: 'Async agent launched. agentId: def456' }] } }),
+    ].join('\n')}\n`,
+  );
+  await mkdir(join(dir, 's1', 'subagents'), { recursive: true });
+  await writeFile(
+    join(dir, 's1', 'subagents', 'agent-def456.jsonl'),
+    `${[
+      JSON.stringify({ type: 'assistant', timestamp: '2026-09-25T20:10:15.000Z', message: { id: 'h1', model: 'claude-opus-5-5', usage: { output_tokens: 10 }, content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: SPEC-READY\nSpec written.' } }] } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-09-25T20:10:18.000Z', message: { id: 'h2', model: 'claude-opus-5-5', usage: { output_tokens: 5 }, content: [{ type: 'text', text: 'The report has been handed back.' }] } }),
+    ].join('\n')}\n`,
+  );
+  // The run's own transcript is read before its notification arrives, as a Stop hook between the two reads it.
+  const first = await scanProject(dir, {});
+  await writeFile(main, `${await readFile(main, 'utf8')}${copies(2858023, 554309, '10').join('\n')}\n`);
+  const second = await scanProject(dir, { cursors: first.cursors, records: first.records });
+  const [after] = second.records;
+  expect(after?.verdict === 'SPEC-READY' && after.verdict_source === 'handback', `snapshot: a notification that points at the handback leaves the handback's verdict — got ${after?.verdict} from ${after?.verdict_source}`);
+  expect(after?.resumes === 0, `snapshot: one notification written three times is one result, not two resumes — got ${after?.resumes}`);
+  // Read in one pass, notification first: the same.
+  const [once] = (await scanProject(dir, {})).records;
+  expect(once?.verdict === 'SPEC-READY' && once.resumes === 0, `snapshot: read in one pass, the same — got ${once?.verdict}, ${once?.resumes} resume(s)`);
+  // A resume runs longer, so its notification is a new one.
+  await writeFile(main, `${await readFile(main, 'utf8')}${copies(3100000, 600000, '40').join('\n')}\n`);
+  const [resumed] = (await scanProject(dir, { cursors: second.cursors, records: second.records })).records;
+  expect(resumed?.resumes === 1, `snapshot: a notification from a longer run is a resume — got ${resumed?.resumes}`);
+  // A record the old reading damaged — read in full, its verdict replaced — is read once more and mended.
+  const damaged = { ...after, verdict: 'UNCLEAR', verdict_source: 'none', result_chars: 148 };
+  const [mended] = (await scanProject(dir, { cursors: second.cursors, records: [damaged] })).records;
+  expect(mended?.verdict === 'SPEC-READY' && mended.verdict_source === 'handback', `snapshot: a handback verdict lost to a notification is read again — got ${mended?.verdict} from ${mended?.verdict_source}`);
+}
+
 // ─── models and effort: the release's, not the alias's or the session's ─────────────────
 {
   // Every stage names a model and an effort level. With `opus` and no level, the architect ran on
