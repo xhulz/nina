@@ -55,6 +55,15 @@ export function exportsDir() {
 }
 
 /**
+ * The commands typed into `nina` on a terminal, one a line, so the arrow keys reach the last session's.
+ *
+ * @returns {string}
+ */
+export function shellHistoryFile() {
+  return process.env.NINA_DATA ? join(process.env.NINA_DATA, 'shell_history') : join(homedir(), '.nina', 'shell_history');
+}
+
+/**
  * How Claude Code names a project's transcript directory, and so its snapshot file and its gate
  * ledgers: the absolute path with every character that is not a letter or a digit made a dash.
  *

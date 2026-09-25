@@ -107,6 +107,7 @@ tried first and failed on real data. Read the reason before undoing it.
 ## Commands
 
 ```bash
+nina                                          # on a terminal: the banner once, then commands typed under it
 nina init --project ../thing                  # profile, TODO, wiring, and a first composition
 nina compose --project ../thing [--check]     # rebuild a project's harness files, or say if they drifted
 nina check --project ../thing                 # is what the project declared about itself true?
@@ -128,6 +129,7 @@ nina release <version>                        # freeze the working layers; never
 
 ```
 bin/nina.mjs          entry point and command table
+src/shell.mjs         `nina` alone on a terminal: one banner, then each typed command run under it
 src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval, export, langfuse
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event

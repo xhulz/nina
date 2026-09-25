@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { printBanner } from '../src/banner.mjs';
+import { shell } from '../src/shell.mjs';
 import { snapshot } from '../src/commands/snapshot.mjs';
 import { compose } from '../src/commands/compose.mjs';
 import { check } from '../src/commands/check.mjs';
@@ -55,7 +56,8 @@ const PLANNED = {};
 
 /** Prints usage. */
 function help() {
-  console.log('  usage: nina <command> [options]\n');
+  console.log('  usage: nina <command> [options]');
+  console.log('         nina              on a terminal: the banner once, then type commands under it\n');
   for (const [name, c] of Object.entries(COMMANDS)) {
     console.log(`    ${name.padEnd(12)} ${c.help}`);
   }
@@ -82,8 +84,14 @@ async function main() {
   const [, , name, ...argv] = process.argv;
   const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
 
-  // A hook's stdout is its answer, and a banner in front of the JSON would make it unreadable.
-  if (!argv.includes('--quiet') && !argv.includes('--hook')) printBanner(pkg.version);
+  // On a terminal with no command, or asked for by name: one banner, then commands typed under it.
+  if (name === 'shell' || (!name && process.stdin.isTTY && process.stdout.isTTY)) {
+    return shell({ bin: fileURLToPath(import.meta.url), version: pkg.version, commands: Object.keys(COMMANDS) });
+  }
+
+  // A hook's stdout is its answer, and a banner in front of the JSON would make it unreadable. A command
+  // typed into `nina` runs under the banner the session already printed.
+  if (!argv.includes('--quiet') && !argv.includes('--hook') && !process.env.NINA_SHELL) printBanner(pkg.version);
 
   if (!name || name === 'help' || name === '--help' || name === '-h') {
     help();

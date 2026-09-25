@@ -36,6 +36,7 @@ import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, planted
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { handleEdit, noticeOf } from '../src/guard.mjs';
 import { modelFindings } from '../src/tools.mjs';
+import { words } from '../src/shell.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
 import { MAX_BODY, exportCommand } from '../src/commands/export.mjs';
@@ -3150,6 +3151,29 @@ const dated = (date, status = 'active') =>
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
   const learned = inside([]);
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
+}
+
+// ─── the session: one banner, and the commands under it ─────────────────────────────────
+{
+  // Every command prints the banner; typed one after another into `nina`, they run under the one the
+  // session printed. Piped here, so it is asked for by name — on a terminal `nina` alone opens it.
+  const session = spawnSync(process.execPath, [NINA, 'shell'], {
+    encoding: 'utf8',
+    input: 'help\nnina requests\n\nbogus\nexit\nstats\n',
+    env: { ...process.env, NINA_DATA: await scratch() },
+  });
+  const said = `${session.stdout}${session.stderr}`;
+  expect(session.status === 0 && said.split('harness orchestration · v').length === 2, `shell: one banner for the session, none per command — got ${said}`);
+  expect(said.includes('usage: nina <command>') && said.includes('no open requests'), `shell: each command runs, a leading \`nina\` typed out of habit included — got ${said}`);
+  expect(said.includes('unknown command "bogus"') && said.includes('exit 2'), `shell: a command that fails says its exit code and the session goes on — got ${said}`);
+  expect(!said.includes('unknown command "exit"') && !said.includes('No snapshot data'), `shell: exit leaves, and nothing after it runs — got ${said}`);
+  expect(run([], { loud: true }).out.includes('usage: nina <command>'), 'shell: without a terminal, `nina` alone still prints the banner and the usage');
+  expect(
+    JSON.stringify(words(`upgrade --to 0.28.11 "a b" 'c d' e\\ f`)) === JSON.stringify(['upgrade', '--to', '0.28.11', 'a b', 'c d', 'e f']) &&
+      words('   ').length === 0 &&
+      JSON.stringify(words('x ""')) === JSON.stringify(['x', '']),
+    'shell: a typed line splits into words, quoted strings keeping their spaces',
+  );
 }
 
 // ─── snapshot: a notification that points at the handback ───────────────────────────────
