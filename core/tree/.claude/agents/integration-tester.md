@@ -3,7 +3,8 @@
 name: integration-tester
 <!-- nina:slot project.1 description -->
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill
-model: sonnet
+model: {{WORK_MODEL}}
+effort: {{WORK_EFFORT}}
 ---
 
 ## Consult your pills first

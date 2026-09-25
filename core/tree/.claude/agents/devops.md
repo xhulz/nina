@@ -2,7 +2,8 @@
 name: devops
 description: Owns everything between "qa passed" and "it is running where someone can use it". Runs after qa PASS on any step that changes a deployed surface. Executes the preview-first invariant (Hard Rule #14) — builds, deploys to preview, smokes against preview, applies migrations in the right order, verifies secret/env parity and the two deploy targets, and names the rollback. Read-only on code + Bash (deploys, never fixes). A production deploy requires {{OWNER}}'s explicit go in the session; preview never does.
 tools: Read, Grep, Glob, Bash, WebFetch, Skill<!-- nina:slot frontend.5 -->
-model: opus
+model: {{DEEP_MODEL}}
+effort: {{DEEP_EFFORT}}
 ---
 
 ## Consult your pills first

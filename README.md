@@ -372,7 +372,7 @@ node scripts/harness-check.mjs    # this repo's own detectors
 | [`src/wiring.mjs`](src/wiring.mjs) | the hooks and npm scripts a project needs, read by `init`, `wire`, `check` and `upgrade` |
 | [`src/transcripts.mjs`](src/transcripts.mjs) | the transcript parser |
 | [`src/detectors.mjs`](src/detectors.mjs) | runs a project's detectors from its hooks |
-| [`src/tools.mjs`](src/tools.mjs) | what an agent spec's frontmatter must carry: name, description, tools, model, skills |
+| [`src/tools.mjs`](src/tools.mjs) | what an agent spec's frontmatter must carry: name, description, tools, model, effort, skills |
 | [`src/langfuse.mjs`](src/langfuse.mjs) | a run as an OpenTelemetry trace and a verdict score |
 | [`core/`](core), [`surfaces/`](surfaces) | the harness layers, and in `core/defaults/` the release's own text for a slot |
 | [`releases/`](releases) | the frozen releases projects pin |

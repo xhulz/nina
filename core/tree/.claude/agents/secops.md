@@ -2,7 +2,8 @@
 name: secops
 <!-- nina:slot project.1 description -->
 tools: Read, Grep, Glob, Bash, WebFetch, Skill
-model: opus
+model: {{DEEP_MODEL}}
+effort: {{DEEP_EFFORT}}
 ---
 
 ## Consult your pills first
