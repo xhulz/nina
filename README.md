@@ -353,6 +353,9 @@ then asks what the project is and one yes-or-no question for each surface no fil
 composes the harness. The first Claude Code session opens from the brief and works through what is still
 missing with the owner.
 
+Run alone on a terminal, `pnpm nina` opens a session: the banner once, then a `nina ›` prompt where commands
+(`stats`, `check`, `upgrade --to <version>`) run one under another, with Tab, history and `clear`.
+
 The test suites run from this repo:
 
 ```bash

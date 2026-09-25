@@ -1,8 +1,9 @@
 /**
  * The NINA banner.
  *
- * Printed on every invocation. This is not decoration and is not a candidate for
- * "quiet mode" trimming — see the project memory `nina-cli`.
+ * Printed on every invocation, and once at the top of a `nina` session, whose commands run under it.
+ * This is not decoration and is not a candidate for "quiet mode" trimming — see the project memory
+ * `nina-cli`.
  */
 
 /** ANSI-Shadow block lettering for the CLI name — six lines, by design. */
