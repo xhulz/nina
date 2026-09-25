@@ -97,7 +97,14 @@ The measurement store is the only copy of history older than Claude Code's trans
 snapshot must never make a record worse. A dispatch already on record is never re-created, and a
 notification already read is not read twice — re-walking bytes after a cursor went back used to blank a
 record and count a resume that never happened, and once the snapshot wrote whenever a record changed,
-it wrote the blank over the good one. Cursors live beside each project's records, written by rename:
+it wrote the blank over the good one. Claude Code 2.1.282 made the same mistake easy twice over. It writes
+one notification up to three times (queued, then taken off the queue or absorbed mid-turn, and delivered as
+a message), each at its own time, so a copy is told from a resume by the agent's usage block, whose time a
+resume has made longer. And when the run handed its report back, the notification says only that the
+report was delivered and is not repeated. Read as the report, it replaced the verdict the handback
+declared with none, on three of the first new project's runs in an afternoon, and nothing read their
+unchanged transcripts again. A notification now never replaces a handback's verdict, and a run whose
+recorded verdict is not its handback's is read once more. Cursors live beside each project's records, written by rename:
 one shared file, rewritten whole by every project's hook, let the later of two concurrent writers put
 every other project's cursor back.
 

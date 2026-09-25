@@ -449,18 +449,29 @@ export async function scanProject(projectDir, prior = {}) {
       if (!record) continue;
 
       const result = /<result>([\s\S]*?)(?:<\/result>|$)/.exec(text)?.[1] ?? '';
-      // The same notification read twice — bytes re-walked after a cursor went back — is not a
-      // second result. Taking it as one counted a resume that never happened and replaced a verdict
-      // read from the subagent's own transcript with a weaker one guessed from this summary.
-      if (record.result_ts && record.result_ts === (row.timestamp ?? null)) continue;
-      const { verdict, source } = classifyVerdict(result, record.role);
-      if (record.result_ts) record.resumes += 1;
+      // The same notification read twice is not a second result. Taking it as one counted a resume
+      // that never happened. It is read twice when bytes are re-walked after a cursor went back, and
+      // since Claude Code 2.1.282 one notification is also written up to three times: queued, taken
+      // off the queue or absorbed mid-turn, and delivered as a message, each at its own time. The
+      // agent's usage block (its time so far) tells a copy from a resume, which has run for longer;
+      // a notification without one is told by its time, as before.
+      const spentMs = Number(/<duration_ms>(\d+)<\/duration_ms>/.exec(text)?.[1] ?? Number.NaN);
+      const timed = Number.isFinite(spentMs);
+      if (timed ? record.notified_ms === spentMs : record.result_ts && record.result_ts === (row.timestamp ?? null)) continue;
+      if (timed ? record.notified_ms != null : record.result_ts) record.resumes += 1;
+      if (timed) record.notified_ms = spentMs;
       record.status = /<status>(.*?)<\/status>/.exec(text)?.[1] ?? null;
       record.result_ts = row.timestamp ?? null;
-      record.result_chars = result.length;
-      record.verdict = verdict;
-      record.verdict_source = source;
-      record.issues = issueCount(result, verdict, source);
+      // A notification whose run handed its report back says only that: "delivered to you as a
+      // message … it is not repeated here". Read for a verdict, it replaced the one the handback
+      // declared with none, and since the subagent's transcript had not grown, nothing read it again.
+      if (!String(record.verdict_source ?? '').startsWith('handback')) {
+        const { verdict, source } = classifyVerdict(result, record.role);
+        record.result_chars = result.length;
+        record.verdict = verdict;
+        record.verdict_source = source;
+        record.issues = issueCount(result, verdict, source);
+      }
       if (record.ts && record.result_ts) {
         record.duration_s = Math.round((Date.parse(record.result_ts) - Date.parse(record.ts)) / 1000);
       }
@@ -517,9 +528,12 @@ async function attachAgentDetail(projectDir, dispatches) {
       // first read froze a partial bill. A run still in flight has no handback yet and is read again;
       // a record from before a field existed is read once more; and one whose transcript is gone is
       // never reached here, so it keeps what it had rather than being dropped, which is what a
-      // --rebuild would do to every run older than Claude Code's transcript retention.
+      // --rebuild would do to every run older than Claude Code's transcript retention. A run read in
+      // full has a verdict from its handback; one whose verdict says otherwise lost it to a notification
+      // read after it, and is read once more to get it back.
       const size = (await stat(join(dir, file)).catch(() => null))?.size ?? null;
-      if (records.every((r) => r.agent_read && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r && r.agent_read_bytes === size)) continue;
+      const whole = (r) => r.agent_read && String(r.verdict_source ?? '').startsWith('handback') && r.agent_read_bytes === size;
+      if (records.every((r) => whole(r) && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r)) continue;
 
       const skills = new Set();
       // Lessons this run read, and whether it only listed the directory. Every spec tells its role
