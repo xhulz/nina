@@ -130,6 +130,7 @@ export function spanOf(record, project, context = null) {
   if (typeof record.issues === 'number') attributes.push(attribute('langfuse.observation.metadata.issues', record.issues));
   if (typeof record.files_touched === 'number') attributes.push(attribute('langfuse.observation.metadata.files_touched', record.files_touched));
   if (record.branch) attributes.push(attribute('langfuse.observation.metadata.branch', record.branch));
+  if (record.effort) attributes.push(attribute('langfuse.observation.metadata.effort', record.effort));
   if (tokens) attributes.push(...usageAttributes(tokens, record.usage_model, record.usage_model));
   if (context) {
     attributes.push(attribute('langfuse.observation.input', context.prompt ?? ''));

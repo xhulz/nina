@@ -2,7 +2,8 @@
 name: planner
 description: Use when a task is ambiguous, multi-step, or crosses multiple files/packages. Decomposes the user request into an ordered list of concrete subtasks. MUST be the first stage for any new feature or multi-file change per CLAUDE.md rules. Do NOT use for trivial edits, single-file bug fixes, or pure Q&A.
 tools: Read, Write, Edit, Grep, Glob, WebSearch, WebFetch
-model: sonnet
+model: {{WORK_MODEL}}
+effort: {{WORK_EFFORT}}
 ---
 
 ## Consult your pills first

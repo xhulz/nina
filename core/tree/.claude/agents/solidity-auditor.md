@@ -3,7 +3,8 @@
 name: solidity-auditor
 <!-- nina:slot project.1 description -->
 tools: Read, Grep, Glob, Bash, Skill
-model: opus
+model: {{DEEP_MODEL}}
+effort: {{DEEP_EFFORT}}
 ---
 
 ## Consult your pills first

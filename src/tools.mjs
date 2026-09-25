@@ -156,9 +156,13 @@ export function frontmatterFindings(specs) {
 /** The model values a spec may declare: an alias Claude Code knows, `inherit`, or a full model id. */
 const MODEL_VALUE = /^(opus|sonnet|haiku|fable|inherit|claude-[a-z0-9.-]+(\[[a-z0-9]+\])?)$/;
 
+/** The effort levels a spec may declare. Which of them a model accepts is Claude Code's to say. */
+const EFFORT_VALUE = /^(low|medium|high|xhigh|max)$/;
+
 /**
- * Every spec whose `model:` is none of those. The model is a stage's largest cost decision, and
- * `nina stats` reads it back against what ran; a typo there is a stage on a model nobody chose.
+ * Every spec whose `model:` or `effort:` is none of those. The model is a stage's largest cost
+ * decision and the effort its next, and `nina stats` reads both back against what ran; a typo there
+ * is a stage on a model nobody chose, or at the session's effort with nothing saying so.
  *
  * @param {Map<string, string>} specs - Role → composed spec text.
  * @returns {string[]}
@@ -170,6 +174,10 @@ export function modelFindings(specs) {
     const model = /^model:[ \t]*(.*)$/m.exec(front)?.[1].trim();
     if (model !== undefined && !MODEL_VALUE.test(model)) {
       out.push(`${role}: \`model: ${model}\` is neither an alias (opus, sonnet, haiku, fable, inherit) nor a model id`);
+    }
+    const effort = /^effort:[ \t]*(.*)$/m.exec(front)?.[1].trim();
+    if (effort !== undefined && !EFFORT_VALUE.test(effort)) {
+      out.push(`${role}: \`effort: ${effort}\` is not one of low, medium, high, xhigh, max`);
     }
   }
   return out;

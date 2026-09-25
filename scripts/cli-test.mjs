@@ -2811,6 +2811,11 @@ const dated = (date, status = 'active') =>
   const fast = new Map([['f1', { usage: { output_tokens: 10, speed: 'fast' }, model: 'claude-opus-5' }]]);
   const fellBack = new Map([['f2', { usage: { output_tokens: 10, iterations: [{ type: 'fallback_message' }] }, model: 'claude-fable-5-1' }]]);
   expect(tokensOf(fast).model === null && tokensOf(fellBack).model === null, 'cost: a fast-mode or fallback run is left unpriced rather than priced as the model it names');
+  const at = (id, effort) => [id, { usage: { output_tokens: 1 }, model: 'claude-opus-5-5', effort }];
+  expect(
+    tokensOf(new Map([at('e1', 'xhigh'), at('e2', 'xhigh'), at('e3', 'high')])).effort === 'xhigh' && tokensOf(new Map([at('e4', null)])).effort === null,
+    "cost: a run's effort is the level most of its messages ran at, and none where the transcript names none",
+  );
 
   expect(priceOf('claude-opus-5-5').input === 4 && priceOf('claude-opus-5').input === 5, 'cost: the longest model prefix wins — 5.5 is not priced as 5');
   expect(priceOf('claude-opus-4-8[1m]')?.input === 5, 'cost: a context suffix does not hide the model');
@@ -2832,7 +2837,7 @@ const dated = (date, status = 'active') =>
   await writeFile(
     join(dir, 's1', 'subagents', 'agent-abc123.jsonl'),
     // Every streamed copy, as Claude Code writes them: the reader, not this test, has to keep the last.
-    rows.map((u) => JSON.stringify({ type: 'assistant', message: { id: u.id, model: u.model, usage: u.usage, content: [] } })).concat(['']).join('\n'),
+    rows.map((u) => JSON.stringify({ type: 'assistant', effort: 'high', message: { id: u.id, model: u.model, usage: u.usage, content: [] } })).concat(['']).join('\n'),
   );
   const agentFile = join(dir, 's1', 'subagents', 'agent-abc123.jsonl');
   // Three writes to two files, and a read that writes nothing.
@@ -2851,6 +2856,11 @@ const dated = (date, status = 'active') =>
   expect(record?.files_touched === 2, `proportion: a run counts the distinct files it wrote, not its edits or its reads — got ${record?.files_touched}`);
   expect(!JSON.stringify(record).includes('/p/a.ts'), 'proportion: and keeps the number, never the paths');
   expect(record?.tokens?.output === 600 && record.usage_model === 'claude-sonnet-5', `cost: the snapshot record carries the run's tokens and model — got ${JSON.stringify(record)}`);
+  expect(record?.effort === 'high', `cost: and the effort level it ran at — got ${record?.effort}`);
+  const unleveled = { ...record };
+  delete unleveled.effort;
+  const [leveled] = (await scanProject(dir, { cursors: {}, records: [unleveled] })).records;
+  expect(leveled?.effort === 'high', `cost: a record from before the effort was kept gets it on the next snapshot — got ${leveled?.effort}`);
   // A record read before it learned the field is read once more while its transcript is on disk —
   // how 825 runs recorded before tokens existed got theirs — and one already carrying it is not.
   const before = { ...record, agent_read: true, lessons_read: 0 };
@@ -2885,6 +2895,15 @@ const dated = (date, status = 'active') =>
   expect(/reviewer\s+2\s+\$15\.00\s+\$20\.00\s+80%/.test(out) && /all stages\s+3\s+\$25\.00/.test(out), `cost: stats reports each stage's median, total and share — got ${out}`);
   expect(out.includes('4 of 4 runs have a token record, 1 on a model the price table does not know'), `cost: the header counts the runs it could not price — got ${out}`);
   expect(/models —/.test(out) && /qa\s+claude-sonnet-5\s+1 run\(s\)\s+2026-09-24 → 2026-09-24\s+loop-back 0% of 1\s+median \$5\.00/.test(out) && /^\s+claude-opus-4-1\s+1 run/m.test(out) && !/reviewer\s+claude-sonnet-5/.test(out), `models: a stage that ran on two models is read model by model, and one that ran on one is not — got ${out}`);
+  const levels = join(await scratch(), 'snaps');
+  await mkdir(levels, { recursive: true });
+  const leveledRow = (effort) => JSON.stringify({ ...JSON.parse(row('architect', 1e5, 'claude-opus-5')), effort });
+  await writeFile(join(levels, '-x.jsonl'), `${[leveledRow('high'), leveledRow('xhigh'), leveledRow('xhigh')].join('\n')}\n`);
+  const byLevel = run(['stats', '--snapshots', levels, '--all'], { loud: true }).out;
+  expect(
+    /architect\s+claude-opus-5 · high\s+1 run\(s\)/.test(byLevel) && /^\s+claude-opus-5 · xhigh\s+2 run\(s\)/m.test(byLevel),
+    `models: one model at two effort levels is read level by level — got ${byLevel}`,
+  );
 
   // Declared against used: only runs after the spec was last written count, and an alias names a family.
   const home = realpathSync(await scratch());
@@ -3131,6 +3150,47 @@ const dated = (date, status = 'active') =>
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
   const learned = inside([]);
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
+}
+
+// ─── models and effort: the release's, not the alias's or the session's ─────────────────
+{
+  // Every stage names a model and an effort level. With `opus` and no level, the architect ran on
+  // whatever the alias pointed to that week at whatever the session was set to, and one move of each
+  // took it from 12k tokens written a run to 90k with no release in between.
+  const dir = await composed('plain');
+  const spec = async (role) => readFile(join(dir, '.claude', 'agents', `${role}.md`), 'utf8');
+  const front = (text) => text.slice(4, text.indexOf('\n---', 4));
+  expect(
+    /^model: claude-opus-5-5\neffort: high$/m.test(front(await spec('architect'))) && /^model: claude-sonnet-5\neffort: xhigh$/m.test(front(await spec('implementer'))),
+    'compose: a stage runs on the model and at the effort level its release names',
+  );
+  const roles = (await readdir(join(dir, '.claude', 'agents'))).map((f) => f.replace(/\.md$/, ''));
+  const unnamed = [];
+  for (const role of roles) if (!/^model: claude-\S+\neffort: \S+$/m.test(front(await spec(role)))) unnamed.push(role);
+  expect(roles.length > 5 && unnamed.length === 0, `compose: every composed stage names both — missing in ${unnamed.join(', ')}`);
+
+  // A project that declares its own level runs at it; one it cannot run at is a problem `check` names.
+  const profilePath = join(dir, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, DEEP_EFFORT: 'xhigh' } }));
+  run(['compose', '--project', dir]);
+  expect(/^effort: xhigh$/m.test(front(await spec('reviewer'))), 'compose: a project that declares its own effort level runs at it');
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, DEEP_EFFORT: 'extreme' } }));
+  run(['compose', '--project', dir]);
+  const checked = run(['check', '--project', dir], { loud: true }).out;
+  expect(checked.includes('architect: `effort: extreme` is not one of low, medium, high, xhigh, max'), `check: an effort level Claude Code has no such level for is named — got ${checked}`);
+  const levels = modelFindings(new Map([['a', '---\nname: a\neffort: max\n---\n'], ['b', '---\nname: b\neffort: {{DEEP_EFFORT}}\n---\n'], ['c', '---\nname: c\n---\neffort: nonsense in the body\n']]));
+  expect(levels.length === 1 && levels[0].startsWith('b: `effort: {{DEEP_EFFORT}}`'), `models: a level left undeclared is named, and only the frontmatter is read — got ${JSON.stringify(levels)}`);
+
+  // The spec is written once and briefly, and its steps say what they build on, so the ones that
+  // build on nothing still open go out together.
+  const architect = await spec('architect');
+  const router = await readFile(join(dir, '.claude', 'router.md'), 'utf8');
+  expect(
+    architect.includes('**Say each thing once, and briefly.**') && architect.includes('`Builds on: nothing`') && !architect.includes('156 KB') &&
+      router.includes('Steps whose turn comes together, each in a different package and sharing no file, go out together') && router.includes('Parallel steps save'),
+    'compose: the architect writes each thing once and names what each step builds on, and the router sends the independent ones out together',
+  );
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
@@ -3423,7 +3483,7 @@ const dated = (date, status = 'active') =>
   const row = (i, extra = {}) => ({
     project: slug, dispatch_id: `toolu_${String(i).padStart(4, '0')}`, ts: '2026-09-20T10:00:00.000Z', result_ts: '2026-09-20T10:05:00.000Z',
     role: 'reviewer', desc: 'SECRET-DESCRIPTION', session: 's1', verdict: 'APPROVED', verdict_source: 'handback', branch: 'main',
-    tokens: { input: 10, output: 20, write_5m: 0, write_1h: 0, read: 30 }, usage_model: 'claude-opus-4-8', files_touched: 2, ...extra,
+    tokens: { input: 10, output: 20, write_5m: 0, write_1h: 0, read: 30 }, usage_model: 'claude-opus-4-8', effort: 'high', files_touched: 2, ...extra,
   });
   let rows = [
     ...Array.from({ length: SPAN_BATCH + 20 }, (_, i) => row(i)),
@@ -3494,8 +3554,8 @@ const dated = (date, status = 'active') =>
   const span = spansSent()[0];
   const attr = (s, key) => s.attributes.find((a) => a.key === key)?.value;
   expect(
-    attr(span, 'langfuse.trace.name')?.stringValue === 'reviewer' && attr(span, 'langfuse.trace.metadata.project')?.stringValue === 'Kittens' && attr(span, 'langfuse.observation.type')?.stringValue === 'generation' && JSON.parse(attr(span, 'langfuse.observation.usage_details').stringValue).cache_read_input_tokens === 30 && attr(span, 'langfuse.trace.tags')?.arrayValue?.values?.map((v) => v.stringValue).join() === 'nina,Kittens',
-    `export: a run is a trace named for its role, in a project named by its directory, a generation when it spent tokens — got ${JSON.stringify(span.attributes)}`,
+    attr(span, 'langfuse.trace.name')?.stringValue === 'reviewer' && attr(span, 'langfuse.trace.metadata.project')?.stringValue === 'Kittens' && attr(span, 'langfuse.observation.type')?.stringValue === 'generation' && JSON.parse(attr(span, 'langfuse.observation.usage_details').stringValue).cache_read_input_tokens === 30 && attr(span, 'langfuse.trace.tags')?.arrayValue?.values?.map((v) => v.stringValue).join() === 'nina,Kittens' && attr(span, 'langfuse.observation.metadata.effort')?.stringValue === 'high',
+    `export: a run is a trace named for its role, in a project named by its directory, a generation when it spent tokens, with the effort it ran at — got ${JSON.stringify(span.attributes)}`,
   );
 
   calls = [];

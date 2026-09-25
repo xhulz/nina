@@ -2,7 +2,8 @@
 name: implementer
 description: Use after the architect has produced a spec. Writes code strictly to spec, INCLUDING test files. Verifies typecheck/lint/build pass locally before handing off to reviewer. DOES NOT run vitest — QA stage runs tests after reviewer approves. Do NOT use without a prior architect spec for non-trivial work.
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill<!-- nina:slot frontend.3 -->
-model: sonnet
+model: {{WORK_MODEL}}
+effort: {{WORK_EFFORT}}
 ---
 
 ## Consult your pills first

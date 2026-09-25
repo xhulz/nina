@@ -138,9 +138,13 @@ Two implementers writing the same checkout will clobber each other. If you want 
 ### A spec's steps are passes of their own
 
 When the architect splits a spec into steps, each step is its own pass from the implementer on: an
-implementer for that step alone, then the reviewer and every gate its diff triggers, then qa. The next
-step's implementer goes out only once the pass before it closed, so no step is built on one that was sent
-back. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
+implementer for that step alone, then the reviewer and every gate its diff triggers, then qa. A step's
+implementer goes out only once every step it builds on has closed its pass, so no step is built on one
+that was sent back. Steps whose turn comes together, each in a different package and sharing no file, go out together, as
+§ *Implementers* says: one message, each implementer worktree-isolated, the merge yours and in step
+order; their reviews go out together too, and their qa runs one after the other. Parallel steps save
+time, not tokens: each run builds its own context, and a step that builds on another is never one of
+them. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
 steps: that spec goes back to the architect to be split. `ONE-SPEC` and `ONE-REVIEW` are the planner's
 groupings of sibling steps, and never merge an architect's steps into one run.
 

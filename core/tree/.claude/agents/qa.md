@@ -2,7 +2,8 @@
 name: qa
 <!-- nina:slot project.1 description -->
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: {{WORK_MODEL}}
+effort: {{WORK_EFFORT}}
 ---
 
 ## Consult your pills first

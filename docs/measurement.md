@@ -34,7 +34,7 @@ identical.
 
 `~/.nina/snapshots/` holds **metadata only** — role, verdict, timestamps, duration, branch,
 which skills were invoked, how many pills the run opened, how many issues a loop-back named, how many
-distinct files the run wrote, and the tokens the run spent by kind with the model that spent them. No report text, no source, no PII, not
+distinct files the run wrote, and the tokens the run spent by kind with the model that spent them and the effort level it ran at. No report text, no source, no PII, not
 even a pill's path or an issue's id — and no dollars: a price is a fact about a date, so `stats`
 prices the tokens when it reads them, at the list prices in `src/prices.mjs`, and says which date's.
 Those are API-equivalent figures; a subscription pays nothing per token, and the unit is still the
@@ -77,6 +77,14 @@ orchestrator runs each step as its own pass from the implementer on, and an impl
 returns `BLOCKED`. `stats` names every implementer run past the limit its project's release states, with
 the largest and what it read, and says nothing for a release that states none.
 
+Each step names the steps it builds on, and those whose turn comes together, in different packages and
+sharing no file, go out at once, each implementer in its own worktree, as implementers in different
+packages already could. That buys time and not tokens: each run builds its own context, and the one
+project that ran two at once paid no less per file than its serial runs that week. What every step reads
+is the spec, which is why the architect is told to say each thing once: the spike's spec was 156 KB where
+the other project's had a median of 40 KB, only 10% of it code, and it opened with four revision sections
+from the rounds it was sent back through, which every later stage read before the spec itself.
+
 `stats` reports the projects that run the harness: one whose directory holds `.nina/profile.json`, or
 failing that one with ten pipeline dispatches, which is how it was told before profiles existed. Counted
 by dispatches alone, the first new project, five dispatches in, was hidden among the projects that do not
@@ -110,7 +118,7 @@ work back and what a run cost. The first reading, over one project where the rev
 `sonnet` to `opus` on 2026-09-04:
 
 ```
-  models — a stage that ran on more than one, model by model; different weeks, not an experiment
+  models — a stage that ran on more than one model or effort level, one line each; different weeks, not an experiment
     reviewer            claude-sonnet-5        49 run(s)  2026-08-12 → 2026-09-04  loop-back 4% of 49  median $0.69
                         claude-opus-4-8        72 run(s)  2026-09-05 → 2026-09-10  loop-back 19% of 52  median $0.75
                         claude-opus-5          55 run(s)  2026-09-16 → 2026-09-22  loop-back 39% of 51  median $3.18
@@ -134,8 +142,36 @@ it was built on, it reports none, which is what that project's history says.
 
 The per-stage model stays in the spec's frontmatter rather than in `graph.md`, so it is one fact in one
 place. `modelFindings` (in `src/tools.mjs`, beside the check of what a spec's tools grant) requires it to
-be an alias Claude Code knows (`opus`, `sonnet`, `haiku`, `fable`), `inherit`, or a model id; the compose
-suite runs it over every fixture and `nina check` over every project.
+be an alias Claude Code knows (`opus`, `sonnet`, `haiku`, `fable`), `inherit`, or a model id, and an
+`effort:` to be `low`, `medium`, `high`, `xhigh` or `max`; the compose suite runs it over every fixture and
+`nina check` over every project.
+
+### At what effort
+
+The model alone did not explain what a stage wrote. The architect wrote a median 12k tokens a run on
+`claude-opus-4-8` and 90k on `claude-opus-5`, which read as the model's doing. The transcripts also say at
+what effort each message ran, and no spec named one, so every stage had run at the session's level, which
+the owner's settings set per model: `high` for Opus 4.8, `xhigh` for Sonnet 5, Opus 5 and Opus 5.5. Sonnet 5
+at `xhigh` wrote 13k as architect. Opus 5.5 at `xhigh` wrote 277k in the first new project's one run, about
+three quarters of it thinking: of the 143k it wrote before its first report, some 36k was the spec and the
+calls that gathered it. The reviewer went the same way, 4.5k a run on Opus 4.8 at `high`, 33k on Opus 5 and
+65k on Opus 5.5 at `xhigh`. And `opus` itself had moved twice under the harness, to Opus 5 and then to
+Opus 5.5, with no release in between.
+
+So each spec names a model id and an effort level, from four defaults in `core/vocabulary.json`:
+`DEEP_MODEL` (`claude-opus-5-5`) and `DEEP_EFFORT` (`high`) for the stages that design and judge (the
+architect, the reviewer, secops, devops, and the two that write and audit immutable code), and
+`WORK_MODEL` (`claude-sonnet-5`) and `WORK_EFFORT` (`xhigh`) for the stages that carry a spec out. `high`
+for the first is one level below where they ran and one above Opus 5.5's own default, `medium`. `xhigh` for
+the second is where they always ran, and none of them wrote more than it had. A model moves when a release
+moves it, and a project declares any of the four to change it: a provider with its own model ids, or a
+level it has measured and prefers. The record keeps the effort beside the model, `stats` reads one model at
+two levels as two lines, and Langfuse gets it as metadata. A record from before the field is read once more
+while its transcript is on disk.
+
+What this cannot say yet is whether the architect at `high` specifies as well. The next runs will show what
+it writes; whether the reviewer still catches what it caught is a question for `nina eval`, run on the
+release that names the level against the one before it.
 
 ### Sending it to Langfuse: `nina langfuse`
 

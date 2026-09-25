@@ -236,7 +236,7 @@ function declaredSince(dir, rel, declared) {
  * What each stage ran on. A spec's `model:` is the one choice here that changes cost by an order of
  * magnitude, and it had only ever been read, never measured: the model a run used is on every record,
  * so a stage that ran on more than one can be read model by model — its runs, when, how often it sent
- * work back, and what a run cost. That is a comparison across different weeks of different work, not
+ * work back, and what a run cost. The effort level is read with it, where the record has one. That is a comparison across different weeks of different work, not
  * an experiment; what it can settle is whether a change is worth an eval.
  *
  * Where a project's directory can be found it also asks whether each stage runs on the model its spec
@@ -253,7 +253,9 @@ function modelReport(records) {
   for (const r of ran) {
     if (!PIPELINE_ROLES.has(r.role)) continue;
     const models = byRole.get(r.role) ?? new Map();
-    models.set(r.usage_model, [...(models.get(r.usage_model) ?? []), r]);
+    // The effort is part of what a stage ran on: one model at two levels wrote seven times as much.
+    const on = r.effort ? `${r.usage_model} · ${r.effort}` : r.usage_model;
+    models.set(on, [...(models.get(on) ?? []), r]);
     byRole.set(r.role, models);
   }
   const changed = [...byRole].filter(([, models]) => models.size > 1).sort(([a], [b]) => a.localeCompare(b));
@@ -269,7 +271,7 @@ function modelReport(records) {
       const costs = runs.map((r) => (r.tokens ? costOf(r.tokens, r.usage_model) : null)).filter((c) => c !== null);
       const dates = runs.map((r) => String(r.ts).slice(0, 10)).sort();
       lines.push(
-        `    ${(i === 0 ? role : '').padEnd(20)}${model.padEnd(20)}${String(runs.length).padStart(5)} run(s)  ${dates[0]} → ${dates.at(-1)}` +
+        `    ${(i === 0 ? role : '').padEnd(20)}${model.padEnd(26)}${String(runs.length).padStart(5)} run(s)  ${dates[0]} → ${dates.at(-1)}` +
           (clear.length ? `  loop-back ${pct(loops, clear.length)} of ${clear.length}` : '  no readable verdict') +
           (costs.length ? `  median ${money(median(costs))}` : ''),
       );
@@ -301,7 +303,7 @@ function modelReport(records) {
   }
 
   if (lines.length === 0 && drift.length === 0) return;
-  console.log('\n  models — a stage that ran on more than one, model by model; different weeks, not an experiment');
+  console.log('\n  models — a stage that ran on more than one model or effort level, one line each; different weeks, not an experiment');
   for (const line of lines) console.log(line);
   for (const line of drift) console.log(line);
 }

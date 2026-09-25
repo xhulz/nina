@@ -519,7 +519,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       // never reached here, so it keeps what it had rather than being dropped, which is what a
       // --rebuild would do to every run older than Claude Code's transcript retention.
       const size = (await stat(join(dir, file)).catch(() => null))?.size ?? null;
-      if (records.every((r) => r.agent_read && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && r.agent_read_bytes === size)) continue;
+      if (records.every((r) => r.agent_read && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r && r.agent_read_bytes === size)) continue;
 
       const skills = new Set();
       // Lessons this run read, and whether it only listed the directory. Every spec tells its role
@@ -554,8 +554,10 @@ async function attachAgentDetail(projectDir, dispatches) {
         }
         if (line.includes('"usage"')) {
           try {
-            const message = JSON.parse(line)?.message;
-            if (message?.id && message.usage) usage.set(message.id, { usage: message.usage, model: message.model ?? null });
+            const row = JSON.parse(line);
+            const message = row?.message;
+            const effort = typeof row?.effort === 'string' ? row.effort : null;
+            if (message?.id && message.usage) usage.set(message.id, { usage: message.usage, model: message.model ?? null, effort });
           } catch {
             // A torn line loses one message's count, not the run's.
           }
@@ -592,6 +594,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       records.forEach((record, i) => {
         record.tokens = i === 0 ? spent.tokens : null;
         record.usage_model = spent.model;
+        record.effort = spent.effort;
         record.files_touched = written.size;
       });
       for (const record of records) {
@@ -623,21 +626,26 @@ async function attachAgentDetail(projectDir, dispatches) {
 }
 
 /**
- * What a run spent, from each of its messages' final usage: tokens by kind, and the model that spent
- * most of them. Metadata — counts and a model id, never a message.
+ * What a run spent, from each of its messages' final usage: tokens by kind, and the model and effort
+ * level that most of its messages ran at. Metadata — counts, a model id and a level, never a message.
  *
- * @param {Map<string, {usage: object, model: string|null}>} usage - Message id → its final usage.
- * @returns {{tokens: {input: number, output: number, write_5m: number, write_1h: number, read: number}|null, model: string|null}}
+ * The effort is kept because the model alone did not explain what a stage wrote. Every stage ran at
+ * the session's level, and the architect wrote a median 12k tokens on one model at `high` and 90k on
+ * the next at `xhigh`, most of it thinking; with only the model on the record, that read as the model.
+ *
+ * @param {Map<string, {usage: object, model: string|null, effort?: string|null}>} usage - Message id → its final usage.
+ * @returns {{tokens: {input: number, output: number, write_5m: number, write_1h: number, read: number}|null, model: string|null, effort: string|null}}
  */
 export function tokensOf(usage) {
-  if (usage.size === 0) return { tokens: null, model: null };
+  if (usage.size === 0) return { tokens: null, model: null, effort: null };
   const tokens = { input: 0, output: 0, write_5m: 0, write_1h: 0, read: 0 };
   const byModel = new Map();
+  const byEffort = new Map();
   const n = (v) => (typeof v === 'number' ? v : 0);
   // A fast-mode message is billed at a premium, and a fallback iteration ran on another model than the
   // message names; neither is what the model's list price says, so a run with either is left unpriced.
   let irregular = false;
-  for (const { usage: u, model } of usage.values()) {
+  for (const { usage: u, model, effort } of usage.values()) {
     if (u.speed === 'fast' || (Array.isArray(u.iterations) && u.iterations.some((it) => it?.type && it.type !== 'message'))) irregular = true;
     tokens.input += n(u.input_tokens);
     tokens.output += n(u.output_tokens);
@@ -647,9 +655,10 @@ export function tokensOf(usage) {
     tokens.write_1h += split ? n(u.cache_creation.ephemeral_1h_input_tokens) : 0;
     tokens.write_5m += split ? n(u.cache_creation.ephemeral_5m_input_tokens) : n(u.cache_creation_input_tokens);
     if (model) byModel.set(model, (byModel.get(model) ?? 0) + 1);
+    if (effort) byEffort.set(effort, (byEffort.get(effort) ?? 0) + 1);
   }
   const model = irregular ? null : ([...byModel].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
-  return { tokens, model };
+  return { tokens, model, effort: [...byEffort].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null };
 }
 
 /**
