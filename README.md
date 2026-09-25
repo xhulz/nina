@@ -43,9 +43,8 @@ There are eleven subagents, and a project gets the ones its risks call for. Ever
 `architect`, `implementer`, `reviewer`, `qa`, `devops` and `secops`. A database adds `dba`, external services
 add `integration-tester`, and smart contracts add `solidity-dev` and `solidity-auditor`, since contract code
 can't be patched once it ships. The chain also scales with the change. A one-file label fix gets a light chain
-or a direct edit, and anything on a critical path (auth, plus what the project's surfaces add: money, the database, an
-integration) goes through every
-gate.
+or a direct edit, and anything on a critical path (auth, plus what the project's surfaces add: money, the
+database, an integration) goes through every gate.
 
 ```mermaid
 flowchart LR
@@ -97,6 +96,12 @@ Each layer mirrors the project's file tree, and `nina compose` merges them:
 - `{{PLACEHOLDERS}}` get filled from the project's profile, so the core can state a rule without naming one
   project's provider, packages or models. A release can answer a name itself, like the typecheck and test
   commands, and a project declares it only to change it.
+- `core/defaults/` holds the release's own text for a project slot a file can't do without. The one that
+  needed it is an agent's `description:`, which Claude Code requires before it loads the agent at all. The
+  project's own text still wins; until it writes some, the default composes, and nothing counts it as owed.
+  An empty default marks a place a project may add to, like the last rows of each agent's skills table.
+- A passage marked `<!-- nina:why -->` tells how a rule came to be. It stays in the layers for whoever
+  maintains them and is never composed, so no dispatch pays to read the history of a rule.
 - Every composed file opens with a notice naming the layer to edit instead. Claude Code's `Edit` tool refuses
   a file the agent hasn't read, so any agent editing an existing file sees the notice first. Seeing it isn't
   the same as obeying it, so an edit guard hook refuses the edit and quotes the notice back.
@@ -113,10 +118,11 @@ flowchart LR
 Composition gets tested like code. Four fixture projects, one for each shape worth testing, have to pass ten
 properties each: no placeholder survives, every unfilled slot belongs to the project, nothing leaks in from a
 surface the project didn't declare, gated files show up exactly when they should, rule references resolve,
-the notice never lands above a frontmatter block, every agent spec declares its tool allowlist, the graph
-validates, every numbered list counts 1, 2, 3 in every profile, and every file fits a size budget. An eleventh check looks at the layers themselves: a surface's technology, role or domain may only be named in
-files gated on that surface. The first time it ran, it found 37 places where ungated core prose handed work
-to a role that only some projects have.
+the notice never lands above a frontmatter block, every agent spec declares its name, description and tool
+allowlist, the graph validates, every numbered list counts 1, 2, 3 in every profile, and every file fits a
+size budget. An eleventh check looks at the layers themselves: a surface's technology, role or domain may only
+be named in files gated on that surface. The first time it ran, it found 37 places where ungated core prose
+handed work to a role that only some projects have.
 
 ### Releases and upgrades
 
@@ -207,15 +213,27 @@ Each project runs NINA's detectors from two hooks, and each hook reaches a diffe
 | `UserPromptSubmit` | the model, as `additionalContext`, before it answers |
 
 For a long time only the first one existed, so every finding went to the person, who wasn't the one about to
-act on it. The detectors report drift in the composed files, what a new project still has to declare (so its
-first conversation starts by filling that in without being asked), lessons that are owed, and the health of the
-loop gate itself.
+act on it. The detectors report drift in the composed files, what a project still has to declare, lessons that
+are owed, and the health of the loop gate itself.
+
+The two readers are told differently. The model gets a finding in full the first time, and after that, while
+it stays the same, only its summary and an instruction not to repeat it. The person hears one line from
+`Stop`, and only about what the turn itself left behind, since whatever the model was handed before the turn
+it has already relayed. A new project's first answer opens with what the project is, read from the brief its
+owner wrote during `init`, and proposes writing the architecture together, instead of reciting what is
+missing.
 
 ### Measurement and the learning cycle
 
 `nina snapshot` reads Claude Code's transcripts and records each dispatch: which stage ran, the verdict it
 declared, whether it got sent back, which skills it used and whether it read its lessons. The store keeps
 metadata only. Report text, source code and personal data never go in.
+
+`nina stats` reads that store back: the loop-back rate of each stage, what each stage costs at list prices
+(a subscription pays nothing per token, but the unit still compares one stage with another), which model each
+stage actually ran on against the one its spec declares, and the size of each change against the chain that
+carried it. The first cost reading, over 825 runs, had the implementer at 41% of the spend and the gate whose
+value was in question for weeks at 2%.
 
 The same history can go to Langfuse on its own. `nina langfuse login` asks for a project's keys once, and
 `nina langfuse on` makes a project send its runs after every turn, from the detector that already snapshots
@@ -299,24 +317,48 @@ None of this showed up until I counted.
   reviewer got better at catching things, or maybe the lesson didn't help. It isn't proof, but without the
   numbers I couldn't even ask.
 
+## What the first new project found
+
+The harness was extracted from a project that was already running, so the path a new project takes had never
+been walked. The first project started from nothing walked it in two days, and each thing it found became a
+release:
+
+- `Stop` printed twenty-two lines under every answer, repeating the pending items the model had just
+  explained. It says one line now, and only about what the turn left behind.
+- The first answer to "hello" was an inventory of what the project lacked. It now opens with what the owner
+  said the project is.
+- Once the architecture existed, the model closed every answer with the same pending line, because it was
+  told before every message to mention it. It now gets the full list once per session.
+- Seven agents, the reviewer, qa and secops among them, took their `description:` from the project, and
+  Claude Code doesn't load an agent without one. Every new project had no reviewer until it wrote one, and
+  nothing said so, because the fixtures fill no project slot and composed the same broken specs. The release
+  now supplies a default, and the fixtures check for it.
+- The integration recipe told the project to add a row to skills tables it had no way to edit, and a region
+  written in backticks was reported as a skill that wasn't installed.
+
 ## Getting started
 
-You need Node 20 or newer. NINA has no dependencies, and a project installs it straight from this repo:
+You need Node 20 or newer. NINA has no dependencies, and a project installs it straight from this repo, with
+the commit pinned in its lockfile:
 
 ```bash
+pnpm init                          # a new project needs its own package.json first
 pnpm add -D github:xhulz/nina
-npx nina init
+pnpm nina init
 ```
 
-`init` works out the surfaces a repo reveals (a Prisma schema means `db`, a wrangler config means `edge-cf`) and
-asks about the ones no file can settle. It writes `.nina/profile.json`, wires the Claude Code hooks and composes
-the harness. The first Claude Code session in the project then starts by filling in whatever is still missing.
+`init` works out the surfaces a repo reveals (a Prisma schema means `db`, a wrangler config means `edge-cf`),
+then asks what the project is and one yes-or-no question for each surface no file can settle. It writes
+`.nina/profile.json`, the owner's answer as `.nina/BRIEF.md` and a to-do list, wires the Claude Code hooks and
+composes the harness. The first Claude Code session opens from the brief and works through what is still
+missing with the owner.
 
 The test suites run from this repo:
 
 ```bash
 node scripts/compose-test.mjs     # the fixtures against their properties, plus the layer audit
 node scripts/cli-test.mjs         # the CLI end to end, in scratch projects
+node scripts/harness-check.mjs    # this repo's own detectors
 ```
 
 ## Repository map
@@ -330,7 +372,9 @@ node scripts/cli-test.mjs         # the CLI end to end, in scratch projects
 | [`src/wiring.mjs`](src/wiring.mjs) | the hooks and npm scripts a project needs, read by `init`, `wire`, `check` and `upgrade` |
 | [`src/transcripts.mjs`](src/transcripts.mjs) | the transcript parser |
 | [`src/detectors.mjs`](src/detectors.mjs) | runs a project's detectors from its hooks |
-| [`core/`](core), [`surfaces/`](surfaces) | the harness layers |
+| [`src/tools.mjs`](src/tools.mjs) | what an agent spec's frontmatter must carry: name, description, tools, model, skills |
+| [`src/langfuse.mjs`](src/langfuse.mjs) | a run as an OpenTelemetry trace and a verdict score |
+| [`core/`](core), [`surfaces/`](surfaces) | the harness layers, and in `core/defaults/` the release's own text for a slot |
 | [`releases/`](releases) | the frozen releases projects pin |
 | [`fixtures/`](fixtures) | projects that exist to be composed and checked |
 | [`evals/`](evals) | a change with planted defects, for comparing one release's reviewer with another's |
@@ -342,7 +386,7 @@ this repo, with a table of which document to read before changing what.
 
 ## Engineering
 
-- Node.js with zero runtime dependencies. About 9.6k lines of source and 4k lines of tests.
+- Node.js with zero runtime dependencies. About 9.8k lines of source and 4.2k lines of tests.
 - 47 frozen releases so far. The package ships all of them, so an upgrade can compose its target and report the
   cost before it changes anything.
 - The tests check properties over the fixture projects, audit the layers, run the whole CLI in scratch projects,
