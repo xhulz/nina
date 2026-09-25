@@ -1178,9 +1178,37 @@ async function sound(fixture, core) {
   expect(mode('pass.mjs', 'context').stdout === '', 'detectors: --context says nothing when there is nothing to say');
   expect(JSON.parse(mode('fail.mjs', 'hook').stdout).systemMessage?.includes('the map is stale'), 'detectors: --hook tells the person');
 
-  // The person is told once, in a line per detector; the model is handed the whole finding every time.
+  // The person is told once, in a line per detector; the model is handed a finding before every message.
   expect(mode('fail.mjs', 'hook').stdout === '', 'detectors: --hook does not tell the person the same finding again');
   expect(mode('fail.mjs', 'context').stdout.includes('the map is stale'), 'detectors: while the model is still told it before every message');
+  // In full once. Told before every message to say it was pending, the model closed every answer with the
+  // same line; unchanged since the last message, the finding is its summary and not to be said again.
+  const context = (script, session) => JSON.parse(mode(script, 'context', session).stdout || '{}').hookSpecificOutput?.additionalContext ?? '';
+  const again = context('fail.mjs');
+  expect(
+    again.includes('map — the map is stale') && again.includes('Do not tell the user again') && again.includes('`node scripts/harness-check.mjs` prints it in full') && !again.includes('pass over it in silence'),
+    `detectors: a finding the model was handed at the last message, unchanged, is its summary and not to be repeated — got ${again}`,
+  );
+  await writeFile(join(dir, 'summary.mjs'), "console.log('map: 3 stale entries'); process.exit(1);\n");
+  expect(context('summary.mjs', 'alone').includes('pass over it in silence'), 'detectors: a finding that is its summary alone is handed over in full the first time');
+  await writeFile(join(dir, 'grown.mjs'), "console.log('the map is stale\\nand a new entry is missing'); process.exit(1);\n");
+  const grown = context('grown.mjs');
+  expect(grown.includes('a new entry is missing') && grown.includes('pass over it in silence') && !grown.includes('Do not tell the user again'), `detectors: a finding that changed is handed over in full again — got ${grown}`);
+  const two = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import { runDetectors } from ${JSON.stringify(join(ROOT, 'src', 'detectors.mjs'))};` +
+        `runDetectors([{ name: 'map', script: 'grown.mjs', args: [] }, { name: 'lessons', script: 'summary.mjs', args: [] }], { root: ${JSON.stringify(dir)}, context: true });`,
+    ],
+    { encoding: 'utf8', input: '' },
+  );
+  const mixed = JSON.parse(two.stdout || '{}').hookSpecificOutput?.additionalContext ?? '';
+  expect(
+    mixed.includes('lessons: map: 3 stale entries') && mixed.includes('pass over it in silence') && mixed.includes('Also still pending') && mixed.includes('map — the map is stale.') && !mixed.includes('a new entry is missing'),
+    `detectors: a new finding goes in full beside the summary of one already handed over — got ${mixed}`,
+  );
   mode('pass.mjs', 'hook');
   expect(JSON.parse(mode('fail.mjs', 'hook').stdout || '{}').systemMessage?.includes('the map is stale'), 'detectors: a finding that comes back after it was cleared is told again');
   await writeFile(join(dir, 'many.mjs'), "console.log('first thing\\nsecond thing\\nthird thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");
