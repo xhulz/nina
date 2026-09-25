@@ -85,8 +85,17 @@ export function required(spec) {
     const rest = spec.slice(start + 3);
     const end = rest.indexOf('\n## ');
     const section = end === -1 ? rest : rest.slice(0, end);
-    for (const [, token] of section.matchAll(/`([a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?)`/g)) {
-      if (SKILL_ID.test(token) && (token.includes('-') || token.includes(':'))) skills.add(token);
+    // A skill is named where the section lists one: in bold, or as the first cell of a table row. Any
+    // other name in backticks is prose — in some roles the project's own introduction composes inside
+    // this section, and a region it named, `us-east-1`, was reported as a skill that is not installed.
+    for (const line of section.split('\n')) {
+      const listed = [
+        ...[...line.matchAll(/\*\*`([^`]+)`\*\*/g)].map((m) => m[1]),
+        ...(/^\|\s*`([^`]+)`\s*\|/.exec(line)?.slice(1) ?? []),
+      ];
+      for (const token of listed) {
+        if (SKILL_ID.test(token) && (token.includes('-') || token.includes(':'))) skills.add(token);
+      }
     }
   }
   if (skills.size > 0 || /\bSkill\b tool|via the `Skill`/.test(spec)) needs.add('Skill');

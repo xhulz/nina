@@ -3292,9 +3292,21 @@ const dated = (date, status = 'active') =>
   const bed = await sound('plain', 'dev');
   await writeFile(join(bed, '.claude', 'agents', 'docs-writer.md'), '---\nname: docs-writer\ntools: Read\n---\nOurs.\n');
   const reviewerSpec = join(bed, '.claude', 'agents', 'reviewer.md');
-  await writeFile(reviewerSpec, (await readFile(reviewerSpec, 'utf8')).replace('| Skill | Invoke when the diff touches… |\n|---|---|', '| Skill | Invoke when the diff touches… |\n|---|---|\n| `nina-absent-skill-xyz` | never |'));
+  // A skill is one the section lists, in a table's first cell or in bold. A project's introduction composes
+  // inside the section in some roles, and a region it named in backticks was reported as a missing skill.
+  await writeFile(
+    reviewerSpec,
+    (await readFile(reviewerSpec, 'utf8')).replace(
+      '| Skill | Invoke when the diff touches… |\n|---|---|',
+      '| Skill | Invoke when the diff touches… |\n|---|---|\n| `nina-absent-skill-xyz` | never |\n\nThe database runs in `us-east-1`, and moves to `sa-east-1` if it must. Also consult **`nina-absent-bold-xyz`**.\n',
+    ),
+  );
   const byHand = run(['check', '--project', bed], { loud: true });
   const asDetector = run(['check', '--project', bed, '--detector'], { loud: true });
+  expect(
+    byHand.out.includes('names skill `nina-absent-bold-xyz`') && !byHand.out.includes('`us-east-1`') && !byHand.out.includes('`sa-east-1`'),
+    `check: a skill is what the section lists, not every name in backticks around it — got ${byHand.out}`,
+  );
   expect(!byHand.out.includes('docs-writer'), `check: an agent of the project's own is not reported as a missing stage — got ${byHand.out}`);
   expect(byHand.out.includes('nina-absent-skill-xyz') && !asDetector.out.includes('nina-absent-skill-xyz') && asDetector.status === 0, `check --detector: leaves the machine's skills to a check run by hand — got ${asDetector.out}`);
   await writeFile(reviewerSpec, (await readFile(reviewerSpec, 'utf8')).replace(/^model: .*$/m, 'model: sonet'));

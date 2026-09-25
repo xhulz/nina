@@ -146,8 +146,11 @@ stays quiet, because the move measures `check` itself, before and after: a new c
 detector, measured against an old harness-check that never ran it, read every problem the project
 already had as one the move made, and rolled the move back — `--force` or not. And it leaves out which
 skills are installed, a fact about one machine rather than the project, which a `nina check` by hand
-still reports. In every mode, only the specs the harness composed are stages: a project may keep agents
-of its own beside them.
+still reports. A skill is what a spec's "Skills you MUST consult" section lists, in bold or as the first
+cell of a table row. Every name in backticks there used to count, and in some roles the project's own
+introduction composes inside that section, so a project that wrote its region as `us-east-1` was told
+that skill was not installed. In every mode, only the specs the harness composed are stages: a project
+may keep agents of its own beside them.
 
 It also writes the **wiring**, because without it the scripts it composes are never run:
 `.claude/settings.json` with every hook the pinned version's scripts need — the harness check's, the
