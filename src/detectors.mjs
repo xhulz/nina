@@ -23,6 +23,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { hookStateDir, slugFor } from './paths.mjs';
+import { CHECK } from './wiring.mjs';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -165,7 +166,72 @@ const digestOf = (text) => createHash('sha256').update(text).digest('hex').slice
 function findingKeys(result) {
   const lines = String(result.detail || 'stale').split('\n').map((l) => l.trim()).filter(Boolean);
   const summary = [...lines].reverse().find((l) => /^[a-z][\w -]*: /i.test(l));
-  return lines.filter((l) => l !== summary && !l.startsWith('→')).map((l) => digestOf(`${result.name}|${l}`));
+  const keys = lines.filter((l) => l !== summary && !l.startsWith('→')).map((l) => digestOf(`${result.name}|${l}`));
+  // A finding that is its summary alone is still a finding: with no key, it counted as handed over
+  // before it ever was.
+  return keys.length > 0 ? keys : [digestOf(`${result.name}|`)];
+}
+
+/**
+ * The report, in full, for the findings given: each finding's lines under its detector's name, and the
+ * detector's advice under them.
+ *
+ * @returns {string[]} Its lines; none when there is nothing to report.
+ */
+function reportOf(drift, errored, missing, detectors) {
+  const parts = [];
+  if (drift.length > 0) {
+    // Not every detector reports drift any more — one reports a lesson the pipeline owes — so the
+    // heading says what they have in common: something here needs doing before it is forgotten.
+    parts.push('⚠️  harness check — something needs acting on:');
+    for (const r of drift) {
+      const hint = detectors.find((d) => d.name === r.name)?.hint;
+      // A finding of several lines sits under its detector's name, so a reader can tell whose it is.
+      const lines = String(r.detail || 'stale').split('\n').filter((l) => l.trim());
+      const body = lines.length === 1 ? ` ${lines[0].trim()}` : `\n${lines.map((l) => `    ${l.trim()}`).join('\n')}`;
+      parts.push(`  ${r.name}:${body}${hint ? `\n  → ${hint}` : ''}`);
+    }
+  }
+  if (errored.length > 0) {
+    parts.push('🔧 harness check could not run — this says nothing about drift:');
+    for (const r of errored) parts.push(`  ${r.name}: ${r.detail}`);
+  }
+  // A declared detector that is absent was deleted; that is worth saying. One this repo
+  // never declared simply does not apply here.
+  if (missing.length > 0) {
+    parts.push('🔧 harness check incomplete — a declared detector is missing:');
+    for (const r of missing) parts.push(`  ${r.name}: ${r.detail}`);
+  }
+  return parts;
+}
+
+/**
+ * What the prompt hook hands the model, or null for nothing. A finding not handed over at the last
+ * message goes in full, with the instruction to act on it or say it is pending. One that was, and has
+ * not changed, goes as its summary, with the instruction not to say it again: told before every message
+ * to say it was pending, the model closed every answer with the same line.
+ *
+ * @returns {string|null}
+ */
+function contextOf(fresh, known, errored, missing, detectors) {
+  const said = [];
+  const full = reportOf(fresh, errored, missing, detectors);
+  if (full.length > 0) {
+    said.push(
+      "This project's harness check ran before this message and reported the following. Act on it " +
+        'where it bears on the work, or tell the user it is pending — do not pass over it in silence.\n\n' +
+        full.join('\n'),
+    );
+  }
+  if (known.length > 0) {
+    said.push(
+      `${full.length > 0 ? 'Also still pending' : "This project's harness check ran before this message. Still pending"}, ` +
+        `and unchanged since it was handed to you earlier in this session: ${known.map((r) => `${r.name} — ${summaryOf(r.detail)}`).join('; ')}. ` +
+        'Do not tell the user again, least of all as a closing line to your answer; bring it up only where ' +
+        `this message's work touches it. \`node ${CHECK}\` prints it in full.`,
+    );
+  }
+  return said.length > 0 ? said.join('\n\n') : null;
 }
 
 /**
@@ -229,29 +295,7 @@ export function runDetectors(detectors, options) {
   const errored = results.filter((r) => r.state === 'error');
   const missing = results.filter((r) => r.state === 'missing');
 
-  const parts = [];
-  if (drift.length > 0) {
-    // Not every detector reports drift any more — one reports a lesson the pipeline owes — so the
-    // heading says what they have in common: something here needs doing before it is forgotten.
-    parts.push('⚠️  harness check — something needs acting on:');
-    for (const r of drift) {
-      const hint = detectors.find((d) => d.name === r.name)?.hint;
-      // A finding of several lines sits under its detector's name, so a reader can tell whose it is.
-      const lines = String(r.detail || 'stale').split('\n').filter((l) => l.trim());
-      const body = lines.length === 1 ? ` ${lines[0].trim()}` : `\n${lines.map((l) => `    ${l.trim()}`).join('\n')}`;
-      parts.push(`  ${r.name}:${body}${hint ? `\n  → ${hint}` : ''}`);
-    }
-  }
-  if (errored.length > 0) {
-    parts.push('🔧 harness check could not run — this says nothing about drift:');
-    for (const r of errored) parts.push(`  ${r.name}: ${r.detail}`);
-  }
-  // A declared detector that is absent was deleted; that is worth saying. One this repo
-  // never declared simply does not apply here.
-  if (missing.length > 0) {
-    parts.push('🔧 harness check incomplete — a declared detector is missing:');
-    for (const r of missing) parts.push(`  ${r.name}: ${r.detail}`);
-  }
+  const parts = reportOf(drift, errored, missing, detectors);
   if (!hook && !context && applicable.length === 0) {
     parts.push(`no detectors declared in ${join(root, 'package.json')} — nothing to check here`);
   }
@@ -280,20 +324,18 @@ export function runDetectors(detectors, options) {
   // closing the loop meant the human relaying it. A UserPromptSubmit hook's `additionalContext`
   // is put in the model's own context before it answers, which is where a finding can change
   // what happens next.
+  //
+  // What the model was handed at the last message and has not changed since is not handed over in full
+  // again: it has it already, and every copy stays in the conversation.
   if (context) {
-    remember(root, hookSession(), { given: drift.flatMap(findingKeys) });
-    if (text) {
-      process.stdout.write(
-        `${JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: 'UserPromptSubmit',
-            additionalContext:
-              "This project's harness check ran before this message and reported the following. Act on it " +
-              'where it bears on the work, or tell the user it is pending — do not pass over it in silence.\n\n' +
-              text,
-          },
-        })}\n`,
-      );
+    const session = hookSession();
+    const before = readStops(root)[session]?.given;
+    const handed = new Set(Array.isArray(before) ? before : []);
+    remember(root, session, { given: drift.flatMap(findingKeys) });
+    const known = drift.filter((r) => findingKeys(r).every((k) => handed.has(k)));
+    const said = contextOf(drift.filter((r) => !known.includes(r)), known, errored, missing, detectors);
+    if (said) {
+      process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: said } })}\n`);
     }
     return 0;
   }

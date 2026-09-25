@@ -54,8 +54,14 @@ For a long time that was the only mode, so every detector — drift, a stale map
 to the one reader who was not about to act on it, and closing any loop meant the person relaying it.
 `--context` emits `additionalContext` for a UserPromptSubmit hook, which Claude Code puts in the model's
 own context before it answers. A project wants both: the Stop hook tells the person what the turn left
-behind, the prompt hook tells the model before the next one. They are not told alike. The model gets
-every finding in full, before every message, since that is what it acts on. The person hears only what
+behind, the prompt hook tells the model before the next one. They are not told alike. The model is
+handed every finding before every message, since that is what it acts on, but in full once: one it was
+handed at the last message, unchanged, goes as its detector's summary, with the instruction not to say it
+again and the command that prints it in full. Handed the whole list each time, with the instruction to act
+on it or say it was pending, the model in a new project closed every answer, whatever it was about, with
+the same line: the project's name and owner were still unfilled. A finding that changes, or clears and
+comes back, goes in full again, and each copy handed over stays in the conversation, so the summary is
+also what keeps a long session from carrying the list forty times. The person hears only what
 the turn itself left behind: the prompt hook records, per session, which findings it handed the model,
 and the Stop hook says nothing about those, because the model already had them and relayed them. A
 finding the turn produced (a hand edit to a composed file, a lesson owed after it) is one line, the
