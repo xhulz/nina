@@ -244,14 +244,32 @@ export async function check(argv, ctx) {
     if (NEEDS[s] && !surfaces.includes(NEEDS[s])) problems.push(`surface "${s}" is a stack of "${NEEDS[s]}", which this profile does not declare — its rules have nowhere to land`);
   }
 
+  // What the project has chosen to decide later, and why: a vocabulary name, a document or a project slot,
+  // under "deferred" in the profile. It is said as a note rather than a problem, so a project that has not
+  // made a decision yet — and says so — is not told on every turn that it has not. The first new project,
+  // designing before it had code, was told the same five things before every message for days.
+  const deferred = profile.deferred && typeof profile.deferred === 'object' ? profile.deferred : {};
+  const deferredUsed = new Set();
+  let deferrable = false;
+  const owe = (key, problem) => {
+    const why = typeof deferred[key] === 'string' ? deferred[key].trim() : '';
+    if (why) {
+      deferredUsed.add(key);
+      notes.push(`deferred: ${key} — ${why}`);
+    } else {
+      deferrable = true;
+      problems.push(problem);
+    }
+  };
+
   const referenced = await referencedVocabulary(resolved.dir, surfaces.filter((s) => available.includes(s)), target);
   const declared = profile.vocabulary ?? {};
   const defaults = defaultVocabulary(resolved.dir);
   for (const name of [...referenced].sort()) {
     if (!(name in declared)) {
-      if (!(name in defaults)) problems.push(`vocabulary is missing {{${name}}}, which a chosen layer uses`);
+      if (!(name in defaults)) owe(name, `vocabulary is missing {{${name}}}, which a chosen layer uses`);
     } else if (declared[name] === null || declared[name] === '') {
-      problems.push(`vocabulary {{${name}}} is declared but not filled in`);
+      owe(name, `vocabulary {{${name}}} is declared but not filled in`);
     }
   }
   for (const name of Object.keys(declared).sort()) {
@@ -274,7 +292,7 @@ export async function check(argv, ctx) {
       problems.push(`${label} has kind "${entry.kind}" — expected one of ${KINDS.join(', ')}`);
     }
     if (entry?.slug && !existsSync(join(target, '.claude', 'integrations', `${entry.slug}.md`))) {
-      problems.push(`${label} has no doc at .claude/integrations/${entry.slug}.md — a premise has nowhere to live`);
+      owe(`.claude/integrations/${entry.slug}.md`, `${label} has no doc at .claude/integrations/${entry.slug}.md — a premise has nowhere to live`);
     }
     if (entry?.boundary && !existsSync(join(target, entry.boundary))) {
       notes.push(`${label} names boundary "${entry.boundary}", which does not exist yet`);
@@ -287,17 +305,26 @@ export async function check(argv, ctx) {
   // one only to tailor it.
   const defaulted = await defaultedSlots(resolved.dir);
   const open = [...slots].filter((s) => !filled.has(s) && !defaulted.has(s));
-  const missing = open.filter((s) => !expected.has(s));
+  const missing = open.filter((s) => !expected.has(s) && !(typeof deferred[s] === 'string' && deferred[s].trim()));
+  for (const s of open.filter((s) => !expected.has(s) && !missing.includes(s))) owe(s, `project slot ${s} has no fragment`);
   const awaited = open.filter((s) => expected.has(s));
   const orphan = [...filled].filter((s) => !slots.has(s));
-  if (missing.length > 0) problems.push(`${missing.length} project slot(s) have no fragment — see .nina/TODO.md`);
+  if (missing.length > 0) {
+    deferrable = true;
+    problems.push(`${missing.length} project slot(s) have no fragment — see .nina/TODO.md`);
+  }
   for (const s of awaited) notes.push(`project slot ${s} is new in this core and still to fill`);
 
   const unwritten = new Set();
   for (const [doc, refs] of await owedDocuments(resolved.dir, surfaces)) {
     if (existsSync(join(target, doc))) continue;
     unwritten.add(doc);
-    problems.push(`${doc} does not exist, and the chosen layers tell an agent to read it ${refs} time(s)`);
+    owe(doc, `${doc} does not exist, and the chosen layers tell an agent to read it ${refs} time(s)`);
+  }
+  for (const [key, why] of Object.entries(deferred)) {
+    if (deferredUsed.has(key)) continue;
+    if (typeof why !== 'string' || !why.trim()) problems.push(`"${key}" is deferred with no reason — say why it waits, or fill it`);
+    else notes.push(`"${key}" is deferred, and nothing this check asks for goes by that name any more — remove it from "deferred"`);
   }
   for (const s of orphan) notes.push(`project fragment ${s} fills a slot core ${profile.core} does not have`);
 
@@ -368,6 +395,9 @@ export async function check(argv, ctx) {
     }
   }
   for (const p of problems) console.log(`  ✗ ${p}`);
+  if (deferrable) {
+    console.log('  → a decision this project has not made yet can wait: name it under "deferred" in .nina/profile.json, with why');
+  }
   for (const n of notes) console.log(`  · ${n}`);
   if (problems.length === 0 && notes.length === 0) console.log('  ✓ profile, vocabulary, integrations and project layer all check out');
   console.log(

@@ -497,6 +497,11 @@ export async function composeProject(target, ctx, options = {}) {
       if (name in (profile.vocabulary ?? {})) continue;
       text = text.split(`{{${name}}}`).join(value);
     }
+    // A name the project deferred, with its reason, reads as not decided: a stage that meets it asks
+    // instead of guessing, and the raw placeholder it would otherwise read looks like an editing slip.
+    for (const [name, why] of Object.entries(profile.deferred ?? {})) {
+      if (typeof why === 'string' && why.trim() && /^[A-Z][A-Z0-9_]*$/.test(name)) text = text.split(`{{${name}}}`).join(`[${name}: not decided yet]`);
+    }
 
     // Only what has a comment syntax the notice knows. A layer that one day composes JSON
     // would be corrupted by it rather than marked, so it gets nothing and says nothing.

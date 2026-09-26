@@ -4016,6 +4016,30 @@ const dated = (date, status = 'active') =>
   expect(run(['runs', '--project', await scratch()], { loud: true }).status === 1, 'runs: a directory with no profile says so');
 }
 
+// ─── deferred: a decision the project has not made yet, said once, with why ─────────────
+{
+  // A project designing before it had code was told the same five things before every message for days.
+  const dir = await sound('plain', 'dev');
+  const profilePath = join(dir, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  const [name] = Object.keys(profile.vocabulary).filter((n) => profile.vocabulary[n]);
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, [name]: null } }));
+  const owed = run(['check', '--project', dir], { loud: true });
+  expect(owed.status === 1 && owed.out.includes(`vocabulary {{${name}}} is declared but not filled in`) && owed.out.includes('name it under "deferred"'), `deferred: an unfilled name is a problem, and the check says it can wait — got ${owed.out}`);
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, [name]: null }, deferred: { [name]: 'chosen with the architecture', GONE_NAME: 'stale' } }));
+  const waiting = run(['check', '--project', dir], { loud: true });
+  expect(
+    waiting.status === 0 && waiting.out.includes(`deferred: ${name} — chosen with the architecture`) && waiting.out.includes('"GONE_NAME" is deferred, and nothing this check asks for goes by that name'),
+    `deferred: a deferred name is a note with its reason, and one that names nothing is said to be stale — got ${waiting.out}`,
+  );
+  run(['compose', '--project', dir]);
+  const composedText = (await Promise.all((await walk(join(dir, '.claude'))).filter((f) => f.endsWith('.md')).map((f) => readFile(join(dir, '.claude', f), 'utf8')))).join('\n') + (await readFile(join(dir, 'CLAUDE.md'), 'utf8'));
+  expect(composedText.includes(`[${name}: not decided yet]`) && !composedText.includes(`{{${name}}}`), `deferred: a stage reads a deferred name as not decided, not as a raw placeholder`);
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, [name]: null }, deferred: { [name]: '  ' } }));
+  const reasonless = run(['check', '--project', dir], { loud: true });
+  expect(reasonless.status === 1 && reasonless.out.includes(`"${name}" is deferred with no reason`), `deferred: a deferral with no reason does not count — got ${reasonless.out}`);
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');
