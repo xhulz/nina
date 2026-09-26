@@ -34,7 +34,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 ## Inputs
 - The implementer's diff + summary.
-- The architect's spec.
+- The architect's spec — or, in a chain with no architect, the dispatch the implementer was given. Review against it, and ask of it none of what only an architect's spec carries: the Obsolescence list, the preview-deploy plan, the skill citation, integration premises.
 - Current repo state.
 
 ## Outputs
