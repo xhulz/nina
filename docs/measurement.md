@@ -97,6 +97,13 @@ itself, and a later spec reached its eighth as the way new work was asked for, s
 orchestrator too: a spec is corrected in place, new work is a new step or spec, and a dispatch names the
 sections that changed.
 
+On a terminal `stats` is drawn: each section marked in the banner's pink, each stage's runs as a bar of
+what went forward, what was sent back and what said nothing readable, each stage's share of the cost as a
+bar, and every sentence under a section marked `!` when it needs looking at, `✓` when it is sound and `·`
+otherwise, wrapped to the window. Piped, it is the same lines without colour or wrapping, so `grep` finds a
+whole sentence and the suite reads it; the bars stay, since a block character reads the same anywhere.
+`src/look.mjs` holds how it looks, and `nina pipeline` draws with the same.
+
 `stats` reports the projects that run the harness: one whose directory holds `.nina/profile.json`, or
 failing that one with ten pipeline dispatches, which is how it was told before profiles existed. Counted
 by dispatches alone, the first new project, five dispatches in, was hidden among the projects that do not

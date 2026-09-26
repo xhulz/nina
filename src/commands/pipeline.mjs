@@ -12,7 +12,7 @@
 
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { PINK, useColor } from '../banner.mjs';
+import { dim, pink } from '../look.mjs';
 import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
 import { TERMINALS, parseGraph } from '../graph.mjs';
 import { required } from '../tools.mjs';
@@ -220,9 +220,7 @@ export async function pipeline(argv) {
     chosen = picked[0];
   }
 
-  const color = useColor();
-  const name = (s) => (color && !TERMINALS.has(s) ? `\x1b[38;2;${PINK.join(';')}m${s}\x1b[0m` : s);
-  const dim = (s) => (color ? `\x1b[2m${s}\x1b[0m` : s);
+  const name = (s) => (TERMINALS.has(s) ? s : pink(s));
   const width = Math.max(80, Math.min(process.stdout.columns ?? 110, 140));
   const fit = (s, room) => (s.length > room ? `${s.slice(0, Math.max(room - 1, 1))}…` : s);
   const arrow = ' ─▶ ';

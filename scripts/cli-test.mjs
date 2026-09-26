@@ -37,6 +37,7 @@ import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, set
 import { handleEdit, noticeOf } from '../src/guard.mjs';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
+import { bar, heading, note, stacked, wrapped } from '../src/look.mjs';
 import { chainsByShape, historyOf, pickShape, shapeOf } from '../src/commands/pipeline.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
@@ -3153,6 +3154,12 @@ const dated = (date, status = 'active') =>
   };
   const own = inside([]);
   expect(own.includes('3 dispatches · 1 project') && own.includes('(this project; --all for every project)'), `stats: inside a project it reports that project — got ${own}`);
+  // Each stage's runs as a bar of what went forward, back, or said nothing, with the key under the table;
+  // and a history with nothing unread says so rather than "0% of finished runs report no verdict".
+  expect(
+    /reviewer\s+1\s+1\s+1\s+100%\s+100%\s+0%\s+—\s+▓{16}\n/.test(own) && own.includes('█ forward  ▓ sent back  ░ no verdict read') && own.includes("every finished run's verdict could be read.") && !own.includes('0% of finished runs'),
+    `stats: each stage's runs drawn as a bar, and a clean history said as one — got ${own}`,
+  );
   expect(inside(['--all']).includes('5 dispatches · 2 projects'), 'stats: and --all reports every project in the store');
 
   // One implementer run past the files one step may write is named, against the limit the project's
@@ -3181,6 +3188,31 @@ const dated = (date, status = 'active') =>
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
   const learned = inside([]);
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
+}
+
+// ─── look: how a report reads on a terminal, and piped ──────────────────────────────────
+{
+  expect(bar(1, 4) === '████' && bar(0, 10) === '' && bar(0.53, 20) === '██████████▋' && bar(2, 3) === '███', `look: a bar is its share of the cells, ending on an eighth — got ${bar(0.53, 20)}`);
+  const parts = (a, b, c) => [{ n: a, char: '█', paint: (x) => x }, { n: b, char: '▓', paint: (x) => x }, { n: c, char: '░', paint: (x) => x }];
+  const split = stacked(parts(98, 1, 1), 16);
+  expect(split.length === 16 && split.endsWith('▓░') && stacked(parts(0, 0, 0), 16) === '', `look: a stacked bar keeps its length, and a part that is not zero always shows — got ${split}`);
+  // Piped, a report reads as it always did; on a terminal it is marked, coloured and wrapped.
+  expect(heading('cost', 'at list prices') === '\n  cost — at list prices' && note('a sentence', 'warn') === '    a sentence', 'look: piped, a heading and a note are plain lines');
+  const tty = process.stdout.isTTY;
+  const noColor = process.env.NO_COLOR;
+  process.stdout.isTTY = true;
+  delete process.env.NO_COLOR;
+  try {
+    const marked = heading('cost', 'at list prices');
+    const warned = note('look at this', 'warn');
+    expect(marked.includes('▌') && marked.includes('\x1b[') && marked.replace(/\x1b\[[0-9;]*m/g, '').includes('cost — at list prices'), `look: on a terminal a heading is marked and keeps its words — got ${JSON.stringify(marked)}`);
+    expect(warned.replace(/\x1b\[[0-9;]*m/g, '') === '    ! look at this' && note('fine', 'ok').includes('✓'), `look: a note is marked by what it is — got ${JSON.stringify(warned)}`);
+  } finally {
+    process.stdout.isTTY = tty;
+    if (noColor !== undefined) process.env.NO_COLOR = noColor;
+  }
+  const long = wrapped(Array.from({ length: 60 }, () => 'word').join(' '), 4, 6).split('\n');
+  expect(long.length > 1 && long.every((l, i) => (i === 0 ? l.length + 4 : l.length) <= 140) && long.slice(1).every((l) => l.startsWith('      w')), `look: a long line wraps to the window, its continuation indented — got ${JSON.stringify(long)}`);
 }
 
 // ─── pipeline: the chain a project composes, drawn ──────────────────────────────────────

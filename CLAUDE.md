@@ -145,6 +145,7 @@ src/deep.mjs          learn --deep: the loop-back reports read by a model, group
 src/langfuse.mjs      a run as an OTLP trace and a verdict score, and the requests that send them
 src/agentrun.mjs      one stage's own run, read from its transcript for --content, with secrets masked
 src/banner.mjs        the startup banner
+src/look.mjs          how a report looks on a terminal: colour, section marks, bars, wrapping; plain when piped
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to
 fixtures/             projects that exist to be composed and checked
