@@ -626,9 +626,13 @@ async function attachAgentDetail(projectDir, dispatches) {
       // 744 of one project's 826 in full on every turn, two seconds before the person saw an answer.
       const size = (await stat(join(dir, file)).catch(() => null))?.size ?? null;
       const settled = (r) => r.handed_back === false || String(r.verdict_source ?? '').startsWith('handback');
+      // `resumes` is written only by a reader from before rounds, which bills the whole run to its first
+      // record. A store both versions wrote to — one project on the old pin, a hook elsewhere on the new —
+      // had its runs marked read by the old one and skipped here, their first round billed twice.
       if (
         run.agent_read_bytes === size &&
-        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r)
+        !('resumes' in run) &&
+        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r && 'turns' in r)
       ) {
         continue;
       }
@@ -656,6 +660,8 @@ async function attachAgentDetail(projectDir, dispatches) {
         usage: new Map(),
         /** The files the round wrote through the edit tools. Only their number is kept. */
         written: new Set(),
+        /** The tool calls the round made, by id: over its turns, how many calls each turn sent at once. */
+        calls: new Set(),
       });
       const rounds = [fresh()];
       const roundOf = roundsOf();
@@ -677,6 +683,7 @@ async function attachAgentDetail(projectDir, dispatches) {
         const round = rounds[n - 1];
         const hasSkill = line.includes('"Skill"');
         const hasHandback = line.includes('SubagentHandback');
+        for (const m of line.matchAll(/"type":"tool_use","id":"([^"]+)"/g)) round.calls.add(m[1]);
         if (/"name":"(Edit|Write|MultiEdit|NotebookEdit)"/.test(line)) {
           try {
             for (const block of JSON.parse(line)?.message?.content ?? []) {
@@ -755,9 +762,14 @@ async function attachAgentDetail(projectDir, dispatches) {
           targets = [dispatches.get(id)];
         }
         const spent = tokensOf(round.usage);
+        const shape = contextOf(round.usage);
         targets.forEach((record, j) => {
           // One transcript, one bill: were two records ever to share an agent, the second would count it again.
           record.tokens = j === 0 ? spent.tokens : null;
+          record.turns = shape.turns;
+          record.tool_calls = round.calls.size;
+          record.context_start = shape.start;
+          record.context_peak = shape.peak;
           record.usage_model = spent.model;
           record.effort = spent.effort;
           record.files_touched = round.written.size;
@@ -788,6 +800,20 @@ async function attachAgentDetail(projectDir, dispatches) {
       run.agent_read_bytes = size;
     }
   }
+}
+
+/**
+ * How a round spent its context: how many turns it took, and how large the context each turn re-read was
+ * when the round began and at its largest. Every turn is billed the whole context again, so a round that
+ * begins where a long one ended — a run resumed for a fix — pays for everything before it on each turn.
+ *
+ * @param {Map<string, {usage: object}>} usage - Message id → its final usage, in the order the round sent them.
+ * @returns {{turns: number, start: number|null, peak: number|null}} Context sizes in tokens.
+ */
+export function contextOf(usage) {
+  const n = (v) => (typeof v === 'number' ? v : 0);
+  const sizes = [...usage.values()].map(({ usage: u }) => n(u.input_tokens) + n(u.cache_read_input_tokens) + n(u.cache_creation_input_tokens));
+  return { turns: sizes.length, start: sizes[0] ?? null, peak: sizes.length > 0 ? Math.max(...sizes) : null };
 }
 
 /**

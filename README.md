@@ -232,9 +232,11 @@ metadata only. Report text, source code and personal data never go in.
 
 `nina stats` reads that store back: the loop-back rate of each stage, what each stage costs at list prices
 (a subscription pays nothing per token, but the unit still compares one stage with another), which model each
-stage actually ran on against the one its spec declares, and the size of each change against the chain that
-carried it. The first cost reading, over 825 runs, had the implementer at 41% of the spend and the gate whose
-value was in question for weeks at 2%.
+stage actually ran on against the one its spec declares, how each stage's rounds spent their context, and the
+size of each change against the chain that carried it. The first cost reading, over 825 runs, had the
+implementer at 41% of the spend and the gate whose value was in question for weeks at 2%. The first context
+reading found resumed fix rounds starting at nearly half a million tokens, which is why a fix now goes to a
+fresh run.
 
 The same history can go to Langfuse on its own. `nina langfuse login` asks for a project's keys once, and
 `nina langfuse on` makes a project send its runs after every turn, from the detector that already snapshots

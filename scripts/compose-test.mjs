@@ -221,7 +221,7 @@ const BUDGETS = {
   '.claude/pills/README.md': 10000,
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,
-  '.claude/router.md': 16000,
+  '.claude/router.md': 16500,
   '.claude/templates/integration.md': 3000,
   'CLAUDE.md': 25000,
 };

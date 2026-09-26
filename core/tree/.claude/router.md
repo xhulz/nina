@@ -92,6 +92,9 @@ A report with no `VERDICT` line, a run that stopped, or one out of context is no
 with `SendMessage` for its report; failing that, dispatch the stage again, saying what the first run left
 in the tree. Nothing builds on its work until a verdict does.
 
+### A round of work goes to a fresh run
+A resumed run is billed its whole history again on every turn. Resume one only for something short: its missing report, or a re-check of a few files. A fix, a revised spec or a re-run of flows goes to a new run of the stage, dispatched with what it needs: the spec's path, the findings with their `ISSUES` line, and the files they name.<!-- nina:why --> In the project this was learned in, a resumed fix began at a 526k-token context and re-read 60M tokens, twice a first round, and resumed rounds held three quarters of everything the pipeline read.<!-- /nina:why -->
+
 ### A report that sends work two ways
 When one report names issues for the architect and for the implementer, the architect goes first, and the
 implementer fixes against the corrected spec.
