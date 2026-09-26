@@ -3809,6 +3809,15 @@ const dated = (date, status = 'active') =>
     'flow: an architect blocked on a live premise has it observed by the integration-tester first, and is never told to run what it has no shell for',
   );
   expect(validateGraph(graph, new Map()).filter((p) => /cap|never emits/.test(p)).length === 0, 'flow: the probe edge carries a cap and leaves on a verdict the architect emits');
+
+  // The frontend surface's visual gate carried one project's script, port, screens and the path to its
+  // owner's node: every frontend project was told to run a file it did not have. The command is the
+  // project's to name, and a chain with no architect carries its visual acceptance in the dispatch.
+  expect(
+    reviewer.includes('pnpm --filter @acme/app visual') && !/visual-fixture-server|opt\/homebrew|\/identification|\/dashboard|5199|parent commit/.test(reviewer) &&
+      reviewer.includes('or the dispatch, in a chain with no architect — must carry a Visual acceptance section'),
+    'flow: the visual gate serves the build with the command the project names, and nothing of another project\'s',
+  );
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
