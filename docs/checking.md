@@ -18,6 +18,21 @@ derived rather than maintained: whatever the chosen layers reference in backtick
 is what the project owes, so a new reference added to the core starts being asked for on its own. It
 found a leak the first time it ran — a surface hardcoding one project's integration doc.
 
+A project that has not made a decision yet can say so. A vocabulary name, an owed document, an
+integration's doc or a project slot named under `"deferred"` in `.nina/profile.json`, with the reason it
+waits, is a note rather than a problem:
+
+```json
+"deferred": { "AUTH_LIB": "the auth library is Open in architecture.md §7", ".claude/code-map.md": "no code yet" }
+```
+
+The first new project designed for days before it had code, and every message of its owner's came with the
+same five problems, three of them decisions its architecture marked Open: a check that always fails is one
+nobody reads. A deferral with no reason counts for nothing, one that names nothing the check asks for is
+said to be stale, and `upgrade` does not ask for a deferred name. A deferred name composes as
+`[AUTH_LIB: not decided yet]`, so a stage that meets it asks rather than reading a raw placeholder as a
+slip to work around.
+
 `where` answers the question that comes before all of them: **an agent has something to write — does
 it go here at all?** The composed tree carries no provenance, because `nina:slot` and `nina:requires`
 are consumed at composition, so a line in a project's `.claude/agents/qa.md` cannot say whether it came

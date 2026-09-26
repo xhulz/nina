@@ -235,7 +235,8 @@ export async function upgrade(argv, ctx) {
   const declared = profile.vocabulary ?? {};
   // A name the new release supplies a default for is not owed: it composes as the default until declared.
   const defaultsAfter = defaultVocabulary(onto.dir);
-  const needed = [...vocabAfter].filter((v) => (!(v in declared) && !(v in defaultsAfter)) || declared[v] === null).sort();
+  const waits = (key) => typeof profile.deferred?.[key] === 'string' && profile.deferred[key].trim() !== '';
+  const needed = [...vocabAfter].filter((v) => ((!(v in declared) && !(v in defaultsAfter)) || declared[v] === null) && !waits(v)).sort();
   const unused = Object.keys(declared).filter((v) => !vocabAfter.has(v)).sort();
   // A slot the new release fills itself is not asked of the project: it composes as the release wrote it.
   const defaultedAfter = await defaultedSlots(onto.dir);
