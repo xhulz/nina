@@ -108,7 +108,7 @@ When in doubt: **smaller diff, escalate sooner.**
 <!-- nina:slot integrations.4 -->
 
 ## Parallel-dispatch behavior
-When the parent agent has dispatched multiple implementers in parallel (because the planner marked subtasks as `PARALLEL-SAFE`), assume your sibling implementers are working in adjacent file regions. Your contract is: **never write outside your spec's file list**, and trust that the parent will sequence merging.
+When the parent agent has dispatched multiple implementers in parallel (because the planner marked subtasks as `PARALLEL-SAFE`, or a spec's steps build on nothing still open), assume your sibling implementers are working in adjacent file regions. Your contract is: **never write outside your spec's file list**, and trust that the parent will sequence merging. A sibling in another package may be writing in this same checkout, so a check that fails in a file outside your list may be its half-written work: run your checks on your own package where the command allows it, and report such a failure rather than touching the file.
 
 ## Verdict line — the first line of your report
 

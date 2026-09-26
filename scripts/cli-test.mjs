@@ -3267,8 +3267,25 @@ const dated = (date, status = 'active') =>
   const router = await readFile(join(dir, '.claude', 'router.md'), 'utf8');
   expect(
     architect.includes('**Say each thing once, and briefly.**') && architect.includes('`Builds on: nothing`') && !architect.includes('156 KB') &&
-      router.includes('Steps whose turn comes together, each in a different package and sharing no file, go out together') && router.includes('Parallel steps save'),
+      router.includes('Steps whose turn comes together and share no file go out together') && router.includes('Parallel steps save'),
     'compose: the architect writes each thing once and names what each step builds on, and the router sends the independent ones out together',
+  );
+
+  // Side by side in this checkout across packages, in worktrees within one; a file every step would edit
+  // goes in one step; and a spec is corrected in place, by the orchestrator too. One implementer per
+  // package, always in a worktree, serialized steps that nothing ordered and asked for a commit a new
+  // project did not have.
+  const implementer = await spec('implementer');
+  const composedText = await Promise.all(['CLAUDE.md', '.claude/graph.md', '.claude/agents-overview.md', '.claude/router.md'].map((rel) => readFile(join(dir, rel), 'utf8')));
+  expect(
+    router.includes('### Implementers side by side') && router.includes('side by side in this checkout') && router.includes('A worktree\n  holds only what is committed') &&
+      architect.includes('goes in one step, the last that needs it') && implementer.includes('may be its half-written work') &&
+      !composedText.some((text) => /one per package|One implementer per package/.test(text)),
+    'compose: implementers run side by side across packages and in worktrees within one, and nothing composed still says one per package',
+  );
+  expect(
+    router.includes('### A spec is corrected in place') && router.includes('Never ask for\na `Revision N` section') && !router.includes('eighth revision') && !router.includes('The rule\n  used to be'),
+    'compose: the orchestrator asks for no revision sections, and the history behind both rules is not composed',
   );
 }
 
