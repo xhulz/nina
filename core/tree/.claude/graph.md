@@ -49,7 +49,7 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 <!-- nina:slot blockchain.2 -->
 <!-- nina:slot money.1 -->
 - `reviewer` → `qa` on `APPROVED`
-- `reviewer` → `done` on `APPROVED` — a chain with no architect whose change no test covers
+- `reviewer` → `done` on `APPROVED` — a spike, or a chain with no architect whose change no test covers
 - `reviewer` → `implementer` on `REJECTED` — an implementation bug · max 2
 - `reviewer` → `architect` on `REJECTED` — a design flaw, or no preview-deploy plan · max 2
 - `qa` → `devops` on `PASS` — the change touches a deployed surface

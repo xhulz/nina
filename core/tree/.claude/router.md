@@ -81,6 +81,15 @@ orchestrator went on asking for revisions. The first new project's second spike 
 revision sections, one of them written by the orchestrator, and every dispatch told the stage to read them
 first. Its first spec reached an eighth revision, which had become the way new work was asked for.<!-- /nina:why -->
 
+### A spike answers one question
+A spike is an experiment: it answers a question about a service, a library or the data before anything is
+designed on it, and its code is evidence, kept in a directory of its own outside the product's packages.
+The architect writes a spike plan, one page, not a spec: the question, what to run and observe, the
+answer that settles it, and when to stop. The reviewer checks that it measures what it says it measures.
+No qa, devops or secops. Its plan is corrected at most twice; past that, or when its answer raises a new
+question, stop and ask {{OWNER}}: a new question is a new spike, and a spike revised past its question is
+the product being designed without a spec.
+
 ### Reviewer audits; QA runs tests
 Reviewer runs `{{TYPECHECK_CMD}}` / `{{LINT_CMD}}` (and `{{BUILD_CMD}}` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
 
@@ -167,23 +176,6 @@ milestone by, and what `qa` checks a "pre-existing" failure against.
   `{{API_DIR}}` integration suite, which is slow for its own reasons (real DB).
 - **The merge**, always.
 - **A loop-back.** When a stage rejects, fix and re-run that stage; do not fan out around a failure.
-
-### Right-sizing beats parallelism
-
-Before parallelizing a chain, ask whether the chain should be that long at all. The
-proportional-dispatch table above is worth more than any fan-out: a display change that takes
-`implementer → reviewer` is already faster than the same change parallelized across five stages.
-
----
-
-## What NOT to use subagents for
-
-- Trivial edits (rename variable, fix typo, add a log line).
-- Reading code to answer a user question.
-- Running a single command.
-- Pure research / exploration.
-
-The subagent overhead isn't worth it for sub-5-minute tasks. Do it directly.
 
 ---
 
