@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Use when a task is ambiguous, multi-step, or crosses multiple files/packages. Decomposes the user request into an ordered list of concrete subtasks. MUST be the first stage for any new feature or multi-file change per CLAUDE.md rules. Do NOT use for trivial edits, single-file bug fixes, or pure Q&A.
+description: Use when a task is ambiguous, multi-step, or crosses multiple files/packages. Decomposes the user request into an ordered list of concrete subtasks. The first stage of the chains CLAUDE.md's task-shape table starts with it — a new feature, or a change on a critical path or across three or more files with logic. Do NOT use for trivial edits, single-file bug fixes, or pure Q&A.
 tools: Read, Write, Edit, Grep, Glob, WebSearch, WebFetch
 model: {{WORK_MODEL}}
 effort: {{WORK_EFFORT}}

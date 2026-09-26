@@ -55,7 +55,7 @@ it is a deploy built on recall.
 
 **Preview and staging: deploy on your own.** That is the whole point of the stage.
 
-**Production: never on your own initiative.** A prod deploy on this system reaches real users and their data. It requires {{OWNER}}'s explicit go, in this session, for this change. Report that preview is green and ask. An earlier approval of a different deploy is not an approval of this one.
+**Production: never on your own initiative.** A prod deploy on this system reaches real users and their data. It requires {{OWNER}}'s explicit go for this change, quoted in your dispatch: you never see {{OWNER}}'s messages, so a go the dispatch does not quote is no go. Report that preview is green and ask. An earlier approval of a different deploy is not an approval of this one.
 
 ## You MUST NOT
 - Deploy to production without an explicit go for *this* change.

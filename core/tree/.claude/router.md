@@ -42,15 +42,9 @@ it.
 
 ### Milestone gate
 
-```
-… last sub-step: → reviewer → qa ─┬─▶ devops (preview deploy + smoke) ─┐
-                                   │                                    ├─▶ milestone done
-   (entire spec-SET like 6.* )  ───┴─▶ secops (whole-set audit) ────────┘
-                                            │
-                                            └─ BLOCKED (CRITICAL/HIGH) → architect / implementer → re-audit
-```
-
-**secops** is a MILESTONE gate, not a per-sub-step stage. When the LAST sub-step of a numbered set (`6.*`) or phase (one package's build-out) passes qa, dispatch **secops** to audit the whole assembled surface for cross-cutting security/privacy gaps. The set is not "done" until secops returns `SECURE`. Do NOT run secops per sub-step — only at set boundaries.
+**secops** is a milestone gate, not a per-sub-step stage: when the LAST sub-step of a numbered set (`6.*`)
+or phase passes qa, dispatch it beside devops to audit the whole assembled surface. The set is not done
+until it returns `SECURE`; a `BLOCKED` goes back to the architect or implementer, then to a re-audit.
 
 ---
 
@@ -93,6 +87,15 @@ the product being designed without a spec.
 ### Reviewer audits; QA runs tests
 Reviewer runs `{{TYPECHECK_CMD}}` / `{{LINT_CMD}}` (and `{{BUILD_CMD}}` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
 
+### A stage that returns no verdict
+A report with no `VERDICT` line, a run that stopped, or one out of context is not a pass. Resume it once
+with `SendMessage` for its report; failing that, dispatch the stage again, saying what the first run left
+in the tree. Nothing builds on its work until a verdict does.
+
+### A report that sends work two ways
+When one report names issues for the architect and for the implementer, the architect goes first, and the
+implementer fixes against the corrected spec.
+
 ### Pipeline is not sacred
 If reviewer finds a design flaw, loop back to the architect. Don't paper over with implementation hacks.
 
@@ -102,7 +105,7 @@ stage invokes them through the `Skill` tool. The architect cites which skill inf
 reviewer rejects a spec touching a surface with a mandatory skill that cites none and says nothing of why.
 
 ### Devops owns the deploy
-Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change.**
+Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change, quoted in the dispatch.**
 <!-- nina:slot frontend.2 -->
 
 ### Look at every loop-back for a lesson
@@ -128,7 +131,6 @@ run them one after another and buy nothing.
 | **`reviewer` ∥ every gate the diff triggered** after the implementer | all read-only + Bash | the gates stop being a serial prefix to the review |
 | **`reviewer` fanned out by dimension** — one per axis of risk the diff carries, such as tenant isolation, patterns and spec-scope | read-only; they never touch the same output | **the biggest single win.** One reviewer carrying ~15 checklists over a 500-line diff misses things; three narrow ones do not. Faster *and* better |
 | **`architect` across the sibling specs of one milestone** (`<feature>-spec1..N`) | each writes its own file under `.claude/plans/specs/` | the specs share context, so designing them together is more coherent than one-at-a-time, and the whole milestone is specced in one pass |
-| **`secops` ∥ `qa`** at the end of a milestone | secops is read-only by definition | removes the audit from the critical path |
 | **`devops` ∥ `secops`** at the end of a milestone | devops only reads code; what it writes is a deploy target, not the tree | the audit and the preview deploy stop being sequential |
 | **`Explore` fan-out** for "where does X live" | read-only | one search instead of every stage re-grepping the tree |
 
@@ -157,8 +159,9 @@ that was sent back. Steps whose turn comes together and share no file go out tog
 says; their reviews go out together too, and their qa runs one after the other. Parallel steps save
 time, not tokens: each run builds its own context, and a step that builds on another is never one of
 them. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
-steps: that spec goes back to the architect to be split. `ONE-SPEC` and `ONE-REVIEW` are the planner's
-groupings of sibling steps, and never merge an architect's steps into one run.
+steps: that spec goes back to the architect to be split. The planner's `ONE-SPEC` and `ONE-REVIEW` group
+its own sibling steps into one spec and one review; they never put two of an architect's steps in one
+implementer run.
 
 ### Commits
 
@@ -189,4 +192,4 @@ milestone by, and what `qa` checks a "pre-existing" failure against.
 
 ## Quick triage
 
-When dispatch is ambiguous, escalate one notch (heavier chain). The cost of an extra stage is low; the cost of skipping a gate on a critical path is a production incident.
+When the doubt is whether a critical path is touched, take the heavier chain; when it is only how much ceremony, the lighter one (`CLAUDE.md` § *If you are uncertain which chain applies*).
