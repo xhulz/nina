@@ -37,7 +37,7 @@ import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, set
 import { handleEdit, noticeOf } from '../src/guard.mjs';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
-import { chainsByShape, shapeOf } from '../src/commands/pipeline.mjs';
+import { chainsByShape, historyOf, pickShape, shapeOf } from '../src/commands/pipeline.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
 import { MAX_BODY, exportCommand } from '../src/commands/export.mjs';
@@ -3206,28 +3206,76 @@ const dated = (date, status = 'active') =>
       '- `planner` → `human` on `BLOCKED` — no answer',
       // A detour that does not come back to the next stage of the line is not a gate on it.
       '- `planner` → `dba` on `PLAN-READY` — a data plan',
+      '## Concurrency',
+      '- `implementer` × many — work that shares no file',
+      '- `ghost` × many — a stage the graph does not declare',
     ].join('\n'),
+  );
+  expect(graph.many.get('implementer')?.when === 'work that shares no file', `pipeline: a stage that runs as several agents is declared under Concurrency — got ${JSON.stringify([...graph.many])}`);
+  expect(
+    validateGraph(graph, new Map()).some((p) => p.includes('says `ghost` runs as several agents, and it is not a stage here')),
+    'check: a stage declared to run as several agents must be a stage',
   );
   const shape = shapeOf(graph);
   expect(shape.line.join(' ') === 'planner implementer reviewer qa', `pipeline: the line follows the unconditioned forward edges — got ${shape.line.join(' ')}`);
   expect(shape.gates.length === 1 && shape.gates[0].gate === 'dba' && shape.gates[0].to === 'reviewer', `pipeline: a gate is a detour that comes back to the line — got ${JSON.stringify(shape.gates)}`);
   expect(shape.ends.map((e) => e.path.join('>')).join(' ') === 'devops>done done', `pipeline: the ends follow the last stage's conditioned edges to a terminal — got ${JSON.stringify(shape.ends)}`);
   expect(shape.back.map((e) => e.from).join(' ') === 'planner reviewer qa', `pipeline: what goes back is grouped by stage, in the stages' order — got ${shape.back.map((e) => e.from).join(' ')}`);
-  const shapes = chainsByShape('x\n| Task shape | Required dispatch |\n|---|---|\n| Trivial edit | none — edit directly |\n| **Refactor** (no new behavior) | **architect → implementer** — and a note |\n\nafter');
-  expect(JSON.stringify(shapes) === JSON.stringify([{ shape: 'Trivial edit', chain: 'none — edit directly' }, { shape: 'Refactor (no new behavior)', chain: 'architect → implementer' }]), `pipeline: a task shape takes the chain its row sets in bold — got ${JSON.stringify(shapes)}`);
+  const shapes = chainsByShape('x\n| Task shape | Required dispatch |\n|---|---|\n| Trivial edit | none — edit directly |\n| **Refactor** (no new behavior) | **architect → implementer** — and a note |\n| **ANY schema change** | **+ dba before reviewer** |\n\nafter');
+  expect(
+    JSON.stringify(shapes) ===
+      JSON.stringify([
+        { shape: 'Trivial edit', chain: 'none — edit directly', addOn: false },
+        { shape: 'Refactor (no new behavior)', chain: 'architect → implementer', addOn: false },
+        { shape: 'ANY schema change', chain: '+ dba before reviewer', addOn: true },
+      ]),
+    `pipeline: a task shape takes the chain its row sets in bold, and a row that runs no chain adds to one — got ${JSON.stringify(shapes)}`,
+  );
+  expect(
+    pickShape(shapes, '2')[0]?.shape === 'Refactor (no new behavior)' && pickShape(shapes, 'refactor behavior').length === 1 && pickShape(shapes, 'e').length === 3 && pickShape(shapes, '9').length === 0,
+    'pipeline: --for picks a shape by its number, or by every word it gives',
+  );
+  const lately = historyOf(
+    [
+      { role: 'reviewer', ts: '2026-09-20T10:00:00Z', verdict: 'REJECTED' },
+      { role: 'reviewer', ts: '2026-09-21T10:00:00Z', verdict: 'APPROVED' },
+      { role: 'reviewer', ts: '2026-09-22T10:00:00Z', verdict: 'UNCLEAR' },
+      { role: 'reviewer', ts: '2026-09-22T11:00:00Z', verdict: null, status: 'denied' },
+      { role: 'reviewer', ts: '2026-08-01T10:00:00Z', verdict: 'REJECTED' },
+    ],
+    '2026-09-01',
+  ).get('reviewer');
+  expect(JSON.stringify(lately) === JSON.stringify({ runs: 3, read: 2, back: 1 }), `pipeline: a stage's history counts its runs since the date, the verdicts read and those that sent work back, and no denied dispatch — got ${JSON.stringify(lately)}`);
 
   // End to end, on a composed project with gates, and an agent of the project's own.
   const dir = await composed('acme');
   await writeFile(join(dir, '.claude', 'agents', 'docs-writer.md'), '---\nname: docs-writer\ndescription: Writes the user docs.\ntools: Read\n---\nOurs.\n');
+  const today = new Date().toISOString().slice(0, 10);
+  await mkdir(join(process.env.NINA_DATA, 'snapshots'), { recursive: true });
+  await writeFile(
+    join(process.env.NINA_DATA, 'snapshots', `${slugFor(realpathSync(dir))}.jsonl`),
+    `${[['reviewer', 'REJECTED'], ['reviewer', 'APPROVED'], ['implementer', 'DIFF-READY']].map(([role, verdict], i) => JSON.stringify({ project: 'x', dispatch_id: `p${i}`, ts: `${today}T0${i}:00:00.000Z`, role, verdict })).join('\n')}\n`,
+  );
   const drawn = run(['pipeline', '--project', dir], { loud: true });
   const out = drawn.out;
   expect(drawn.status === 0 && out.includes('pipeline · ') && out.includes('core dev') && out.includes('surfaces db, edge-cf, frontend, integrations'), `pipeline: the header names the project, its core and surfaces — got ${out.slice(0, 400)}`);
-  expect(/planner ─▶ architect ─▶ implementer ─▶ reviewer ─▶ qa ─┬─▶ /.test(out) && /└─▶ done\s+nothing to deploy/.test(out), `pipeline: the line, and where its last stage sends work — got ${out}`);
+  expect(/planner ─▶ architect ×n ─▶ implementer ×n ─▶ reviewer ×n ─▶ qa ─┬─▶ /.test(out) && /└─▶ done\s+nothing to deploy/.test(out), `pipeline: the line, its stages that run as several agents, and where its last stage sends work — got ${out}`);
+  expect(/×n\s+runs as several agents at once[^\n]*\n\s+architect\s+the sibling specs/.test(out) && /\n\s+implementer\s+work that shares no file/.test(out), `pipeline: what running as several agents means, stage by stage — got ${out}`);
+  expect(/reviewer\s+claude-opus-5-5 · high[^\n]*\n\s+ran\s+2 run\(s\), sent back 1 of 2 \(50%\)/.test(out) && /qa\s+claude-sonnet-5 · xhigh[^\n]*\n\s+ran\s+no run/.test(out), `pipeline: each stage's last thirty days from the measured history — got ${out}`);
   expect(/implementer ─▶ dba ─▶ reviewer\s+the diff touches the schema/.test(out) && out.includes('implementer ─▶ integration-tester ─▶ reviewer'), `pipeline: the gates the surfaces bring — got ${out}`);
   expect(/reviewer\s+↩ implementer\s+REJECTED\s+2\s+an implementation bug/.test(out) && /architect\s+↩ human\s+BLOCKED\s+—/.test(out), `pipeline: what goes back, on which verdict, with its cap — got ${out}`);
   expect(/architect\s+claude-opus-5-5 · xhigh/.test(out) && /reviewer\s+claude-opus-5-5 · high/.test(out) && /skills\s+.*cloudflare:/.test(out), `pipeline: each stage's model, effort and skills — got ${out}`);
   expect(/the project's own agents, outside the pipeline\n\s+docs-writer\s+Writes the user docs\./.test(out), `pipeline: an agent of the project's own, apart from the stages — got ${out}`);
   expect(/Single-file bug fix \(TS\)\s+implementer → reviewer → qa/.test(out), `pipeline: which chain a task takes, by its shape — got ${out}`);
+  // One shape's chain alone: its stages, the add-ons any chain may take, and only what goes back among them.
+  const one = run(['pipeline', '--project', dir, '--for', 'single file bug'], { loud: true }).out;
+  expect(
+    one.includes('for: Single-file bug fix (TS)') && /\n  implementer ×n ─▶ reviewer ×n ─▶ qa\n/.test(one) && one.includes('+ dba before reviewer') &&
+      !/↩ architect|planner/.test(one) && /reviewer\s+↩ implementer\s+REJECTED/.test(one),
+    `pipeline --for: one shape's chain, its add-ons, and only its own loop-backs — got ${one}`,
+  );
+  const vague = run(['pipeline', '--project', dir, '--for', 'change'], { loud: true });
+  expect(vague.status === 1 && vague.out.includes('task shapes — narrow it, or give the number'), `pipeline --for: a vague shape lists the ones it matches — got ${vague.out}`);
   const none = run(['pipeline', '--project', await scratch()], { loud: true });
   expect(none.status === 1 && none.out.includes('no .claude/graph.md'), `pipeline: a directory with no composed graph says so — got ${none.out}`);
 }

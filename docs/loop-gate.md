@@ -10,6 +10,11 @@ It used to exist only as prose, restated across thirteen documents, and prose ca
 describes the graph rather than being a second copy of it. A spec's own "back to **architect**" is
 checked against the edges, so the prose can still say it but cannot contradict it.
 
+The stages that may run as several agents at once are declared the same way, under "## Concurrency":
+`` `implementer` × many — when ``, for the architect across a milestone's sibling specs, implementers on work
+that shares no file, and reviewers fanned out by risk. They were prose too, and `nina pipeline` could not
+mark them on the line it draws. `nina check` refuses one that names no stage.
+
 Every loop-back edge carries a **cap**: how many times the same issue may travel it before the
 orchestrator stops and hands the owner every round's report. Before the cap there was no rule anywhere
 that could end a loop.
