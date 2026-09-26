@@ -1,0 +1,13 @@
+{
+  "ARCHITECT_EFFORT": "xhigh",
+  "BUILD_CMD": "pnpm build",
+  "DEEP_EFFORT": "high",
+  "DEEP_MODEL": "claude-opus-5-5",
+  "LINT_CMD": "pnpm lint",
+  "RUN_READ_WARN": "40",
+  "STEP_FILES": "15",
+  "TEST_CMD": "pnpm test",
+  "TYPECHECK_CMD": "pnpm typecheck",
+  "WORK_EFFORT": "xhigh",
+  "WORK_MODEL": "claude-sonnet-5"
+}

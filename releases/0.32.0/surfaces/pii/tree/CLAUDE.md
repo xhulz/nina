@@ -1,0 +1,5 @@
+<!-- nina:slot pii.1 -->
+8. **Sensitive personal data is classified, and the classification is enforced.** What counts as sensitive here — identity documents, financial identifiers, anything a person would not expect to be readable by whoever can read a log — is declared in `.claude/architecture.md` § *Privacy*, along with the regime that governs it ({{PRIVACY_REGIME}}). Encrypted at rest. **No sensitive value in a log, an error message, a URL, an analytics event, or an agent transcript** — the places nobody thinks about are exactly the ones that persist. Document bytes live only in the object store, referenced by key, never in the database in clear text.
+
+<!-- nina:slot pii.2 -->
+- **personal data**: where it is collected, stored, logged or sent
