@@ -35,7 +35,7 @@ checked against what the repository says, not against one working tree.
 from its own runs, and it answers link by link, because the cycle is only as real as its weakest one:
 
 ```
-  observe   826 dispatch(es) recorded, 2026-08-12 → 2026-09-22
+  observe   826 run(s) in 843 round(s) recorded, 2026-08-12 → 2026-09-22
   capture   ✗ reviewer: 24 loop-back(s) since its newest lesson (2026-09-03)
   apply     592 of 646 run(s) of roles that have lessons opened their pills (92%)
   graduate  0 lesson(s) at 3+ occurrences · 0 request(s) open

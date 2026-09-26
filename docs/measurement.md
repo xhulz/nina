@@ -135,6 +135,43 @@ than the retention window. A record whose transcript is gone keeps what it had.
 This half exists because every rule the harness could not enforce was invisible until
 measured: mandatory skills were invoked 2 times in 743 runs before anyone counted.
 
+### Runs and rounds
+
+A record is a **round**: one pass of an agent that ends in a report. A **run** is the agent, from the Agent
+call that started it to its last report, and has a round per report — the dispatch, and each `SendMessage`
+that resumed it after it reported. The first round is recorded under the dispatch's id, each later one under
+that id with `#<round>` after it, and `runOf` in `src/transcripts.mjs` gives the run of either.
+
+A run used to be one record holding its last verdict. The orchestrator resumes the same reviewer, architect
+and implementer through every fix, so a reviewer that rejected twice and then approved was one approval: over
+the first new project's first two days the loop gate's ledger held 34 loop-backs where the snapshot held 5,
+and `stats` read the reviewer as sending back 20% of its work where it sent back 57%. It also timed the first
+round to the resume's notification, stretching it across every hour the agent sat waiting. The gate had
+always counted rounds, so two mechanisms disagreed about one fact.
+
+Where one round ends is read from the agent's own transcript, where a resume is written as a message: a round
+ends at the run's handback, and the next opens with the next thing said to the agent — not a reminder, not a
+tool's result. A message that reaches the run before it reports is part of the round it is in, and one it has
+not answered yet is not a round. `roundsOf` is that rule, and the snapshot, the context sent to Langfuse and
+`learn --deep` all read rounds through it. Each round keeps its own verdict, time, spend, files, skills and
+lessons read, so every report counts rounds without knowing a run can have several, and asks of runs only
+what belongs to one: `stats` prices a run as the sum of its rounds and asks whether it invoked a skill, and
+`learn` whether it read a lesson, since what a run read in its first round is in front of it in every round
+after. A run captured whole before rounds existed is split on the next snapshot while its transcript is on
+disk; its later rounds are marked `backfilled`, and one whose first round already went to Langfuse whole is
+not sent, since its tokens would be counted twice.
+
+A round with no report is still running for three hours after it started — the longest measured took 68
+minutes — and after that it never reported, or its report could not be found. Those two used to be counted in
+neither the verdicts nor the unreadable ones, so a change in Claude Code that hid every report would have
+left `stats` saying every verdict could be read. They are unreadable now, and `stats` says how many there are
+apart from the reports that lack a verdict line, since the two have different causes.
+
+A run from before the handback existed has no report in its own transcript, so "read in full" could never be
+said of it, and every snapshot read it again: one project's 744 such runs, two seconds before the person saw
+an answer on every turn. A run is read again now only when its transcript has grown, or when a round that
+handed its report back holds a verdict from somewhere else.
+
 ### Which model a stage ran on
 
 A spec's `model:` is the one choice in the harness that moves cost by an order of magnitude, and until

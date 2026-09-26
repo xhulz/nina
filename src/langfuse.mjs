@@ -131,6 +131,8 @@ export function spanOf(record, project, context = null) {
   if (typeof record.files_touched === 'number') attributes.push(attribute('langfuse.observation.metadata.files_touched', record.files_touched));
   if (record.branch) attributes.push(attribute('langfuse.observation.metadata.branch', record.branch));
   if (record.effort) attributes.push(attribute('langfuse.observation.metadata.effort', record.effort));
+  // A round after the first is the same agent resumed after it reported; the trace says which.
+  if (typeof record.round === 'number') attributes.push(attribute('langfuse.observation.metadata.round', record.round));
   if (tokens) attributes.push(...usageAttributes(tokens, record.usage_model, record.usage_model));
   if (context) {
     attributes.push(attribute('langfuse.observation.input', context.prompt ?? ''));

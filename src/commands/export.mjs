@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRun, runFile } from '../agentrun.mjs';
 import { BATCH, SETTLE_MINUTES, postScore, postScores, postSpans, scoreOf, settled, spanOf, spansOf } from '../langfuse.mjs';
-import { transcriptsOf } from '../transcripts.mjs';
+import { runOf, transcriptsOf } from '../transcripts.mjs';
 import { exportsDir, snapshotsDir } from '../paths.mjs';
 import { readConfig, statusPath, targetOf } from './langfuse.mjs';
 import { projectName } from './stats.mjs';
@@ -140,7 +140,16 @@ async function keep(slug, sent) {
  *   sends what it does from then on, and its history only when asked.
  */
 export function due(records, sent, now = new Date(), since = '') {
-  const spans = records.filter((r) => r.dispatch_id && !sent.spans[r.dispatch_id] && String(r.ts) >= since && settled(r, now) && spanOf(r, ''));
+  // A round split from a run captured before rounds were, whose first round went while it still held the
+  // whole run's spend: sent now, its tokens would be counted twice. Its first round's record has changed
+  // since it went, which is how it is told.
+  const byId = new Map(records.map((r) => [r.dispatch_id, r]));
+  const sentWhole = (r) => {
+    if (!r.backfilled) return false;
+    const first = byId.get(runOf(r));
+    return Boolean(first && sent.spans[first.dispatch_id] && sent.spans[first.dispatch_id] !== digest(first));
+  };
+  const spans = records.filter((r) => r.dispatch_id && !sent.spans[r.dispatch_id] && String(r.ts) >= since && settled(r, now) && !sentWhole(r) && spanOf(r, ''));
   const going = new Set(spans.map((r) => r.dispatch_id));
   const scores = records.filter((r) => (sent.spans[r.dispatch_id] || going.has(r.dispatch_id)) && !sent.scores[r.dispatch_id] && scoreOf(r));
   const changed = records.filter((r) => sent.spans[r.dispatch_id] && sent.spans[r.dispatch_id] !== digest(r)).length;
@@ -306,7 +315,7 @@ async function exportProject({ slug, name, file, target, dry, now, since = '', q
   let bytes = 0;
   for (const record of todo.spans) {
     if (error) break;
-    const run = content ? await readRun(runFile(transcriptsOf(slug), record)) : null;
+    const run = content ? await readRun(runFile(transcriptsOf(slug), record), record.round ?? 1) : null;
     if (content && !run) bare += 1;
     let built = spansOf(record, name, run);
     let size = JSON.stringify(built).length;

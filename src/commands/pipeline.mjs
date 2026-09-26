@@ -16,7 +16,7 @@ import { dim, pink } from '../look.mjs';
 import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
 import { TERMINALS, parseGraph } from '../graph.mjs';
 import { required } from '../tools.mjs';
-import { isLoopBack } from '../transcripts.mjs';
+import { isLoopBack, runOf } from '../transcripts.mjs';
 import { frontmatter } from './pills.mjs';
 
 /** A stage line under "## Stages": "- `name` — what it does". */
@@ -133,19 +133,24 @@ export function pickShape(shapes, query) {
 }
 
 /**
- * What each stage did since a date, from the measurement store: its runs, the verdicts that could be read,
- * and how many of those sent work back. A run a hook denied never ran, and is not counted.
+ * What each stage did since a date, from the measurement store: its runs, their rounds, the verdicts that
+ * could be read, and how many of those sent work back. A run a hook denied never ran, and is not counted.
  *
- * @param {object[]} records - The project's records.
+ * @param {object[]} records - The project's records, one per round.
  * @param {string} since - An ISO date.
- * @returns {Map<string, {runs: number, read: number, back: number}>}
+ * @returns {Map<string, {runs: number, rounds: number, read: number, back: number}>}
  */
 export function historyOf(records, since) {
   const byRole = new Map();
+  const seen = new Map();
   for (const r of records) {
     if (!r.role || r.status === 'denied' || String(r.ts ?? '') < since) continue;
-    const s = byRole.get(r.role) ?? { runs: 0, read: 0, back: 0 };
-    s.runs += 1;
+    const s = byRole.get(r.role) ?? { runs: 0, rounds: 0, read: 0, back: 0 };
+    const runs = seen.get(r.role) ?? new Set();
+    runs.add(runOf(r));
+    seen.set(r.role, runs);
+    s.runs = runs.size;
+    s.rounds += 1;
     if (r.verdict && r.verdict !== 'UNCLEAR' && r.verdict !== 'NONE') {
       s.read += 1;
       if (isLoopBack(r.verdict)) s.back += 1;
@@ -323,7 +328,7 @@ export async function pipeline(argv) {
       const h = history.get(stage);
       const said = !h
         ? 'no run'
-        : `${h.runs} run(s)${h.read === 0 ? ', no verdict read' : `, sent back ${h.back} of ${h.read} (${Math.round((100 * h.back) / h.read)}%)`}`;
+        : `${h.runs} run(s)${h.rounds > h.runs ? ` in ${h.rounds} rounds` : ''}${h.read === 0 ? ', no verdict read' : `, sent back ${h.back} of ${h.read} (${Math.round((100 * h.back) / h.read)}%)`}`;
       console.log(`    ${' '.repeat(col)}${dim('ran     ')}${said}`);
     }
     const skills = [...required(spec).skills].sort();

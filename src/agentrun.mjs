@@ -13,7 +13,7 @@
 import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { tokensOf } from './transcripts.mjs';
+import { roundsOf, tokensOf } from './transcripts.mjs';
 
 /** How much of a prompt, a report or a message's text is sent, and of a tool call's input or result. */
 export const TEXT_CHARS = 20_000;
@@ -71,13 +71,16 @@ function resultText(content) {
 }
 
 /**
- * Reads a stage's transcript.
+ * Reads one round of a stage's transcript: what it was told, what it wrote and called, and what it
+ * reported. A run resumed after it reported is a round per report (`roundsOf`), and a snapshot record is
+ * one round, so what goes beside a record is that round's and no other's.
  *
  * @param {string} file - `agent-<id>.jsonl` under its session.
+ * @param {number} [round] - Which round, from 1.
  * @returns {Promise<{prompt: string|null, report: string|null, messages: object[], tools: object[]}|null>}
  *   Null when the transcript is gone — Claude Code prunes them after a while.
  */
-export async function readRun(file) {
+export async function readRun(file, round = 1) {
   if (!file || !existsSync(file)) return null;
   let prompt = null;
   let handback = null;
@@ -86,8 +89,12 @@ export async function readRun(file) {
   const messages = new Map();
   /** @type {Map<string, {id: string, name: string, input: unknown, start: string, end: string|null, output: string, error: boolean}>} */
   const tools = new Map();
+  const roundOf = roundsOf();
   const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
   for await (const line of rl) {
+    const n = roundOf(line);
+    if (n < round) continue;
+    if (n > round) break;
     let row;
     try {
       row = JSON.parse(line);
@@ -96,7 +103,8 @@ export async function readRun(file) {
     }
     const at = row.timestamp ?? null;
     const content = row.message?.content;
-    if (row.type === 'user' && !row.isMeta && typeof content === 'string' && prompt === null) prompt = content;
+    // The run's first prompt; a later round's is the message that resumed it, which Claude Code marks as meta.
+    if (row.type === 'user' && (round > 1 || !row.isMeta) && typeof content === 'string' && prompt === null) prompt = content;
     if (row.type === 'user' && Array.isArray(content)) {
       for (const block of content) {
         const call = block?.type === 'tool_result' ? tools.get(block.tool_use_id) : null;

@@ -18,7 +18,7 @@ import { createReadStream, existsSync, readFileSync, realpathSync, statSync } fr
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import { isLoopBack } from '../transcripts.mjs';
+import { isLoopBack, runOf } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { HARNESS, snapshotsDir } from '../paths.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
@@ -158,6 +158,32 @@ export async function harvest(projects) {
 const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
 
 /**
+ * Records grouped by the run they are rounds of, each run's rounds in the order given.
+ *
+ * @param {object[]} records - Snapshot records, one per round.
+ * @returns {Map<string, object[]>}
+ */
+function byRun(records) {
+  const runs = new Map();
+  for (const r of records) runs.set(runOf(r), [...(runs.get(runOf(r)) ?? []), r]);
+  return runs;
+}
+
+/** How long a round may go without a report and still be running. The longest measured took 68 minutes. */
+const RUNNING_HOURS = 3;
+
+/**
+ * Whether a round that has no report is still running, rather than one that never reported or whose report
+ * the snapshot could not find. The two looked the same — neither forward, nor sent back, nor unreadable — so
+ * a change in Claude Code that hid every report would have left `stats` saying every verdict could be read.
+ *
+ * @param {object} r - A record.
+ * @param {number} now - Milliseconds since the epoch.
+ * @returns {boolean}
+ */
+const running = (r, now) => !r.verdict && now - Date.parse(r.ts) <= RUNNING_HOURS * 3_600_000;
+
+/**
  * What each stage cost, at API list prices, over the runs whose tokens were recorded. A gate that
  * rarely sends work back is a question of what it costs as much as of what it catches, and until the
  * snapshot kept tokens only the second half could be asked.
@@ -167,16 +193,19 @@ const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
 function costReport(records) {
   const measured = records.filter((r) => r.tokens && typeof r.tokens === 'object');
   if (measured.length === 0) return;
+  // A run's cost is its rounds', so a reviewer resumed twice is one run at the price of three rounds.
   /** @type {Map<string, number[]>} */
   const byRole = new Map();
   let unpriced = 0;
-  for (const r of measured) {
-    const cost = costOf(r.tokens, r.usage_model);
-    if (cost === null) {
+  const runs = byRun(measured);
+  for (const rounds of runs.values()) {
+    const costs = rounds.map((r) => costOf(r.tokens, r.usage_model)).filter((c) => c !== null);
+    if (costs.length === 0) {
       unpriced += 1;
       continue;
     }
-    byRole.set(r.role, [...(byRole.get(r.role) ?? []), cost]);
+    const role = rounds[0].role;
+    byRole.set(role, [...(byRole.get(role) ?? []), costs.reduce((a, b) => a + b, 0)]);
   }
   const total = [...byRole.values()].flat().reduce((a, b) => a + b, 0);
   if (total === 0) return;
@@ -186,7 +215,7 @@ function costReport(records) {
   console.log(
     heading(
       'cost',
-      `at API list prices of ${PRICES_AS_OF}; ${measured.length} of ${records.length} runs have a token record` +
+      `at API list prices of ${PRICES_AS_OF}; ${runs.size} of ${byRun(records).size} runs have a token record` +
         (unpriced > 0 ? `, ${unpriced} on a model the price table does not know` : ''),
     ),
   );
@@ -269,13 +298,17 @@ function modelReport(records) {
   const lines = [];
   for (const [role, models] of changed) {
     const ordered = [...models].sort(([, a], [, b]) => String(a[0].ts).localeCompare(String(b[0].ts)));
-    for (const [i, [model, runs]] of ordered.entries()) {
-      const clear = runs.filter((r) => r.verdict && r.verdict !== 'UNCLEAR' && r.verdict !== 'NONE');
+    for (const [i, [model, rounds]] of ordered.entries()) {
+      const clear = rounds.filter((r) => r.verdict && r.verdict !== 'UNCLEAR' && r.verdict !== 'NONE');
       const loops = clear.filter((r) => isLoopBack(r.verdict)).length;
-      const costs = runs.map((r) => (r.tokens ? costOf(r.tokens, r.usage_model) : null)).filter((c) => c !== null);
-      const dates = runs.map((r) => String(r.ts).slice(0, 10)).sort();
+      const runs = byRun(rounds);
+      const costs = [...runs.values()]
+        .map((rs) => rs.map((r) => (r.tokens ? costOf(r.tokens, r.usage_model) : null)).filter((c) => c !== null))
+        .filter((cs) => cs.length > 0)
+        .map((cs) => cs.reduce((a, b) => a + b, 0));
+      const dates = rounds.map((r) => String(r.ts).slice(0, 10)).sort();
       lines.push(
-        `    ${i === 0 ? `${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}` : ''.padEnd(20)}${model.padEnd(26)}${String(runs.length).padStart(5)} run(s)  ${dim(`${dates[0]} → ${dates.at(-1)}`)}` +
+        `    ${i === 0 ? `${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}` : ''.padEnd(20)}${model.padEnd(26)}${String(runs.size).padStart(5)} run(s)  ${dim(`${dates[0]} → ${dates.at(-1)}`)}` +
           (clear.length ? `  loop-back ${pct(loops, clear.length)} of ${clear.length}` : '  no readable verdict') +
           (costs.length ? `  median ${money(median(costs))}` : ''),
       );
@@ -301,7 +334,7 @@ function modelReport(records) {
       if (other.length === 0) continue;
       const used = [...new Set(other.map((r) => r.usage_model))].join(', ');
       drift.push(
-        `    ${basename(dir)}: ${role} declares ${declared}, and ${other.length} of ${since.length} run(s) since that line last changed ran ${used} — an override no spec shows`,
+        `    ${basename(dir)}: ${role} declares ${declared}, and ${other.length} of ${since.length} round(s) since that line last changed ran ${used} — an override no spec shows`,
       );
     }
   }
@@ -422,7 +455,7 @@ function proportionReport(records, stepLimit = () => null) {
     const read = typeof largest.tokens?.read === 'number' ? `, ${Math.round(largest.tokens.read / 1e6)}M tokens read from cache` : '';
     console.log(
       note(
-        `${over.length} implementer run(s) wrote more files than one step may (${stepLimit(largest.project)}); the largest wrote ${largest.files_touched}${read}. The architect splits such a spec into steps.`,
+        `${over.length} implementer round(s) wrote more files than one step may (${stepLimit(largest.project)}); the largest wrote ${largest.files_touched}${read}. The architect splits such a spec into steps.`,
         'warn',
       ),
     );
@@ -537,18 +570,23 @@ export async function stats(argv, ctx) {
   const skipped = new Set(all.map((r) => r.project)).size - new Set(records.map((r) => r.project)).size;
 
   /**
-   * @type {Map<string, {n:number, done:number, clear:number, loop:number, unclear:number,
-   *   declared:number, durations:number[]}>}
+   * Per stage, counted in rounds: the verdicts are the rounds', and the loop gate counts rounds.
+   *
+   * @type {Map<string, {n:number, runs:Set<string>, done:number, lost:number, clear:number, loop:number,
+   *   unclear:number, declared:number, durations:number[]}>}
    */
   const byRole = new Map();
   // A dispatch a hook denied never ran, so it is neither a run nor a missing verdict.
   const held = records.filter((r) => r.status === 'denied').length;
+  const now = Date.now();
   for (const r of records.filter((r) => r.status !== 'denied')) {
     if (!byRole.has(r.role)) {
-      byRole.set(r.role, { n: 0, done: 0, clear: 0, loop: 0, unclear: 0, declared: 0, durations: [] });
+      byRole.set(r.role, { n: 0, runs: new Set(), done: 0, lost: 0, clear: 0, loop: 0, unclear: 0, declared: 0, durations: [] });
     }
     const s = byRole.get(r.role);
     s.n += 1;
+    s.runs.add(runOf(r));
+    if (!r.verdict && !running(r, now)) s.lost += 1;
     if (r.verdict) s.done += 1;
     if (r.verdict_source === 'declared' || r.verdict_source === 'handback') s.declared += 1;
     if (r.verdict === 'UNCLEAR' || r.verdict === 'NONE') s.unclear += 1;
@@ -561,17 +599,18 @@ export async function stats(argv, ctx) {
 
   const span = [records[0]?.ts, records.at(-1)?.ts].map((t) => String(t).slice(0, 10));
   const projectCount = new Set(records.map((r) => r.project)).size;
+  const run = byRun(records.filter((r) => r.status !== 'denied')).size;
   console.log(
-    `  ${projectCount === 1 ? `${bold(pink(projectName(records[0].project)))} · ` : ''}${bold(records.length)} dispatches · ${projectCount} project${projectCount === 1 ? '' : 's'} · ` +
+    `  ${projectCount === 1 ? `${bold(pink(projectName(records[0].project)))} · ` : ''}${bold(run)} runs in ${bold(records.length - held)} rounds · ${projectCount} project${projectCount === 1 ? '' : 's'} · ` +
       `${span[0]} → ${span[1]}` +
       (here ? dim('  (this project; --all for every project)') : '') +
       (skipped > 0 ? dim(`  (${skipped} non-harness project${skipped === 1 ? '' : 's'} hidden, --all to include)`) : '') +
       (held > 0 ? `  · ${held} dispatch(es) denied by a hook, not counted as runs` : ''),
   );
-  console.log(heading('stages', 'what each ran, and what came of it'));
+  console.log(heading('stages', 'what each ran, and what came of it; a round is one report, and a run resumed after it reported has one per report'));
   console.log(
     dim(
-      `    ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'verdict'.padStart(9)}${'loop-back'.padStart(11)}` +
+      `    ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'rounds'.padStart(9)}${'loop-back'.padStart(11)}` +
         `${'rate'.padStart(7)}${'declared'.padStart(10)}${'unreadable'.padStart(12)}` +
         `${'median'.padStart(9)}`,
     ),
@@ -592,24 +631,33 @@ export async function stats(argv, ctx) {
       Math.max(1, Math.round((16 * s.n) / busiest)),
     );
     const declared = pct(s.declared, s.done).padStart(10);
-    const unread = pct(s.unclear, s.done).padStart(12);
+    const unread = pct(s.unclear + s.lost, s.done + s.lost).padStart(12);
     console.log(
-      `    ${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}${String(s.n).padStart(6)}${String(s.clear).padStart(9)}` +
+      `    ${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}${String(s.runs.size).padStart(6)}${String(s.n).padStart(9)}` +
         `${zero(String(s.loop).padStart(11), s.loop)}${zero(pct(s.loop, s.clear).padStart(7), s.loop)}` +
-        `${s.declared < s.done ? amber(declared) : dim(declared)}${s.unclear > 0 ? amber(unread) : dim(unread)}` +
+        `${s.declared < s.done ? amber(declared) : dim(declared)}${s.unclear + s.lost > 0 ? amber(unread) : dim(unread)}` +
         `${medianMin(s.durations).padStart(9)}  ${runsBar}`,
     );
   }
   console.log(dim(`    ${' '.repeat(86)}█ forward  ▓ sent back  ░ no verdict read`));
 
   const unreadable = rows.reduce((a, [, s]) => a + s.unclear, 0);
+  const lost = rows.reduce((a, [, s]) => a + s.lost, 0);
   const done = rows.reduce((a, [, s]) => a + s.done, 0);
   console.log('');
-  console.log(
-    unreadable === 0
-      ? note("every finished run's verdict could be read.", 'ok')
-      : note(`${pct(unreadable, done)} of finished runs report no machine-readable verdict. Those stages need a verdict token on the report's first line.`, 'warn'),
-  );
+  if (unreadable === 0 && lost === 0) console.log(note("every finished round's verdict could be read.", 'ok'));
+  if (unreadable > 0) {
+    console.log(note(`${pct(unreadable, done + lost)} of finished rounds report no machine-readable verdict. Those stages need a verdict token on the report's first line.`, 'warn'));
+  }
+  if (lost > 0) {
+    console.log(
+      note(
+        `${lost} round(s) that started more than ${RUNNING_HOURS} hours ago have no report at all: a run that never finished, or a report ` +
+          "the snapshot could not find — which is how a change in Claude Code's transcripts first shows.",
+        'warn',
+      ),
+    );
+  }
 
   // Whether the stages that send work back say what they send back. Counted only over reports read
   // since the record learned the field, and only over declared loop-backs, which are all it asks of.
@@ -621,12 +669,14 @@ export async function stats(argv, ctx) {
     );
   }
 
-  const withSkills = records.filter((r) => r.agent_id && r.skills?.length > 0);
-  // Only a run whose own transcript could be located says anything about skill use.
-  const observable = records.filter((r) => r.agent_id).length;
+  // Only a run whose own transcript could be located says anything about skill use, and a skill a run
+  // invoked in one round is in front of it in every round after.
+  const skillsOf = [...byRun(records.filter((r) => r.agent_id)).values()].map((rounds) => [...new Set(rounds.flatMap((r) => r.skills ?? []))]);
+  const withSkills = skillsOf.filter((skills) => skills.length > 0);
+  const observable = skillsOf.length;
   if (observable > 0) {
     const tally = new Map();
-    for (const r of withSkills) for (const k of r.skills) tally.set(k, (tally.get(k) ?? 0) + 1);
+    for (const skills of withSkills) for (const k of skills) tally.set(k, (tally.get(k) ?? 0) + 1);
     const list = [...tally].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ×${n}`);
     console.log(
       note(
@@ -652,7 +702,7 @@ export async function stats(argv, ctx) {
       `${role}: ${s.loop} loop-back(s) in ${s.clear} readable verdict(s) (${pct(s.loop, s.clear)}),` +
         ` against ${elsewhere} across the other gates — check whether it still gates anything.` +
         (s.n - s.clear > 0
-          ? ` ${s.n - s.clear} further run(s) produced no readable verdict at all, so the rate may understate it.`
+          ? ` ${s.n - s.clear} further round(s) produced no readable verdict at all, so the rate may understate it.`
           : '') +
         // A rate built from verdicts a parser guessed at is not the same claim as one built
         // from verdicts the stage declared, and the difference decides whether it can be acted on.
@@ -695,7 +745,7 @@ export async function stats(argv, ctx) {
     );
     if (newest) {
       const since = records.filter((r) => String(r.ts).slice(0, 10) > newest).length;
-      if (since > 0) console.log(note(`${since} dispatch(es) since the newest pill (${newest}).`));
+      if (since > 0) console.log(note(`${since} round(s) since the newest pill (${newest}).`));
     }
   }
   for (const name of pills.unresolved) {

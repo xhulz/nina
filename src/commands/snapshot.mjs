@@ -149,7 +149,7 @@ export async function snapshot(argv, ctx) {
     if (!quiet) {
       const span = `${String(records[0].ts).slice(0, 10)} → ${String(records.at(-1).ts).slice(0, 10)}`;
       console.log(
-        `  ${project.slug.padEnd(48)} ${String(records.length).padStart(5)} dispatches  ` +
+        `  ${project.slug.padEnd(48)} ${String(records.length).padStart(5)} rounds  ` +
           `${String(fresh).padStart(5)} new  ${span}`,
       );
     }
@@ -157,7 +157,7 @@ export async function snapshot(argv, ctx) {
 
 
   if (!quiet) {
-    console.log(`\n  ${totalNew} new dispatch${totalNew === 1 ? '' : 'es'} captured → ${outDir}`);
+    console.log(`\n  ${totalNew} new round${totalNew === 1 ? '' : 's'} captured → ${outDir}`);
   }
   return 0;
 }
