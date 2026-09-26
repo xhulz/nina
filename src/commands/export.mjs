@@ -25,7 +25,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRun, runFile } from '../agentrun.mjs';
-import { BATCH, SETTLE_MINUTES, postScore, postScores, postSpans, scoreOf, settled, spanOf, spansOf } from '../langfuse.mjs';
+import { BATCH, SETTLE_MINUTES, contextMode, postScore, postScores, postSpans, scoreOf, settled, spanOf, spansOf } from '../langfuse.mjs';
 import { runOf, transcriptsOf } from '../transcripts.mjs';
 import { exportsDir, snapshotsDir } from '../paths.mjs';
 import { readConfig, statusPath, targetOf } from './langfuse.mjs';
@@ -214,7 +214,7 @@ export async function exportCommand(argv, ctx = {}) {
     const release = await lock(only);
     if (!release) return 0;
     try {
-      const result = await exportProject({ slug: only, name: projectName(only), file: join(snapshotsDir(), `${only}.jsonl`), target, now: ctx.now, since: setting.since, quiet: true, content: setting.content });
+      const result = await exportProject({ slug: only, name: projectName(only), file: join(snapshotsDir(), `${only}.jsonl`), target, now: ctx.now, since: setting.since, quiet: true, content: contextMode(setting) });
       if (result.spans > 0 || result.scores > 0 || result.error) {
         // The same failure again is not news: it was reported once, and repeating it every turn it is
         // retried would be the noise the detectors exist to remove.
@@ -251,7 +251,7 @@ export async function exportCommand(argv, ctx = {}) {
       continue;
     }
     try {
-      const content = Boolean(config.projects[slug]?.content);
+      const content = contextMode(config.projects[slug]);
       if ((await exportProject({ slug, name, file: join(dir, `${slug}.jsonl`), target, dry, now: ctx.now, content })).error) failed = true;
     } finally {
       await release();
@@ -265,7 +265,7 @@ export async function exportCommand(argv, ctx = {}) {
  *
  * @returns {Promise<{spans: number, scores: number, error: string|null}>} What went, and why the rest did not.
  */
-async function exportProject({ slug, name, file, target, dry, now, since = '', quiet = false, content = false }) {
+async function exportProject({ slug, name, file, target, dry, now, since = '', quiet = false, content = null }) {
   const say = quiet ? () => {} : (line) => console.log(line);
   const records = await recordsOf(file);
   const sent = await sentOf(slug);
@@ -282,7 +282,8 @@ async function exportProject({ slug, name, file, target, dry, now, since = '', q
   const tail = () => (notes.length ? ` — ${notes.join('; ')}` : '');
 
   if (dry) {
-    say(`  ${name}: would send ${todo.spans.length} trace(s)${content ? " with each stage's context" : ''} and ${todo.scores.length} score(s) to ${target.host}${tail()}`);
+    const what = content === 'prompts' ? " with each stage's prompt and report" : content ? " with each stage's context" : '';
+    say(`  ${name}: would send ${todo.spans.length} trace(s)${what} and ${todo.scores.length} score(s) to ${target.host}${tail()}`);
     if (todo.spans[0]) say(`    e.g. ${JSON.stringify(spanOf(todo.spans[0], name))}`);
     return { spans: 0, scores: 0, error: null };
   }
@@ -319,11 +320,12 @@ async function exportProject({ slug, name, file, target, dry, now, since = '', q
     if (error) break;
     const run = content ? await readRun(runFile(transcriptsOf(slug), record), record.round ?? 1) : null;
     if (content && !run) bare += 1;
-    let built = spansOf(record, name, run);
+    const sending = { prompts: content === 'prompts' };
+    let built = spansOf(record, name, run, {}, sending);
     let size = JSON.stringify(built).length;
     for (const limits of SMALLER) {
       if (size <= MAX_BODY) break;
-      built = spansOf(record, name, run, limits);
+      built = spansOf(record, name, run, limits, sending);
       size = JSON.stringify(built).length;
     }
     // Cutting its texts bounds each one, not how many calls a stage made. One that still does not fit

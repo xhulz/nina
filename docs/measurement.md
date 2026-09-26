@@ -183,8 +183,8 @@ and a newer hook both wrote to had those runs skipped as read, their first round
 
 Every turn is billed the whole context again, so what a round costs is its turns times the size of what
 each re-read, and a count of tokens alone cannot say which grew. Each round keeps its `turns` (API messages),
-its `tool_calls`, and the context a turn re-read when it began (`context_start`) and at its largest
-(`context_peak`), counts only. `stats` sets each stage's first rounds beside its resumed ones, and `nina runs`
+its `tool_calls`, the context a turn re-read when it began (`context_start`) and at its largest
+(`context_peak`), and the length of the prompt that opened it (`prompt_chars`), counts only. `stats` sets each stage's first rounds beside its resumed ones, and `nina runs`
 names the largest context a cycle reached.
 
 The first reading, over the first new project's 128 rounds, is where two rules came from. A resumed
@@ -295,7 +295,8 @@ groups and charts them, beside whatever else a project already sends it.
 
 ```bash
 nina langfuse login                  # asks for a project's keys, checks them against Langfuse, keeps them
-nina langfuse on [--content]         # in a project: send its runs after every turn, with each stage's context
+nina langfuse on [--content | --prompts]   # in a project: send its runs after every turn, with each stage's context,
+                                           # or only the prompt it was given and the report it handed back
 nina langfuse status                 # the keys, the projects that send, how the last send went
 nina export --langfuse [--dry-run]   # by hand: the history from before a project was turned on
 ```
@@ -315,9 +316,10 @@ whoever runs it on this machine, and a committed profile would make it for every
 the runs it makes from the moment it is turned on; its history goes only when `nina export` is asked.
 
 Each dispatch becomes a trace named for its role, the session id setting a pipeline's stages side by side
-in Langfuse's sessions view, and its verdict a categorical score beside it. Without `--content` the trace
-is one observation: a generation with the run's model, usage and the cost `stats` would estimate, or a
-span when it spent no tokens. The description the orchestrator gave the dispatch stays behind, and so does
+in Langfuse's sessions view, and its verdict a categorical score beside it. Every root carries the round's
+shape as metadata: turns, tool calls, the context at its start and peak, the prompt's length. Without
+`--content` or `--prompts` the trace is one observation: a generation with the run's model, usage and the
+cost `stats` would estimate, or a span when it spent no tokens. The description the orchestrator gave the dispatch stays behind, and so does
 the flattened path that names the owner's home directory: the project goes by its directory's name.
 
 With `--content`, the trace is the stage's own run, read from its transcript at the moment of sending and
@@ -333,6 +335,15 @@ goes as it is, and so does every line of code a stage read, which is why context
 It is also far more data. Over one project's 826 runs, context meant 70,863 observations and 166 MB,
 against 826 observations without it. Langfuse bills every trace, observation and score as a unit, and its
 free plan includes 50,000 a month.
+
+With `--prompts`, only what passed between the agents goes: the prompt each round was given — the
+dispatch, or the message that resumed the run — and the report it handed back, on one observation per
+round. Nothing is beneath it, so it is a generation again, with the usage and cost beside the texts. It is for improving what the orchestrator hands a stage, which is read against how the
+round went; what the stage read and called in between is what `--content` adds, and is most of the data.
+The same masking applies, and a prompt still carries whatever the orchestrator put in it, diffs and code
+included. What a round was told is read by one rule, `promptOf` in `src/transcripts.mjs`, which the
+snapshot also uses to keep each round's `prompt_chars`, so `stats` shows the length of what a stage was
+handed without anything being sent anywhere.
 
 Observations go over OpenTelemetry (`/api/public/otel/v1/traces`, OTLP/HTTP as JSON), which is how
 Langfuse's v4 data model takes them. Scores go in batches, as `score-create` events to

@@ -2,14 +2,15 @@
  * `nina langfuse` — the keys, set once, and which projects send their runs to Langfuse on their own.
  *
  *   nina langfuse login [--host <url>]            ask for the keys, check them against Langfuse, keep them
- *   nina langfuse on [--project <dir>] [--content]   send this project's runs after every turn
+ *   nina langfuse on [--project <dir>] [--content | --prompts]   send this project's runs after every turn
  *   nina langfuse off [--project <dir>]
  *   nina langfuse status
  *
  * Once a project is on, nobody runs an export: the `lessons` detector every composed project runs
  * already snapshots the project each turn, and it starts the export in the background whenever a run
  * is ready to go. What it sends is metadata unless the project is turned on with `--content`, which adds
- * each stage's own context — see `src/langfuse.mjs`.
+ * each stage's own context, or with `--prompts`, which adds only what passed between the agents: the
+ * prompt each stage was given and the report it handed back — see `src/langfuse.mjs`.
  *
  * The keys live in `~/.nina/exports/langfuse.json`, readable by the owner only, beside the record of what
  * was sent; `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` override them. They are asked
@@ -21,12 +22,18 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { DEFAULT_HOST, projectOf } from '../langfuse.mjs';
+import { DEFAULT_HOST, contextMode, projectOf } from '../langfuse.mjs';
 import { exportsDir, slugFor } from '../paths.mjs';
 import { projectName } from './stats.mjs';
 
 /** Where the keys and the switches live. */
 export const configPath = () => join(exportsDir(), 'langfuse.json');
+
+/** What a project sends, in words, by `contextMode`. */
+const LABELS = { full: "with each stage's own context", prompts: "with each stage's prompt and report", none: 'as metadata only' };
+
+/** The same, as `status` lists it. */
+const SHORT = { full: 'with context', prompts: 'with prompts and reports', none: 'metadata only' };
 
 /** Where the background export leaves what it last did, per project. */
 export const statusPath = (slug) => join(exportsDir(), 'langfuse', `${slug}.status.json`);
@@ -34,7 +41,7 @@ export const statusPath = (slug) => join(exportsDir(), 'langfuse', `${slug}.stat
 /**
  * The configuration on disk: keys, host, and the projects that are on.
  *
- * @returns {Promise<{publicKey?: string, secretKey?: string, host?: string, projects: Record<string, {content: boolean, since: string}>}>}
+ * @returns {Promise<{publicKey?: string, secretKey?: string, host?: string, projects: Record<string, {content: boolean|'prompts', since: string}>}>}
  */
 export async function readConfig() {
   try {
@@ -113,7 +120,7 @@ export async function langfuse(argv, ctx = {}) {
     }
     await writeConfig({ ...config, host, publicKey, secretKey });
     console.log(`  ✓ the keys open "${opened.project}" at ${host}; kept in ${configPath()}, readable by you only`);
-    console.log('    next, in each project that should send: `nina langfuse on` (add `--content` for each stage\'s own context)\n');
+    console.log('    next, in each project that should send: `nina langfuse on` (add `--prompts` for what passed between the agents, or `--content` for each stage\'s whole context)\n');
     return 0;
   }
 
@@ -123,12 +130,20 @@ export async function langfuse(argv, ctx = {}) {
       console.error('  no keys yet — `nina langfuse login` first\n');
       return 2;
     }
-    const content = argv.includes('--content');
+    if (argv.includes('--content') && argv.includes('--prompts')) {
+      console.error('  --content already sends the prompts; pass one of the two\n');
+      return 2;
+    }
+    const content = argv.includes('--content') ? true : argv.includes('--prompts') ? 'prompts' : false;
     await writeConfig({ ...config, projects: { ...config.projects, [slug]: { content, since: new Date().toISOString() } } });
-    console.log(`  ✓ ${project} sends its runs to ${target.host} from now on, after every turn, ${content ? "with each stage's own context" : 'as metadata only'}`);
-    if (content) {
+    console.log(`  ✓ ${project} sends its runs to ${target.host} from now on, after every turn, ${LABELS[contextMode({ content }) ?? 'none']}`);
+    if (content === true) {
       console.log("    each stage's prompt, messages, tool calls and report go with it — code and whatever the stages read included;");
       console.log('    obvious secrets are masked, and nothing more is: turn it on only where that code may leave this machine');
+    }
+    if (content === 'prompts') {
+      console.log("    each stage's prompt and report go with it, and nothing it read, wrote or called between them;");
+      console.log('    a prompt carries whatever the orchestrator put in it, diffs and code included, and only obvious secrets are masked');
     }
     console.log(`    the runs from before now stay here; \`nina export --langfuse --project ${slug}\` sends them, once`);
     console.log('    it runs from the `lessons` detector in this project\'s hooks — `nina check` says whether they are wired\n');
@@ -150,12 +165,12 @@ export async function langfuse(argv, ctx = {}) {
     for (const [name, setting] of on) {
       const last = JSON.parse(await readFile(statusPath(name), 'utf8').catch(() => 'null'));
       const said = !last ? 'nothing sent yet' : last.error ? `✗ ${last.at}: ${last.error}` : `last sent ${last.at}: ${last.spans} trace(s), ${last.scores} score(s)`;
-      console.log(`  ${projectName(name)}: ${setting.content ? 'with context' : 'metadata only'}, since ${setting.since.slice(0, 10)} — ${said}`);
+      console.log(`  ${projectName(name)}: ${SHORT[contextMode(setting) ?? 'none']}, since ${setting.since.slice(0, 10)} — ${said}`);
     }
     console.log('');
     return 0;
   }
 
-  console.error('  usage: nina langfuse login [--host <url>] | on [--project <dir>] [--content] | off [--project <dir>] | status\n');
+  console.error('  usage: nina langfuse login [--host <url>] | on [--project <dir>] [--content | --prompts] | off [--project <dir>] | status\n');
   return 2;
 }

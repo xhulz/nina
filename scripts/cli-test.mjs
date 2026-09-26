@@ -3066,7 +3066,13 @@ const dated = (date, status = 'active') =>
   await writeFile(
     join(dir, 's1', 'subagents', 'agent-abc123.jsonl'),
     // Every streamed copy, as Claude Code writes them: the reader, not this test, has to keep the last.
-    rows.map((u) => JSON.stringify({ type: 'assistant', effort: 'high', message: { id: u.id, model: u.model, usage: u.usage, content: [] } })).concat(['']).join('\n'),
+    [
+      // A reminder in the first round is not what the run was told; the dispatch's prompt is.
+      JSON.stringify({ type: 'user', isMeta: true, message: { content: '<system-reminder>\nnot the prompt\n</system-reminder>' } }),
+      JSON.stringify({ type: 'user', message: { content: 'Review the change.' } }),
+      ...rows.map((u) => JSON.stringify({ type: 'assistant', effort: 'high', message: { id: u.id, model: u.model, usage: u.usage, content: [] } })),
+      '',
+    ].join('\n'),
   );
   const agentFile = join(dir, 's1', 'subagents', 'agent-abc123.jsonl');
   // Three writes to two files, and a read that writes nothing.
@@ -3106,8 +3112,8 @@ const dated = (date, status = 'active') =>
   // Each turn is billed the whole context again, so a round is kept with its turns, the calls they sent,
   // and the context at its start and at its largest.
   expect(
-    record.turns === 2 && record.tool_calls === 4 && record.context_start === 1210 && record.context_peak === 1210,
-    `context: a round keeps its turns, tool calls and context size — got ${JSON.stringify(record)}`,
+    record.turns === 2 && record.tool_calls === 4 && record.context_start === 1210 && record.context_peak === 1210 && record.prompt_chars === 'Review the change.'.length,
+    `context: a round keeps its turns, tool calls, context size and the length of its prompt — got ${JSON.stringify(record)}`,
   );
   const shape = contextOf(new Map([['a', { usage: { input_tokens: 5, cache_read_input_tokens: 100 } }], ['b', { usage: { cache_read_input_tokens: 300, cache_creation_input_tokens: 20 } }]]));
   expect(shape.turns === 2 && shape.start === 105 && shape.peak === 320, `context: a turn's context is its input, read and written tokens — got ${JSON.stringify(shape)}`);
@@ -3115,6 +3121,10 @@ const dated = (date, status = 'active') =>
   delete unshaped.turns;
   const [shaped] = (await scanProject(dir, { cursors: {}, records: [unshaped] })).records;
   expect(shaped?.turns === 2 && shaped.tokens.output === 600, 'context: a record from before turns were kept is read once more');
+  const unprompted = { ...record, tokens: { output: -1 } };
+  delete unprompted.prompt_chars;
+  const [prompted] = (await scanProject(dir, { cursors: {}, records: [unprompted] })).records;
+  expect(prompted?.prompt_chars === 'Review the change.'.length && prompted.tokens.output === 600, 'context: a record from before prompts were measured is read once more');
   // A reader from before rounds writes `resumes` and bills the whole run to its first record. A store it
   // shared with a newer reader had those runs marked read and skipped, their first round billed twice.
   const [remarked] = (await scanProject(dir, { cursors: {}, records: [{ ...record, resumes: 1, tokens: { output: -1 } }] })).records;
@@ -3151,6 +3161,8 @@ const dated = (date, status = 'active') =>
     two.turns === 1 && two.tool_calls === 1 && two.context_start === 5000 && one.turns === 2,
     `context: a resumed round counts its own turns, from the context it resumed with — got ${JSON.stringify(two)}`,
   );
+  const resumedWith = 'The coordinator sent a message while you were working:\nRe-review the fix.'.length;
+  expect(two.prompt_chars === resumedWith && !JSON.stringify(resumed).includes('Re-review the fix'), `context: a resumed round measures the message that resumed it, and keeps its length only — got ${two.prompt_chars}`);
   // A reminder after the report opens nothing; a message the run was sent before it reported is part of the
   // round it was in; a message it never answered is not a round yet.
   const opens = roundsOf();
@@ -4044,8 +4056,8 @@ const dated = (date, status = 'active') =>
     `${[
       round('t1', 'architect', 'SPEC-READY', '2026-09-20T10:00:00.000Z', { desc: 'Spec the export' }),
       round('t2', 'implementer', 'DIFF-READY', '2026-09-20T10:10:00.000Z', { files_touched: 7 }),
-      round('t3', 'reviewer', 'REJECTED', '2026-09-20T10:20:00.000Z', { round: 1, turns: 20, tool_calls: 30, context_start: 30_000, context_peak: 150_000 }),
-      round('t3#2', 'reviewer', 'APPROVED', '2026-09-20T10:40:00.000Z', { round: 2, turns: 8, tool_calls: 8, context_start: 212_000, context_peak: 251_000 }),
+      round('t3', 'reviewer', 'REJECTED', '2026-09-20T10:20:00.000Z', { round: 1, turns: 20, tool_calls: 30, context_start: 30_000, context_peak: 150_000, prompt_chars: 2500 }),
+      round('t3#2', 'reviewer', 'APPROVED', '2026-09-20T10:40:00.000Z', { round: 2, turns: 8, tool_calls: 8, context_start: 212_000, context_peak: 251_000, prompt_chars: 800 }),
       round('t4', 'qa', 'PASS', '2026-09-20T11:00:00.000Z'),
       round('t5', 'implementer', 'DIFF-READY', '2026-09-21T09:00:00.000Z', { desc: 'Fix the label', files_touched: 1 }),
     ].map((r) => JSON.stringify(r)).join('\n')}\n`,
@@ -4060,7 +4072,7 @@ const dated = (date, status = 'active') =>
   expect(/largest write 7 file\(s\) · context up to 251k/.test(out) && !/Fix the label[^▌]*context up to/.test(out), `runs: a cycle names the largest context a turn in it re-read, where it was measured — got ${out}`);
   const stats = run(['stats', '--project', slugFor(dir), '--all'], { loud: true }).out;
   expect(
-    /reviewer\s+first\s+1\s+20\s+1\.50\s+30k\s+150k/.test(stats) && /^\s+resumed\s+1\s+8\s+1\.00\s+212k\s+251k/m.test(stats),
+    /reviewer\s+first\s+1\s+20\s+1\.50\s+30k\s+150k\s+2,500/.test(stats) && /^\s+resumed\s+1\s+8\s+1\.00\s+212k\s+251k\s+800$/m.test(stats),
     `context: stats sets a stage's first rounds beside its resumed ones — got ${stats}`,
   );
   expect(run(['runs', '--project', await scratch()], { loud: true }).status === 1, 'runs: a directory with no profile says so');
@@ -4630,6 +4642,22 @@ const dated = (date, status = 'active') =>
   expect(huge.length === 1 && typeOf(huge[0]) === 'generation' && withContext.out.includes('1 went without their context — too large for a request even cut down') && calls.filter((c) => c.url.endsWith('/otel/v1/traces')).every((c) => c.init.body.length <= MAX_BODY + 1000), `export --content: a stage too large even cut down goes as its record alone, never blocking the rest — got ${huge.length} ${withContext.out}`);
   const request = calls.find((c) => c.url.endsWith('/otel/v1/traces'));
   expect(request && tree.every((s) => request.body.resourceSpans[0].scopeSpans[0].spans.some((x) => x.spanId === s.spanId)), 'export --content: a stage goes whole, in one request');
+  // With --prompts, only what passed between the agents: the prompt in and the report out, on a root that
+  // carries the usage itself, since nothing is beneath it — and the round's shape beside them.
+  await writeFile(join(data, 'exports', 'langfuse.json'), JSON.stringify({ projects: { [slug]: { content: 'prompts', since: '' } } }));
+  rows = [...rows, row(993, { agent_id: 'c0ffee', turns: 2, prompt_chars: 27 })];
+  await save();
+  calls = [];
+  const promptsOnly = await exp(['--dry-run']);
+  expect(promptsOnly.out.includes("with each stage's prompt and report"), `export --prompts: a dry run says what would go — got ${promptsOnly.out}`);
+  await exp([]);
+  const lone = spansSent().filter((s) => s.traceId === spansSent().find((x) => x.spanId === spanIdOf({ dispatch_id: 'toolu_0993' }))?.traceId);
+  expect(
+    lone.length === 1 && typeOf(lone[0]) === 'generation' && attr(lone[0], 'langfuse.observation.input')?.stringValue === 'Review the change in ~/work' &&
+      attr(lone[0], 'langfuse.observation.output')?.stringValue === 'VERDICT: APPROVED' && Boolean(attr(lone[0], 'langfuse.observation.usage_details')) &&
+      attr(lone[0], 'langfuse.observation.metadata.prompt_chars')?.intValue === '27' && !JSON.stringify(lone).includes('.env'),
+    `export --prompts: one observation, the prompt in and the report out with the usage and shape beside them, and nothing the stage read — got ${JSON.stringify(lone.map((s) => s.attributes))}`,
+  );
   if (savedT === undefined) delete process.env.NINA_TRANSCRIPTS;
   else process.env.NINA_TRANSCRIPTS = savedT;
   await rm(join(data, 'exports', 'langfuse.json'));
@@ -4778,6 +4806,16 @@ const dated = (date, status = 'active') =>
   expect(scored.length === 1, `langfuse: a verdict Langfuse took without a word is not sent again on the next turn — got ${scored.length}`);
   const shown = run(['langfuse', 'status'], { loud: true });
   expect(shown.out.includes('pk-lf-test') && shown.out.includes(`${bed.split('/').at(-1)}: metadata only`), `langfuse status: the keys and the projects that send — got ${shown.out}`);
+  const since = JSON.parse(await readFile(configFile, 'utf8')).projects[slug].since;
+  const prompted = run(['langfuse', 'on', '--project', bed, '--prompts'], { loud: true });
+  expect(
+    prompted.status === 0 && JSON.parse(await readFile(configFile, 'utf8')).projects[slug].content === 'prompts' && run(['langfuse', 'status'], { loud: true }).out.includes(`${bed.split('/').at(-1)}: with prompts and reports`),
+    `langfuse on --prompts: a project sends what passed between its agents, and status says so — got ${prompted.out}`,
+  );
+  expect(run(['langfuse', 'on', '--project', bed, '--prompts', '--content']).status === 2, 'langfuse on: --content already carries the prompts, so the two together are refused');
+  const reset = JSON.parse(await readFile(configFile, 'utf8'));
+  reset.projects[slug] = { content: false, since };
+  await writeFile(configFile, JSON.stringify(reset));
   expect(run(['langfuse', 'off', '--project', bed]).status === 0 && !JSON.parse(await readFile(configFile, 'utf8')).projects[slug], 'langfuse off: turns it off');
   const before = got.length;
   await write([...rows, ran(3, '2026-09-12T10:00:00.000Z')]);
