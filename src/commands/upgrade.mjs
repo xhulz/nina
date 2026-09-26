@@ -436,6 +436,9 @@ export async function upgrade(argv, ctx) {
     {
       label: 'composing the harness files',
       run: () => {
+        // The files of the project's own that the move replaces are copied above; compose will not write
+        // over one, so each goes first, and a rollback puts it back.
+        for (const p of occupied) rmSync(join(target, p), { force: true });
         const r = nina(ctx, target, ['compose', '--project', target]);
         const wrote = /composed (\d+) file/.exec(r.out)?.[1];
         if (r.ok) for (const p of removable) rmSync(join(target, p), { force: true });

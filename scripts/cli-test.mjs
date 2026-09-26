@@ -1759,6 +1759,60 @@ const dated = (date, status = 'active') =>
 }
 
 
+// ─── compose and init --force: what the project wrote itself is never lost ──────────────
+{
+  // `init` refused to compose over a CLAUDE.md or agent spec written by hand and told the owner to move it
+  // aside and run `compose` — which wrote over whatever was still there, with no copy kept.
+  const bed = await sound('plain', 'dev');
+  const mine = '# Our own CLAUDE.md\n\nWritten by hand.\n';
+  await writeFile(join(bed, 'CLAUDE.md'), mine);
+  await rm(join(bed, '.claude', 'agents', 'qa.md'));
+  // A link is the project's whatever it points at — here, another project's composed spec, notice and all.
+  const outside = join(await scratch(), 'reviewer.md');
+  await writeFile(outside, '<!-- nina:generated — another project -->\nkept elsewhere\n');
+  await rm(join(bed, '.claude', 'agents', 'reviewer.md'));
+  await symlink(outside, join(bed, '.claude', 'agents', 'reviewer.md'));
+  const refused = run(['compose', '--project', bed], { loud: true });
+  expect(
+    refused.status === 1 && refused.out.includes('CLAUDE.md') && refused.out.includes('.claude/agents/reviewer.md') && refused.out.includes('nothing was written'),
+    `compose: names the files of the project's own where it composes one, and refuses — got ${refused.out}`,
+  );
+  expect(
+    (await readFile(join(bed, 'CLAUDE.md'), 'utf8')) === mine && (await readFile(outside, 'utf8')).endsWith('kept elsewhere\n') && !existsSync(join(bed, '.claude', 'agents', 'qa.md')),
+    'compose: and writes nothing at all, through a link or anywhere else',
+  );
+  await rm(join(bed, '.claude', 'agents', 'reviewer.md'));
+  await writeFile(join(bed, 'CLAUDE.md'), `${(await readFile(join(bed, '.claude', 'router.md'), 'utf8')).split('\n').slice(0, 3).join('\n')}\nedited by hand\n`);
+  expect(run(['compose', '--project', bed]).status === 0, 'compose: a composed file edited by hand still carries its notice, and is composed over as drift');
+
+  // Started over to add a surface, as `init` itself advises, a project kept nothing it had declared, and
+  // its pin moved to the newest release past every check `upgrade` makes.
+  const releases = (await readdir(join(ROOT, 'releases'))).sort(byVersion);
+  const [older, newer] = releases.slice(-2);
+  const dir = await scratch();
+  run(['init', '--project', dir, '--core', older, '--surfaces', 'integrations', '--no-ask']);
+  const profilePath = join(dir, '.nina', 'profile.json');
+  const declared = JSON.parse(await readFile(profilePath, 'utf8'));
+  const [asked] = Object.keys(declared.vocabulary);
+  declared.vocabulary[asked] = 'ours';
+  declared.vocabulary.WORK_MODEL = 'claude-opus-5-5';
+  declared.integrations = [{ name: 'jev', kind: 'live-api', boundary: 'src/jev.ts' }];
+  declared.note = 'the project wrote this';
+  await writeFile(profilePath, `${JSON.stringify(declared, null, 2)}\n`);
+  const again = run(['init', '--project', dir, '--force', '--surfaces', 'integrations,db', '--no-ask'], { loud: true });
+  const after = JSON.parse(await readFile(profilePath, 'utf8'));
+  expect(
+    again.status === 0 && after.core === older && after.vocabulary[asked] === 'ours' && after.vocabulary.WORK_MODEL === 'claude-opus-5-5' &&
+      after.integrations?.[0]?.name === 'jev' && after.note === 'the project wrote this' && after.surfaces.includes('db'),
+    `init --force: a project started over keeps its pin, its vocabulary, its integrations and whatever else it declared — got ${JSON.stringify(after)}\n${again.out}`,
+  );
+  expect(again.out.includes(`kept from the profile it replaced: the pin ${older}, 2 vocabulary value(s), 1 integration(s)`), `init --force: and says what it kept — got ${again.out}`);
+  if (newer !== older) {
+    const moved = run(['init', '--project', dir, '--force', '--core', newer, '--no-ask'], { loud: true });
+    expect(moved.status === 1 && moved.out.includes(`nina upgrade --to ${newer}`) && JSON.parse(await readFile(profilePath, 'utf8')).core === older, `init --force: does not move a pin; upgrade does — got ${moved.out}`);
+  }
+}
+
 // ─── packaged install: the two things that only exist in a checkout ─────────────────────
 {
   // An installed package ships `releases/` and no working tree, so a `dev` pin — which means
@@ -2755,6 +2809,14 @@ const dated = (date, status = 'active') =>
     (await readFile(join(dir, '.nina', 'replaced', '.claude', 'extra.md'), 'utf8').catch(() => '')) === 'mine\n',
     "upgrade: and keeps a copy on disk, where an interrupted move cannot lose it",
   );
+  // With nothing else wrong, --force replaces it: the composed file in its place, the copy kept.
+  await writeFile(join(dir, '.claude', 'code-map.md'), '# Map\n');
+  const forcedOn = bed(['upgrade', '--project', dir, '--to', '2.2.0', '--apply', '--force']);
+  expect(
+    forcedOn.status === 0 && (await pinned()) === '2.2.0' && (await readFile(join(dir, '.claude', 'extra.md'), 'utf8')).includes('# Extra') && forcedOn.out.includes('replaced 1 file(s) of yours'),
+    `upgrade: --force replaces a file of the project's own that compose will not write over — got ${forcedOn.status}\n${forcedOn.out}`,
+  );
+  await rm(join(dir, '.claude', 'code-map.md'));
   await rm(join(dir, '.claude', 'extra.md'));
 
   // A note is not a failure: a slot the move creates must not roll it back, however the step was doing.
