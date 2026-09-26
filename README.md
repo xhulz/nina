@@ -243,8 +243,10 @@ The same history can go to Langfuse on its own. `nina langfuse login` asks for a
 it. Each stage becomes a trace named for its role, with its tokens, estimated cost and verdict. With
 `--content`, the trace also holds what the stage did: its prompt and report, each message it wrote, and
 each tool call with what came back, read from the transcript as it is sent. Obvious secrets are masked, but
-the code the stages read goes with it, so context is a switch per project. Each run goes once, after it
-settles, because Langfuse keeps what it is first sent and a second send would count twice.
+the code the stages read goes with it, so context is a switch per project. With `--prompts`, only what
+passed between the agents goes: the prompt each stage was given and the report it handed back, beside how
+many turns it took and how large its context grew. Each run goes once, after it settles, because Langfuse
+keeps what it is first sent and a second send would count twice.
 
 When a stage gets sent back, the pipeline can write a lesson for that role. `nina learn` checks the cycle one
 link at a time, and its first audit found four of the five links broken. Here's the same project before and

@@ -632,7 +632,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       if (
         run.agent_read_bytes === size &&
         !('resumes' in run) &&
-        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r && 'turns' in r)
+        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r)
       ) {
         continue;
       }
@@ -662,6 +662,8 @@ async function attachAgentDetail(projectDir, dispatches) {
         written: new Set(),
         /** The tool calls the round made, by id: over its turns, how many calls each turn sent at once. */
         calls: new Set(),
+        /** How long the prompt that opened the round was, in characters; never the prompt. */
+        promptChars: null,
       });
       const rounds = [fresh()];
       const roundOf = roundsOf();
@@ -681,6 +683,14 @@ async function attachAgentDetail(projectDir, dispatches) {
           }
         }
         const round = rounds[n - 1];
+        if (round.promptChars === null && line.includes('"type":"user"')) {
+          try {
+            const said = promptOf(JSON.parse(line), n);
+            if (said !== null) round.promptChars = said.length;
+          } catch {
+            // A torn line is not the prompt.
+          }
+        }
         const hasSkill = line.includes('"Skill"');
         const hasHandback = line.includes('SubagentHandback');
         for (const m of line.matchAll(/"type":"tool_use","id":"([^"]+)"/g)) round.calls.add(m[1]);
@@ -770,6 +780,7 @@ async function attachAgentDetail(projectDir, dispatches) {
           record.tool_calls = round.calls.size;
           record.context_start = shape.start;
           record.context_peak = shape.peak;
+          record.prompt_chars = round.promptChars;
           record.usage_model = spent.model;
           record.effort = spent.effort;
           record.files_touched = round.written.size;
@@ -800,6 +811,21 @@ async function attachAgentDetail(projectDir, dispatches) {
       run.agent_read_bytes = size;
     }
   }
+}
+
+/**
+ * What a round was told, from one transcript row, or null when the row is not it. The dispatch's prompt
+ * opens the first round; a later round opens with the message that resumed the run, which Claude Code
+ * marks as meta, while a meta row in the first round is a reminder. The snapshot measures it and the
+ * Langfuse export sends it, so both read it here.
+ *
+ * @param {object} row - A parsed transcript row.
+ * @param {number} round - The round the row is in, from 1.
+ * @returns {string|null}
+ */
+export function promptOf(row, round) {
+  const content = row?.message?.content;
+  return row?.type === 'user' && (round > 1 || !row.isMeta) && typeof content === 'string' ? content : null;
 }
 
 /**

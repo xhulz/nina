@@ -224,8 +224,8 @@ function costReport(records) {
 }
 
 /**
- * How each stage's rounds spent their context: turns, tool calls sent per turn, and the context a turn
- * re-read when the round began and at its largest. Every turn is billed the whole context again, so the
+ * How each stage's rounds spent their context: turns, tool calls sent per turn, the context a turn
+ * re-read when the round began and at its largest, and how long the prompt that opened the round was. Every turn is billed the whole context again, so the
  * cost of a round is its turns times its context, and a round that starts where a long one ended pays for
  * all of it on every turn. The first rounds of a run are set beside the later ones, which are resumes.
  *
@@ -236,8 +236,9 @@ function contextReport(records) {
   if (shaped.length === 0) return;
   const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   const k = (n) => (typeof n === 'number' ? `${Math.round(n / 1000)}k` : '—');
-  console.log(heading('context', 'every turn re-reads the whole context: a round costs its turns times its size, and a resumed one starts where it ended'));
-  console.log(dim(`    ${'stage'.padEnd(20)}${'rounds'.padEnd(8)}${'n'.padStart(4)}${'turns'.padStart(7)}${'calls/turn'.padStart(12)}${'starts at'.padStart(11)}${'peak'.padStart(8)}`));
+  const chars = (xs) => (xs.length ? median(xs).toLocaleString('en-US') : '—');
+  console.log(heading('context', 'every turn re-reads the whole context: a round costs its turns times its size, and a resumed one starts where it ended; the prompt it was handed is in characters'));
+  console.log(dim(`    ${'stage'.padEnd(20)}${'rounds'.padEnd(8)}${'n'.padStart(4)}${'turns'.padStart(7)}${'calls/turn'.padStart(12)}${'starts at'.padStart(11)}${'peak'.padStart(8)}${'prompt'.padStart(9)}`));
   const byRole = new Map();
   for (const r of shaped) byRole.set(r.role, [...(byRole.get(r.role) ?? []), r]);
   for (const [role, rounds] of [...byRole].sort((a, b) => b[1].reduce((x, r) => x + r.turns, 0) - a[1].reduce((x, r) => x + r.turns, 0))) {
@@ -251,7 +252,8 @@ function contextReport(records) {
       const name = i === 0 || !rounds.some((r) => (r.round ?? 1) === 1) ? pink(role) + ' '.repeat(Math.max(20 - role.length, 1)) : ' '.repeat(20);
       console.log(
         `    ${name}${dim(label.padEnd(8))}${String(group.length).padStart(4)}${String(median(group.map((r) => r.turns))).padStart(7)}` +
-          `${(calls / turns).toFixed(2).padStart(12)}${k(median(group.map((r) => r.context_start ?? 0))).padStart(11)}${k(median(group.map((r) => r.context_peak ?? 0))).padStart(8)}`,
+          `${(calls / turns).toFixed(2).padStart(12)}${k(median(group.map((r) => r.context_start ?? 0))).padStart(11)}${k(median(group.map((r) => r.context_peak ?? 0))).padStart(8)}` +
+          `${chars(group.map((r) => r.prompt_chars).filter((n) => typeof n === 'number')).padStart(9)}`,
       );
     });
   }

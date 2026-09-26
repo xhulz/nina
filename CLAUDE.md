@@ -84,7 +84,7 @@ must not break.
   installs the release that carries it.
 - **The measurement store is metadata only**: counts, verdicts, timestamps, tokens, never report text,
   source, PII, an id a model wrote, or dollars. Langfuse gets each run once, since it keeps what it is
-  first sent, and a stage's context only from a project turned on with `--content`, read from the
+  first sent, and a stage's context only from a project turned on with `--content` or `--prompts`, read from the
   transcript when it is sent and never kept here.
 - **Nothing here bills per token by accident.** `nina eval` runs on the Claude Code login and strips every
   billing credential from its child unless `--api` asks for it.
@@ -125,7 +125,7 @@ nina learn --project ../thing [--deep]        # is the pipeline learning? --deep
 nina requests                                 # the lessons projects have graduated to the harness
 nina snapshot && nina stats                   # measure what the pipeline did, and what it cost
 nina runs --project ../thing                  # what each piece of work cost: its cycles, stages, rounds, time
-nina langfuse login && nina langfuse on       # keys once; then this project sends its runs after every turn
+nina langfuse login && nina langfuse on       # keys once; then this project sends its runs after every turn (--prompts: the handoffs only)
 nina export --langfuse [--dry-run]            # by hand: the history from before a project was turned on
 nina eval --release <a> --release <b>         # which release's reviewer catches more planted defects
 nina release <version>                        # freeze the working layers; never rewritten
@@ -148,7 +148,7 @@ src/transcripts.mjs   the transcript parser (dispatch/verdict/skill extraction)
 src/detectors.mjs     runs a project's drift detectors (imported by its harness-check)
 src/deep.mjs          learn --deep: the loop-back reports read by a model, grouped by cause, set against the pills
 src/langfuse.mjs      a run as an OTLP trace and a verdict score, and the requests that send them
-src/agentrun.mjs      one stage's own run, read from its transcript for --content, with secrets masked
+src/agentrun.mjs      one stage's own run, read from its transcript for --content and --prompts, with secrets masked
 src/banner.mjs        the startup banner
 src/look.mjs          how a report looks on a terminal: colour, section marks, bars, wrapping; plain when piped
 src/surfaces.mjs      which surfaces a repository's files reveal, and which concern a stack surface needs

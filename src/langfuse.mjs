@@ -101,30 +101,46 @@ function usageAttributes(tokens, model, priced) {
 }
 
 /**
+ * How much of a stage's context a project sends, from its switch in the Langfuse configuration: all of it
+ * (`--content`), only what passed between the agents (`--prompts`), or none.
+ *
+ * @param {{content?: boolean|string}|undefined} setting - The project's entry, if it is on.
+ * @returns {'full'|'prompts'|null}
+ */
+export function contextMode(setting) {
+  return setting?.content === 'prompts' ? 'prompts' : setting?.content ? 'full' : null;
+}
+
+/** A round's shape, as metadata on its root: how many turns and calls it took, and how large its context and prompt were. */
+const SHAPE = ['turns', 'tool_calls', 'context_start', 'context_peak', 'prompt_chars'];
+
+/**
  * The OTLP span at the root of a dispatch's trace. Without its context, a run that spent tokens is a
  * generation carrying the run's whole usage and estimated cost, and one that did not is a span. With it,
  * the root is the agent — its prompt in, its report out — and the usage is on the messages beneath it,
- * so no sum counts a token twice. Its verdict is the score beside it rather than an attribute on it: a
- * run whose verdict is read only later can still be given one, since that is a first score and not a
- * second span.
+ * so no sum counts a token twice. With the prompt and report alone, nothing is beneath it, so the root is
+ * a generation again, carrying the usage beside them. Its verdict is the score beside it rather than an
+ * attribute on it: a run whose verdict is read only later can still be given one, since that is a first
+ * score and not a second span.
  *
  * @param {object} record - A snapshot record.
  * @param {string} project - The name the project goes by in Langfuse.
  * @param {{prompt: string, report: string}} [context] - What the stage was given and handed back.
+ * @param {{usage?: boolean}} [options] - `usage`: the root carries the usage even with its context.
  * @returns {object|null} Null for a record with no time to place it at.
  */
-export function spanOf(record, project, context = null) {
+export function spanOf(record, project, context = null, { usage = false } = {}) {
   const start = nanos(record.ts);
   if (!start) return null;
   const end = nanos(record.result_ts) ?? start;
-  const tokens = !context && record.tokens && typeof record.tokens === 'object' ? record.tokens : null;
+  const tokens = (!context || usage) && record.tokens && typeof record.tokens === 'object' ? record.tokens : null;
   const attributes = [
     attribute('langfuse.session.id', record.session ?? 'no-session'),
     attribute('langfuse.trace.name', record.role),
     attribute('langfuse.trace.tags', ['nina', project]),
     attribute('langfuse.trace.metadata.project', project),
     attribute('langfuse.trace.metadata.role', record.role),
-    attribute('langfuse.observation.type', context ? 'agent' : tokens ? 'generation' : 'span'),
+    attribute('langfuse.observation.type', tokens ? 'generation' : context ? 'agent' : 'span'),
     attribute('langfuse.observation.metadata.role', record.role),
   ];
   if (typeof record.issues === 'number') attributes.push(attribute('langfuse.observation.metadata.issues', record.issues));
@@ -133,6 +149,7 @@ export function spanOf(record, project, context = null) {
   if (record.effort) attributes.push(attribute('langfuse.observation.metadata.effort', record.effort));
   // A round after the first is the same agent resumed after it reported; the trace says which.
   if (typeof record.round === 'number') attributes.push(attribute('langfuse.observation.metadata.round', record.round));
+  for (const key of SHAPE) if (typeof record[key] === 'number') attributes.push(attribute(`langfuse.observation.metadata.${key}`, record[key]));
   if (tokens) attributes.push(...usageAttributes(tokens, record.usage_model, record.usage_model));
   if (context) {
     attributes.push(attribute('langfuse.observation.input', context.prompt ?? ''));
@@ -144,23 +161,26 @@ export function spanOf(record, project, context = null) {
 /**
  * Everything a dispatch sends: the root, and — when its context goes too — a generation per message it
  * wrote, with that message's own tokens and cost, and an observation per tool it called, with what went
- * in and what came back. Every text is masked (`redact`), cut to a length, and has the owner's home
- * directory written as `~`.
+ * in and what came back. With `prompts`, only what passed between the agents goes: the root, with the
+ * prompt the stage was given and the report it handed back, and none of what it read, wrote or called in
+ * between. Every text is masked (`redact`), cut to a length, and has the owner's home directory written
+ * as `~`.
  *
  * @param {object} record - A snapshot record.
  * @param {string} project - The name the project goes by in Langfuse.
  * @param {object|null} run - From `readRun`, or null to send the record alone.
  * @param {{text?: number, tool?: number}} [limits] - How much of each text goes.
+ * @param {{prompts?: boolean}} [options] - `prompts`: the prompt and the report, and nothing beneath them.
  * @returns {object[]} Spans; empty for a record with no time to place it at.
  */
-export function spansOf(record, project, run, limits = {}) {
+export function spansOf(record, project, run, limits = {}, { prompts = false } = {}) {
   const textChars = limits.text ?? TEXT_CHARS;
   const toolChars = limits.tool ?? TOOL_CHARS;
   const home = homedir();
   const clean = (text, chars) => clip(redact(String(text ?? '')).replaceAll(home, '~'), chars);
-  const root = spanOf(record, project, run ? { prompt: clean(run.prompt, textChars), report: clean(run.report, textChars) } : null);
+  const root = spanOf(record, project, run ? { prompt: clean(run.prompt, textChars), report: clean(run.report, textChars) } : null, { usage: prompts });
   if (!root) return [];
-  if (!run) return [root];
+  if (!run || prompts) return [root];
   const child = (id, name, start, end, attributes) => ({
     traceId: root.traceId,
     spanId: hexId(`${record.dispatch_id}|${id}`, 16),

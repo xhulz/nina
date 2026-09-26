@@ -13,7 +13,7 @@
 import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { roundsOf, tokensOf } from './transcripts.mjs';
+import { promptOf, roundsOf, tokensOf } from './transcripts.mjs';
 
 /** How much of a prompt, a report or a message's text is sent, and of a tool call's input or result. */
 export const TEXT_CHARS = 20_000;
@@ -103,8 +103,7 @@ export async function readRun(file, round = 1) {
     }
     const at = row.timestamp ?? null;
     const content = row.message?.content;
-    // The run's first prompt; a later round's is the message that resumed it, which Claude Code marks as meta.
-    if (row.type === 'user' && (round > 1 || !row.isMeta) && typeof content === 'string' && prompt === null) prompt = content;
+    if (prompt === null) prompt = promptOf(row, round);
     if (row.type === 'user' && Array.isArray(content)) {
       for (const block of content) {
         const call = block?.type === 'tool_result' ? tools.get(block.tool_use_id) : null;
