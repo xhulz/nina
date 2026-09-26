@@ -18,7 +18,7 @@ import { createReadStream, existsSync, readFileSync, realpathSync, statSync } fr
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import { isLoopBack, runOf } from '../transcripts.mjs';
+import { ROLE_TOKENS, isLoopBack, runOf } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { HARNESS, snapshotsDir } from '../paths.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
@@ -26,20 +26,17 @@ import { layerRootFor } from './compose.mjs';
 import { PRICES_AS_OF, costOf } from '../prices.mjs';
 
 /**
- * The pipeline roles. A project that dispatches only generic agents
- * (`general-purpose`, `Explore`, `Plan`) is not running the harness, so it is left out
- * of the report by default — capture stays wide because losing a transcript is
- * irreversible, but measuring a pipeline against projects that have none is noise.
- */
-/**
- * The roles whose job is to approve or reject.
+ * The roles whose job is to approve or reject: every stage whose verdicts include no `-READY` token, the one
+ * a stage gives when it has produced something rather than ruled on it.
  *
  * Only these can be judged by loop-back rate. A planner, architect or implementer produces
  * work rather than ruling on it, so its rate is near zero by nature and says nothing — the
  * first version of this check used a sample size instead of a role list and therefore asked
- * the question of everyone, which is why it had to be silenced by a single loop-back.
+ * the question of everyone, which is why it had to be silenced by a single loop-back. Read from
+ * `ROLE_TOKENS` rather than listed here: the list here was written before the blockchain surface and never
+ * learned its auditor, so a blockchain project's gate was never judged as one.
  */
-const GATES = new Set(['reviewer', 'qa', 'dba', 'integration-tester', 'secops', 'devops']);
+const GATES = new Set(Object.entries(ROLE_TOKENS).filter(([, tokens]) => !tokens.some((t) => t.endsWith('-READY'))).map(([role]) => role));
 
 /** Below this rate a gate is worth a second look. The gates that do stop things sit near 20%. */
 const GATE_FLOOR = 0.05;
@@ -47,17 +44,13 @@ const GATE_FLOOR = 0.05;
 /** Fewer readable verdicts than this and the rate is noise, whatever it says. */
 const GATE_SAMPLE = 20;
 
-const PIPELINE_ROLES = new Set([
-  'planner',
-  'architect',
-  'implementer',
-  'dba',
-  'integration-tester',
-  'reviewer',
-  'qa',
-  'secops',
-  'devops',
-]);
+/**
+ * The pipeline roles: every stage a release composes, as `ROLE_TOKENS` names them. A project that
+ * dispatches only generic agents (`general-purpose`, `Explore`, `Plan`) is not running the harness, so it
+ * is left out of the report by default — capture stays wide because losing a transcript is irreversible,
+ * but measuring a pipeline against projects that have none is noise.
+ */
+const PIPELINE_ROLES = new Set(Object.keys(ROLE_TOKENS));
 
 /**
  * Loads snapshot records, optionally filtered.
