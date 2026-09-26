@@ -37,6 +37,7 @@ import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, set
 import { handleEdit, noticeOf } from '../src/guard.mjs';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
+import { chainsByShape, shapeOf } from '../src/commands/pipeline.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
 import { MAX_BODY, exportCommand } from '../src/commands/export.mjs';
@@ -3180,6 +3181,55 @@ const dated = (date, status = 'active') =>
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
   const learned = inside([]);
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
+}
+
+// ─── pipeline: the chain a project composes, drawn ──────────────────────────────────────
+{
+  // The line is the one unconditioned forward edge each stage takes; a gate is a detour off it that comes
+  // back to the next stage; an end is where the last stage sends work on a condition; and what goes back is
+  // grouped by the stage that sends it, in the order the stages are listed.
+  const graph = parseGraph(
+    [
+      '## Stages',
+      '- `planner` — plans', '- `implementer` — writes', '- `dba` — gate', '- `reviewer` — audits', '- `qa` — tests', '- `devops` — deploys',
+      '## Edges',
+      '- `planner` → `implementer` on `PLAN-READY`',
+      '- `implementer` → `reviewer` on `DIFF-READY`',
+      '- `implementer` → `dba` on `DIFF-READY` — the schema is touched',
+      '- `dba` → `reviewer` on `APPROVED`',
+      '- `qa` → `implementer` on `FAIL` — a test fails · max 2',
+      '- `reviewer` → `qa` on `APPROVED`',
+      '- `reviewer` → `implementer` on `REJECTED` — a bug · max 2',
+      '- `qa` → `devops` on `PASS` — a deployed surface',
+      '- `qa` → `done` on `PASS` — nothing to deploy',
+      '- `devops` → `done` on `DEPLOYED`',
+      '- `planner` → `human` on `BLOCKED` — no answer',
+      // A detour that does not come back to the next stage of the line is not a gate on it.
+      '- `planner` → `dba` on `PLAN-READY` — a data plan',
+    ].join('\n'),
+  );
+  const shape = shapeOf(graph);
+  expect(shape.line.join(' ') === 'planner implementer reviewer qa', `pipeline: the line follows the unconditioned forward edges — got ${shape.line.join(' ')}`);
+  expect(shape.gates.length === 1 && shape.gates[0].gate === 'dba' && shape.gates[0].to === 'reviewer', `pipeline: a gate is a detour that comes back to the line — got ${JSON.stringify(shape.gates)}`);
+  expect(shape.ends.map((e) => e.path.join('>')).join(' ') === 'devops>done done', `pipeline: the ends follow the last stage's conditioned edges to a terminal — got ${JSON.stringify(shape.ends)}`);
+  expect(shape.back.map((e) => e.from).join(' ') === 'planner reviewer qa', `pipeline: what goes back is grouped by stage, in the stages' order — got ${shape.back.map((e) => e.from).join(' ')}`);
+  const shapes = chainsByShape('x\n| Task shape | Required dispatch |\n|---|---|\n| Trivial edit | none — edit directly |\n| **Refactor** (no new behavior) | **architect → implementer** — and a note |\n\nafter');
+  expect(JSON.stringify(shapes) === JSON.stringify([{ shape: 'Trivial edit', chain: 'none — edit directly' }, { shape: 'Refactor (no new behavior)', chain: 'architect → implementer' }]), `pipeline: a task shape takes the chain its row sets in bold — got ${JSON.stringify(shapes)}`);
+
+  // End to end, on a composed project with gates, and an agent of the project's own.
+  const dir = await composed('acme');
+  await writeFile(join(dir, '.claude', 'agents', 'docs-writer.md'), '---\nname: docs-writer\ndescription: Writes the user docs.\ntools: Read\n---\nOurs.\n');
+  const drawn = run(['pipeline', '--project', dir], { loud: true });
+  const out = drawn.out;
+  expect(drawn.status === 0 && out.includes('pipeline · ') && out.includes('core dev') && out.includes('surfaces db, edge-cf, frontend, integrations'), `pipeline: the header names the project, its core and surfaces — got ${out.slice(0, 400)}`);
+  expect(/planner ─▶ architect ─▶ implementer ─▶ reviewer ─▶ qa ─┬─▶ /.test(out) && /└─▶ done\s+nothing to deploy/.test(out), `pipeline: the line, and where its last stage sends work — got ${out}`);
+  expect(/implementer ─▶ dba ─▶ reviewer\s+the diff touches the schema/.test(out) && out.includes('implementer ─▶ integration-tester ─▶ reviewer'), `pipeline: the gates the surfaces bring — got ${out}`);
+  expect(/reviewer\s+↩ implementer\s+REJECTED\s+2\s+an implementation bug/.test(out) && /architect\s+↩ human\s+BLOCKED\s+—/.test(out), `pipeline: what goes back, on which verdict, with its cap — got ${out}`);
+  expect(/architect\s+claude-opus-5-5 · xhigh/.test(out) && /reviewer\s+claude-opus-5-5 · high/.test(out) && /skills\s+.*cloudflare:/.test(out), `pipeline: each stage's model, effort and skills — got ${out}`);
+  expect(/the project's own agents, outside the pipeline\n\s+docs-writer\s+Writes the user docs\./.test(out), `pipeline: an agent of the project's own, apart from the stages — got ${out}`);
+  expect(/Single-file bug fix \(TS\)\s+implementer → reviewer → qa/.test(out), `pipeline: which chain a task takes, by its shape — got ${out}`);
+  const none = run(['pipeline', '--project', await scratch()], { loud: true });
+  expect(none.status === 1 && none.out.includes('no .claude/graph.md'), `pipeline: a directory with no composed graph says so — got ${none.out}`);
 }
 
 // ─── the session: one banner, and the commands under it ─────────────────────────────────
