@@ -8,7 +8,7 @@
  * the transcripts are hundreds of megabytes and growing.
  */
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { slugFor, snapshotsDir } from '../paths.mjs';
 import { createReadStream, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createInterface } from 'node:readline';
@@ -118,6 +118,40 @@ export function storedRecords(dir) {
 }
 
 /**
+ * Takes a project's lock, or says it is taken. The records and the cursors are written one after the other,
+ * and two snapshots of one project at once — a project's own detector and a global hook, both on every
+ * Stop — could leave the cursors of the scan that read further beside the records of the one that read less,
+ * and whatever lay between was never captured. One that finds the lock taken skips the project: the next
+ * snapshot reads from where this one leaves it. A lock names its process, so one left by a snapshot that
+ * died is taken over.
+ *
+ * @param {string} path - The lock file.
+ * @returns {Promise<(() => Promise<void>)|null>} Its release, or null when another snapshot holds it.
+ */
+async function lock(path) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await open(path, 'wx');
+      await handle.writeFile(String(process.pid));
+      await handle.close();
+      return () => rm(path, { force: true });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      const pid = Number(await readFile(path, 'utf8').catch(() => ''));
+      let alive = false;
+      try {
+        alive = pid > 0 && process.kill(pid, 0);
+      } catch (e) {
+        alive = e.code === 'EPERM';
+      }
+      if (alive) return null;
+      await rm(path, { force: true });
+    }
+  }
+  return null;
+}
+
+/**
  * Runs the snapshot.
  *
  * @param {string[]} argv - Command arguments.
@@ -155,40 +189,56 @@ export async function snapshot(argv, ctx) {
 
   let totalNew = 0;
   for (const project of targets) {
-    const file = join(outDir, `${project.slug}.jsonl`);
-    const prior = rebuild ? [] : await readRecords(file);
-    const own = rebuild ? {} : await readJson(join(outDir, `${project.slug}.state.json`));
-    const cursors = rebuild ? {} : (own.cursors ?? legacy[project.slug]?.cursors ?? {});
-
-    const scanned = await scanProject(project.dir, { cursors, records: prior });
-    const records = scanned.records.map((r) => ({ project: project.slug, ...r }));
-    if (records.length === 0) continue;
-
-    const fresh = records.length - prior.length;
-    // A prior record can change without the count changing — a field learned after it was
-    // captured, filled in from its transcript — and a write gated on the count alone would
-    // compute the backfill and throw it away.
-    const changed =
-      fresh !== 0 ||
-      prior.length === 0 ||
-      rebuild ||
-      records.some((r, i) => JSON.stringify(r) !== JSON.stringify({ project: project.slug, ...prior[i] }));
-    if (changed) await writeAtomic(file, records);
-    await writeAtomicText(join(outDir, `${project.slug}.state.json`), `${JSON.stringify({ cursors: scanned.cursors, captured: records.length }, null, 2)}\n`);
-    totalNew += Math.max(0, fresh);
-
-    if (!quiet) {
-      const span = `${String(records[0].ts).slice(0, 10)} → ${String(records.at(-1).ts).slice(0, 10)}`;
-      console.log(
-        `  ${project.slug.padEnd(48)} ${String(records.length).padStart(5)} rounds  ` +
-          `${String(fresh).padStart(5)} new  ${span}`,
-      );
+    const release = await lock(join(outDir, `${project.slug}.lock`));
+    if (!release) continue;
+    try {
+      totalNew += await snapshotProject(project, { outDir, rebuild, quiet, legacy });
+    } finally {
+      await release();
     }
   }
-
 
   if (!quiet) {
     console.log(`\n  ${totalNew} new round${totalNew === 1 ? '' : 's'} captured → ${outDir}`);
   }
   return 0;
+}
+
+/**
+ * Snapshots one project, under its lock.
+ *
+ * @returns {Promise<number>} How many rounds it captured that were not on record.
+ */
+async function snapshotProject(project, { outDir, rebuild, quiet, legacy }) {
+  const file = join(outDir, `${project.slug}.jsonl`);
+  // The store is the only copy of history older than the transcripts, and a rebuild re-reads only what is
+  // still on disk: the record it replaces is kept beside it first.
+  if (rebuild && existsSync(file)) await copyFile(file, `${file}.before-rebuild-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  const prior = rebuild ? [] : await readRecords(file);
+  const own = rebuild ? {} : await readJson(join(outDir, `${project.slug}.state.json`));
+  const cursors = rebuild ? {} : (own.cursors ?? legacy[project.slug]?.cursors ?? {});
+
+  const scanned = await scanProject(project.dir, { cursors, records: prior });
+  const records = scanned.records.map((r) => ({ project: project.slug, ...r }));
+  if (records.length === 0) return 0;
+
+  const fresh = records.length - prior.length;
+  // A prior record can change without the count changing — a field learned after it was
+  // captured, filled in from its transcript — and a write gated on the count alone would
+  // compute the backfill and throw it away.
+  const changed =
+    fresh !== 0 ||
+    prior.length === 0 ||
+    rebuild ||
+    records.some((r, i) => JSON.stringify(r) !== JSON.stringify({ project: project.slug, ...prior[i] }));
+  if (changed) await writeAtomic(file, records);
+  await writeAtomicText(join(outDir, `${project.slug}.state.json`), `${JSON.stringify({ cursors: scanned.cursors, captured: records.length }, null, 2)}\n`);
+  if (!quiet) {
+    const span = `${String(records[0].ts).slice(0, 10)} → ${String(records.at(-1).ts).slice(0, 10)}`;
+    console.log(
+      `  ${project.slug.padEnd(48)} ${String(records.length).padStart(5)} rounds  ` +
+        `${String(fresh).padStart(5)} new  ${span}`,
+    );
+  }
+  return Math.max(0, fresh);
 }
