@@ -188,7 +188,7 @@ Every named declaration gets a TSDoc block (`/** ... */`) — exported or not: f
 - Not a restatement of the signature. Not a changelog. Not a crutch for bad naming.
 
 ### Enforcement
-Reviewer verifies coverage. **Missing TSDoc on any new declaration = request changes.**
+Reviewer verifies coverage. **Missing TSDoc on any new declaration = `REJECTED`.**
 
 ---
 

@@ -8,7 +8,7 @@
 - `cacheStrategy` lives in `{{DB_PKG}}`. Services do not add, strip, or override cache policies.
 
 <!-- nina:slot db.4 -->
-- **Every service query includes `userId` (tenant scope) in the `where` clause.** Missing scope = automatic CHANGES REQUESTED.
+- **Every service query includes `userId` (tenant scope) in the `where` clause.** Missing scope = automatic `REJECTED`.
 
 <!-- nina:slot db.5 -->
 

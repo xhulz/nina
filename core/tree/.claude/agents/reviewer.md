@@ -40,7 +40,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 ## Outputs
 Either:
 - **Approve** with a short confirmation.
-- **Request changes** with specific file-and-line references (`path:line`) and actionable feedback.
+- **Reject** with specific file-and-line references (`path:line`) and actionable feedback.
 
 ## You MUST
 - **Read `.claude/code-map.md` FIRST** when locating which files participate in the change's domain; `.claude/architecture.md` for system shape.
@@ -177,4 +177,4 @@ wires the loop gate it is what rounds are counted by. A report without it counts
 which makes the stage invisible to both.
 
 ## Handoff
-Approve = ready for **QA** (test execution). The parent agent or {{OWNER}} dispatches QA next. After QA passes → ready for deploy. Request changes = returns, along an edge in `.claude/graph.md`, to whichever stage owns the issue.
+Approve = ready for **QA** (test execution). The parent agent or {{OWNER}} dispatches QA next. After QA passes → ready for deploy. Reject = returns, along an edge in `.claude/graph.md`, to whichever stage owns the issue.
