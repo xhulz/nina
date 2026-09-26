@@ -52,6 +52,16 @@ It prints the file's notice by **calling `generatedNotice`**, not by restating i
 fact drifting apart has already shipped here once, and a command whose whole purpose is to be trusted
 about where things go is the worst place for a second.
 
+## One screen: `nina status`
+
+The question a person brings to a project — is its harness in order, and is it current — took six
+commands to answer. `nina status` answers it on one screen: the release the project pins, the NINA it has
+installed and the newest on the registry (asked for three seconds, skipped with `--offline`), whether every
+hook its release needs is wired, what `gate --selftest` and `check` conclude, how fresh its measured history
+is and what the last seven days cost at API list prices, and its pills and open requests. Each line reads
+what its own command reads, or runs it, so the screen cannot disagree with them; it exits 1 when any line
+needs looking at, and names the command that deals with it.
+
 ## Seeing the pipeline: `nina pipeline`
 
 Opening a project, the pipeline was a graph, a router, ten specs and a table in `CLAUDE.md` to read before

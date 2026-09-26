@@ -29,6 +29,7 @@ import { exportCommand } from '../src/commands/export.mjs';
 import { langfuse } from '../src/commands/langfuse.mjs';
 import { pipeline } from '../src/commands/pipeline.mjs';
 import { runs } from '../src/commands/runs.mjs';
+import { status } from '../src/commands/status.mjs';
 
 /** The NINA install directory (the parent of `bin/`). */
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -36,6 +37,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 /** Commands wired today, in the order `help` lists them. */
 const COMMANDS = {
   init: { run: init, help: 'start a harness for a project: profile, surfaces, and what to fill' },
+  status: { run: status, help: "one screen: the pin, the install and the newest release, the hooks, the gate, check, what the week cost, the learning" },
   snapshot: { run: snapshot, help: 'capture pipeline history from the Claude Code transcripts' },
   stats: { run: stats, help: 'report loop-back rate per stage from the snapshots' },
   runs: { run: runs, help: 'what each piece of work cost: its cycles, their stages and rounds, what was sent back, time and cost' },
