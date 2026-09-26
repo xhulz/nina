@@ -399,7 +399,7 @@ this repo, with a table of which document to read before changing what.
   and use mutation checks for the rules that matter: undo the rule and some test has to fail.
 - Known limits are written down. The loop gate can't see a fix the model makes by itself without a subagent, for
   example, and a scheduled `/loop` prompt resets the counts the same way a person's reply does.
-- Commands: `init`, `compose`, `check`, `where`, `pills`, `learn`, `requests`, `wire`, `gate`, `upgrade`,
+- Commands: `init`, `compose`, `check`, `where`, `pipeline`, `pills`, `learn`, `requests`, `wire`, `gate`, `upgrade`,
   `release`, `snapshot`, `stats`, `eval`, `export`, `langfuse`.
 
 <sub>© 2026 Marcos Schulz. All rights reserved. The source is public so it can be read, and forking it on GitHub

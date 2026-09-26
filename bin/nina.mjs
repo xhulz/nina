@@ -27,6 +27,7 @@ import { wire } from '../src/commands/wire.mjs';
 import { evalCommand } from '../src/commands/eval.mjs';
 import { exportCommand } from '../src/commands/export.mjs';
 import { langfuse } from '../src/commands/langfuse.mjs';
+import { pipeline } from '../src/commands/pipeline.mjs';
 
 /** The NINA install directory (the parent of `bin/`). */
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -39,6 +40,7 @@ const COMMANDS = {
   check: { run: check, help: "validate a project's profile, vocabulary and integrations" },
   compose: { run: compose, help: 'rebuild a project\'s .claude/ from core + its surfaces' },
   where: { run: where, help: 'say which layer owns a path, and where a change to it goes' },
+  pipeline: { run: pipeline, help: "draw the project's agent chain: the line, its gates, what goes back, each stage's model and skills" },
   pills: { run: pills, help: 'validate the corrections the pipeline wrote about itself' },
   learn: { run: learn, help: 'is the pipeline learning from its own runs? observe, capture, apply, graduate, verify; --deep reads why' },
   requests: { run: requests, help: "the lessons projects have graduated to the harness — this repo's inbox" },

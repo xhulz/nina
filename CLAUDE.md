@@ -96,7 +96,7 @@ must not break.
 |---|---|
 | a layer, `compose`, the notice, `nina:why`, the size budgets, the edit guard, the tools a spec may use | [`docs/composition.md`](docs/composition.md) |
 | `init`, `wire`, the hooks a project needs, the vocabulary and its defaults, how a project installs NINA | [`docs/installing.md`](docs/installing.md) |
-| `check`, `where` | [`docs/checking.md`](docs/checking.md) |
+| `check`, `where`, `pipeline` | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
 | `snapshot`, `stats`, cost, models, proportion, `eval`, `export`, `langfuse` | [`docs/measurement.md`](docs/measurement.md) |
@@ -113,6 +113,7 @@ nina init --project ../thing                  # profile, TODO, wiring, and a fir
 nina compose --project ../thing [--check]     # rebuild a project's harness files, or say if they drifted
 nina check --project ../thing                 # is what the project declared about itself true?
 nina where <path> --project ../thing          # does this path belong to the harness, and which layer?
+nina pipeline --project ../thing              # the agent chain drawn: gates, loop-backs, models, skills
 nina wire --project ../thing [--apply]        # merge the hooks and npm scripts its version needs
 nina upgrade --project ../thing --to <v> [--apply]   # what a move costs, then the whole move
 nina gate --selftest --project ../thing       # would the loop gate still hold a loop past its cap?
@@ -131,7 +132,7 @@ nina release <version>                        # freeze the working layers; never
 ```
 bin/nina.mjs          entry point and command table
 src/shell.mjs         `nina` alone on a terminal: one banner, then each typed command run under it
-src/commands/         init, compose, check, where, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval, export, langfuse
+src/commands/         init, compose, check, where, pipeline, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval, export, langfuse
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/guard.mjs         the edit guard: refuses an edit to a composed file, quoting where it belongs
