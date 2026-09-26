@@ -5,9 +5,8 @@
 <!-- nina:slot project.2 pipeline-diagram -->
 
 The `reviewer` and every gate the diff triggers are read-only, so **dispatch them together in one
-message** after the implementer rather than in sequence. The reviewer remains the gate — it does not
-approve until the applicable guardrails have signed off. After approval, `qa` runs vitest once, on
-its own. On a diff over ~200 lines, fan the reviewer out by dimension. Full rules:
+message** after the implementer rather than in sequence. The reviewer names the gates the diff
+triggers; `qa` goes out once the reviewer and each of them approved, and runs vitest once, on its own. On a diff over ~200 lines, fan the reviewer out by dimension. Full rules:
 `.claude/router.md` § *Parallelization*.
 
 ---
@@ -59,7 +58,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 ### QA (test execution)
 
-- **Input:** reviewer's APPROVED verdict + the implementer's touched-package list.
+- **Input:** `APPROVED` from the reviewer and every gate the diff triggered + the implementer's touched-package list.
 - **Output:** PASS (ready for deploy) or FAIL (loops back to implementer/architect).
 - **Tools:** Read, Grep, Glob, Bash.
 - Runs vitest **once**, per affected package, **sequentially** (configs enforce single-fork). Kills stray test processes at start and end. See `.claude/agents/qa.md`.

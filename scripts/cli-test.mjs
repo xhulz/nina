@@ -3434,8 +3434,8 @@ const dated = (date, status = 'active') =>
       '- `qa` → `done` on `PASS` — nothing to deploy',
       '- `devops` → `done` on `DEPLOYED`',
       '- `planner` → `human` on `BLOCKED` — no answer',
-      // A detour that does not come back to the next stage of the line is not a gate on it.
-      '- `planner` → `dba` on `PLAN-READY` — a data plan',
+      // A detour that does not come back to the line is not a gate on it.
+      '- `planner` → `devops` on `PLAN-READY` — a deploy plan',
       '## Concurrency',
       '- `implementer` × many — work that shares no file',
       '- `ghost` × many — a stage the graph does not declare',
@@ -3448,7 +3448,10 @@ const dated = (date, status = 'active') =>
   );
   const shape = shapeOf(graph);
   expect(shape.line.join(' ') === 'planner implementer reviewer qa', `pipeline: the line follows the unconditioned forward edges — got ${shape.line.join(' ')}`);
-  expect(shape.gates.length === 1 && shape.gates[0].gate === 'dba' && shape.gates[0].to === 'reviewer', `pipeline: a gate is a detour that comes back to the line — got ${JSON.stringify(shape.gates)}`);
+  expect(shape.gates.length === 1 && shape.gates[0].gate === 'dba' && shape.gates[0].to === 'reviewer' && shape.gates[0].beside.length === 0, `pipeline: a gate is a detour that comes back to the line — got ${JSON.stringify(shape.gates)}`);
+  // One that comes back further on runs beside the stages it skips.
+  const beside = shapeOf(parseGraph(['## Stages', '- `implementer` — writes', '- `dba` — gate', '- `reviewer` — audits', '- `qa` — tests', '## Edges', '- `implementer` → `reviewer` on `DIFF-READY`', '- `implementer` → `dba` on `DIFF-READY` — the schema is touched', '- `dba` → `qa` on `APPROVED` — with the reviewer', '- `reviewer` → `qa` on `APPROVED`'].join('\n')));
+  expect(beside.gates[0]?.to === 'qa' && beside.gates[0].beside.join() === 'reviewer', `pipeline: a gate that rejoins the line past a stage runs beside it — got ${JSON.stringify(beside.gates)}`);
   expect(shape.ends.map((e) => e.path.join('>')).join(' ') === 'devops>done done', `pipeline: the ends follow the last stage's conditioned edges to a terminal — got ${JSON.stringify(shape.ends)}`);
   expect(shape.back.map((e) => e.from).join(' ') === 'planner reviewer qa', `pipeline: what goes back is grouped by stage, in the stages' order — got ${shape.back.map((e) => e.from).join(' ')}`);
   const shapes = chainsByShape('x\n| Task shape | Required dispatch |\n|---|---|\n| Trivial edit | none — edit directly |\n| **Refactor** (no new behavior) | **architect → implementer** — and a note |\n| **ANY schema change** | **+ dba before reviewer** |\n\nafter');
@@ -3492,7 +3495,10 @@ const dated = (date, status = 'active') =>
   expect(/planner ─▶ architect ×n ─▶ implementer ×n ─▶ reviewer ×n ─▶ qa ─┬─▶ /.test(out) && /└─▶ done\s+nothing to deploy/.test(out), `pipeline: the line, its stages that run as several agents, and where its last stage sends work — got ${out}`);
   expect(/×n\s+runs as several agents at once[^\n]*\n\s+architect\s+the sibling specs/.test(out) && /\n\s+implementer\s+work that shares no file/.test(out), `pipeline: what running as several agents means, stage by stage — got ${out}`);
   expect(/reviewer\s+claude-opus-5-5 · high[^\n]*\n\s+ran\s+2 run\(s\), sent back 1 of 2 \(50%\)/.test(out) && /qa\s+claude-sonnet-5 · xhigh[^\n]*\n\s+ran\s+no run/.test(out), `pipeline: each stage's last thirty days from the measured history — got ${out}`);
-  expect(/implementer ─▶ dba ─▶ reviewer\s+the diff touches the schema/.test(out) && out.includes('implementer ─▶ integration-tester ─▶ reviewer'), `pipeline: the gates the surfaces bring — got ${out}`);
+  expect(
+    /implementer ─▶ dba ─▶ qa\s+beside the reviewer · the diff touches the schema/.test(out) && /implementer ─▶ integration-tester ─▶ qa\s+beside the reviewer/.test(out),
+    `pipeline: the gates the surfaces bring, run beside the reviewer and rejoining at qa — got ${out}`,
+  );
   expect(/reviewer\s+↩ implementer\s+REJECTED\s+2\s+an implementation bug/.test(out) && /architect\s+↩ human\s+BLOCKED\s+—/.test(out), `pipeline: what goes back, on which verdict, with its cap — got ${out}`);
   expect(/architect\s+claude-opus-5-5 · xhigh/.test(out) && /reviewer\s+claude-opus-5-5 · high/.test(out) && /skills\s+.*cloudflare:/.test(out), `pipeline: each stage's model, effort and skills — got ${out}`);
   expect(/the project's own agents, outside the pipeline\n\s+docs-writer\s+Writes the user docs\./.test(out), `pipeline: an agent of the project's own, apart from the stages — got ${out}`);
@@ -3500,7 +3506,7 @@ const dated = (date, status = 'active') =>
   // One shape's chain alone: its stages, the add-ons any chain may take, and only what goes back among them.
   const one = run(['pipeline', '--project', dir, '--for', 'single file bug'], { loud: true }).out;
   expect(
-    one.includes('for: Single-file bug fix (TS)') && /\n  implementer ×n ─▶ reviewer ×n ─▶ qa\n/.test(one) && one.includes('+ dba before reviewer') &&
+    one.includes('for: Single-file bug fix (TS)') && /\n  implementer ×n ─▶ reviewer ×n ─▶ qa\n/.test(one) && one.includes('+ dba beside the reviewer') &&
       !/↩ architect|planner/.test(one) && /reviewer\s+↩ implementer\s+REJECTED/.test(one),
     `pipeline --for: one shape's chain, its add-ons, and only its own loop-backs — got ${one}`,
   );

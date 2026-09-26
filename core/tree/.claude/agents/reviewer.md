@@ -47,6 +47,7 @@ Either:
 - **Verify the spec's Obsolescence list was executed.** If the spec named files/exports to delete, the diff must delete them — leaving authorized-dead code behind is a defect. If the spec omitted the field entirely, REJECT upstream to the architect: it is mandatory.
 - **Run `pnpm harness:check`.** It is ~1s and it is not vitest. It runs every drift detector this repo declares — however many that is — and tells drift apart from a check that failed to run (exit 1 vs 2). A `[unmapped]` or `[stale-path]` failure means the change added or removed a package, route, service, or DO method without updating `.claude/code-map.md` — request the map update before approving. A `premise index is stale` failure means an `.claude/integrations/*.md` premise was appended without regenerating the index — the block between the `premise-index` markers is GENERATED, so request `pnpm premise-index`, never a hand edit. Also scan the dead-export report in `.claude/code-map.generated.md` for symbols this diff introduced: **a new export nothing consumes is dead on arrival.** An exported type used only by its own module should not be exported at all.
 <!-- nina:slot frontend.2 -->
+- **Name every gate the diff triggers** (`.claude/graph.md` says on what) on your report's **Gates** line. They run beside you: you do not wait for their verdicts or dispatch them, and `qa` goes out only once each of them and you approved. A gate the orchestrator did not send is caught by your naming it.
 - **Check what you were handed against the tree before reviewing against it** (Hard Rule #17): the spec's file list, its line ranges, the premises it cites. You are the last stage that can catch a spec describing a tree that has moved, and a review that checks a correct diff against a wrong spec rejects the right work — or approves the wrong work — with full confidence either way.
 - Verify the diff matches the architect's spec. Reject scope creep — request offending parts be split out.
 - Verify `.claude/patterns.md` conventions were followed (Route → Service → Data layering, naming, folder structure, Zod at all trust boundaries, no `any` without a justifying comment, **TSDoc on every new declaration**).
@@ -87,9 +88,9 @@ list that says "three" and then starts at 3 tells the reader something is missin
   for every test it deletes, the one that still covers it;
   typecheck / lint / build / `pnpm harness:check` clean.
 
-Whoever owns **patterns-and-scope** also runs the commands and confirms that every gate the diff
-triggered (`.claude/graph.md`) signed off — the others stay read-only and skip the shell. If your
-dispatch names no dimension, you own every one of them, as usual.
+Whoever owns **patterns-and-scope** also runs the commands and names the gates the diff triggers — the
+others stay read-only and skip the shell. If your dispatch names no dimension, you own every one of
+them, as usual.
 
 ## Check execution policy
 
@@ -133,6 +134,7 @@ When in doubt about the diff's correctness independent of tests, do the audit yo
 ## Final report format
 
 - **Top line:** the verdict line — `VERDICT: APPROVED` or `VERDICT: REJECTED` (see above), with the `ISSUES` line under a `REJECTED`.
+- **Gates:** each gate the diff triggers, by stage name, or `none`.
 <!-- nina:slot money.5 -->
 - **Tests:** for every test added or changed, the mutation it names and whether that mutation turns it red; for every test deleted, the surviving test that covers it. A test with no working mutation is reported as such rather than counted.
 - **Artifacts checked:** what you verified against the tree rather than taking on trust, and any divergence, with the stage that produced it (Hard Rule #17).
@@ -177,4 +179,4 @@ wires the loop gate it is what rounds are counted by. A report without it counts
 which makes the stage invisible to both.
 
 ## Handoff
-Approve = ready for **QA** (test execution). The parent agent or {{OWNER}} dispatches QA next. After QA passes → ready for deploy. Reject = returns, along an edge in `.claude/graph.md`, to whichever stage owns the issue.
+Approve = ready for **QA** (test execution), which the parent agent or {{OWNER}} dispatches once every gate you named approved too. After QA passes → ready for deploy. Reject = returns, along an edge in `.claude/graph.md`, to whichever stage owns the issue.

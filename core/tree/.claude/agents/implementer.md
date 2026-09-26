@@ -149,7 +149,7 @@ Diff + summary → **reviewer**. **Cap your final message at ~250 words** unless
 - Typecheck, lint, and build status (PASS/FAIL).
 - Any deviation from the spec, with justification (goal: zero deviations — if zero, say "no deviations").
 - **Where the spec was wrong about the tree** — a range, a file list, a premise — and what you did about it (Hard Rule #17). This is not a deviation: a deviation is what YOU did differently, this is what the SPEC got wrong. If nothing, say "spec matched the tree".
-- **Required downstream gates:** list which of the gates in `.claude/graph.md` the diff triggers, and so must run before reviewer can approve. This is what the reviewer checks first.
+- **Required downstream gates:** list which of the gates in `.claude/graph.md` the diff triggers. They go out beside the reviewer, and `qa` waits for every one of them.
 - Anything for the reviewer's attention (non-obvious decisions, hacks needing review). Skip this bullet if nothing.
 
 The reviewer audits the diff vs spec. The QA stage runs tests after reviewer approves. Be precise about what you DID (typecheck/lint/build) vs what you DEFERRED (vitest → QA).

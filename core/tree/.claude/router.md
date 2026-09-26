@@ -19,7 +19,7 @@ task into a chain over them.
 
 <!-- nina:slot project.3 track-flow-diagram -->
 
-The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated, composed for this project. Every gate the diff triggers runs in parallel after the implementer, and each must approve before the reviewer can. `qa` runs after the reviewer approves.
+The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated. Every gate the diff triggers runs beside the reviewer, and `qa` goes out once all of them approved. The reviewer's `Gates` line names the gates the diff triggers: send any you did not.
 
 **Every loop has a cap.** Before dispatching a loop-back, count the rounds the SAME issue has already made on that edge. At the cap `.claude/graph.md` gives it, do not dispatch again: stop and hand {{OWNER}} the report from every round. A third attempt at a fix that failed twice is rarely different from the second, each round costs minutes to hours<!-- nina:why -->, and until this rule existed nothing in the pipeline could stop a loop at all<!-- /nina:why -->. A different issue on the same edge starts its own count. A stage that sends work back names each issue on the `ISSUES` line under its verdict; when you dispatch a round — the fix, and the check of the fix — copy that line into both dispatches, so the stage that checks can keep the id of an issue that is still open. That id is what your count is of.
 
