@@ -15,7 +15,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor } from '../paths.mjs';
@@ -135,6 +135,15 @@ function dryRun(target) {
     // Reported by the wiring check; the script is run directly instead.
   }
   const command = hookCommand(settings, 'PreToolUse', GATE) ?? `node "${join(target, GATE)}"`;
+  // A hook that runs past its timeout is killed before `finally` can remove its directory; one left by a
+  // run an hour gone is such a one, and goes now.
+  for (const left of readdirSync(tmpdir()).filter((f) => f.startsWith('nina-gate-'))) {
+    try {
+      if (Date.now() - statSync(join(tmpdir(), left)).mtimeMs > 3_600_000) rmSync(join(tmpdir(), left), { recursive: true, force: true });
+    } catch {
+      // Another run's, going as this one looks.
+    }
+  }
   const data = mkdtempSync(join(tmpdir(), 'nina-gate-'));
   try {
     const run = spawnSync('sh', ['-c', command], {

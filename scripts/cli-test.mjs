@@ -15,7 +15,7 @@
  */
 
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -47,6 +47,14 @@ import { redact } from '../src/agentrun.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const NINA = join(ROOT, 'bin', 'nina.mjs');
+
+// Everything a run writes goes under one directory, removed when the run ends: every test bed, store and
+// home below, and — through `TMPDIR`, which each command the suite starts inherits — whatever those make of
+// their own. Each run used to leave its directories behind, and the machine this was written on had kept
+// 100,287 of them, 10 GB.
+const RUN_ROOT = await mkdtemp(join(tmpdir(), 'nina-cli-run-'));
+process.env.TMPDIR = RUN_ROOT;
+process.on('exit', () => rmSync(RUN_ROOT, { recursive: true, force: true }));
 
 /** A fresh empty project directory. */
 const scratch = () => mkdtemp(join(tmpdir(), 'nina-cli-'));

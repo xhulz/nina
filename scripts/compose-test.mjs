@@ -38,7 +38,7 @@
 import { cp, mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { frontmatterFindings, modelFindings, toolFindings } from '../src/tools.mjs';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,11 @@ import { ANSWERED, answers } from '../src/commands/learn.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const verbose = process.argv.includes('--verbose');
+
+// Every fixture composes under one directory, removed when the run ends; each run used to leave one
+// directory per fixture behind.
+const RUN_ROOT = await mkdtemp(join(tmpdir(), 'nina-compose-run-'));
+process.on('exit', () => rmSync(RUN_ROOT, { recursive: true, force: true }));
 
 /** Every file under a directory, as paths relative to it. */
 async function walk(dir, prefix = '') {
@@ -69,7 +74,7 @@ async function walk(dir, prefix = '') {
 async function runFixture(name) {
   const source = join(ROOT, 'fixtures', name);
   const expect = JSON.parse(await readFile(join(source, 'expect.json'), 'utf8'));
-  const work = await mkdtemp(join(tmpdir(), `nina-${name}-`));
+  const work = await mkdtemp(join(RUN_ROOT, `${name}-`));
   await cp(join(source, '.nina'), join(work, '.nina'), { recursive: true });
 
   const result = await composeProject(work, { root: ROOT });
