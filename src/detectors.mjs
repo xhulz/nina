@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { hookStateDir, slugFor } from './paths.mjs';
 import { CHECK } from './wiring.mjs';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -157,20 +157,82 @@ const stopState = (root) => join(hookStateDir(), `${slugFor(root)}.stop.json`);
 /** Sessions remembered per project; the oldest is forgotten past this. */
 const SESSIONS_KEPT = 20;
 
+/** What Claude Code wrote to the hook's stdin, read once: stdin can be read only once. */
+let input;
+
 /**
- * The session a Stop hook runs in, from the payload Claude Code writes to its stdin. What was said is
- * kept per session: kept per project, a second session open on the same project found the finding
- * already told — to the first session's person — and told its own nothing.
+ * The payload Claude Code writes to a hook's stdin, or an empty object run by hand.
+ *
+ * @returns {{session_id?: string, prompt?: string, transcript_path?: string}}
+ */
+function hookInput() {
+  if (input === undefined) {
+    try {
+      input = process.stdin.isTTY ? {} : (JSON.parse(readFileSync(0, 'utf8')) ?? {});
+    } catch {
+      input = {};
+    }
+  }
+  return input;
+}
+
+/**
+ * The session a hook runs in. What was said is kept per session: kept per project, a second session open
+ * on the same project found the finding already told — to the first session's person — and told its own
+ * nothing.
  *
  * @returns {string}
  */
-function hookSession() {
-  if (process.stdin.isTTY) return '-';
+const hookSession = () => String(hookInput().session_id ?? '-');
+
+/**
+ * Whether the prompt the hook runs before is a subagent's completion notification rather than something a
+ * person said. Claude Code submits each as a prompt, and every one ran the detectors — a second or more
+ * before the model read it — and put their findings beside it: one session of the first new project did so
+ * 181 times over 23 of its owner's messages.
+ *
+ * @returns {boolean}
+ */
+const notification = () => String(hookInput().prompt ?? '').trimStart().startsWith('<task-notification>');
+
+/** How much of a transcript's end is read for a compaction since the last hand-over: it is the latest line. */
+const TAIL = 1024 * 1024;
+
+/**
+ * Whether the session was compacted after a moment: a compaction drops what the model was handed, so what it
+ * was handed is handed again.
+ *
+ * @param {unknown} path - The session's transcript.
+ * @param {unknown} since - An ISO time.
+ * @returns {boolean}
+ */
+function compactedSince(path, since) {
+  if (typeof path !== 'string' || typeof since !== 'string' || !existsSync(path)) return false;
+  let text;
   try {
-    return String(JSON.parse(readFileSync(0, 'utf8'))?.session_id ?? '-');
+    const size = statSync(path).size;
+    const length = Math.min(size, TAIL);
+    const buffer = Buffer.alloc(length);
+    const fd = openSync(path, 'r');
+    try {
+      readSync(fd, buffer, 0, length, size - length);
+    } finally {
+      closeSync(fd);
+    }
+    text = buffer.toString('utf8');
   } catch {
-    return '-';
+    return false;
   }
+  for (const line of text.split('\n')) {
+    if (!line.includes('"compact_boundary"')) continue;
+    try {
+      const row = JSON.parse(line);
+      if (row?.subtype === 'compact_boundary' && String(row.timestamp) > since) return true;
+    } catch {
+      // A torn line at the head of the tail.
+    }
+  }
+  return false;
 }
 
 /** What was said, per session, for a project. */
@@ -237,8 +299,9 @@ function reportOf(drift, errored, missing, detectors) {
 /**
  * What the prompt hook hands the model, or null for nothing. A finding not handed over at the last
  * message goes in full, with the instruction to act on it or say it is pending. One that was, and has
- * not changed, goes as its summary, with the instruction not to say it again: told before every message
- * to say it was pending, the model closed every answer with the same line.
+ * not changed, goes as its summary beside a new one, with the instruction not to say it again — told
+ * before every message to say it was pending, the model closed every answer with the same line — and on
+ * its own not at all: the model has it from the first time, until a compaction drops it.
  *
  * @returns {string|null}
  */
@@ -317,6 +380,7 @@ function remember(root, session, change) {
  */
 export function runDetectors(detectors, options) {
   const { root, hook = false, context = false } = options;
+  if (context && notification()) return 0;
   const declared = declaredIn(root);
   const results = detectors.map((d) => runOne(d, root, declared, context ? 'context' : hook ? 'stop' : ''));
   const applicable = results.filter((r) => r.state !== 'n/a');
@@ -358,11 +422,17 @@ export function runDetectors(detectors, options) {
   // again: it has it already, and every copy stays in the conversation.
   if (context) {
     const session = hookSession();
-    const before = readStops(root)[session]?.given;
-    const handed = new Set(Array.isArray(before) ? before : []);
-    remember(root, session, { given: drift.flatMap(findingKeys) });
+    const state = readStops(root)[session] ?? {};
+    // A compaction since the last hand-over dropped it from the model's context: everything goes again.
+    const compacted = compactedSince(hookInput().transcript_path, state.handed_at);
+    const handed = new Set(!compacted && Array.isArray(state.given) ? state.given : []);
     const known = drift.filter((r) => findingKeys(r).every((k) => handed.has(k)));
-    const said = contextOf(drift.filter((r) => !known.includes(r)), known, errored, missing, detectors);
+    const fresh = drift.filter((r) => !known.includes(r));
+    remember(root, session, { given: drift.flatMap(findingKeys), ...(fresh.length > 0 ? { handed_at: new Date().toISOString() } : {}) });
+    // What the model was handed and has not changed is said only beside something new. Said on its own
+    // before every message, it went into the conversation on every prompt the session had.
+    const speaking = fresh.length > 0 || errored.length > 0 || missing.length > 0;
+    const said = contextOf(fresh, speaking ? known : [], errored, missing, detectors);
     if (said) {
       process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: said } })}\n`);
     }
