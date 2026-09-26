@@ -3788,6 +3788,17 @@ const dated = (date, status = 'active') =>
     'flow: the orchestrator commits each closed pass on a working branch, and no stage moves the checkout',
   );
   expect(qa.includes('`git worktree add <dir> HEAD`') && !qa.includes('reproduce on `main`'), 'flow: qa checks a pre-existing failure in a worktree at HEAD, never by moving the checkout');
+
+  // A spike has a shape of its own. The first new project spent most of its first two days on two spikes
+  // carried by the whole chain, one of them through eight revisions of its spec.
+  const architect = await read('.claude/agents/architect.md');
+  const spike = chainsByShape(claude).find((row) => row.shape.startsWith('Spike'));
+  expect(spike?.chain === 'architect (spike plan) → implementer → reviewer', `flow: a spike takes the architect's plan, the implementer and the reviewer — got ${JSON.stringify(spike)}`);
+  expect(
+    router.includes('### A spike answers one question') && router.includes('Its plan is corrected at most twice') && architect.includes('a **spike plan** instead, one page') &&
+      reviewer.includes('- **A spike** (`.claude/router.md` § *A spike answers one question*) is reviewed for one thing') && graph.edges.some((e) => e.from === 'reviewer' && e.to === 'done' && e.when.startsWith('a spike')),
+    'flow: a spike is planned on a page, reviewed for whether it measures what it says, ends at the review, and is corrected at most twice',
+  );
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────

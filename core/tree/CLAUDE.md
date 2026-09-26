@@ -92,6 +92,7 @@ a request against the pinned version, quoting the composed file and line, and it
 | Question / exploration / Q&A | none — answer directly |
 | Trivial edit (rename, typo, 1-line log fix) | none — edit directly |
 | **Small read-only / display / UI-copy change** (≤2 files, no critical path) | **implementer → reviewer** — or a direct edit if a subagent adds no value; qa runs ONLY the affected test file, and not at all when no test covers the change. No planner, no secops. |
+| **Spike** — an experiment that answers a question about a service, a library or the data before anything is designed on it | **architect (spike plan) → implementer → reviewer** — no qa, devops or secops; `.claude/router.md` § *A spike answers one question* |
 | Single-file bug fix (TS) | **implementer → reviewer → qa** |
 | Refactor TS (no new behavior) | **architect → implementer → reviewer → qa** |
 | New TS feature / multi-file change (a critical path, or ≥3 files with logic) | **planner → architect → implementer → reviewer → qa** |
