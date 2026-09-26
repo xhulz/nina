@@ -28,7 +28,7 @@ import { join, relative, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor, snapshotsDir } from '../paths.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
-import { GRADUATION_AT, frontmatter, graduationTarget, list, pillFiles, roleGates } from './pills.mjs';
+import { GRADUATION_AT, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
 import { decodeProjectDir } from './stats.mjs';
 import { snapshot } from './snapshot.mjs';
 import { loadProject, projectGateDir, readLedger, replay } from '../gate.mjs';
@@ -292,6 +292,8 @@ async function answerRequest(target, file, answer) {
   const pill = await readFile(join(target, fields.pill), 'utf8');
   const retired = /^status: .*$/m.test(pill) ? pill.replace(/^status: .*$/m, 'status: retired') : pill.replace(/^---\n/, '---\nstatus: retired\n');
   await writeFile(join(target, fields.pill), retired);
+  // And out of the way of the agents that open every pill to see which apply.
+  await tidyRetired(target);
   return { pill: fields.pill };
 }
 

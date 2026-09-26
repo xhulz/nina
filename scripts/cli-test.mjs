@@ -1161,7 +1161,9 @@ async function sound(fixture, core) {
   expect(inFake(['requests']).out.includes('answered in 9.9.9'), 'requests: the inbox says which release carries the answer');
 
   const closedNow = await closeAnswered(dir, join(fake, 'releases', '9.9.9'), '9.9.9');
-  const pillAfter = await readFile(pillPath, 'utf8');
+  // Retired, it moves where no agent opens it to see whether it applies.
+  const pillAfter = await readFile(join(dir, '.claude', 'pills', 'retired', 'reviewer', 'lesson.md'), 'utf8').catch(() => '');
+  expect(!existsSync(pillPath), 'learn: a pill the release retires leaves the directory its agents read');
   const reqAfter = reqs.length ? await readFile(join(dir, '.nina', 'requests', reqs[0]), 'utf8') : '';
   expect(
     closedNow.length === 1 && closedNow[0].where === '.claude/agents/reviewer.md' && /^status: retired$/m.test(pillAfter) &&
@@ -1233,7 +1235,7 @@ async function sound(fixture, core) {
 
   // Closing by hand stays one command, and it retires the pill with it.
   const closed = run(['learn', '--close', 'r-manual', '--project', other]);
-  const after = await readFile(join(other, '.claude', 'pills', 'qa', 'local.md'), 'utf8');
+  const after = await readFile(join(other, '.claude', 'pills', 'retired', 'qa', 'local.md'), 'utf8').catch(() => '');
   expect(closed.status === 0 && /^status: retired$/m.test(after), `learn: --close should retire the pill — got ${closed.status}\n${after}`);
 
   if (before === undefined) delete process.env.NINA_DATA;
@@ -1606,7 +1608,19 @@ source: the 2026-09-01 review
   );
   expect(out.includes('dba exists only where'), 'pills: one role takes a singular verb');
   expect(!out.includes('learned-twice'), 'pills: twice is not yet a rule');
-  expect(!out.includes('already-graduated'), 'pills: a retired pill is history, not a candidate');
+  expect(!out.includes('already-graduated.md has recurred'), 'pills: a retired pill is history, not a candidate');
+  expect(out.includes('reviewer/already-graduated.md is retired but still where agents open it'), 'pills: and one still where its agents read is told to move');
+  // --tidy moves it where no agent opens it; the corpus still counts it, and an active pill there is lost.
+  const tidied = run(['pills', '--project', dir, '--tidy'], { loud: true });
+  expect(
+    tidied.out.includes('moved reviewer/already-graduated.md → retired/reviewer/already-graduated.md') && existsSync(join(dir, '.claude', 'pills', 'retired', 'reviewer', 'already-graduated.md')) &&
+      !existsSync(join(dir, '.claude', 'pills', 'reviewer', 'already-graduated.md')),
+    `pills: --tidy moves a retired pill out of the directory its agents read — got ${tidied.out}`,
+  );
+  const after = run(['pills', '--project', dir], { loud: true }).out;
+  expect(/\d+ pill\(s\): \d+ active, 1 retired/.test(after) && !after.includes('is retired but still where'), `pills: and it is still counted, as retired — got ${after}`);
+  await plant(dir, 'retired/reviewer/lost.md', recurring('reviewer-lost', 'reviewer', 1));
+  expect(run(['pills', '--project', dir], { loud: true }).out.includes('retired/reviewer/lost.md is active but sits in retired/'), 'pills: an active pill in retired/ is said to be lost');
 }
 
 

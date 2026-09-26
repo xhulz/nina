@@ -20,6 +20,7 @@ import { NEEDS, detected } from '../surfaces.mjs';
 import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
 import { EXPECT_ENV } from '../expected.mjs';
 import { closeAnswered } from './learn.mjs';
+import { tidyRetired } from './pills.mjs';
 import { missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
@@ -500,6 +501,9 @@ export async function upgrade(argv, ctx) {
         }
       }
     }
+    // Retired pills still where agents open them, from before they had a place of their own.
+    const shelved = await tidyRetired(target).catch(() => []);
+    if (shelved.length > 0) console.log(`\n  moved ${shelved.length} retired pill(s) to .claude/pills/retired/, where no agent opens them: ${shelved.join(', ')}`);
     const lessons = nina(ctx, target, ['learn', '--project', target, '--check']);
     if (!lessons.ok && lessons.out.trim()) {
       console.log('\n  the learning cycle has something to act on — not caused by this move, now visible:');

@@ -99,9 +99,10 @@ not cover the case, and the fix belongs where nobody has to remember it:
 - a correction that would apply to **any** project of this shape → back into the harness itself, as
   a rule in the core or in the surface that implies it
 
-Once the rule is written where it belongs, set the pill `status: retired` and leave it in place. A
-retired pill is history, not instruction: agents skip it. Deleting it would lose the reason the rule
-exists.
+Once the rule is written where it belongs, set the pill `status: retired` and move it to
+`.claude/pills/retired/<the directory it was in>/` — `nina pills --tidy` does it, and so do `nina learn
+--close` and `nina upgrade`. A retired pill is history, not instruction, and there no agent opens it to
+find out. Deleting it would lose the reason the rule exists.
 
 A lesson that belongs in the harness cannot be written there from this project — the core and the
 surfaces live in another repository, and this project composes a frozen version of them. So

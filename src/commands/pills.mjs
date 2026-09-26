@@ -10,11 +10,11 @@
  * This reads the project, never the layers — pills are written at runtime, not composed.
  */
 
-import { readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename } from 'node:fs/promises';
 import { HARNESS } from '../paths.mjs';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { REQUIRES, layerRootFor } from './compose.mjs';
 
 /** Fields every pill must carry, and what breaks without each one. */
@@ -32,6 +32,34 @@ const SEVERITIES = ['low', 'medium', 'high'];
 
 /** The statuses a pill may declare. */
 const STATUSES = ['active', 'retired'];
+
+/**
+ * Where a retired pill goes, beside the directories agents read: every agent opens every pill in its own
+ * directory and in `shared/` to learn which apply, and in the first new project 16 KB of the 33 KB it opened
+ * on every dispatch was retired.
+ */
+export const RETIRED = 'retired';
+
+/**
+ * Moves every retired pill still where agents read it into `retired/<the directory it was read from>/`.
+ *
+ * @param {string} target - The project.
+ * @returns {Promise<string[]>} The pills moved, as paths relative to `.claude/pills/`.
+ */
+export async function tidyRetired(target) {
+  const pillsDir = join(target, '.claude', 'pills');
+  if (!existsSync(pillsDir)) return [];
+  const moved = [];
+  for (const pill of await pillFiles(pillsDir)) {
+    if (!pill.dir || pill.dir === RETIRED || pill.dir.startsWith(`${RETIRED}/`)) continue;
+    if (frontmatter(await readFile(pill.path, 'utf8'))?.status !== 'retired') continue;
+    const to = join(pillsDir, RETIRED, pill.dir, pill.file);
+    await mkdir(dirname(to), { recursive: true });
+    await rename(pill.path, to);
+    moved.push(`${pill.dir}/${pill.file}`);
+  }
+  return moved;
+}
 
 /**
  * How often the same lesson must be learned before it stops being an anecdote.
@@ -184,6 +212,15 @@ export function graduationTarget(applies, gates) {
 export async function pillFiles(pillsDir) {
   const found = [];
   for (const entry of await readdir(pillsDir, { withFileTypes: true })) {
+    // Retired pills keep the directory they were read from, one level down, where no agent globs.
+    if (entry.isDirectory() && entry.name === RETIRED) {
+      for (const inner of await readdir(join(pillsDir, RETIRED), { withFileTypes: true })) {
+        const dir = inner.isDirectory() ? `${RETIRED}/${inner.name}` : RETIRED;
+        const files = inner.isDirectory() ? await readdir(join(pillsDir, dir)) : [inner.name];
+        for (const file of files) if (file.endsWith('.md')) found.push({ dir, file, path: join(pillsDir, dir, file) });
+      }
+      continue;
+    }
     if (entry.isDirectory()) {
       for (const file of await readdir(join(pillsDir, entry.name))) {
         if (file.endsWith('.md')) found.push({ dir: entry.name, file, path: join(pillsDir, entry.name, file) });
@@ -208,6 +245,7 @@ export function validate(pill, text, roles, today) {
   const label = `${pill.dir ? `${pill.dir}/` : ''}${pill.file}`;
   const problems = [];
   const notes = [];
+  const shelved = pill.dir === RETIRED || pill.dir.startsWith(`${RETIRED}/`);
 
   if (pill.dir === '') {
     problems.push(`${label} sits at the top level of pills/ — no agent globs there, so nobody reads it`);
@@ -224,6 +262,14 @@ export function validate(pill, text, roles, today) {
   }
 
   const applies = list(fields.applies_to);
+  // Where a retired pill sits says only where it was read from, and nobody reads it there now.
+  if (shelved) {
+    if (fields.status !== 'retired') problems.push(`${label} is ${fields.status || 'active'} but sits in ${RETIRED}/, where no agent reads it — move it back, or retire it`);
+    return { problems, notes, fields, label, citations: [], uncited: false };
+  }
+  if (fields.status === 'retired') {
+    notes.push(`${label} is retired but still where agents open it — \`nina pills --tidy\` moves it to ${RETIRED}/${pill.dir}/`);
+  }
   for (const role of applies) {
     if (!roles.includes(role)) {
       problems.push(`${label} applies_to "${role}", which this project does not compose — available: ${roles.join(', ')}`);
@@ -306,6 +352,12 @@ export async function pills(argv, ctx) {
     .sort();
 
   const today = new Date().toISOString().slice(0, 10);
+  if (argv.includes('--tidy')) {
+    const moved = await tidyRetired(target);
+    for (const m of moved) console.log(`  moved ${m} → ${RETIRED}/${m}`);
+    console.log(moved.length ? `\npills: ${moved.length} retired pill(s) moved where no agent opens them\n` : 'pills: no retired pill where agents read\n');
+    return 0;
+  }
   const files = existsSync(pillsDir) ? await pillFiles(pillsDir) : [];
 
   // The directory itself is composed, so its presence says nothing. An empty corpus is the
