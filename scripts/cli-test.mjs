@@ -3190,6 +3190,20 @@ const dated = (date, status = 'active') =>
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
 }
 
+// ─── upgrade: a release the install does not carry ──────────────────────────────────────
+{
+  // Asked to move to a release newer than the installed package, upgrade says that, and the install that
+  // fixes it. It said "profile pins core <version>", about a pin the profile did not hold.
+  const dir = await scratch();
+  await mkdir(join(dir, '.nina'), { recursive: true });
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const far = run(['upgrade', '--project', dir, '--to', '9.9.9'], { loud: true });
+  expect(
+    far.status === 1 && far.out.includes('9.9.9 is not a release the installed NINA') && far.out.includes('pnpm add -D -E @xhulz/nina@9.9.9') && !far.out.includes('profile pins core 9.9.9'),
+    `upgrade: a release the install does not carry is said as that, with the install — got ${far.out}`,
+  );
+}
+
 // ─── look: how a report reads on a terminal, and piped ──────────────────────────────────
 {
   expect(bar(1, 4) === '████' && bar(0, 10) === '' && bar(0.53, 20) === '██████████▋' && bar(2, 3) === '███', `look: a bar is its share of the cells, ending on an eighth — got ${bar(0.53, 20)}`);
