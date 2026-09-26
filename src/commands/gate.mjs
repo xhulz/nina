@@ -22,11 +22,14 @@ import { HARNESS, legacyHint, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
 import { loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
 import { layerRootFor } from './compose.mjs';
+import { handsToModel } from '../detectors.mjs';
 
 /**
- * The gate's failures a person has not been told about yet, as one sentence, or null. Each failure is
- * reported once: a detector that repeats one transient error on every turn for a day is the noise the
- * detectors exist to remove, and the gate's own log keeps the history.
+ * The gate's failures the model has not been told about yet, as one sentence, or null. Each failure is
+ * reported until the prompt hook hands it over, and not after: a detector that repeats one transient
+ * error on every turn for a day is the noise the detectors exist to remove, and the gate's own log keeps
+ * the history. Spent by the first run that saw it, it was usually spent by the Stop hook, whose line the
+ * model never reads, or by a check run by hand.
  *
  * @param {string} target - The project directory.
  * @returns {string|null}
@@ -50,7 +53,7 @@ function newErrors(target) {
   if (fresh.length === 0) return null;
   const last = fresh.at(-1);
   try {
-    writeFileSync(seenFile, `${last.at}\n`);
+    if (handsToModel()) writeFileSync(seenFile, `${last.at}\n`);
   } catch {
     // Unwritable: it is said again next time, which is better than never.
   }

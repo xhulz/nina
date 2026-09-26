@@ -92,8 +92,9 @@ const SUITE_HOME = await mkdtemp(join(tmpdir(), 'nina-cli-home-'));
  * Runs the CLI against a project.
  *
  * @param {string[]} args - Arguments after the command name.
- * @param {{input?: string, loud?: boolean}} [options] - `input` is piped to stdin; `loud`
- *   drops `--quiet`, which otherwise suppresses everything a detector does not need.
+ * @param {{input?: string, loud?: boolean, env?: object}} [options] - `input` is piped to stdin; `loud`
+ *   drops `--quiet`, which otherwise suppresses everything a detector does not need; `env` is added to
+ *   the environment.
  * @returns {{status: number, out: string}}
  */
 function run(args, options = {}) {
@@ -101,6 +102,7 @@ function run(args, options = {}) {
     encoding: 'utf8',
     input: options.input ?? '',
     cwd: ROOT,
+    env: { ...process.env, ...options.env },
   });
   return { status: result.status, out: `${result.stdout}${result.stderr}` };
 }
@@ -1094,7 +1096,14 @@ async function sound(fixture, core) {
   // Recurring three times is an event too, and the detector answers it itself: filing a request
   // decides nothing, so it used to wait on a command nobody was told to type.
   await writeFile(pillPath, `---\napplies_to: [reviewer]\nstatus: active\ndate: ${old}\nlast_seen: ${today}\noccurrences: 3\n---\n**Rule:** do the thing.\n`);
-  const sentOff = run(['learn', '--check', '--project', dir]);
+  // The Stop hook says it is about to go and leaves it to the prompt hook, which tells the model: sent from
+  // the Stop hook, the request was news only the person heard, and nothing was owed by the next message.
+  const stopped = run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'stop' } });
+  expect(
+    stopped.status === 1 && stopped.out.includes('goes to the harness as a request before your next message') && (await readdir(join(dir, '.nina', 'requests')).catch(() => [])).length === 0,
+    `learn: the Stop hook does not send a lesson, it says one is about to go — got ${stopped.out}`,
+  );
+  const sentOff = run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } });
   const reqs = await readdir(join(dir, '.nina', 'requests')).catch(() => []);
   expect(
     sentOff.status === 1 && sentOff.out.includes('sent to the harness') && reqs.length === 1,
@@ -2586,6 +2595,17 @@ const dated = (date, status = 'active') =>
   expect(garbage.status === 0 && garbage.out === '', 'gate e2e: garbage in lets the call through and prints nothing');
   const failing = run(['gate', '--selftest', '--project', bed], { loud: true });
   expect(failing.status === 1 && failing.out.includes('failed 1 time'), `gate: the selftest reports a gate that has been failing — got ${failing.out}`);
+  // Through the hooks. The Stop hook's line reaches only the person, and says the model will be told
+  // before the next message; the prompt hook then tells it, and only then is the failure spent. Spent by
+  // the first run that saw it — the Stop hook's, or one by hand — the model was never told at all.
+  const check = (flag) =>
+    spawnSync(process.execPath, [join(bed, 'scripts', 'harness-check.mjs'), flag], { cwd: bed, input: JSON.stringify({ session_id: 's-told' }), encoding: 'utf8', env: { ...process.env, NINA_DATA: data } }).stdout;
+  const stopLine = check('--hook');
+  expect(stopLine.includes('loop gate') && stopLine.includes('the model is told before your next message'), `gate: the Stop hook tells the person the gate failed — got ${stopLine}`);
+  expect(run(['gate', '--selftest', '--project', bed]).status === 1, 'gate: and a failure only the person was told of, or that was read by hand, is still owed to the model');
+  const handed = check('--context');
+  expect(handed.includes('the gate failed 1 time'), `gate: the prompt hook hands it to the model — got ${handed}`);
+  expect(!check('--context').includes('the gate failed'), 'gate: and once handed over it is spent');
   expect(run(['gate', '--selftest', '--project', bed]).status === 0, 'gate: and reports each failure once, not on every turn');
 
   // A gate script that runs and holds nothing — wired, writable, never failing — is what only the dry
@@ -4245,11 +4265,14 @@ const dated = (date, status = 'active') =>
   await write([...rows, ran(2, '2026-09-11T10:00:00.000Z')]);
   run(['learn', '--check', '--project', bed]);
   await until(async () => Boolean((await status())?.error));
-  const told = run(['learn', '--check', '--project', bed], { loud: true });
+  // Said by the Stop hook, whose line only the person reads, it is still owed to the model.
+  const stopped = run(['learn', '--check', '--project', bed], { loud: true, env: { NINA_HOOK: 'stop' } });
+  expect(stopped.out.includes('the export to Langfuse failed') && (await status())?.reported !== true, `langfuse: a failure the Stop hook said is still owed to the model — got ${stopped.out}`);
+  const told = run(['learn', '--check', '--project', bed], { loud: true, env: { NINA_HOOK: 'context' } });
   expect(told.status === 1 && told.out.includes('the export to Langfuse failed') && told.out.includes('answered 500'), `langfuse: a failed export is reported by the detector — got ${told.out}`);
   await until(async () => (await status())?.reported === true);
   await new Promise((done) => setTimeout(done, 1500));
-  const again = run(['learn', '--check', '--project', bed], { loud: true });
+  const again = run(['learn', '--check', '--project', bed], { loud: true, env: { NINA_HOOK: 'context' } });
   expect(!again.out.includes('the export to Langfuse failed'), `langfuse: the same failure is not reported every turn — got ${again.out}`);
   failTraces = false;
   await until(async () => {
