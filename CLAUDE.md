@@ -75,10 +75,11 @@ must not break.
   the cut: cutting changes what `init` pins, which is the one effect not in the diff.
 - **One mechanism per fact.** When two commands report the same fact, one reads the other — `src/expected.mjs`,
   `src/wiring.mjs`, `generatedNotice`. A second copy drifting from the first has shipped here more than once.
-- **This repository does not edit the projects it serves.** A project vendors the packed tarball
-  rather than linking this checkout, pins a release, and moves only through its own `nina upgrade`; work
-  here ends at `nina release` and `npm pack`. An answer to a project's request becomes true for it only
-  when it installs the release that carries it.
+- **This repository does not edit the projects it serves.** A project installs the published package at an
+  exact version rather than linking this checkout, pins a release, and moves only through its own
+  `nina upgrade`; work here ends at `nina release`, and the cut merged to `main` publishes itself (see
+  `.github/workflows/publish.yml`). An answer to a project's request becomes true for it only when it
+  installs the release that carries it.
 - **The measurement store is metadata only**: counts, verdicts, timestamps, tokens, never report text,
   source, PII, an id a model wrote, or dollars. Langfuse gets each run once, since it keeps what it is
   first sent, and a stage's context only from a project turned on with `--content`, read from the

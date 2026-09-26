@@ -1,6 +1,6 @@
 # Installing NINA, and starting a project
 
-How a project gets NINA and a first harness: the vendored package, `init`, the vocabulary and its defaults, and the wiring. Read before touching `src/commands/init.mjs`, `src/commands/wire.mjs`, `src/wiring.mjs`, `src/vocabulary.mjs`, `core/vocabulary.json`, `src/paths.mjs` or the detectors.
+How a project gets NINA and a first harness: the published package, `init`, the vocabulary and its defaults, and the wiring. Read before touching `src/commands/init.mjs`, `src/commands/wire.mjs`, `src/wiring.mjs`, `src/vocabulary.mjs`, `core/vocabulary.json`, `src/paths.mjs` or the detectors.
 
 ## Installing
 
@@ -9,18 +9,26 @@ project that installs it can compose any version it pins — which is what lets 
 cost of a move before the move happens.
 
 ```bash
-npm pack                                        # here: xhulz-nina-<version>.tgz, ~157 kB
-cp xhulz-nina-0.8.0.tgz ../thing/vendor/        # then, in the consuming project:
-pnpm add -D file:vendor/xhulz-nina-0.8.0.tgz
-pnpm nina compose                               # the command is `nina` whatever the package is called
+pnpm add -D -E @xhulz/nina       # an exact version, in package.json and in the lockfile
+pnpm nina compose                # the command is `nina` whatever the package is called
 ```
 
-**A project vendors the packed artifact; it does not link this checkout.** `link:../IA/harness`
+**A project installs a published version; it does not link this checkout.** `link:../IA/harness`
 puts a symlink in `node_modules`, so the project runs this working tree — uncommitted edits
 included. The release pin freezes the layers and nothing freezes the compiler, which does decide
-composed output. Vendoring is what makes a project's harness fully determined by three things
-recorded in its own repository: the package version, the release pin, and its project layer. A
-fresh clone then installs with no registry, no auth, and no harness checkout on the machine.
+composed output. An exact version is what makes a project's harness fully determined by three things
+recorded in its own repository: the package version, the release pin, and its project layer. The
+lockfile keeps the version's integrity hash, and the registry is public, so a fresh clone installs with
+no auth and no harness checkout on the machine.
+
+Until 0.28.15 a project vendored the packed `.tgz` instead, which kept the same three things but needed the
+file copied into every project by hand at every release, and a hook that could not start told the person to
+install that file. The hooks an older `init` or `wire` wrote still say so, and `nina wire --apply` updates
+them. Publishing is not a step anyone takes: a release cut on a branch and merged to `main` is published by
+`.github/workflows/publish.yml`, once, after the suites pass on a clean runner. npm trusts that workflow in
+this repository through OIDC (trusted publishing), so no token exists to leak, and every version carries
+the provenance of the build that made it. `npm pack` still builds the same file locally, to try one before
+it ships.
 
 The package is scoped because `nina` is taken on the public registry. The scope changes what you
 install and nothing else: `bin` names the binary, so the command, the banner and every path in this
@@ -90,8 +98,7 @@ For working on the harness itself, `pnpm link` still symlinks `bin/nina.mjs` ont
 ## Starting a project
 
 ```bash
-mkdir vendor && cp ../IA/harness/xhulz-nina-<version>.tgz vendor/
-pnpm add -D file:vendor/xhulz-nina-<version>.tgz        # first: every composed script imports it
+pnpm add -D -E @xhulz/nina                              # first: every composed script imports it
 npx nina init                                           # interview, profile, TODO, hooks — and compose
 npx nina init --surfaces db,money                       # or declare the surfaces instead of the interview
 ```

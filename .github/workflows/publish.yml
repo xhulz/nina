@@ -1,0 +1,59 @@
+# Runs the suites on every pull request and every push to main, and publishes to npm the version
+# package.json names, once: a release is cut on a branch and merged by pull request, so the push that
+# lands `Cut <version>` on main is the one that publishes it. No token is kept anywhere. npm trusts
+# this workflow, in this repository, through OIDC, and records the build's provenance.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      # harness-check runs these two as detectors, beside the ones that read the maintainer's machine
+      # (the requests projects sent it), which a runner does not have.
+      - run: node scripts/compose-test.mjs
+      - run: node scripts/cli-test.mjs
+
+  publish:
+    needs: suites
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@^11.5.1
+      - name: Is this version on npm yet?
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "@xhulz/nina@$version" version > /dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$version is already on npm; nothing to publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.published == 'false'
+        run: npm publish
