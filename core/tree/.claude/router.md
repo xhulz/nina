@@ -66,6 +66,15 @@ One package is not one step, though: the architect still splits a long file list
 ### Architect output is a spec, not code
 Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
 
+### A spec is corrected in place
+A spec sent back is corrected where it is wrong; new work comes as a new step file or spec. Never ask for
+a `Revision N` section, and correct a spec yourself only in place. Point a dispatch at the sections and steps
+that changed, by number: a history at a spec's head is read first by every stage and applies to
+nothing.<!-- nina:why --> The architect was told to correct in place, and the
+orchestrator went on asking for revisions. The first new project's second spike spec opened with four
+revision sections, one of them written by the orchestrator, and every dispatch told the stage to read them
+first. Its first spec reached an eighth revision, which had become the way new work was asked for.<!-- /nina:why -->
+
 ### Reviewer audits; QA runs tests
 Reviewer runs `{{TYPECHECK_CMD}}` / `{{LINT_CMD}}` (and `{{BUILD_CMD}}` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
 
@@ -123,26 +132,30 @@ run them one after another and buy nothing.
 | **`devops` ∥ `secops`** at the end of a milestone | devops only reads code; what it writes is a deploy target, not the tree | the audit and the preview deploy stop being sequential |
 | **`Explore` fan-out** for "where does X live" | read-only | one search instead of every stage re-grepping the tree |
 
-### Implementers: one per package, worktree-isolated, never the same file
+### Implementers side by side
 
-Two implementers writing the same checkout will clobber each other. If you want them concurrent:
+Two implementers write at once only on work that shares no file and builds on nothing the other writes:
+the planner's `PARALLEL-SAFE`, a step's `Builds on` and the binding file lists say which. Where decides how:
 
-- Dispatch each with **`isolation: "worktree"`** so it gets its own git worktree.
-- **One implementer per package, maximum.** `{{API_DIR}}` and `{{APP_DIR}}` are fine together; two inside
-  `{{API_DIR}}` are not.
-- Their specs' "Files to touch" lists must be **disjoint** — the planner marks the subtasks
-  `PARALLEL-SAFE` only after checking that, and the architect's binding file list is what makes the
-  check possible.
-- The orchestrator sequences the merge. Never let two agents merge.
+- **In different packages, each checked on its own** (typecheck, lint and build scoped to it, as
+  `{{API_DIR}}` and `{{APP_DIR}}` are): side by side in this checkout.
+- **In one package, or where a check spans packages:** each with **`isolation: "worktree"`**. A worktree
+  holds only what is committed, so the work they build on is committed first (else ask {{OWNER}} for the
+  commit, or run them in turn), and lacks what git does not track, such as dependencies or a virtual
+  environment, until its implementer sets it up.
+- You merge a worktree's work, in step order. Never let two agents merge.<!-- nina:why --> The rule
+  used to be one implementer per package, always in a worktree. The first new project had no commit for a
+  worktree to hold, so it ran two implementers side by side in one checkout, one per spike directory, and
+  neither disturbed the other. It also ran two steps of one spec one after the other that built on the
+  same two steps and nothing else, only because they shared a package and both edited its README.<!-- /nina:why -->
 
 ### A spec's steps are passes of their own
 
 When the architect splits a spec into steps, each step is its own pass from the implementer on: an
 implementer for that step alone, then the reviewer and every gate its diff triggers, then qa. A step's
 implementer goes out only once every step it builds on has closed its pass, so no step is built on one
-that was sent back. Steps whose turn comes together, each in a different package and sharing no file, go out together, as
-§ *Implementers* says: one message, each implementer worktree-isolated, the merge yours and in step
-order; their reviews go out together too, and their qa runs one after the other. Parallel steps save
+that was sent back. Steps whose turn comes together and share no file go out together, as § *Implementers side by side*
+says; their reviews go out together too, and their qa runs one after the other. Parallel steps save
 time, not tokens: each run builds its own context, and a step that builds on another is never one of
 them. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
 steps: that spec goes back to the architect to be split. `ONE-SPEC` and `ONE-REVIEW` are the planner's

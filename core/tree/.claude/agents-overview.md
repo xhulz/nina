@@ -44,8 +44,9 @@ such as tenant isolation, patterns and spec-scope — which is both faster and m
 agent carrying fifteen checklists. The reviewer is still the gate: it refuses approval until the
 applicable guardrails have signed off. After approval, **qa** runs the suite once, alone.
 
-Concurrent **implementers** are the one write-side exception and need `isolation: "worktree"`, one
-per package, with disjoint file lists. See `.claude/router.md` § *Parallelization*.
+Concurrent **implementers** are the one write-side exception: only on work that shares no file and
+builds on nothing the other writes, side by side in different packages, each in `isolation: "worktree"`
+within one. See `.claude/router.md` § *Parallelization*.
 
 **devops** runs after every qa PASS that changes a deployed surface: it builds clean, deploys both targets, applies migrations, smokes against **preview** — never prod first — and names the rollback. Production waits for an explicit go from {{OWNER}}.
 

@@ -67,5 +67,6 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 
 Stages that only read may run together: after the implementer, the `reviewer` and every gate the diff
 triggered go out in one message; at a milestone's end, `secops` runs beside `qa` or `devops`.
-Implementers run concurrently only one per package, each in its own worktree, with disjoint file lists.
+Implementers run concurrently only on work that shares no file and builds on nothing the other writes:
+side by side in different packages, each in its own worktree within one.
 `qa` always runs alone.

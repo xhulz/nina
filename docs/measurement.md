@@ -77,13 +77,25 @@ orchestrator runs each step as its own pass from the implementer on, and an impl
 returns `BLOCKED`. `stats` names every implementer run past the limit its project's release states, with
 the largest and what it read, and says nothing for a release that states none.
 
-Each step names the steps it builds on, and those whose turn comes together, in different packages and
-sharing no file, go out at once, each implementer in its own worktree, as implementers in different
-packages already could. That buys time and not tokens: each run builds its own context, and the one
-project that ran two at once paid no less per file than its serial runs that week. What every step reads
-is the spec, which is why the architect is told to say each thing once: the spike's spec was 156 KB where
-the other project's had a median of 40 KB, only 10% of it code, and it opened with four revision sections
-from the rounds it was sent back through, which every later stage read before the spec itself.
+Each step names the steps it builds on, and those whose turn comes together and share no file go out at
+once. That buys time and not tokens: each run builds its own context, and the one project that ran two at
+once paid no less per file than its serial runs that week. The first version sent them out only one per
+package, each in a worktree, the rule implementers already had, and the first new project met both halves
+of it. Its second spike's steps 3 and 4 built on steps 1 and 2 and nothing else, and ran one after the other
+for about two and a half hours only because they shared a package and a README. And it had no commit, and a
+worktree holds only what is committed: with none it is empty, and work not yet committed is not in it. So
+it ran two implementers of two spikes side by side in one checkout, against the rule, and neither disturbed
+the other. Now implementers in different packages, each checked on its own, run side by side in the
+checkout; within one package each gets a worktree, once the work they build on is committed; and a file
+every step would edit goes in one step, so it orders nothing else.
+
+What every step reads is the spec, which is why the architect is told to say each thing once: the spike's
+spec was 156 KB where the other project's had a median of 40 KB, only 10% of it code, and it opened with
+four revision sections from the rounds it was sent back through, which every later stage read before the
+spec itself. Telling the architect was not enough. The orchestrator kept asking for revisions and wrote one
+itself, and a later spec reached its eighth as the way new work was asked for, so the router now tells the
+orchestrator too: a spec is corrected in place, new work is a new step or spec, and a dispatch names the
+sections that changed.
 
 `stats` reports the projects that run the harness: one whose directory holds `.nina/profile.json`, or
 failing that one with ten pipeline dispatches, which is how it was told before profiles existed. Counted
