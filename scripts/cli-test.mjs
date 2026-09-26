@@ -3818,6 +3818,23 @@ const dated = (date, status = 'active') =>
       reviewer.includes('or the dispatch, in a chain with no architect — must carry a Visual acceptance section'),
     'flow: the visual gate serves the build with the command the project names, and nothing of another project\'s',
   );
+
+  // What no rule covered, and what two rules said two ways.
+  const [devops, planner] = await Promise.all(['.claude/agents/devops.md', '.claude/agents/planner.md'].map(read));
+  expect(
+    graphText.includes('`secops` runs beside `devops`, after the last `qa` passed.') && !/secops` runs alongside `qa`|`secops` ∥ `qa`|beside `qa` or `devops`/.test(graphText + router + claude),
+    'flow: secops audits a milestone after its last qa passed, beside devops, never beside a qa whose failure would change what it audited',
+  );
+  expect(
+    router.includes('### A stage that returns no verdict') && router.includes('Nothing builds on its work until a verdict does.') &&
+      router.includes('### A report that sends work two ways') && router.includes('the architect goes first'),
+    'flow: a stage with no verdict is asked again and never built on, and a report that sends work two ways goes to the architect first',
+  );
+  expect(devops.includes('quoted in your dispatch: you never see') && router.includes('quoted in the dispatch.**'), 'flow: devops deploys to production only on a go the dispatch quotes, since it never sees the owner');
+  expect(claude.includes('before a session\'s first dispatch, read `.claude/graph.md` and `.claude/router.md`'), 'flow: the orchestrator reads the graph and the router before its first dispatch');
+  expect(!planner.includes('MUST be the first stage for any new feature or multi-file change'), 'flow: the planner\'s description no longer claims every multi-file change, against the task-shape table');
+  expect(!router.includes('escalate one notch') && router.includes('when it is only how much ceremony, the lighter one'), 'flow: the router says what CLAUDE.md says when the chain is in doubt');
+  expect(claude.includes('**Sizes, and what each decides.**'), 'flow: the sizes the pipeline uses are stated side by side, each with what it decides');
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
