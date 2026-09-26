@@ -8,7 +8,7 @@
 - **Local dev:** `{{SECRETS_LOCAL}}` (gitignored).
 
 <!-- nina:slot edge-cf.2 -->
-- `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml` is required for `@prisma/client/edge`.
+- `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml` is required for a database client that runs at the edge.
 
 <!-- nina:slot edge-cf.3 -->
 - **Miniflare** for Worker integration tests.

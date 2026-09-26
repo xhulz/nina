@@ -3,7 +3,7 @@
   directly in `tools:` above. Use them; there is nothing to invoke via `Skill`.
 
 <!-- nina:slot frontend.2 -->
-- **Build-time env.** Vite inlines `VITE_*` at build time, so a variable the deploy platform supplies at RUNTIME never reaches the bundle — it is not late, it is absent. Verify every `VITE_*` the app reads is present in the build environment — a missing one ships a blank page, not an error.
+- **Build-time env.** A bundler inlines the variables the app reads at build time, so one the deploy platform supplies at RUNTIME never reaches the bundle — it is not late, it is absent. Verify every variable the app reads is present in the build environment — a missing one ships a blank page, not an error.
 
 <!-- nina:slot frontend.3 -->
 
@@ -12,7 +12,7 @@
 You are not the visual gate; the **reviewer** is, and it judges the render against the spec before
 the code ever reaches you. Your question is narrower and different: **did the deployed thing come up
 at all?** That is not the same failure — a build that renders perfectly on a reviewer's localhost
-still ships a blank page when `VITE_API_BASE_URL` was missing from the deploy build, which is exactly
+still ships a blank page when the API's address was missing from the deploy build, which is exactly
 what happened here once.
 
 So on the preview URL, not localhost: `browser_navigate`, one screenshot at 1440, and

@@ -33,6 +33,7 @@
     "EMITTING_PKGS": "`db`, `settlement`",
     "PAGES_PROJECT": "ledger-web",
     "API_STAGING": "ledger-api-staging",
-    "PRIVACY_REGIME": "GDPR"
+    "PRIVACY_REGIME": "GDPR",
+    "TENANT_KEY": "ledgerId"
   }
 }

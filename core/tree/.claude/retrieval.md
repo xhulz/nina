@@ -39,7 +39,6 @@ This is the closest thing the harness has to RAG for development. Treat it as au
 <!-- nina:slot edge-cf.2 -->
 <!-- nina:slot money.1 -->
 <!-- nina:slot frontend.1 -->
-<!-- nina:slot frontend.2 -->
 <!-- nina:slot edge-cf.3 -->
 | Performance investigation | `.claude/architecture.md` § *Performance targets*, relevant source | architect → implementer |
 

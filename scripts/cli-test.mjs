@@ -3837,6 +3837,66 @@ const dated = (date, status = 'active') =>
   expect(claude.includes('**Sizes, and what each decides.**'), 'flow: the sizes the pipeline uses are stated side by side, each with what it decides');
 }
 
+// ─── surfaces: a concern states what is true of it, a stack what is true of one way to meet it ──
+{
+  // The database surface was one project's stack: a project that owned data and had not chosen its client
+  // was told its client was Prisma, its reads went through Accelerate and its tenant was `userId`; its
+  // frontend was React on TanStack with shadcn and a `web-shared` package holding a currency formatter.
+  const read = (dir, rel) => readFile(join(dir, rel), 'utf8');
+  const ledger = await composed('ledger'); // a database, no Prisma
+  const acme = await composed('acme'); // a database through Prisma, and a frontend
+  const concernOnly = await Promise.all(['CLAUDE.md', '.claude/agents/dba.md', '.claude/agents/reviewer.md', '.claude/patterns.md', '.claude/agents/devops.md'].map((rel) => read(ledger, rel)));
+  expect(
+    concernOnly.every((text) => !/Prisma|prisma|Accelerate|cacheStrategy|userId|Postgres/.test(text)) && concernOnly[0].includes('filters by `ledgerId`') && concernOnly[1].includes('**Tenant scope.** Every query in app code filters by `ledgerId`'),
+    'surfaces: a project with a database and no Prisma is told nothing of Prisma, and its tenant is the key it declared',
+  );
+  const [acmeDba, acmeClaude, acmePatterns] = await Promise.all(['.claude/agents/dba.md', 'CLAUDE.md', '.claude/patterns.md'].map((rel) => read(acme, rel)));
+  expect(
+    acmeDba.includes('prisma migrate diff') && acmeDba.includes('`--from-empty`') && acmeDba.includes('**Where reads are cached through Prisma Accelerate,**') && acmeClaude.includes('`prisma-client-api`') &&
+      acmePatterns.includes('### Prisma') && acmeClaude.includes('filters by `accountId`'),
+    'surfaces: a project that declares prisma gets its commands, its skills and its conventions, on top of the concern',
+  );
+  // The frontend's conventions are the project's, in a file of its own, owed until written.
+  const frontendDoc = await read(acme, '.claude/frontend.md');
+  expect(
+    frontendDoc.includes('a component fetches nothing on its own') && acmePatterns.includes('are in `.claude/frontend.md`') && !/TanStack|shadcn|web-shared|formatBrl/.test(acmePatterns),
+    'surfaces: a frontend project writes its own conventions in .claude/frontend.md, and the layers name no framework',
+  );
+  expect(!existsSync(join(ledger, '.claude', 'frontend.md')), 'surfaces: a project with no frontend composes no frontend conventions');
+  const devLayers = layerRootFor(ROOT, 'dev').dir;
+  expect(
+    (await projectSlots(devLayers, ['frontend'])).has('.claude/frontend.md project.1') && !(await projectSlots(devLayers, ['db'])).has('.claude/frontend.md project.1'),
+    'surfaces: the frontend conventions are owed by a frontend project until it writes them, and by no other',
+  );
+
+  // A stack means nothing without its concern.
+  const stranded = await scratch();
+  await cp(join(ROOT, 'fixtures', 'acme', '.nina'), join(stranded, '.nina'), { recursive: true });
+  const profilePath = join(stranded, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  await writeFile(profilePath, JSON.stringify({ ...profile, surfaces: profile.surfaces.filter((s) => s !== 'db') }));
+  expect(run(['check', '--project', stranded], { loud: true }).out.includes('surface "prisma" is a stack of "db", which this profile does not declare'), 'surfaces: check refuses a stack declared without its concern');
+
+  // The interview asks about the stack only once the concern is a yes, and a Prisma schema reveals both.
+  const both = await scratch();
+  await mkdir(join(both, 'prisma'), { recursive: true });
+  await writeFile(join(both, 'prisma', 'schema.prisma'), 'datasource db {}\n');
+  run(['init', '--project', both, '--core', 'dev', '--no-ask']);
+  expect(JSON.parse(await readFile(join(both, '.nina', 'profile.json'), 'utf8')).surfaces.join() === 'db,prisma', 'surfaces: a Prisma schema reveals the database and the stack that reaches it');
+  const none = await scratch();
+  const interviewed = run(['init', '--project', none, '--core', 'dev', '--ask'], { input: `x\n\n${'n\n'.repeat(12)}` }).out;
+  expect(!interviewed.includes('Does it reach that data through Prisma?') && interviewed.includes('Does it own persistent data of its own?'), 'surfaces: a project that owns no data is not asked how it reaches it');
+
+  // Moving onto a release that splits a stack out of a concern: a project whose files show the stack is
+  // told, and the move waits for it to be declared, rather than dropping its rules in silence.
+  const moving = await scratch();
+  await mkdir(join(moving, 'prisma'), { recursive: true });
+  await writeFile(join(moving, 'prisma', 'schema.prisma'), 'datasource db {}\n');
+  run(['init', '--project', moving, '--core', '0.30.0', '--surfaces', 'db', '--no-ask']);
+  const preview = run(['upgrade', '--project', moving, '--to', 'dev'], { loud: true });
+  expect(preview.status === 1 && preview.out.includes('prisma — a Prisma schema') && preview.out.includes('undeclared, their rules leave its specs'), `upgrade: a surface the move adds that the project's files show is named, and holds the move — got ${preview.out}`);
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');

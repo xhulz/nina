@@ -1,25 +1,22 @@
-<!-- nina:slot db.1 -->
-| `prisma-client-api` | a new or changed Prisma query |
-
 <!-- nina:slot db.2 -->
-- **If Prisma was touched anywhere in the diff: name `dba` on your Gates line.** Its approval is what a schema or query change needs; yours does not stand in for it.
+- **If the schema, a migration or a query was touched anywhere in the diff: name `dba` on your Gates line.** Its approval is what a database change needs; yours does not stand in for it.
 
 <!-- nina:slot db.3 -->
-- Check for **single-user tenant scoping** in every new Prisma query in app code: the `where` clause must include `userId` (or its model-specific FK equivalent). No "global" queries except the {{AUTH_LIB}} system tables. Missing scope = `REJECTED`.
+- Check for **tenant scoping** in every new query in app code: it filters by `{{TENANT_KEY}}`, or reaches it through the model's foreign keys. No "global" queries except the auth library's own tables. Missing scope = `REJECTED`.
 
 <!-- nina:slot db.4 -->
 - Check for N+1 queries when the DB layer was touched.
 
 <!-- nina:slot db.5 -->
-- **tenant-and-privacy** — `userId` in every app query ({{AUTH_LIB}} tables are the only exemption);
+- **tenant-and-privacy** — `{{TENANT_KEY}}` in every app query (the auth library's own tables are the only exemption);
   no PII or secrets in logs; no cross-tenant read
   or write reachable through a route, an MCP tool, a webhook, or an RPC between services.
 
 <!-- nina:slot db.6 -->
-- `{{DB_PKG}}/prisma/schema.prisma` touched (Prisma migration in play)
+- The schema touched (a migration in play)
 
 <!-- nina:slot db.7 -->
-- Leave `dba` off your Gates line on a Prisma change "because it seems fine."
+- Leave `dba` off your Gates line on a database change "because it seems fine."
 
 <!-- nina:slot db.8 -->
-- Prisma touched and `dba` not dispatched → name it on your Gates line; the orchestrator sends it.
+- Schema or query touched and `dba` not dispatched → name it on your Gates line; the orchestrator sends it.

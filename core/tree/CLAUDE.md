@@ -18,8 +18,8 @@ Mandatory triggers:
 <!-- nina:slot frontend.1 -->
 | Run the **secops** milestone gate | `security-audit` | the attack-class corpus; guidance mode — its full six-phase workflow is for an explicit whole-tree audit only |
 <!-- nina:slot edge-cf.6 -->
-<!-- nina:slot db.1 -->
-<!-- nina:slot db.2 -->
+<!-- nina:slot prisma.1 -->
+<!-- nina:slot prisma.2 -->
 
 **Each agent spec now carries its own binding table** (`.claude/agents/<role>.md` § *Skills you MUST consult*), because a rule that lives only here was invoked 2 times in 743 subagent runs. `qa` and `planner` have no skill bound — none of the installed skills covers vitest or decomposition, and an invented binding is worse than none.
 <!-- nina:slot edge-cf.7 -->

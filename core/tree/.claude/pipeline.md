@@ -69,7 +69,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 - **Input:** qa PASS + the touched-package list + the architect spec's preview-deploy plan.
 - **Output:** `DEPLOYED` (targets, migrations, the smoke it actually ran, the rollback) or `BLOCKED` (what stopped it, which stage owns the fix).
 - **Tools:** Read, Grep, Glob, Bash, WebFetch. **No edits to code, tests or config.**
-- **Checks:** clean rebuild of emitting packages; both targets when the API surface changed; `VITE_*` present at build time; `migrate deploy` against the intended database; secret parity; smoke against preview exercising the changed path; a named rollback.
+- **Checks:** clean rebuild of emitting packages; both targets when the API surface changed; every variable the bundle reads present at build time; migrations applied in order against the intended database; secret parity; smoke against preview exercising the changed path; a named rollback.
 - **Production:** never on its own initiative — an explicit go from {{OWNER}}, for that change.
 
 ---

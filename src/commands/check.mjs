@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { REQUIRES, SLOT, defaultedSlots, layerRootFor, stripWhy, walk } from './compose.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
+import { NEEDS } from '../surfaces.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
 const INTEGRATION_FIELDS = {
@@ -240,6 +241,7 @@ export async function check(argv, ctx) {
   }
   for (const s of new Set(surfaces)) {
     if (surfaces.filter((x) => x === s).length > 1) notes.push(`surface "${s}" is declared more than once`);
+    if (NEEDS[s] && !surfaces.includes(NEEDS[s])) problems.push(`surface "${s}" is a stack of "${NEEDS[s]}", which this profile does not declare — its rules have nowhere to land`);
   }
 
   const referenced = await referencedVocabulary(resolved.dir, surfaces.filter((s) => available.includes(s)), target);

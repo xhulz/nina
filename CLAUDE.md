@@ -25,8 +25,10 @@ Each layer mirrors the project tree, so `core/tree/CLAUDE.md` composes to
 `<project>/CLAUDE.md` and `core/tree/.claude/agents/reviewer.md` to
 `<project>/.claude/agents/reviewer.md`.
 
-Surfaces today: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`. A project
-declares the ones it has in `.nina/profile.json`, along with a `vocabulary` — its own
+Surfaces today: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`, and `prisma`,
+a stack on top of `db`. A surface is a concern — what the interview asks about — and never one project's
+choice of framework, client or key: those go in its own layer or vocabulary (`docs/composition.md`). A
+project declares the ones it has in `.nina/profile.json`, along with a `vocabulary` — its own
 names for the things the core talks about generically.
 
 These mechanisms connect the layers:
@@ -146,6 +148,7 @@ src/langfuse.mjs      a run as an OTLP trace and a verdict score, and the reques
 src/agentrun.mjs      one stage's own run, read from its transcript for --content, with secrets masked
 src/banner.mjs        the startup banner
 src/look.mjs          how a report looks on a terminal: colour, section marks, bars, wrapping; plain when piped
+src/surfaces.mjs      which surfaces a repository's files reveal, and which concern a stack surface needs
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to
 fixtures/             projects that exist to be composed and checked
