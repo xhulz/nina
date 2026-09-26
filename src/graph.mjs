@@ -24,6 +24,13 @@ const STAGE = /^- `([a-z][a-z-]*)` — /;
  */
 const EDGE = /^- `([a-z][a-z-]*)` → `([a-z][a-z-]*)` on `([A-Z][A-Z-]*)`(?: — (.*?))?(?: · max (\d+))?\s*$/;
 
+/**
+ * A line under "## Concurrency" naming a stage that may run as several agents at once, each on a share of
+ * the work: "- `name` × many — when". Declared rather than left to the prose, so a drawing of the pipeline
+ * can show it and `check` can hold it to the stages.
+ */
+const MANY = /^- `([a-z][a-z-]*)` × many — (.*)$/;
+
 /** Where work may end: finished, or handed to the owner. Neither needs a spec. */
 export const TERMINALS = new Set(['done', 'human']);
 
@@ -40,6 +47,8 @@ export function parseGraph(text) {
   const stages = new Set();
   const edges = [];
   const stray = [];
+  /** @type {Map<string, {when: string, line: number}>} */
+  const many = new Map();
   const sections = new Set();
   const twice = [];
   let section = '';
@@ -61,9 +70,12 @@ export function parseGraph(text) {
         return;
       }
       edges.push({ from: m[1], to: m[2], token: m[3], when: m[4] ?? '', max: m[5] ? Number(m[5]) : null, line: i + 1 });
+    } else if (section === 'concurrency') {
+      const m = MANY.exec(line);
+      if (m) many.set(m[1], { when: m[2].trim(), line: i + 1 });
     }
   });
-  return { stages, edges, stray, sections, twice };
+  return { stages, edges, stray, sections, twice, many };
 }
 
 /**
@@ -122,6 +134,9 @@ export function validateGraph(graph, specs, roles = new Set()) {
   for (const s of graph.twice ?? []) problems.push(`stage \`${s}\` is listed more than once`);
 
   for (const s of stray) problems.push(`graph.md:${s.line} is under "## Edges" but is not an edge: ${s.text}`);
+  for (const [s, { line }] of graph.many ?? []) {
+    if (!stages.has(s)) problems.push(`graph.md:${line} says \`${s}\` runs as several agents, and it is not a stage here`);
+  }
 
   // Every stage is a spec on disk and every spec on disk is a stage — the profile decides both, so
   // a mismatch means a layer named a stage the profile does not compose, or composed one no edge

@@ -56,9 +56,17 @@ and `nina check` already holds the specs to the graph.
 The shape is read off `.claude/graph.md`. The line is the one forward edge each stage takes with no
 condition, from the first stage no forward edge reaches. A gate is a detour a stage of the line takes on a
 condition, which hands the work on to the next stage of the line. The ends are where the line's last stage
-sends work on a condition, followed to a terminal. Below them, what each stage sends back, to whom, on
-which verdict and with how many rounds per issue. Then each stage with its model and effort level from its
-spec's frontmatter, its skills as `nina check` reads them, and what it does in the graph's words, which are
-shorter than a `description:` written for Claude Code to choose an agent by. An agent the project wrote for
-itself is listed apart, since the graph does not route to it. Last, the task shapes of `CLAUDE.md`'s chain
-table, each with the chain it takes.
+sends work on a condition, followed to a terminal. A stage the graph declares `× many` carries `×n` on the
+line, and a legend says what its agents split: steps that share no file, for the implementer. Below them,
+what each stage sends back, to whom, on which verdict and with how many rounds per issue. Then each stage
+with its model and effort level from its spec's frontmatter, its skills as `nina check` reads them, what it
+does in the graph's words (shorter than a `description:` written for Claude Code to choose an agent by),
+and what it did lately: its runs over the last thirty days in the measurement store (`--since` moves the
+start), and how many of the verdicts that could be read sent work back. A dispatch a hook denied never ran
+and is not counted. An agent the project wrote for itself is listed apart, since the graph does not route
+to it. Last, the task shapes of `CLAUDE.md`'s chain table, numbered, each with the chain it takes.
+
+`--for` draws one shape's chain alone, named by its number or by words that all appear in it: its stages,
+the add-ons any chain may take (a row whose dispatch runs no chain of its own, such as
+`+ dba before reviewer`), and only what goes back among its stages. Words that match more than one shape
+list the ones they match.
