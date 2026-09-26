@@ -24,6 +24,7 @@
     "nina": "bin/nina.mjs"
   },
   "exports": {
+    "./cost": "./src/cost.mjs",
     "./detectors": "./src/detectors.mjs",
     "./gate": "./src/gate.mjs",
     "./guard": "./src/guard.mjs",

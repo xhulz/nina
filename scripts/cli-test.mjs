@@ -14,7 +14,7 @@
  * Usage: node scripts/cli-test.mjs
  */
 
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -44,6 +44,7 @@ import { realpathSync } from 'node:fs';
 import { MAX_BODY, digest, due, exportCommand } from '../src/commands/export.mjs';
 import { BATCH as SPAN_BATCH, spanIdOf } from '../src/langfuse.mjs';
 import { readRun, redact } from '../src/agentrun.mjs';
+import { watch } from '../src/cost.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const NINA = join(ROOT, 'bin', 'nina.mjs');
@@ -3927,6 +3928,60 @@ const dated = (date, status = 'active') =>
   run(['init', '--project', moving, '--core', '0.30.0', '--surfaces', 'db', '--no-ask']);
   const preview = run(['upgrade', '--project', moving, '--to', 'dev'], { loud: true });
   expect(preview.status === 1 && preview.out.includes('prisma — a Prisma schema') && preview.out.includes('undeclared, their rules leave its specs'), `upgrade: a surface the move adds that the project's files show is named, and holds the move — got ${preview.out}`);
+}
+
+// ─── cost watch: a subagent told, while it runs, what its context has come to cost ──────
+{
+  // Three quarters of the implementer's spend was its own context read again on every turn, and nothing
+  // said so until stats read the transcripts afterwards.
+  const root = await scratch();
+  const projects = await scratch();
+  const agentFile = join(projects, 's-cost', 'subagents', 'agent-acost1.jsonl');
+  await mkdir(dirname(agentFile), { recursive: true });
+  const message = (id, read) => JSON.stringify({ type: 'assistant', message: { id, usage: { input_tokens: 1, cache_read_input_tokens: read, output_tokens: 5 }, content: [] } });
+  const lines = async (...rows) => writeFile(agentFile, `${existsSync(agentFile) ? await readFile(agentFile, 'utf8') : ''}${rows.join('\n')}\n`);
+  const call = (extra = {}) => watch({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost1', agent_type: 'implementer', tool_name: 'Read', ...extra }, { root, warnAt: 40e6 });
+  // A streamed message is written once per block, under one id: its last copy is its count.
+  await lines(message('m1', 5e6), message('m1', 10e6), message('m2', 10e6), message('m3', 10e6), '{"torn');
+  expect(call() === null, 'cost: under the threshold the run is told nothing, and a message streamed in copies counts once');
+  await lines(message('m4', 12e6));
+  const warned = call();
+  expect(
+    warned?.hookSpecificOutput?.hookEventName === 'PostToolUse' && warned.hookSpecificOutput.additionalContext.includes('re-read 42M tokens') &&
+      warned.hookSpecificOutput.additionalContext.includes('each turn now re-reads about 12.0M tokens more') && warned.hookSpecificOutput.additionalContext.includes('name what is left') &&
+      warned.systemMessage.includes('implementer acost1 has re-read 42M'),
+    `cost: past the threshold the run is told what it has re-read and what a turn now costs, and the person in one line — got ${JSON.stringify(warned)}`,
+  );
+  expect(call() === null, 'cost: and once, not on every call after');
+  await lines(message('m5', 20e6), message('m6', 20e6));
+  expect(call()?.hookSpecificOutput?.additionalContext.includes('re-read 82M'), 'cost: and again at each doubling of it');
+  // Outside a subagent there is no agent id; were one read as the word, a file of that name would be watched.
+  await copyFile(agentFile, join(projects, 's-cost', 'subagents', 'agent-undefined.jsonl'));
+  expect(call({ agent_id: undefined }) === null && call({ hook_event_name: 'PreToolUse' }) === null, 'cost: a call outside a subagent, or before a tool, is not watched');
+
+  // End to end, through the hook command a composed project runs, at the threshold its profile declares.
+  const bed = await sound('plain', 'dev');
+  const profilePath = join(bed, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, RUN_READ_WARN: '0.00005' } }));
+  run(['compose', '--project', bed]);
+  const settings = JSON.parse(await readFile(join(bed, '.claude', 'settings.json'), 'utf8'));
+  const command = settings.hooks.PostToolUse.flatMap((g) => (g.matcher ? [] : g.hooks.map((h) => h.command))).find((c) => c.includes('cost-watch.mjs'));
+  const fired = spawnSync('sh', ['-c', command ?? 'false'], {
+    input: JSON.stringify({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost2', agent_type: 'reviewer', tool_name: 'Bash' }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: bed },
+  });
+  await copyFile(agentFile, join(projects, 's-cost', 'subagents', 'agent-acost2.jsonl'));
+  const again = spawnSync('sh', ['-c', command ?? 'false'], {
+    input: JSON.stringify({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost2', agent_type: 'reviewer', tool_name: 'Bash' }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: bed },
+  });
+  expect(
+    Boolean(command) && fired.status === 0 && fired.stdout === '' && again.status === 0 && JSON.parse(again.stdout || '{}').hookSpecificOutput?.additionalContext?.includes('NINA cost watch'),
+    `cost: a composed project's hook watches every tool, at the threshold it declares — got ${command} ${fired.stdout}${fired.stderr} / ${again.stdout}${again.stderr}`,
+  );
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────

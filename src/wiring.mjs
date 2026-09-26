@@ -23,6 +23,7 @@ import { join } from 'node:path';
 export const CHECK = 'scripts/harness-check.mjs';
 export const GATE = 'scripts/loop-gate.mjs';
 export const GUARD = 'scripts/edit-guard.mjs';
+export const COST = 'scripts/cost-watch.mjs';
 
 /** The npm scripts the detectors hang off: the reviewer runs one, the other is a detector itself. */
 export const SCRIPTS = {
@@ -135,6 +136,8 @@ export const HOOKS = [
     event: 'PreToolUse', matcher: 'Edit|Write|MultiEdit|NotebookEdit', script: GUARD, timeout: 10, why: 'a hand edit to a composed file is found only after the turn, as drift, and the next compose overwrites it',
     crash: (cannot) => ({ systemMessage: `NINA: the edit guard could not start, so composed files can be edited in place — ${cannot}` }),
   },
+  // Every tool, since what it watches is a subagent's every turn; a call outside a subagent returns at once.
+  { event: 'PostToolUse', script: COST, timeout: 10, why: 'a run that keeps re-reading its own context is told what it cost only afterwards, by `stats`' },
 ];
 
 /** Where a project's hooks can live: Claude Code reads both, so a hook kept in the local file counts. */

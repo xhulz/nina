@@ -138,6 +138,7 @@ src/commands/         init, compose, check, where, pipeline, pills, learn, wire,
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/guard.mjs         the edit guard: refuses an edit to a composed file, quoting where it belongs
+src/cost.mjs          the cost watch: tells a running subagent, and the person, what its re-read context has cost
 src/wiring.mjs        the hooks and npm scripts a project needs — read by init, wire, check and upgrade
 src/vocabulary.mjs    the vocabulary a release answers itself, from core/vocabulary.json
 src/prices.mjs        API list prices by model, dated, for what stats estimates a run cost
