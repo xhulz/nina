@@ -1057,6 +1057,21 @@ async function sound(fixture, core) {
     'learn: a capture warning names the newest loop-backs, not just how many',
   );
   expect(verified(history.slice(0, 7), [lesson(['qa'], ago(10).slice(0, 10))]).length === 0, 'learn: too few on one side says nothing');
+  // Read on one model and effort: a lesson written the week its role moved to a stricter model read as making
+  // it worse. Before on one model and after on another is not comparable, and says so.
+  const on = (r, model, effort) => ({ ...r, usage_model: model, effort });
+  const moved = [...[30, 29, 28, 27, 26].map((d) => on(pass(d), 'claude-sonnet-5', 'xhigh')), ...[5, 4, 3, 2, 1].map((d) => on(fail(d), 'claude-opus-5', 'xhigh'))];
+  const [confounded] = verified(moved, [lesson(['qa'], ago(10).slice(0, 10))]);
+  expect(
+    confounded?.comparable === false && confounded.on === 'claude-opus-5 · xhigh' && confounded.was === 'claude-sonnet-5 · xhigh',
+    `learn: a lesson whose role changed model across its date is not compared — got ${JSON.stringify(confounded)}`,
+  );
+  const steady = [...moved, ...[30, 29, 28, 27, 26].map((d) => on(pass(d), 'claude-opus-5', 'xhigh')), ...[5, 4, 3, 2].map((d) => on(pass(d), 'claude-sonnet-5', 'xhigh'))];
+  const [same] = verified(steady, [lesson(['qa'], ago(10).slice(0, 10))]);
+  expect(
+    same?.comparable && same.on === 'claude-opus-5 · xhigh' && same.before.n === 5 && same.before.loops === 0 && same.after.loops === 5,
+    `learn: and one with both sides on the model it ran on after is compared on that model alone — got ${JSON.stringify(same)}`,
+  );
 
   // the command end to end: the detector fires, a lesson settles it, graduation writes a request
   const data = await scratch();

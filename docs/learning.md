@@ -50,6 +50,17 @@ nothing read the transcripts for it — and once something did, 92% of runs turn
 pills. **Graduate** had never fired and could not: no pill had ever had `occurrences` bumped past 1.
 **Verify** did not exist at all, so no lesson could ever be shown to have helped.
 
+That first verify line was itself misleading. The reviewer's lesson looked as if it had made things worse,
+2% to 29%, and in the same days the reviewer had moved from Sonnet to Opus, which rejects more whatever it
+was taught. Verify now reads a lesson on one model and effort level — the one its roles ran on most after
+it — and where they ran on it too little before, it says the two sides are not comparable and names the
+model each side ran on, rather than print a number that measures the model:
+
+```
+  verify    reviewer/…-never-write-to-repo-files.md (2026-09-03): not comparable — the role ran on
+            claude-opus-5 · xhigh after it, and before it on claude-sonnet-5 · xhigh
+```
+
 - `--check` is a detector every composed project runs, shipped in the core `harness-check.mjs` with
   no npm script to opt into. It fires on an **event** — a role sent back three times in fourteen
   days since its newest lesson — not on a rate: a ratio that moves over weeks, reported every turn,
