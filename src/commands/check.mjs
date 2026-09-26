@@ -266,7 +266,9 @@ export async function check(argv, ctx) {
   const declared = profile.vocabulary ?? {};
   const defaults = defaultVocabulary(resolved.dir);
   for (const name of [...referenced].sort()) {
-    if (!(name in declared)) {
+    const unanswered = !(name in declared) ? !(name in defaults) : declared[name] === null || declared[name] === '';
+    if (unanswered && expected.has(`{{${name}}}`)) notes.push(`vocabulary {{${name}}} is new in this core and still to fill`);
+    else if (!(name in declared)) {
       if (!(name in defaults)) owe(name, `vocabulary is missing {{${name}}}, which a chosen layer uses`);
     } else if (declared[name] === null || declared[name] === '') {
       owe(name, `vocabulary {{${name}}} is declared but not filled in`);

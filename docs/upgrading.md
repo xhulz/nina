@@ -68,6 +68,12 @@ chain. The exemption is exactly as wide as the slots named and lasts exactly as 
 next `harness:check` reports them again, and the success line names them, because a move that composed
 a hole and said "verified" is the silence this harness exists to remove.
 
+A vocabulary name only the new core uses is the same case, and was missed until a real move hit it: the
+preview listed `{{TENANT_KEY}}` as needed, and `check` then rolled the move back for it. Such names ride in
+the same list, written `{{NAME}}`, and are named again once the move succeeds. A name the old core already
+used and the profile left empty is not excused: that failure was there before the move, and is measured as
+one.
+
 ## Releases — why work here does not move a project that is shipping
 
 A project pins a frozen version of the harness in its profile (`"core": "0.1.0"`), and
