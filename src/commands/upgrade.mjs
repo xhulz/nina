@@ -15,7 +15,8 @@ import { spawnSync } from 'node:child_process';
 import { HARNESS, legacyHint } from '../paths.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { composeProject, composedPaths, defaultedSlots, layerRootFor } from './compose.mjs';
+import { composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
+import { NEEDS, detected } from '../surfaces.mjs';
 import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
 import { EXPECT_ENV } from '../expected.mjs';
 import { closeAnswered } from './learn.mjs';
@@ -213,6 +214,13 @@ export async function upgrade(argv, ctx) {
     .map((e) => e.name);
   const gone = surfaces.filter((s) => !available.includes(s));
   const kept = surfaces.filter((s) => available.includes(s));
+  // A surface the target release adds that this project's own files show it has. When a stack is split out
+  // of a concern — `prisma` out of `db` — its rules go with it, and a project that does not declare it loses
+  // them in silence: the rules that were in its specs yesterday are not there after the move.
+  const offeredBefore = (await readdir(join(from.dir, 'surfaces'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+  const offered = detected(await walk(target)).filter(
+    (d) => available.includes(d.surface) && !offeredBefore.includes(d.surface) && !surfaces.includes(d.surface) && (!NEEDS[d.surface] || kept.includes(NEEDS[d.surface])),
+  );
 
   const [vocabBefore, vocabAfter] = [
     await referencedVocabulary(from.dir, surfaces, target),
@@ -236,6 +244,11 @@ export async function upgrade(argv, ctx) {
 
   console.log(`  ${profile.core} → ${to}\n`);
 
+  if (offered.length > 0) {
+    console.log(`  ✗ ${offered.length} surface(s) ${to} adds that this project's files show it has — undeclared, their rules leave its specs:`);
+    for (const d of offered) console.log(`      ${d.surface} — ${d.why}`);
+    console.log(`      add each to "surfaces" in ${HARNESS}/profile.json, or pass --force to move without them.\n`);
+  }
   if (gone.length > 0) {
     console.log(`  ✗ ${gone.length} declared surface(s) do not exist in ${to}: ${gone.join(', ')}`);
     console.log(`      a rename cannot be guessed — pick the replacement yourself, and move the`);
@@ -309,7 +322,7 @@ export async function upgrade(argv, ctx) {
     console.log('');
   }
 
-  const blocking = gone.length + stranded.length + unwired.length + occupied.length + walledOff.length;
+  const blocking = gone.length + offered.length + stranded.length + unwired.length + occupied.length + walledOff.length;
   if (!apply) {
     console.log(
       blocking > 0

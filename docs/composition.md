@@ -51,7 +51,7 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
    chose.
 
 The last check reads the layers rather than a fixture's output. For every core file, a surface's
-technology may be named only if that file is gated on that surface — `Prisma` only under `db`,
+technology may be named only if that file is gated on that surface — `Prisma` only under `prisma`,
 `wrangler` only under `edge-cf` — and so may a surface's **role**: `dba` only under `db`,
 `integration-tester` only under `integrations`. A role named in ungated prose is an edge to a stage
 the next project may not have; the audit found 37 of them the first time it looked, including one
@@ -65,6 +65,34 @@ same pass found six Cloudflare names (`Pages`, `Worker`, a capitalised `Wrangler
 had never held. A fixture can only prove what its own profile composes, and a deny
 list matches substrings, which makes a word like `Hono` unusable because it fires on `Honor`. Asking
 the layers asks once, of everything.
+
+## A surface is a concern; a stack is a surface of another kind
+
+A surface answers a question about what the project **is**, the one `init` asks: does it own persistent
+data, does it render a screen a person looks at, does it move money. Its layer states what is true of
+every project that answers yes. The database surface once stated one project's stack instead — Prisma,
+Accelerate's `cacheStrategy`, `userId` as the tenant — and so did the frontend's patterns, React on
+TanStack with shadcn and a `web-shared` package holding a currency formatter. The first new project
+answered that it owned data and rendered screens, and was handed all of it before it had chosen a client,
+a cache or a tenant key: every database task met a rule enforcing one of those choices, and another
+forbidding the stage to make it.
+
+So `db` holds what any database owes — a gate on the schema, migrations safe and reversible, index
+coverage, a named policy on every cached read and none on a read that feeds a correctness-critical write,
+tenant isolation in the data layer by `{{TENANT_KEY}}`, which the project declares. A **stack** that is
+reused across projects is a surface of its own, on top of the concern it serves: `prisma` holds the
+Prisma skills, the offline `validate` and `migrate diff`, the commands that destroy a database, and
+Accelerate's `cacheStrategy`, stated as applying where reads go through it. `src/surfaces.mjs` says which
+concern a stack needs — `check` refuses `prisma` without `db`, and `init` asks about it only once `db` is a
+yes — and which surfaces a repository's files reveal. A choice one project made is neither: the
+frontend's framework, state and styling go in `.claude/frontend.md`, a core file gated on `frontend` whose
+one slot the project owes, and the audit refuses in every layer the names that were one project's
+(`PROJECT_TERMS` in the suite: `Hono`, `TanStack`, `shadcn`, `userId`, `Vite`, …).
+
+A project that already had the stack is not left to lose its rules in silence when a release splits it
+out: `upgrade` runs the same detection over the project's files, and a surface the target release adds
+that they show — a Prisma schema, for `prisma` — holds the move until it is declared or `--force` is
+passed.
 
 ## A slot the file cannot do without: `core/defaults/`
 

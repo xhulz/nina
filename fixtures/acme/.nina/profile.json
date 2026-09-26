@@ -2,6 +2,7 @@
   "core": "dev",
   "surfaces": [
     "db",
+    "prisma",
     "integrations",
     "edge-cf",
     "frontend"
@@ -36,6 +37,7 @@
     "EMITTING_PKGS": "`db`, `core`",
     "PAGES_PROJECT": "acme-app",
     "API_STAGING": "acme-api-staging",
-    "VISUAL_SERVE": "pnpm --filter @acme/app visual"
+    "VISUAL_SERVE": "pnpm --filter @acme/app visual",
+    "TENANT_KEY": "accountId"
   }
 }

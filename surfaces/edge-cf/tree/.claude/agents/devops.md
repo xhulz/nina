@@ -6,7 +6,7 @@
 - **`cloudflare:cloudflare`** — when the deploy touches R2, KV, Queues or Durable Object bindings.
 
 <!-- nina:slot edge-cf.3 -->
-- **Both targets, or neither.** A change to the API surface needs the **staging Worker** (`wrangler deploy --env staging`) *and* **Pages** (`pnpm --filter {{PKG_SCOPE}}/app deploy`). Deploying the frontend alone against an old API is the failure that renders new fields as "—". State explicitly which targets this change requires and why.
+- **Both targets, or neither.** A change to the API surface needs the **staging Worker** (`wrangler deploy --env staging`) *and*, where the project has one, the frontend's **Pages** deploy (`{{PAGES_PROJECT}}`). Deploying the frontend alone against an old API is the failure that renders new fields as "—". State explicitly which targets this change requires and why.
 
 <!-- nina:slot edge-cf.4 -->
 - **Secret and variable parity.** Everything the new code reads via `env.*` exists in the target environment (`wrangler secret list`). A missing secret fails at request time, not at deploy time.
@@ -26,6 +26,7 @@ Deploying staging with `--branch=main` is a production deploy wearing a staging 
 permission classifier is right to stop it. Use the staging branch and the block disappears, because
 the block was correct.
 
-**`VITE_*` must be in the environment of the build command.** `[vars]` and `[env.*.vars]` in
-`{{APP_DIR}}/wrangler.toml` do NOT reach a Vite build — Vite inlines at build time, Pages vars apply at
-runtime to a project that has no server. A missing one ships a blank page with no error.
+**A variable the bundle reads must be in the environment of the build command.** `[vars]` and
+`[env.*.vars]` in `{{APP_DIR}}/wrangler.toml` do NOT reach the build — a bundler inlines them at build
+time, and Pages vars apply at runtime to a project that has no server. A missing one ships a blank page
+with no error.

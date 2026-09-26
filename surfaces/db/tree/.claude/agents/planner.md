@@ -1,2 +1,2 @@
 <!-- nina:slot db.1 -->
-- **Prisma flag** — if any subtask may touch `schema.prisma` or create a new Prisma query, mark **"DBA REQUIRED"** on that subtask.
+- **Database flag** — if any subtask may touch the schema or create a new query, mark **"DBA REQUIRED"** on that subtask.

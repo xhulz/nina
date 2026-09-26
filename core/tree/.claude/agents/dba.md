@@ -19,10 +19,10 @@ not cover is wasted context.
 
 | Skill | Invoke when… |
 |---|---|
-<!-- nina:slot db.1 -->
+<!-- nina:slot prisma.1 -->
 <!-- nina:slot project.4 skills -->
 
-<!-- nina:slot db.2 -->
+<!-- nina:slot prisma.2 -->
 
 Cite in your report which skills you consulted, or state that no trigger matched.
 
@@ -50,11 +50,12 @@ Either:
 ## You MUST check (every time)
 
 <!-- nina:slot db.6 -->
-<!-- nina:slot db.7 -->
+<!-- nina:slot prisma.3 -->
 <!-- nina:slot db.8 -->
 <!-- nina:slot db.9 -->
 <!-- nina:slot db.10 -->
 <!-- nina:slot db.11 -->
+<!-- nina:slot prisma.4 -->
 <!-- nina:slot money.1 -->
 <!-- nina:slot db.12 -->
 <!-- nina:slot money.2 -->
@@ -62,10 +63,12 @@ Either:
 <!-- nina:slot pii.1 -->
 <!-- nina:slot db.13 -->
 <!-- nina:slot edge-cf.1 -->
+<!-- nina:slot prisma.5 -->
 
 ## You MUST NOT
 - Edit code — read-only + Bash only.
 <!-- nina:slot db.14 -->
+<!-- nina:slot prisma.6 -->
 <!-- nina:slot db.15 -->
 <!-- nina:slot db.16 -->
 <!-- nina:slot money.4 -->

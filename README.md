@@ -84,13 +84,14 @@ mention a route the graph has.
 | Layer | Holds |
 |---|---|
 | core | what's true for every project |
-| surface | what's true for projects that have it: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain` |
+| surface | what's true for projects that have it: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`, and the `prisma` stack on top of `db` |
 | project | what's true for one project only, kept in that project's repo |
 
 Each layer mirrors the project's file tree, and `nina compose` merges them:
 
 - `<!-- nina:slot db.1 -->` in a core file is a hole the `db` surface fills. A project with no database drops
-  the slot, so its agents never read a word about Prisma.
+  the slot, so its agents never read a word about migrations, and one whose database is not reached
+  through Prisma never reads a word about Prisma.
 - `<!-- nina:requires db -->` on a file's first line makes the whole file conditional. That's why a
   frontend-only project gets seven agent specs instead of eleven.
 - `{{PLACEHOLDERS}}` get filled from the project's profile, so the core can state a rule without naming one

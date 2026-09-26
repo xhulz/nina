@@ -70,7 +70,7 @@ next reader, which is how a second implementation gets written next to the first
 - **Functions / vars:** `camelCase`.
 - **Constants:** `SCREAMING_SNAKE_CASE` only for true compile-time constants.
 - **Env vars:** `SCREAMING_SNAKE_CASE`, loaded through a typed `env.ts` with Zod validation.
-<!-- nina:slot db.1 -->
+<!-- nina:slot prisma.1 -->
 <!-- nina:slot money.1 -->
 <!-- nina:slot money.2 -->
 <!-- nina:slot money.3 -->
@@ -93,7 +93,7 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 <!-- nina:slot db.2 -->
 - Routes must NOT call `.toISOString()` on service results — services do that.
 - Services must NOT import the HTTP framework's request context, shape a response, or reference status codes.
-<!-- nina:slot db.3 -->
+<!-- nina:slot prisma.2 -->
 <!-- nina:slot db.4 -->
 <!-- nina:slot money.4 -->
 <!-- nina:slot money.5 -->
@@ -106,6 +106,7 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 - Custom errors: `class AppError extends Error { code: string; status: number }`. Each route maps known classes to HTTP codes.
 <!-- nina:slot money.6 -->
 <!-- nina:slot db.5 -->
+<!-- nina:slot prisma.3 -->
 <!-- nina:slot integrations.3 -->
 <!-- nina:slot project.2 integration-error-types -->
 

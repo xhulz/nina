@@ -54,7 +54,7 @@ until it returns `SECURE`; a `BLOCKED` goes back to the architect or implementer
 <!-- nina:slot blockchain.1 -->
 
 ### Planner only for ambiguous, multi-step, or multi-package work
-If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things). Don't dispatch planner for "change the button color" or "add a `label` field to a model."
+If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things).
 One package is not one step, though: the architect still splits a long file list into steps (see *A spec's steps are passes of their own*).
 
 ### Architect output is a spec, not code

@@ -22,14 +22,7 @@ import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlot
 import { owedDocuments } from './check.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { PINK, useColor } from '../banner.mjs';
-
-/** Surfaces a repository reveals by its files. The rest are claims about the domain. */
-const DETECTABLE = [
-  { surface: 'db', why: 'a Prisma schema', test: (f) => f.some((p) => p.endsWith('schema.prisma')) },
-  { surface: 'edge-cf', why: 'a wrangler config', test: (f) => f.some((p) => /(^|\/)wrangler\.(toml|jsonc?)$/.test(p)) },
-  { surface: 'frontend', why: 'a Vite config', test: (f) => f.some((p) => /(^|\/)vite\.config\.[cm]?[jt]s$/.test(p)) },
-  { surface: 'blockchain', why: 'a Foundry or Hardhat config', test: (f) => f.some((p) => /(^|\/)(foundry\.toml|hardhat\.config\.[cm]?[jt]s)$/.test(p)) },
-];
+import { DETECTABLE, NEEDS } from '../surfaces.mjs';
 
 /**
  * The question each surface answers. Detection can confirm three of them from files; all
@@ -41,6 +34,7 @@ const QUESTIONS = {
   // dropped. The interview has to keep working against it rather than ask an empty question.
   'external-api': 'Does it depend on anything whose behavior it does not define?',
   db: 'Does it own persistent data of its own?',
+  prisma: 'Does it reach that data through Prisma?',
   money: 'Does it conserve and distribute an amount — money in equals money out plus retained?',
   pii: 'Does it hold data about people that would harm someone specific if it leaked?',
   integrations: 'Does it depend on anything whose behavior it does not define?',
@@ -65,7 +59,7 @@ function questionFor(surface) {
  * The order the interview asks in: the surfaces most projects have first, the rare ones last. Asked
  * alphabetically, the first question a web app met was whether it deploys immutable code.
  */
-const ASK_ORDER = ['db', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'blockchain'];
+const ASK_ORDER = ['db', 'prisma', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'blockchain'];
 
 /**
  * The surfaces a core offers, in the order the interview asks them; one it does not know goes last.
@@ -229,6 +223,9 @@ async function interview(available, matched, impacts) {
     console.log('  whole role. Answer for what the project does today; one can be added later in .nina/profile.json.\n');
     const surfaces = [];
     for (const [n, s] of order.entries()) {
+      // A stack is asked about only where its concern was answered yes: asked whether data it does not
+      // own goes through Prisma, a project has nothing true to answer.
+      if (NEEDS[s] && !surfaces.includes(NEEDS[s])) continue;
       const i = impacts[s];
       const reason = matched.find((d) => d.surface === s)?.why;
       // What a yes brings, in what a person would recognise: roles, rules, agents. The count of
@@ -288,10 +285,8 @@ export async function init(argv, ctx) {
   // Kept as the matched entries, not just their names: the summary prints WHY each surface was
   // detected, and a name cannot answer that. `detected` stays a string list because the
   // interview and the profile both want names.
-  const matched = DETECTABLE.filter((d) => d.test(tree));
-  const detected = matched.map((d) => d.surface);
+  let matched = DETECTABLE.filter((d) => d.test(tree));
   const asked = arg('--surfaces');
-  let surfaces = asked ? asked.split(',').map((s) => s.trim()).filter(Boolean) : detected;
   let scope = '';
 
   const releases = (await readdir(join(ctx.root, 'releases'), { withFileTypes: true }).catch(() => []))
@@ -312,6 +307,10 @@ export async function init(argv, ctx) {
   const available = askOrder(
     (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name),
   );
+  // Only what the pinned core has: a file can reveal a surface a release added after it.
+  matched = matched.filter((d) => available.includes(d.surface));
+  const detected = matched.map((d) => d.surface);
+  let surfaces = asked ? asked.split(',').map((s) => s.trim()).filter(Boolean) : detected;
   const unknown = surfaces.filter((s) => !available.includes(s));
   if (unknown.length > 0) {
     console.error(`  core ${core} has no surface: ${unknown.join(', ')} — it has ${available.join(', ')}\n`);

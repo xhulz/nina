@@ -1,8 +1,5 @@
-<!-- nina:slot db.1 -->
-| `prisma-client-api` | a new or changed Prisma query |
-
 <!-- nina:slot db.2 -->
-- **Tenant-scope impact** — explicitly state where `userId` is enforced. Every new Prisma query in app code includes `userId` (or its model-specific FK equivalent) in the `where` clause. The only exempt tables are the {{AUTH_LIB}} system tables.
+- **Tenant-scope impact** — state where `{{TENANT_KEY}}` is enforced. Every new query in app code filters by it, or reaches it through the model's foreign keys; only the auth library's own tables are exempt.
 
 <!-- nina:slot db.3 -->
-- **Prisma flag** — if `schema.prisma` or a new Prisma query is touched, mark **"DBA REQUIRED"** prominently at the top of the spec. Specify the proposed `cacheStrategy`, or **`NO_CACHE`** for any read that feeds a write whose correctness depends on it being fresh — a stale row contaminates every decision made from it.
+- **Database flag** — if the schema or a new query is touched, mark **"DBA REQUIRED"** prominently at the top of the spec, and name each new read's cache policy, or **`NO_CACHE`** for a read that feeds a write whose correctness depends on it being fresh — a stale row contaminates every decision made from it.

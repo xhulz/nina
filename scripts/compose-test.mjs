@@ -215,6 +215,7 @@ const BUDGETS = {
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
+  '.claude/frontend.md': 3000,
   '.claude/graph.md': 6500,
   '.claude/patterns.md': 20000,
   '.claude/pills/README.md': 10000,
@@ -271,8 +272,10 @@ function numberingGaps(text) {
  * unusable — it fires on `Honor`. Reading the layers asks the question once, of everything.
  */
 const SURFACE_TERMS = {
-  db: ['Prisma', 'Accelerate', 'Postgres', 'dba', 'DBA'],
-  'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Hono', 'Pages', 'Worker', 'Workers', 'Wrangler'],
+  db: ['dba', 'DBA'],
+  // A stack, where `db` is the concern: a project with a database is not thereby a Prisma project.
+  prisma: ['Prisma', 'prisma', 'Accelerate', 'cacheStrategy', '@prisma'],
+  'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Pages', 'Worker', 'Workers', 'Wrangler'],
   integrations: ['integration-tester', 'INTEGRATION-TESTER'],
   frontend: ['Playwright', 'playwright'],
   // A domain, not a technology, but the same leak: a project with no money read that under-gating a
@@ -280,6 +283,15 @@ const SURFACE_TERMS = {
   money: ['money', 'Money', 'payout', 'Payout', 'escrow', 'Escrow'],
   blockchain: ['solidity-dev', 'solidity-auditor', 'Solidity', 'OpenZeppelin', 'Foundry', 'Hardhat', 'Ethereum', 'EVM', 'ERC20', 'ERC721', 'ERC1155', 'ERC-20', 'ERC-721', 'delegatecall', 'selfdestruct'],
 };
+
+/**
+ * Names no layer may use: each is one project's choice — its framework, its components, its currency
+ * helpers, its tenant key — and a layer that names it hands the choice to every project that composes it.
+ * The first new project declared a database and a frontend, and was told its tenant was `userId`, its
+ * reads went through Accelerate and its screens were React on TanStack with shadcn, none of which it had
+ * decided. What a project chose goes in its own layer, or in a vocabulary name it fills.
+ */
+const PROJECT_TERMS = ['Hono', 'TanStack', 'shadcn', 'web-shared', 'formatBrl', 'parseBrl', 'createDbClient', 'userId', 'Postgres', 'Vite', 'VITE_'];
 
 /**
  * Whether a line names a term, rather than merely containing its letters.
@@ -340,6 +352,11 @@ async function surfaceLeaks() {
       const owner = layer.owner ?? (REQUIRES.exec(gated)?.[1] ?? null);
       // A slot or a gate names its surface by design (`nina:slot money.1`); only the prose around it counts.
       const lines = text.split('\n').map((line) => line.replace(/<!-- nina:(?:slot|requires) [^>]*-->/g, ''));
+      for (const term of PROJECT_TERMS) {
+        lines.forEach((line, i) => {
+          if (names(line, term)) found.push(`${layer.label}/${rel}:${i + 1} names "${term}", one project's choice — it belongs in that project's layer or vocabulary`);
+        });
+      }
       for (const [surface, terms] of Object.entries(SURFACE_TERMS)) {
         if (owner === surface) continue;
         for (const term of terms) {
