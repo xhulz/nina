@@ -123,7 +123,12 @@ resume has made longer. And when the run handed its report back, the notificatio
 report was delivered and is not repeated. Read as the report, it replaced the verdict the handback
 declared with none, on three of the first new project's runs in an afternoon, and nothing read their
 unchanged transcripts again. A notification now never replaces a handback's verdict, and a run whose
-recorded verdict is not its handback's is read once more. Cursors live beside each project's records, written by rename:
+recorded verdict is not its handback's is read once more. A project is snapshotted by one snapshot at a time. Its own detector and a global hook both snapshot on
+every Stop, and records and cursors are two writes: interleaved, the cursors of the scan that read further
+could stand beside the records of the one that read less, and what lay between was never captured. A
+snapshot that finds the project's lock taken leaves it to the one holding it; a lock left by a snapshot
+that died is taken over. `--rebuild` keeps the record it replaces beside it
+(`<project>.jsonl.before-rebuild-<time>`), since it re-reads only what is still on disk. Cursors live beside each project's records, written by rename:
 one shared file, rewritten whole by every project's hook, let the later of two concurrent writers put
 every other project's cursor back.
 

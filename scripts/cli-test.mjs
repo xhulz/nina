@@ -4073,6 +4073,35 @@ const dated = (date, status = 'active') =>
   expect(unwired.status === 1 && unwired.out.includes('1 missing — `nina wire --apply` merges them') && /status: \d+ thing\(s\) to look at/.test(unwired.out), `status: what needs looking at is said, with the command that fixes it — got ${unwired.out}`);
 }
 
+// ─── snapshot: one at a time per project, and a rebuild keeps what it replaces ──────────
+{
+  // A project's own detector and a global hook both snapshot on every Stop, and records and cursors are two
+  // writes: interleaved, the dispatches between the two scans were never captured.
+  const slug = '-lock-test';
+  const transcripts = join(SUITE_HOME, '.claude', 'projects', slug);
+  await mkdir(transcripts, { recursive: true });
+  const dispatch = (id, at) => JSON.stringify({ type: 'assistant', uuid: `u-${id}`, timestamp: at, sessionId: 's1', message: { content: [{ type: 'tool_use', id, name: 'Agent', input: { subagent_type: 'reviewer' } }] } });
+  await writeFile(join(transcripts, 's1.jsonl'), `${dispatch('toolu_l1', '2026-09-20T10:00:00.000Z')}\n`);
+  const out = await scratch();
+  const snap = (...extra) => run(['snapshot', '--project', slug, '--exact', '--out', out, ...extra]);
+  const store = join(out, `${slug}.jsonl`);
+  await writeFile(join(out, `${slug}.lock`), String(process.pid));
+  snap();
+  expect(!existsSync(store), 'snapshot: a project another snapshot is capturing is left to it');
+  await rm(join(out, `${slug}.lock`));
+  snap();
+  expect((await readFile(store, 'utf8')).includes('toolu_l1') && !existsSync(join(out, `${slug}.lock`)), 'snapshot: and captured once it is free, the lock released after');
+  await writeFile(join(out, `${slug}.lock`), '999999999');
+  await writeFile(join(transcripts, 's1.jsonl'), `${await readFile(join(transcripts, 's1.jsonl'), 'utf8')}${dispatch('toolu_l2', '2026-09-20T11:00:00.000Z')}\n`);
+  snap();
+  expect((await readFile(store, 'utf8')).includes('toolu_l2'), 'snapshot: a lock its process left behind is taken over');
+  // A rebuild re-reads only the transcripts still on disk, and the store is the only copy of the rest.
+  await writeFile(store, `${(await readFile(store, 'utf8')).trim()}\n${JSON.stringify({ project: slug, dispatch_id: 'toolu_pruned', ts: '2026-08-01T10:00:00.000Z', role: 'qa' })}\n`);
+  snap('--rebuild');
+  const kept = (await readdir(out)).find((f) => f.startsWith(`${slug}.jsonl.before-rebuild-`));
+  expect(Boolean(kept) && (await readFile(join(out, kept), 'utf8')).includes('toolu_pruned'), 'snapshot: a rebuild keeps the record it replaces beside it');
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');
