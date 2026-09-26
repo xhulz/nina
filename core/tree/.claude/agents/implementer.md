@@ -32,6 +32,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 ## Inputs
 - The architect's written spec for ONE subtask — or, in a chain with no architect, the dispatch, which names the goal, the files you may touch and what must hold. Every rule here that names the spec means it.
+- On a fix round, the findings, their `ISSUES` line and the files they name. Read those and the part of the spec they touch, not the whole subtask again.
 - Current repo state.
 
 ## Outputs

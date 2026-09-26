@@ -224,6 +224,40 @@ function costReport(records) {
 }
 
 /**
+ * How each stage's rounds spent their context: turns, tool calls sent per turn, and the context a turn
+ * re-read when the round began and at its largest. Every turn is billed the whole context again, so the
+ * cost of a round is its turns times its context, and a round that starts where a long one ended pays for
+ * all of it on every turn. The first rounds of a run are set beside the later ones, which are resumes.
+ *
+ * @param {object[]} records - The rounds in the window.
+ */
+function contextReport(records) {
+  const shaped = records.filter((r) => typeof r.turns === 'number' && r.turns > 0);
+  if (shaped.length === 0) return;
+  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const k = (n) => (typeof n === 'number' ? `${Math.round(n / 1000)}k` : '—');
+  console.log(heading('context', 'every turn re-reads the whole context: a round costs its turns times its size, and a resumed one starts where it ended'));
+  console.log(dim(`    ${'stage'.padEnd(20)}${'rounds'.padEnd(8)}${'n'.padStart(4)}${'turns'.padStart(7)}${'calls/turn'.padStart(12)}${'starts at'.padStart(11)}${'peak'.padStart(8)}`));
+  const byRole = new Map();
+  for (const r of shaped) byRole.set(r.role, [...(byRole.get(r.role) ?? []), r]);
+  for (const [role, rounds] of [...byRole].sort((a, b) => b[1].reduce((x, r) => x + r.turns, 0) - a[1].reduce((x, r) => x + r.turns, 0))) {
+    [
+      ['first', rounds.filter((r) => (r.round ?? 1) === 1)],
+      ['resumed', rounds.filter((r) => (r.round ?? 1) > 1)],
+    ].forEach(([label, group], i) => {
+      if (group.length === 0) return;
+      const turns = group.reduce((a, r) => a + r.turns, 0);
+      const calls = group.reduce((a, r) => a + (r.tool_calls ?? 0), 0);
+      const name = i === 0 || !rounds.some((r) => (r.round ?? 1) === 1) ? pink(role) + ' '.repeat(Math.max(20 - role.length, 1)) : ' '.repeat(20);
+      console.log(
+        `    ${name}${dim(label.padEnd(8))}${String(group.length).padStart(4)}${String(median(group.map((r) => r.turns))).padStart(7)}` +
+          `${(calls / turns).toFixed(2).padStart(12)}${k(median(group.map((r) => r.context_start ?? 0))).padStart(11)}${k(median(group.map((r) => r.context_peak ?? 0))).padStart(8)}`,
+      );
+    });
+  }
+}
+
+/**
  * Whether a model a run used is the one a spec declares: an alias (`opus`) names a family — a whole
  * segment of the id, wherever it sits, so `claude-3-sonnet` is a sonnet — anything else names a model
  * outright, and `inherit` runs on whatever the session does, so it declares nothing.
@@ -722,6 +756,7 @@ export async function stats(argv, ctx) {
   }
 
   costReport(records.filter((r) => r.status !== 'denied'));
+  contextReport(records.filter((r) => r.status !== 'denied'));
   modelReport(records.filter((r) => r.status !== 'denied'));
   proportionReport(records.filter((r) => r.status !== 'denied'), stepLimitOf(ctx));
 

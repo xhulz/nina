@@ -21,7 +21,7 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
-import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, tokensOf } from '../src/transcripts.mjs';
+import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
@@ -3070,7 +3070,7 @@ const dated = (date, status = 'active') =>
   );
   const agentFile = join(dir, 's1', 'subagents', 'agent-abc123.jsonl');
   // Three writes to two files, and a read that writes nothing.
-  const tool = (name, input) => JSON.stringify({ type: 'assistant', message: { id: `w${Math.random()}`, content: [{ type: 'tool_use', name, input }] } });
+  const tool = (name, input) => JSON.stringify({ type: 'assistant', message: { id: `w${Math.random()}`, content: [{ type: 'tool_use', id: `tu${Math.random()}`, name, input }] } });
   await writeFile(
     agentFile,
     `${await readFile(agentFile, 'utf8')}${[
@@ -3103,6 +3103,22 @@ const dated = (date, status = 'active') =>
   expect(counted?.files_touched === 2, `proportion: a record from before files were counted gets its count on the next snapshot — got ${counted?.files_touched}`);
   const [kept] = (await scanProject(dir, { cursors: {}, records: [{ ...record, tokens: { output: -1 } }] })).records;
   expect(kept?.tokens?.output === -1, 'cost: a run read in full whose transcript has not grown is not read again');
+  // Each turn is billed the whole context again, so a round is kept with its turns, the calls they sent,
+  // and the context at its start and at its largest.
+  expect(
+    record.turns === 2 && record.tool_calls === 4 && record.context_start === 1210 && record.context_peak === 1210,
+    `context: a round keeps its turns, tool calls and context size — got ${JSON.stringify(record)}`,
+  );
+  const shape = contextOf(new Map([['a', { usage: { input_tokens: 5, cache_read_input_tokens: 100 } }], ['b', { usage: { cache_read_input_tokens: 300, cache_creation_input_tokens: 20 } }]]));
+  expect(shape.turns === 2 && shape.start === 105 && shape.peak === 320, `context: a turn's context is its input, read and written tokens — got ${JSON.stringify(shape)}`);
+  const unshaped = { ...record, tokens: { output: -1 } };
+  delete unshaped.turns;
+  const [shaped] = (await scanProject(dir, { cursors: {}, records: [unshaped] })).records;
+  expect(shaped?.turns === 2 && shaped.tokens.output === 600, 'context: a record from before turns were kept is read once more');
+  // A reader from before rounds writes `resumes` and bills the whole run to its first record. A store it
+  // shared with a newer reader had those runs marked read and skipped, their first round billed twice.
+  const [remarked] = (await scanProject(dir, { cursors: {}, records: [{ ...record, resumes: 1, tokens: { output: -1 } }] })).records;
+  expect(remarked?.tokens?.output === 600 && !('resumes' in remarked), `snapshot: a run an older reader marked read is read again — got ${JSON.stringify(remarked)}`);
   // Resumed after it reported, the way Claude Code writes it into the agent's own transcript: the message,
   // then more spend and a new verdict. That is a second round, with its own verdict, time and bill; the
   // first keeps its own. Told apart, the orchestrator resuming one reviewer through every fix no longer
@@ -3114,7 +3130,7 @@ const dated = (date, status = 'active') =>
       JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: 'Report delivered to your caller.' }] } }),
       said('2026-09-24T10:20:00.000Z', '<system-reminder>\nA reminder is not a message.\n</system-reminder>'),
       said('2026-09-24T11:00:00.000Z', 'The coordinator sent a message while you were working:\nRe-review the fix.'),
-      JSON.stringify({ type: 'assistant', effort: 'high', message: { id: 'm3', model: 'claude-sonnet-5', usage: { input_tokens: 0, output_tokens: 400 }, content: [] } }),
+      JSON.stringify({ type: 'assistant', effort: 'high', message: { id: 'm3', model: 'claude-sonnet-5', usage: { input_tokens: 0, output_tokens: 400, cache_read_input_tokens: 5000 }, content: [] } }),
       tool('Edit', { file_path: '/p/d.ts', old_string: 'x', new_string: 'y' }),
       JSON.stringify({ type: 'assistant', timestamp: '2026-09-24T11:05:00.000Z', message: { id: 'h2', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: APPROVED' } }] } }),
     ].join('\n')}\n`,
@@ -3131,6 +3147,10 @@ const dated = (date, status = 'active') =>
     `snapshot: and the resume is a round of its own — its verdict, spend, files, time and branch — got ${JSON.stringify(two)}`,
   );
   expect(runOf(two) === 'toolu_c' && runOf(one) === 'toolu_c', 'snapshot: both rounds are of one run');
+  expect(
+    two.turns === 1 && two.tool_calls === 1 && two.context_start === 5000 && one.turns === 2,
+    `context: a resumed round counts its own turns, from the context it resumed with — got ${JSON.stringify(two)}`,
+  );
   // A reminder after the report opens nothing; a message the run was sent before it reported is part of the
   // round it was in; a message it never answered is not a round yet.
   const opens = roundsOf();
@@ -4024,8 +4044,8 @@ const dated = (date, status = 'active') =>
     `${[
       round('t1', 'architect', 'SPEC-READY', '2026-09-20T10:00:00.000Z', { desc: 'Spec the export' }),
       round('t2', 'implementer', 'DIFF-READY', '2026-09-20T10:10:00.000Z', { files_touched: 7 }),
-      round('t3', 'reviewer', 'REJECTED', '2026-09-20T10:20:00.000Z'),
-      round('t3#2', 'reviewer', 'APPROVED', '2026-09-20T10:40:00.000Z', { round: 2 }),
+      round('t3', 'reviewer', 'REJECTED', '2026-09-20T10:20:00.000Z', { round: 1, turns: 20, tool_calls: 30, context_start: 30_000, context_peak: 150_000 }),
+      round('t3#2', 'reviewer', 'APPROVED', '2026-09-20T10:40:00.000Z', { round: 2, turns: 8, tool_calls: 8, context_start: 212_000, context_peak: 251_000 }),
       round('t4', 'qa', 'PASS', '2026-09-20T11:00:00.000Z'),
       round('t5', 'implementer', 'DIFF-READY', '2026-09-21T09:00:00.000Z', { desc: 'Fix the label', files_touched: 1 }),
     ].map((r) => JSON.stringify(r)).join('\n')}\n`,
@@ -4037,6 +4057,12 @@ const dated = (date, status = 'active') =>
     `runs: each with its time, its cost as its rounds', how it ended, and each stage's rounds and what they sent back — got ${out}`,
   );
   expect(out.includes('still open where the record ends') && out.includes('2 cycle(s): $6.00 in all; the costliest, $5.00'), `runs: and the total, with the costliest named — got ${out}`);
+  expect(/largest write 7 file\(s\) · context up to 251k/.test(out) && !/Fix the label[^▌]*context up to/.test(out), `runs: a cycle names the largest context a turn in it re-read, where it was measured — got ${out}`);
+  const stats = run(['stats', '--project', slugFor(dir), '--all'], { loud: true }).out;
+  expect(
+    /reviewer\s+first\s+1\s+20\s+1\.50\s+30k\s+150k/.test(stats) && /^\s+resumed\s+1\s+8\s+1\.00\s+212k\s+251k/m.test(stats),
+    `context: stats sets a stage's first rounds beside its resumed ones — got ${stats}`,
+  );
   expect(run(['runs', '--project', await scratch()], { loud: true }).status === 1, 'runs: a directory with no profile says so');
 }
 

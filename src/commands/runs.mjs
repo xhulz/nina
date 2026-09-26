@@ -32,7 +32,7 @@ const ENDS = {
  * stages first ran.
  *
  * @param {{runs: object[], end: string}} cycle
- * @returns {{start: string, end: string, minutes: number|null, cost: number, unpriced: number, name: string, how: string, stages: {role: string, runs: number, rounds: number, back: number}[], files: number|null}}
+ * @returns {{start: string, end: string, minutes: number|null, cost: number, unpriced: number, name: string, how: string, stages: {role: string, runs: number, rounds: number, back: number}[], files: number|null, peak: number|null}}
  */
 export function summarize(cycle) {
   const rounds = cycle.runs;
@@ -56,6 +56,7 @@ export function summarize(cycle) {
     stages.set(r.role, s);
   }
   const files = rounds.filter((r) => typeof r.files_touched === 'number').map((r) => r.files_touched);
+  const peaks = rounds.filter((r) => typeof r.context_peak === 'number').map((r) => r.context_peak);
   return {
     start,
     end,
@@ -66,6 +67,7 @@ export function summarize(cycle) {
     how: ENDS[cycle.end](rounds.at(-1)),
     stages: [...stages.values()].map((s) => ({ ...s, runs: s.runs.size })),
     files: files.length ? Math.max(...files) : null,
+    peak: peaks.length ? Math.max(...peaks) : null,
   };
 }
 
@@ -111,7 +113,10 @@ export async function runs(argv) {
       const count = s.rounds > s.runs ? `${s.rounds} rounds` : `${s.rounds}`;
       return `${pink(s.role)} ${count}${s.back ? amber(`, ${s.back} sent back`) : ''}`;
     });
-    console.log(`    ${chain.join(dim(' · '))}${c.files === null ? '' : dim(` · largest write ${c.files} file(s)`)}`);
+    console.log(
+      `    ${chain.join(dim(' · '))}${c.files === null ? '' : dim(` · largest write ${c.files} file(s)`)}` +
+        (c.peak === null ? '' : dim(` · context up to ${Math.round(c.peak / 1000)}k`)),
+    );
   }
   const total = shown.reduce((a, c) => a + c.cost, 0);
   const costliest = shown.reduce((a, c) => (c.cost > a.cost ? c : a), shown[0]);

@@ -175,7 +175,25 @@ apart from the reports that lack a verdict line, since the two have different ca
 A run from before the handback existed has no report in its own transcript, so "read in full" could never be
 said of it, and every snapshot read it again: one project's 744 such runs, two seconds before the person saw
 an answer on every turn. A run is read again now only when its transcript has grown, or when a round that
-handed its report back holds a verdict from somewhere else.
+handed its report back holds a verdict from somewhere else, or when a reader from before rounds marked it
+read. That reader writes `resumes` and bills the whole run to its first record; a store one project's old pin
+and a newer hook both wrote to had those runs skipped as read, their first round billed twice.
+
+### How a round spent its context
+
+Every turn is billed the whole context again, so what a round costs is its turns times the size of what
+each re-read, and a count of tokens alone cannot say which grew. Each round keeps its `turns` (API messages),
+its `tool_calls`, and the context a turn re-read when it began (`context_start`) and at its largest
+(`context_peak`), counts only. `stats` sets each stage's first rounds beside its resumed ones, and `nina runs`
+names the largest context a cycle reached.
+
+The first reading, over the first new project's 128 rounds, is where two rules came from. A resumed
+implementer began its fix at a median 484k tokens of context and took a hundred turns, twice a first round's
+spend, and resumed rounds of the implementer, architect and integration-tester held three quarters of all
+the pipeline read; so the router sends a round of real work to a fresh run, dispatched with the spec, the
+findings and the files they name, and resumes a run only for something short. And turns sent 1.00 to 1.05
+tool calls each, while runs re-read files they had just written 534 times; so Hard Rule #19 asks that
+independent calls go out together and each thing be taken in once. Both are measured by the same columns.
 
 ### What a piece of work cost: `nina runs`
 

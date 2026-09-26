@@ -35,6 +35,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 ## Inputs
 - A single subtask from the planner, OR a direct user request that is already well-scoped for a single change, OR a **group of sibling steps the planner marked `ONE-SPEC`** (steps that change no observable behavior on their own).
+- On a revision, the spec and the report that sent it back: revise what the report names.
 
 For a `ONE-SPEC` group, write **one** spec covering the whole group, with the "Files to touch" list
 numbered per step so the implementer still lands them one at a time and each step stays small and
