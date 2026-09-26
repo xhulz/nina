@@ -3795,10 +3795,20 @@ const dated = (date, status = 'active') =>
   const spike = chainsByShape(claude).find((row) => row.shape.startsWith('Spike'));
   expect(spike?.chain === 'architect (spike plan) → implementer → reviewer', `flow: a spike takes the architect's plan, the implementer and the reviewer — got ${JSON.stringify(spike)}`);
   expect(
-    router.includes('### A spike answers one question') && router.includes('Its plan is corrected at most twice') && architect.includes('a **spike plan** instead, one page') &&
+    router.includes('### A spike answers one question') && router.includes('Its plan is corrected at most twice') && architect.includes('a one-page **spike plan** instead') &&
       reviewer.includes('- **A spike** (`.claude/router.md` § *A spike answers one question*) is reviewed for one thing') && graph.edges.some((e) => e.from === 'reviewer' && e.to === 'done' && e.when.startsWith('a spike')),
     'flow: a spike is planned on a page, reviewed for whether it measures what it says, ends at the review, and is corrected at most twice',
   );
+
+  // A premise of a live service is observed before the design that needs it. The architect had to cite a
+  // response it had no tool to get, and only the integration-tester could get one — after the implementer.
+  expect(
+    graph.edges.some((e) => e.from === 'architect' && e.to === 'integration-tester' && e.token === 'BLOCKED' && e.max === 2) &&
+      tester.includes('## When the architect asks for a probe') && architect.includes('report `BLOCKED` naming what to observe') &&
+      !architect.includes('Run `pnpm code-map`') && !/call the service and keep the response|exercise the service and keep the response/.test(architect),
+    'flow: an architect blocked on a live premise has it observed by the integration-tester first, and is never told to run what it has no shell for',
+  );
+  expect(validateGraph(graph, new Map()).filter((p) => /cap|never emits/.test(p)).length === 0, 'flow: the probe edge carries a cap and leaves on a verdict the architect emits');
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────

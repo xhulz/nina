@@ -63,6 +63,14 @@ You run **after** the implementer, **beside** the reviewer and any other gate th
 
 If the architect's spec has NO **Integration premises** section but the diff touches a gated boundary → halt and reject upstream. The architect must amend the spec with cited premises before you can validate them.
 
+## When the architect asks for a probe
+
+Before there is a spec, the architect may report `BLOCKED` on premises of a live service it cannot read.
+Dispatched with those premises, exercise the service for each, record each in `.claude/integrations/<slug>.md`
+as a `P<n>` with the response captured verbatim, regenerate the index, and report `APPROVED` with the
+`P<n>` of each — or `REJECTED`, with an `ISSUES` id for each premise the service would not show. There is
+no diff to gate: the report goes back to the architect.
+
 ## Inputs
 
 - Architect spec, with its **Integration premises** section.
