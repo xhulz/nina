@@ -11,6 +11,7 @@
  * loop-backs it was supposed to harvest were being counted right here.
  */
 
+import { amber, bar, bold, dim, heading, note, pink, stacked } from '../look.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -183,18 +184,21 @@ function costReport(records) {
   // The same convention as the duration column beside it: the upper middle of an even count.
   const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   console.log(
-    `\n  cost — at API list prices of ${PRICES_AS_OF}; ${measured.length} of ${records.length} runs have a token record` +
-      (unpriced > 0 ? `, ${unpriced} on a model the price table does not know` : ''),
+    heading(
+      'cost',
+      `at API list prices of ${PRICES_AS_OF}; ${measured.length} of ${records.length} runs have a token record` +
+        (unpriced > 0 ? `, ${unpriced} on a model the price table does not know` : ''),
+    ),
   );
-  console.log(`    ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'median'.padStart(10)}${'total'.padStart(10)}${'share'.padStart(8)}`);
+  console.log(dim(`    ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'median'.padStart(10)}${'total'.padStart(10)}${'share'.padStart(8)}`));
   for (const [role, costs] of [...byRole].sort((a, b) => b[1].reduce((x, y) => x + y, 0) - a[1].reduce((x, y) => x + y, 0))) {
     const sum = costs.reduce((a, b) => a + b, 0);
     console.log(
-      `    ${role.padEnd(20)}${String(costs.length).padStart(6)}${money(median(costs)).padStart(10)}` +
-        `${money(sum).padStart(10)}${pct(sum, total).padStart(8)}`,
+      `    ${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}${String(costs.length).padStart(6)}${money(median(costs)).padStart(10)}` +
+        `${bold(money(sum).padStart(10))}${pct(sum, total).padStart(8)}  ${pink(bar(sum / total, 20))}`,
     );
   }
-  console.log(`    ${'all stages'.padEnd(20)}${String([...byRole.values()].flat().length).padStart(6)}${''.padStart(10)}${money(total).padStart(10)}`);
+  console.log(bold(`    ${'all stages'.padEnd(20)}${String([...byRole.values()].flat().length).padStart(6)}${''.padStart(10)}${money(total).padStart(10)}`));
 }
 
 /**
@@ -271,7 +275,7 @@ function modelReport(records) {
       const costs = runs.map((r) => (r.tokens ? costOf(r.tokens, r.usage_model) : null)).filter((c) => c !== null);
       const dates = runs.map((r) => String(r.ts).slice(0, 10)).sort();
       lines.push(
-        `    ${(i === 0 ? role : '').padEnd(20)}${model.padEnd(26)}${String(runs.length).padStart(5)} run(s)  ${dates[0]} → ${dates.at(-1)}` +
+        `    ${i === 0 ? `${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}` : ''.padEnd(20)}${model.padEnd(26)}${String(runs.length).padStart(5)} run(s)  ${dim(`${dates[0]} → ${dates.at(-1)}`)}` +
           (clear.length ? `  loop-back ${pct(loops, clear.length)} of ${clear.length}` : '  no readable verdict') +
           (costs.length ? `  median ${money(median(costs))}` : ''),
       );
@@ -303,9 +307,9 @@ function modelReport(records) {
   }
 
   if (lines.length === 0 && drift.length === 0) return;
-  console.log('\n  models — a stage that ran on more than one model or effort level, one line each; different weeks, not an experiment');
+  console.log(heading('models', 'a stage that ran on more than one model or effort level, one line each; different weeks, not an experiment'));
   for (const line of lines) console.log(line);
-  for (const line of drift) console.log(line);
+  for (const line of drift) console.log(amber(line));
 }
 
 /** The verdicts that close a pipeline cycle: the change passed its tests, reached preview, or cleared the audit. */
@@ -390,15 +394,19 @@ function proportionReport(records, stepLimit = () => null) {
   }
   if (built === 0) return;
   console.log(
-    `\n  proportion — ${built} cycle(s) that wrote code; a cycle closes at qa PASS, devops DEPLOYED or secops SECURE, or at the next design after code` +
-      (unreadable > 0 ? `; ${unreadable} closed by a run whose verdict could not be read` : '') +
-      (open > 0 ? `; ${open} still open when their session's record ends` : ''),
+    heading(
+      'proportion',
+      `${built} cycle(s) that wrote code; a cycle closes at qa PASS, devops DEPLOYED or secops SECURE, or at the next design after code` +
+        (unreadable > 0 ? `; ${unreadable} closed by a run whose verdict could not be read` : '') +
+        (open > 0 ? `; ${open} still open when their session's record ends` : ''),
+    ),
   );
-  console.log(`    ${'largest write'.padEnd(16)}${'cycles'.padStart(8)}${'with a planner or architect'.padStart(30)}`);
+  console.log(dim(`    ${'largest write'.padEnd(16)}${'cycles'.padStart(8)}${'with a planner or architect'.padStart(30)}`));
   for (const row of rows) {
-    console.log(`    ${row.label.padEnd(16)}${String(row.cycles).padStart(8)}${`${row.designed} (${pct(row.designed, row.cycles)})`.padStart(30)}`);
+    const designed = `${row.designed} (${pct(row.designed, row.cycles)})`.padStart(30);
+    console.log(`    ${row.label.padEnd(16)}${String(row.cycles).padStart(8)}${row.cycles ? designed : dim(designed)}  ${pink(bar(row.cycles ? row.designed / row.cycles : 0, 10))}`);
   }
-  console.log('    A shape, not a verdict: a critical path is gated in full at any size, and one spec may cover sibling steps.');
+  console.log(dim('    A shape, not a verdict: a critical path is gated in full at any size, and one spec may cover sibling steps.'));
 
   // The one size the harness does limit: what one implementer run writes. A run re-reads the context it
   // has built on every turn, so its cost grows faster than its size — measured over two projects, the
@@ -413,7 +421,10 @@ function proportionReport(records, stepLimit = () => null) {
     const largest = over.reduce((a, b) => (b.files_touched > a.files_touched ? b : a));
     const read = typeof largest.tokens?.read === 'number' ? `, ${Math.round(largest.tokens.read / 1e6)}M tokens read from cache` : '';
     console.log(
-      `    ${over.length} implementer run(s) wrote more files than one step may (${stepLimit(largest.project)}); the largest wrote ${largest.files_touched}${read}. The architect splits such a spec into steps.`,
+      note(
+        `${over.length} implementer run(s) wrote more files than one step may (${stepLimit(largest.project)}); the largest wrote ${largest.files_touched}${read}. The architect splits such a spec into steps.`,
+        'warn',
+      ),
     );
   }
 }
@@ -551,34 +562,53 @@ export async function stats(argv, ctx) {
   const span = [records[0]?.ts, records.at(-1)?.ts].map((t) => String(t).slice(0, 10));
   const projectCount = new Set(records.map((r) => r.project)).size;
   console.log(
-    `  ${records.length} dispatches · ${projectCount} project${projectCount === 1 ? '' : 's'} · ` +
+    `  ${projectCount === 1 ? `${bold(pink(projectName(records[0].project)))} · ` : ''}${bold(records.length)} dispatches · ${projectCount} project${projectCount === 1 ? '' : 's'} · ` +
       `${span[0]} → ${span[1]}` +
-      (here ? '  (this project; --all for every project)' : '') +
-      (skipped > 0 ? `  (${skipped} non-harness project${skipped === 1 ? '' : 's'} hidden, --all to include)` : '') +
-      (held > 0 ? `  · ${held} dispatch(es) denied by a hook, not counted as runs` : '') +
-      '\n',
+      (here ? dim('  (this project; --all for every project)') : '') +
+      (skipped > 0 ? dim(`  (${skipped} non-harness project${skipped === 1 ? '' : 's'} hidden, --all to include)`) : '') +
+      (held > 0 ? `  · ${held} dispatch(es) denied by a hook, not counted as runs` : ''),
   );
+  console.log(heading('stages', 'what each ran, and what came of it'));
   console.log(
-    `  ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'verdict'.padStart(9)}${'loop-back'.padStart(11)}` +
-      `${'rate'.padStart(7)}${'declared'.padStart(10)}${'unreadable'.padStart(12)}` +
-      `${'median'.padStart(9)}`,
+    dim(
+      `    ${'stage'.padEnd(20)}${'runs'.padStart(6)}${'verdict'.padStart(9)}${'loop-back'.padStart(11)}` +
+        `${'rate'.padStart(7)}${'declared'.padStart(10)}${'unreadable'.padStart(12)}` +
+        `${'median'.padStart(9)}`,
+    ),
   );
 
   const rows = [...byRole.entries()].sort((a, b) => b[1].n - a[1].n);
+  // Each stage's runs as one bar, as long as its share of the busiest stage's: what went forward, what
+  // was sent back, and what said nothing readable (or is still running).
+  const busiest = Math.max(...rows.map(([, s]) => s.n), 1);
+  const zero = (text, n) => (n === 0 ? dim(text) : text);
   for (const [role, s] of rows) {
+    const runsBar = stacked(
+      [
+        { n: s.clear - s.loop, char: '█', paint: pink },
+        { n: s.loop, char: '▓', paint: amber },
+        { n: s.n - s.clear, char: '░', paint: dim },
+      ],
+      Math.max(1, Math.round((16 * s.n) / busiest)),
+    );
+    const declared = pct(s.declared, s.done).padStart(10);
+    const unread = pct(s.unclear, s.done).padStart(12);
     console.log(
-      `  ${role.padEnd(20)}${String(s.n).padStart(6)}${String(s.clear).padStart(9)}` +
-        `${String(s.loop).padStart(11)}${pct(s.loop, s.clear).padStart(7)}` +
-        `${pct(s.declared, s.done).padStart(10)}${pct(s.unclear, s.done).padStart(12)}` +
-        `${medianMin(s.durations).padStart(9)}`,
+      `    ${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}${String(s.n).padStart(6)}${String(s.clear).padStart(9)}` +
+        `${zero(String(s.loop).padStart(11), s.loop)}${zero(pct(s.loop, s.clear).padStart(7), s.loop)}` +
+        `${s.declared < s.done ? amber(declared) : dim(declared)}${s.unclear > 0 ? amber(unread) : dim(unread)}` +
+        `${medianMin(s.durations).padStart(9)}  ${runsBar}`,
     );
   }
+  console.log(dim(`    ${' '.repeat(86)}█ forward  ▓ sent back  ░ no verdict read`));
 
   const unreadable = rows.reduce((a, [, s]) => a + s.unclear, 0);
   const done = rows.reduce((a, [, s]) => a + s.done, 0);
+  console.log('');
   console.log(
-    `\n  ${pct(unreadable, done)} of finished runs report no machine-readable verdict.` +
-      ' Those stages need a verdict token on the report\'s first line.',
+    unreadable === 0
+      ? note("every finished run's verdict could be read.", 'ok')
+      : note(`${pct(unreadable, done)} of finished runs report no machine-readable verdict. Those stages need a verdict token on the report's first line.`, 'warn'),
   );
 
   // Whether the stages that send work back say what they send back. Counted only over reports read
@@ -587,8 +617,7 @@ export async function stats(argv, ctx) {
   if (named.length > 0) {
     const withIds = named.filter((r) => r.issues > 0).length;
     console.log(
-      `  ${withIds} of ${named.length} declared loop-back(s) (${pct(withIds, named.length)}) named their issues` +
-        ' on the `ISSUES` line under the verdict.',
+      note(`${withIds} of ${named.length} declared loop-back(s) (${pct(withIds, named.length)}) named their issues on the \`ISSUES\` line under the verdict.`, withIds < named.length ? 'warn' : 'ok'),
     );
   }
 
@@ -600,9 +629,11 @@ export async function stats(argv, ctx) {
     for (const r of withSkills) for (const k of r.skills) tally.set(k, (tally.get(k) ?? 0) + 1);
     const list = [...tally].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ×${n}`);
     console.log(
-      `  ${withSkills.length} of ${observable} runs with a readable transcript` +
-        ` (${pct(withSkills.length, observable)}) invoked a Skill` +
-        (list.length > 0 ? ` — ${list.join(', ')}` : ' — none at all'),
+      note(
+        `${withSkills.length} of ${observable} runs with a readable transcript (${pct(withSkills.length, observable)}) invoked a Skill` +
+          (list.length > 0 ? ` — ${list.join(', ')}` : ' — none at all'),
+        withSkills.length === 0 ? 'warn' : 'info',
+      ),
     );
   }
 
@@ -617,7 +648,8 @@ export async function stats(argv, ctx) {
       others.reduce((a, [, o]) => a + o.clear, 0),
     );
     console.log(
-      `  ${role}: ${s.loop} loop-back(s) in ${s.clear} readable verdict(s) (${pct(s.loop, s.clear)}),` +
+      note(
+      `${role}: ${s.loop} loop-back(s) in ${s.clear} readable verdict(s) (${pct(s.loop, s.clear)}),` +
         ` against ${elsewhere} across the other gates — check whether it still gates anything.` +
         (s.n - s.clear > 0
           ? ` ${s.n - s.clear} further run(s) produced no readable verdict at all, so the rate may understate it.`
@@ -627,6 +659,8 @@ export async function stats(argv, ctx) {
         (s.declared < s.clear
           ? ` Only ${s.declared} of the ${s.clear} were declared by the stage; the rest were inferred from its report.`
           : ''),
+      'warn',
+      ),
     );
   }
 
@@ -642,30 +676,31 @@ export async function stats(argv, ctx) {
   const newest = pills.dates.at(-1);
   const inWindow = pills.dates.filter((d) => d >= span[0] && d <= span[1]).length;
 
-  console.log('\n  learning');
+  console.log(heading('learning', 'what the loop-backs taught, and what became a rule'));
   if (pills.total === 0) {
-    console.log(
-      `    ${loopBacks} loop-back(s) and not one pill — either nothing was learned, or nothing was written down.`,
-    );
+    console.log(note(`${loopBacks} loop-back(s) and not one pill — either nothing was learned, or nothing was written down.`, loopBacks > 0 ? 'warn' : 'info'));
   } else {
     console.log(
-      // A share over 100% says nothing: the pills were written for something other than these loop-backs.
-      `    ${loopBacks} loop-back(s) in the window → ${inWindow} pill(s) written${inWindow <= loopBacks ? ` (${pct(inWindow, loopBacks)})` : ''}` +
-        ' — every loop-back is looked at for a lesson; `nina learn` shows which roles are owed one.' +
-        (pills.undated > 0 ? ` ${pills.undated} pill(s) carry no date and cannot be placed.` : ''),
+      note(
+        // A share over 100% says nothing: the pills were written for something other than these loop-backs.
+        `${loopBacks} loop-back(s) in the window → ${inWindow} pill(s) written${inWindow <= loopBacks ? ` (${pct(inWindow, loopBacks)})` : ''}` +
+          ' — every loop-back is looked at for a lesson; `nina learn` shows which roles are owed one.' +
+          (pills.undated > 0 ? ` ${pills.undated} pill(s) carry no date and cannot be placed.` : ''),
+      ),
     );
     console.log(
       pills.retired === 0
-        ? `    0 of ${pills.total} pill(s) retired — no correction has ever graduated into a rule.`
-        : `    ${pills.retired} of ${pills.total} pill(s) retired into a rule.`,
+        ? note(`0 of ${pills.total} pill(s) retired — no correction has ever graduated into a rule.`, 'warn')
+        : note(`${pills.retired} of ${pills.total} pill(s) retired into a rule.`, 'ok'),
     );
     if (newest) {
       const since = records.filter((r) => String(r.ts).slice(0, 10) > newest).length;
-      if (since > 0) console.log(`    ${since} dispatch(es) since the newest pill (${newest}).`);
+      if (since > 0) console.log(note(`${since} dispatch(es) since the newest pill (${newest}).`));
     }
   }
   for (const name of pills.unresolved) {
-    console.log(`    ${name} could not be located on disk, so its pills are not counted.`);
+    console.log(note(`${name} could not be located on disk, so its pills are not counted.`, 'warn'));
   }
+  console.log('');
   return 0;
 }
