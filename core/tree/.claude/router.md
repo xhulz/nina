@@ -82,24 +82,9 @@ Reviewer runs `{{TYPECHECK_CMD}}` / `{{LINT_CMD}}` (and `{{BUILD_CMD}}` for fron
 If reviewer finds a design flaw, loop back to the architect. Don't paper over with implementation hacks.
 
 ### Plugin skills are part of the pipeline
-<!-- nina:slot edge-cf.7 -->
-Retrieval-first skills registered for this stack are inherited by every subagent — invoke via the `Skill` tool. Mandatory triggers (mirrors CLAUDE.md):
-
-| Diff touches… | Skill |
-|---|---|
-<!-- nina:slot edge-cf.1 -->
-<!-- nina:slot edge-cf.2 -->
-<!-- nina:slot edge-cf.3 -->
-<!-- nina:slot edge-cf.4 -->
-<!-- nina:slot frontend.1 -->
-| **secops** auditing any milestone | **`security-audit`** (guidance mode — full-audit mode only on an explicit whole-tree request) |
-<!-- nina:slot edge-cf.5 -->
-<!-- nina:slot db.2 -->
-<!-- nina:slot db.3 -->
-<!-- nina:slot blockchain.2 -->
-
-The architect cites which skill informed the spec. The reviewer rejects a spec touching a surface with a mandatory skill that doesn't cite one OR justify why it wasn't needed. Same rigor as the `node_modules:<line>` premise rule.
-<!-- nina:slot edge-cf.6 -->
+The mandatory triggers are the table in `CLAUDE.md` and each spec's own § *Skills you MUST consult*; every
+stage invokes them through the `Skill` tool. The architect cites which skill informed the spec, and the
+reviewer rejects a spec touching a surface with a mandatory skill that cites none and says nothing of why.
 
 ### Devops owns the deploy
 Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change.**

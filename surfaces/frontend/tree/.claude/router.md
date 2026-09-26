@@ -1,6 +1,3 @@
-<!-- nina:slot frontend.1 -->
-| `{{APP_DIR}}/**` page-load perf audit (LCP/INP/CLS/bundle) | `cloudflare:web-perf` |
-
 <!-- nina:slot frontend.2 -->
 
 ### Nothing before devops can see the screen
