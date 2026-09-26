@@ -185,7 +185,7 @@ may keep agents of its own beside them.
 
 It also writes the **wiring**, because without it the scripts it composes are never run:
 `.claude/settings.json` with every hook the pinned version's scripts need — the harness check's, the
-loop gate's and the edit guard's — when the project has no settings file, and the `harness:check` and
+loop gate's, the edit guard's and the cost watch's — when the project has no settings file, and the `harness:check` and
 `harness:compose:check` scripts added to an existing `package.json`. Both files belong to the project
 and carry far more than the harness, so `init` never edits settings that exist and a manifest only
 gains what it lacks. Whatever `init` could not write is §4 of the TODO, `nina wire --apply` merges it,

@@ -172,6 +172,23 @@ said of it, and every snapshot read it again: one project's 744 such runs, two s
 an answer on every turn. A run is read again now only when its transcript has grown, or when a round that
 handed its report back holds a verdict from somewhere else.
 
+### While a run is still running: the cost watch
+
+`stats` says what a run cost after it ended, and by then the money is spent. Three quarters of the first
+new project's implementer spend was the run's own context read again, every turn re-reading everything the
+run had built, so a run's cost grows faster than its work — a median 36M tokens a round there, 159M at
+most. `scripts/cost-watch.mjs`, a composed script the project's hooks run after every tool call
+(`src/cost.mjs`), keeps count while it happens. Claude Code runs a PostToolUse hook for each tool a
+subagent calls, with the subagent's id, and gives the `additionalContext` it answers to that subagent —
+which was probed on 2.1.283 rather than assumed; the documentation does not say. The watch reads only what
+the run's transcript gained since its last call, keeps each message's cache read by its id (a streamed
+message is written once per block), and when the run's total passes `RUN_READ_WARN` million tokens (40 by
+default, a vocabulary name a project can change) and again at every doubling, it tells the run what it has
+re-read and what one more turn now costs, and to hand back what is left if that is more than one run
+should carry; and it tells the person in one line. 40M passes one implementer round in ten in the project
+whose steps were sized right, and half in the one whose were not. It keeps counts only, under the project's
+gate directory, and a call outside a subagent returns at once.
+
 ### Which model a stage ran on
 
 A spec's `model:` is the one choice in the harness that moves cost by an order of magnitude, and until
