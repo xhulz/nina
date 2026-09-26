@@ -20,7 +20,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
-import { loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
+import { LEDGER_TAIL, ledgerPath, loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
+import { storedRecords } from './snapshot.mjs';
 import { layerRootFor } from './compose.mjs';
 import { handsToModel } from '../detectors.mjs';
 
@@ -63,6 +64,12 @@ function newErrors(target) {
   );
 }
 
+/**
+ * When this check first ran in the project, kept beside its ledgers: what the pipeline did before then
+ * was never the gate's to see, so the live check asks only about what came after.
+ */
+const SINCE = 'checked-since';
+
 /** Whether the gate can write its ledger here. It lets every call through when it cannot. */
 function writable(target) {
   const dir = projectGateDir(target);
@@ -71,10 +78,68 @@ function writable(target) {
     const probe = join(dir, `.selftest-${process.pid}`);
     writeFileSync(probe, '');
     rmSync(probe);
+    if (!existsSync(join(dir, SINCE))) writeFileSync(join(dir, SINCE), `${new Date().toISOString()}\n`);
     return null;
   } catch (error) {
     return `the gate cannot write its ledger in ${dir} — ${error.message}. It lets every call through when it cannot, so no cap is held`;
   }
+}
+
+/** How long after a report the gate is asked whether it saw it: the two are written moments apart. */
+const SETTLE_MS = 120_000;
+
+/** Fewer reports than this in a session, and a miss is not yet a pattern. */
+const LIVE_SAMPLE = 3;
+
+/**
+ * Whether the gate saw what the pipeline actually did — what the dry run cannot answer, since it feeds the
+ * gate events written here, in the shape Claude Code sent when they were written. The gate reads fields
+ * of what Claude Code sends each hook, and the transcripts it writes have changed shape twice under this
+ * harness; were the hooks' payloads to change, the gate would record nothing and let everything through,
+ * and the dry run would still pass. So the reports of the last session with enough of them — each round
+ * whose first line declares a verdict, as the snapshot read it from the transcripts — are set against the
+ * verdicts that session's ledger holds. The gate recording fewer than half of them is a finding.
+ *
+ * @param {string} target - The project directory.
+ * @param {{graph: {stages: Set<string>}, tokens: Map<string, Set<string>>}} project - Its composed graph.
+ * @returns {string|null}
+ */
+function liveness(target, project) {
+  const dir = projectGateDir(target);
+  let since;
+  try {
+    since = readFileSync(join(dir, SINCE), 'utf8').trim();
+  } catch {
+    return null;
+  }
+  const now = Date.now();
+  const reports = (storedRecords(target) ?? []).filter(
+    (r) =>
+      r.verdict_source === 'handback' &&
+      r.session &&
+      project.graph.stages.has(r.role) &&
+      project.tokens.get(r.role)?.has(r.verdict) &&
+      String(r.result_ts) >= since &&
+      now - Date.parse(r.result_ts) > SETTLE_MS,
+  );
+  const bySession = new Map();
+  for (const r of reports) bySession.set(r.session, [...(bySession.get(r.session) ?? []), r]);
+  const last = [...bySession.values()]
+    .filter((rs) => rs.length >= LIVE_SAMPLE)
+    .sort((a, b) => String(a.map((r) => r.result_ts).sort().at(-1)).localeCompare(String(b.map((r) => r.result_ts).sort().at(-1))))
+    .at(-1);
+  if (!last) return null;
+  const path = ledgerPath(target, last[0].session);
+  const entries = readLedger(path);
+  // A ledger too large to read whole is read from its tail; what came before the tail is not asked about.
+  const from = entries.length > 0 && statSync(path).size > LEDGER_TAIL ? String(entries[0].at) : '';
+  const shown = last.filter((r) => String(r.result_ts) >= from).length;
+  const recorded = entries.filter((e) => e.k === 'verdict').length;
+  if (shown < LIVE_SAMPLE || recorded * 2 >= shown) return null;
+  return (
+    `in session ${last[0].session.slice(0, 8)}, the transcripts show ${shown} report(s) with a verdict line and the gate recorded ${recorded}: ` +
+    `Claude Code may have changed what it sends to the hooks, and a loop the gate does not see is not capped (${path})`
+  );
 }
 
 /**
@@ -221,7 +286,8 @@ export async function gate(argv, ctx) {
   const problems = [];
   const composed = existsSync(join(target, GATE));
   if (!composed) problems.push(`${GATE} is not composed — run \`nina compose\``);
-  problems.push(...(await missingWiring(target, new Set([GATE]))));
+  const unwired = await missingWiring(target, new Set([GATE]));
+  problems.push(...unwired);
   const cannotWrite = writable(target);
   if (cannotWrite) problems.push(cannotWrite);
   const failing = newErrors(target);
@@ -230,9 +296,14 @@ export async function gate(argv, ctx) {
     const dry = dryRun(target);
     if (dry) problems.push(dry);
   }
+  // A gate that is not wired sees nothing, and says so above; asked whether it saw the pipeline, it would
+  // say the same thing twice.
+  const project = composed && unwired.length === 0 ? loadProject(target) : null;
+  const blind = project ? liveness(target, project) : null;
+  if (blind) problems.push(blind);
 
   if (problems.length === 0) {
-    console.log(`  wired, writable, no new failure, and a dry run through the hook command sent the round past a cap to the owner — ledgers in ${projectGateDir(target)}`);
+    console.log(`  wired, writable, no new failure, a dry run through the hook command sent the round past a cap to the owner, and it recorded the reports the transcripts show — ledgers in ${projectGateDir(target)}`);
     console.log('gate: current');
     return 0;
   }

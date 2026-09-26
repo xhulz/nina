@@ -9,8 +9,8 @@
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { snapshotsDir } from '../paths.mjs';
-import { createReadStream } from 'node:fs';
+import { slugFor, snapshotsDir } from '../paths.mjs';
+import { createReadStream, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join, resolve } from 'node:path';
 import { listProjects, scanProject } from '../transcripts.mjs';
@@ -84,6 +84,37 @@ async function writeAtomic(file, records) {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(tmp, `${records.map((r) => JSON.stringify(r)).join('\n')}\n`);
   await rename(tmp, file);
+}
+
+/**
+ * A project's records in the measurement store, under the name Claude Code gives its directory — as
+ * given, or with its links resolved, since either may be the one the sessions ran in.
+ *
+ * @param {string} dir - The project.
+ * @returns {object[]|null} Null when the store has nothing for it.
+ */
+export function storedRecords(dir) {
+  const names = new Set([slugFor(dir)]);
+  try {
+    names.add(slugFor(realpathSync(dir)));
+  } catch {
+    // A directory that cannot be resolved is looked up as given.
+  }
+  for (const name of names) {
+    const file = join(snapshotsDir(), `${name}.jsonl`);
+    if (!existsSync(file)) continue;
+    return readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l)];
+        } catch {
+          return [];
+        }
+      });
+  }
+  return null;
 }
 
 /**

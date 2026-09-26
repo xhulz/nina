@@ -73,7 +73,7 @@ const DELIVERED = /<(task-notification|agent-message|cross-session-message|teamm
 const DELIVERY_HEAD = 300;
 
 /** The most of a ledger ever read. The owner's last reply bounds what counts, and a session this long is rare. */
-const LEDGER_TAIL = 4 * 1024 * 1024;
+export const LEDGER_TAIL = 4 * 1024 * 1024;
 
 /** The most of a subagent's own transcript read looking for its handback. */
 const AGENT_TAIL = 512 * 1024;
