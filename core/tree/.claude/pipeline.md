@@ -45,7 +45,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 ### Reviewer (gate before qa)
 
 - **Input:** implementer's diff + all upstream artifacts.
-- **Output:** approve, or request changes with `path:line` references.
+- **Output:** `APPROVED`, or `REJECTED` with `path:line` references.
 - **Tools:** Read, Grep, Glob, Bash, WebFetch. **No edits. No vitest.**
 - **Exit criteria:**
   - `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}` pass; `{{BUILD_CMD}}` when frontend touched.

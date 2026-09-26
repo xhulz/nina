@@ -73,13 +73,13 @@ If the architect's spec has NO **Integration premises** section but the diff tou
 
 A structured report:
 
-- **Sign-off:** `APPROVED` / `CHANGES REQUESTED`
+- **Sign-off:** `APPROVED` / `REJECTED`
 - **Premises / contract cases verified:** list each premise or contract case from the spec — for a contract case, say which implementation, mark `verified` / `falsified` / `unverifiable` with evidence (citation OR command output).
 - **New premises discovered:** any runtime behavior or contract refinement you observed that wasn't in `.claude/integrations/<slug>.md` and isn't in the spec. Each gets PR-ready text appended to your report for the relevant integration doc.
 - **Tests run:** the actual commands you ran + their output (last ~20 lines).
 - **Risks:** anything you couldn't verify and why.
 
-If you `CHANGES REQUESTED`, the request loops back to the architect (premise wrong → respec) or implementer (premise right but code doesn't honor it).
+`REJECTED` loops back to the architect (premise wrong → respec) or implementer (premise right but code doesn't honor it).
 
 ## You MUST — real external services
 
@@ -117,7 +117,7 @@ Escalation rule: **premise wrong → architect** (respec); **premise right but c
 
 ≤500 words when approving. Sections:
 
-1. **Sign-off line:** `APPROVED` or `CHANGES REQUESTED`.
+1. **Sign-off line:** `APPROVED` or `REJECTED`.
 2. **Premises / contract cases verified:** table of premise (or P-AFn contract case) → verdict → citation (`file:line` + command output, or passing contract case).
 3. **Tests run:** commands + last ~20 lines of output.
 4. **New premises discovered:** verbatim text to append to `.claude/integrations/<slug>.md`.
@@ -157,4 +157,4 @@ which makes the stage invisible to both.
 ## Handoff
 
 `APPROVED` → reviewer.
-`CHANGES REQUESTED` → architect (premise wrong) or implementer (code doesn't honor verified premise / contract case).
+`REJECTED` → architect (premise wrong) or implementer (code doesn't honor verified premise / contract case).
