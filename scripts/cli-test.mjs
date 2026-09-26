@@ -3777,6 +3777,17 @@ const dated = (date, status = 'active') =>
       reviewer.includes('ask of it none of what only an architect\'s spec carries') && claude.includes('not at all when no test covers the change'),
     'flow: in a chain with no architect the dispatch is the spec, and the reviewer asks nothing only a spec carries',
   );
+
+  // Someone commits. Nothing said who, and the first new project had none: a worktree held nothing, secops
+  // had no range to audit and qa no revision to check a "pre-existing" failure against. And no stage moves
+  // the checkout: a reviewer once stashed the tree every other stage was working in.
+  const qa = await read('.claude/agents/qa.md');
+  expect(
+    router.includes('### Commits') && router.includes('never on the\nproject\'s default branch') && router.includes('Never push, amend, rebase or force') &&
+      claude.includes('8. **Commit each pass that closes**') && claude.includes('18. **Only the orchestrator commits, and no stage moves the checkout.**'),
+    'flow: the orchestrator commits each closed pass on a working branch, and no stage moves the checkout',
+  );
+  expect(qa.includes('`git worktree add <dir> HEAD`') && !qa.includes('reproduce on `main`'), 'flow: qa checks a pre-existing failure in a worktree at HEAD, never by moving the checkout');
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────

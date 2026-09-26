@@ -131,9 +131,8 @@ the planner's `PARALLEL-SAFE`, a step's `Builds on` and the binding file lists s
 - **In different packages, each checked on its own** (typecheck, lint and build scoped to it, as
   `{{API_DIR}}` and `{{APP_DIR}}` are): side by side in this checkout.
 - **In one package, or where a check spans packages:** each with **`isolation: "worktree"`**. A worktree
-  holds only what is committed, so the work they build on is committed first (else ask {{OWNER}} for the
-  commit, or run them in turn), and lacks what git does not track, such as dependencies or a virtual
-  environment, until its implementer sets it up.
+  holds only what is committed — every closed pass is (§ *Commits*) — and lacks what git does not track,
+  such as dependencies or a virtual environment, until its implementer sets it up.
 - You merge a worktree's work, in step order. Never let two agents merge.<!-- nina:why --> The rule
   used to be one implementer per package, always in a worktree. The first new project had no commit for a
   worktree to hold, so it ran two implementers side by side in one checkout, one per spike directory, and
@@ -151,6 +150,15 @@ time, not tokens: each run builds its own context, and a step that builds on ano
 them. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
 steps: that spec goes back to the architect to be split. `ONE-SPEC` and `ONE-REVIEW` are the planner's
 groupings of sibling steps, and never merge an architect's steps into one run.
+
+### Commits
+
+When a pass closes — `qa` returns `PASS`, or the reviewer approves a chain that ends there — commit what
+it changed, with a message naming the step and its spec. Commit on a working branch: never on the
+project's default branch, so before a piece of work's first commit there, create a branch named for its
+spec. Never push, amend, rebase or force; {{OWNER}} merges. A pass sent back is not committed. You are
+the only one who commits (Hard Rule #18): a commit is what a worktree holds, what `secops` audits a
+milestone by, and what `qa` checks a "pre-existing" failure against.
 
 ### Keep these serial
 
