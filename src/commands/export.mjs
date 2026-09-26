@@ -30,6 +30,7 @@ import { runOf, transcriptsOf } from '../transcripts.mjs';
 import { exportsDir, snapshotsDir } from '../paths.mjs';
 import { readConfig, statusPath, targetOf } from './langfuse.mjs';
 import { projectName } from './stats.mjs';
+import { handsToModel } from '../detectors.mjs';
 
 /** The CLI, for the export the detector starts in the background. */
 const BIN = fileURLToPath(new URL('../../bin/nina.mjs', import.meta.url));
@@ -177,7 +178,8 @@ export async function autoExport(slug, records, now = new Date()) {
   const last = JSON.parse(await readFile(statusPath(slug), 'utf8').catch(() => 'null'));
   if (last?.error && !last.reported) {
     finding = `the export to Langfuse failed (${last.at}) — ${last.error}; \`nina langfuse status\` says where it stands`;
-    await writeFile(statusPath(slug), JSON.stringify({ ...last, reported: true }));
+    // Said on every run until the prompt hook hands it to the model, and not after (`handsToModel`).
+    if (handsToModel()) await writeFile(statusPath(slug), JSON.stringify({ ...last, reported: true }));
   }
   const sent = await sentOf(slug);
   if (typeof sent === 'string') return finding ?? sent;

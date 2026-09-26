@@ -28,6 +28,33 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 
 /**
+ * The hook a detector runs under, in `NINA_HOOK`: `context` for the prompt hook, whose findings reach the
+ * model, `stop` for the Stop hook, whose one line reaches only the person, and nothing when run by hand.
+ *
+ * A finding that happens once — the gate failing, a lesson sent to the harness, an export that failed —
+ * used to be spent by whichever run saw it first, and that was usually the Stop hook: the person read one
+ * line saying the model would be told before their next message, and the prompt hook then found nothing
+ * new to tell it. Such a finding is now spent only by the run that hands it to the model
+ * (`handsToModel`), and every run before that reports it.
+ */
+const HOOK = 'NINA_HOOK';
+
+/**
+ * Whether this run is the one that hands its findings to the model, and so the one that may treat a
+ * finding that happens once as told.
+ *
+ * @returns {boolean}
+ */
+export const handsToModel = () => process.env[HOOK] === 'context';
+
+/**
+ * Whether this run is the Stop hook's, whose findings reach only the person.
+ *
+ * @returns {boolean}
+ */
+export const beforeModel = () => process.env[HOOK] === 'stop';
+
+/**
  * Runs one detector.
  *
  * A detector is either a script in the project or, for one the harness CLI owns, a `bin`
@@ -37,9 +64,10 @@ import { join } from 'node:path';
  * @param {{name: string, declaredBy: string, script?: string, bin?: string, args: string[], ignore?: RegExp}} detector
  * @param {string} root - The project root.
  * @param {Set<string>} declared - The npm scripts the project declares.
+ * @param {string} hook - Which hook runs it (`HOOK`), or '' by hand.
  * @returns {{name: string, state: 'ok'|'drift'|'error'|'missing'|'n/a', detail: string}}
  */
-function runOne(detector, root, declared) {
+function runOne(detector, root, declared, hook) {
   // A detector with no `declaredBy` is one the harness ships to every project — the project has
   // nothing to opt into, and asking it to add an npm script first is how a detector ends up
   // installed and never run.
@@ -56,9 +84,10 @@ function runOne(detector, root, declared) {
   // installed the harness the documented way, vendored, would report the harness's own detector
   // as missing on every turn.
   const local = detector.bin ? join(root, 'node_modules', '.bin', detector.bin) : null;
+  const env = { ...process.env, [HOOK]: hook };
   const result = detector.bin
-    ? spawnSync(local && existsSync(local) ? local : detector.bin, detector.args, { cwd: root, encoding: 'utf8' })
-    : spawnSync(process.execPath, [path, ...detector.args], { cwd: root, encoding: 'utf8' });
+    ? spawnSync(local && existsSync(local) ? local : detector.bin, detector.args, { cwd: root, encoding: 'utf8', env })
+    : spawnSync(process.execPath, [path, ...detector.args], { cwd: root, encoding: 'utf8', env });
 
   if (result.error) {
     if (result.error.code === 'ENOENT') {
@@ -289,7 +318,7 @@ function remember(root, session, change) {
 export function runDetectors(detectors, options) {
   const { root, hook = false, context = false } = options;
   const declared = declaredIn(root);
-  const results = detectors.map((d) => runOne(d, root, declared));
+  const results = detectors.map((d) => runOne(d, root, declared, context ? 'context' : hook ? 'stop' : ''));
   const applicable = results.filter((r) => r.state !== 'n/a');
   const drift = results.filter((r) => r.state === 'drift');
   const errored = results.filter((r) => r.state === 'error');

@@ -78,7 +78,14 @@ back is told again. The first new project showed why. The model relayed its eigh
 paragraph, and the Stop hook then printed the same eighteen raw, twenty-two lines prefixed `Stop says:`,
 under every answer; cut to one line said once per session, it was still the harness talking about what
 the person had just been told. Without a record from the prompt hook, every finding counts as new. The
-records are kept per project under `~/.nina/hooks/`, a session each. Hooks are the project's own
+records are kept per project under `~/.nina/hooks/`, a session each.
+
+A finding that happens once is spent only by the prompt hook: the gate failing, a lesson sent to the
+harness, an export to Langfuse that failed. Each detector is told which hook runs it (`NINA_HOOK`), and
+until the prompt hook hands such a finding to the model, every run reports it, the Stop hook's and one by
+hand included; the Stop hook, which sends nothing, says a lesson is about to go. Spent by whichever run saw
+it first, each was spent by the Stop hook as a rule: its one line told the person the model would be told
+before their next message, and by then there was nothing left to tell it. Hooks are the project's own
 `.claude/settings.json` — NINA composes no settings — so `nina init` writes them where there is no
 settings file yet and never edits one that exists, `nina check` asks for whatever is missing, and
 `nina wire --apply` merges exactly what is missing into settings that already exist (see *Starting a

@@ -35,6 +35,7 @@ import { loadProject, projectGateDir, readLedger, replay } from '../gate.mjs';
 import { GATE, shippedScripts } from '../wiring.mjs';
 import { deepLearn, transcriptsOf } from '../deep.mjs';
 import { autoExport } from './export.mjs';
+import { beforeModel } from '../detectors.mjs';
 
 /** Loop-backs from one role, since its newest lesson, that make a lesson overdue. */
 export const CAPTURE_AT = 3;
@@ -602,7 +603,11 @@ export async function learn(argv, ctx) {
     const stuck = owed
       .filter((l) => l.roles.length === 0)
       .map((lesson) => ({ lesson, why: 'names no role in applies_to, so no layer can take it', fix: 'fix its frontmatter — `nina pills` says what is wrong' }));
-    for (const lesson of owed.filter((l) => l.roles.length > 0)) {
+    // Sent from the Stop hook, a request was news only the person heard: its one line said the model would
+    // be told, and by the next message the lesson was no longer owed, so nothing told it. It is sent by the
+    // run that hands its findings to the model, or by hand; the Stop hook says it is about to go.
+    const due = beforeModel() ? owed.filter((l) => l.roles.length > 0) : [];
+    for (const lesson of beforeModel() ? [] : owed.filter((l) => l.roles.length > 0)) {
       // A detector that throws is reported as one that could not run, every turn, and takes the
       // rest of its findings with it — so a request that cannot be written is a finding instead.
       try {
@@ -611,7 +616,7 @@ export async function learn(argv, ctx) {
         stuck.push({ lesson, why: `could not be written to ${HARNESS}/requests/ — ${error.message}`, fix: `make it writable, or send it by hand: \`nina learn --graduate ${lesson.rel}\`` });
       }
     }
-    if (late.length === 0 && sent.length === 0 && stuck.length === 0 && !exported) {
+    if (late.length === 0 && sent.length === 0 && due.length === 0 && stuck.length === 0 && !exported) {
       console.log('learn: current');
       return 0;
     }
@@ -628,6 +633,9 @@ export async function learn(argv, ctx) {
       console.log(`  ${s.lesson.rel} has recurred ${s.lesson.occurrences} times — sent to the harness as ${HARNESS}/requests/${s.file}, proposing a rule in ${s.layer}`);
       console.log('    → commit it with the pill; nothing else is owed here. `nina upgrade` to the release that answers it closes it and retires the pill');
     }
+    for (const lesson of due) {
+      console.log(`  ${lesson.rel} has recurred ${lesson.occurrences} times — it goes to the harness as a request before your next message`);
+    }
     for (const s of stuck) {
       console.log(`  ${s.lesson.rel} has recurred ${s.lesson.occurrences} times and ${s.why}`);
       console.log(`    → ${s.fix}`);
@@ -637,6 +645,7 @@ export async function learn(argv, ctx) {
       `learn: ${[
         late.length && `${late.length} role(s) keep being sent back with nothing written down`,
         sent.length && `${sent.length} lesson(s) sent to the harness`,
+        due.length && `${due.length} lesson(s) to send to the harness`,
         stuck.length && `${stuck.length} lesson(s) cannot be sent`,
         exported && 'the Langfuse export needs a look',
       ]
