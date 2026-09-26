@@ -1,8 +1,9 @@
 /**
- * The project slots a caller has declared it already knows are open.
+ * The project slots, and vocabulary names, a caller has declared it already knows are open.
  *
  * `nina upgrade --apply` creates slots: a new core can introduce one, and it cannot be filled
- * before the core that introduces it is pinned. Every reporter that fails on an unfilled slot
+ * before the core that introduces it is pinned. A name only the new core uses is the same case,
+ * named as `{{NAME}}`: `check` rolled a move back for one the preview had just listed as needed. Every reporter that fails on an unfilled slot
  * therefore has to be told, or the move deadlocks — there is no order in which it completes.
  *
  * Two reporters say this same thing, and the first fix taught only one: `check` counts a slot
@@ -21,7 +22,7 @@ export const EXPECT_ENV = 'NINA_EXPECT_UNFILLED';
 /**
  * @param {string[]} argv - The command's arguments; `--expect-unfilled <a,b>` names slots.
  * @param {NodeJS.ProcessEnv} [env] - Where to read `NINA_EXPECT_UNFILLED` from.
- * @returns {Set<string>} Slot ids as `<relative path> <slot id>`.
+ * @returns {Set<string>} Slot ids as `<relative path> <slot id>`, names as `{{NAME}}`.
  */
 export function expectedUnfilled(argv = [], env = process.env) {
   const fromArgv = argv.includes('--expect-unfilled') ? argv[argv.indexOf('--expect-unfilled') + 1] ?? '' : '';

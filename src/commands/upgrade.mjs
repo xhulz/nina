@@ -37,7 +37,8 @@ const BANNER = /^[\s█╗╔╝║═╚▄▀]*$|harness orchestration ·/;
  * fault — everything else it finds still rolls the move back.
  *
  * @param {string} target - The project.
- * @param {string[]} newSlots - Project slots this move introduces, as `<file> <slot id>`.
+ * @param {string[]} newSlots - Project slots this move introduces, as `<file> <slot id>`, and the
+ *   vocabulary names it introduces, as `{{NAME}}`.
  * @returns {{label: string, args: string[]}[]}
  */
 function validationsFor(target, newSlots = []) {
@@ -242,6 +243,10 @@ export async function upgrade(argv, ctx) {
   // A slot the new release fills itself is not asked of the project: it composes as the release wrote it.
   const defaultedAfter = await defaultedSlots(onto.dir);
   const newSlots = [...slotsAfter].filter((s) => !slotsBefore.has(s) && !filled.has(s) && !defaultedAfter.has(s)).sort();
+  // A name only the new release uses is owed the way a new slot is: it cannot be filled with meaning
+  // before the core that asks for it is pinned, and rolling back for it left no order the move completes in.
+  const newVocab = needed.filter((v) => !vocabBefore.has(v));
+  const awaited = [...newSlots, ...newVocab.map((v) => `{{${v}}}`)];
   const stranded = [...filled].filter((s) => !slotsAfter.has(s)).sort();
 
   console.log(`  ${profile.core} → ${to}\n`);
@@ -357,7 +362,7 @@ export async function upgrade(argv, ctx) {
   // What was already failing is not this upgrade's doing, and rolling back for it would blame
   // the move for a problem the project brought with it. Measured before anything is written,
   // so the only rollback is for something that WAS passing and now is not.
-  const VALIDATIONS = validationsFor(target, newSlots);
+  const VALIDATIONS = validationsFor(target, awaited);
   const DETECTORS = "running the project's own detectors";
   const hasDetectors = await declares(target, 'harness:check');
 
@@ -416,7 +421,7 @@ export async function upgrade(argv, ctx) {
   // `harness:check` — an npm script whose detector list this command does not own and cannot
   // pass an argument to. The environment is what crosses that boundary, and setting it once
   // means a reporter added to the chain later is told without anyone remembering to tell it.
-  if (newSlots.length > 0) process.env[EXPECT_ENV] = newSlots.join(',');
+  if (awaited.length > 0) process.env[EXPECT_ENV] = awaited.join(',');
 
   // Compose writes and never deletes. So the files the new version stops composing are removed right
   // after it composes — before anything is verified, so what is verified is what stays — unless they
@@ -515,6 +520,10 @@ export async function upgrade(argv, ctx) {
     if (newSlots.length > 0) {
       console.log(`\n  ${newSlots.length} project slot(s) still to fill — only this project can write them:`);
       for (const s of newSlots) console.log(`      ${s}`);
+    }
+    if (newVocab.length > 0) {
+      console.log(`\n  ${newVocab.length} vocabulary name(s) ${to} asks for and this profile does not answer — fill each, or defer it with why:`);
+      console.log(`      ${newVocab.join(', ')}`);
     }
     console.log('');
     return 0;

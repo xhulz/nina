@@ -694,7 +694,7 @@ async function sound(fixture, core) {
   // The move that introduces a slot the project cannot possibly have filled yet.
   await writeFile(
     join(nina, 'core', 'tree', 'CLAUDE.md'),
-    '# Bed\n\n<!-- nina:slot project.1 intro -->\n\n<!-- nina:slot project.2 added -->\n\n<!-- nina:slot project.3 given -->\n',
+    '# Bed\n\n<!-- nina:slot project.1 intro -->\n\n<!-- nina:slot project.2 added -->\n\n<!-- nina:slot project.3 given -->\n\nKeyed by {{BED_KEY}}.\n',
   );
   // And one the release writes itself until the project does, which the move does not ask for.
   await mkdir(join(nina, 'core', 'defaults', 'tree'), { recursive: true });
@@ -754,6 +754,16 @@ async function sound(fixture, core) {
     'deadlock: the pin should have moved',
   );
   expect(moved.out.includes('CLAUDE.md project.2'), 'deadlock: the move should name what is still owed');
+  // A name only the new release uses is the same case as its new slot: the preview listed it as needed, and
+  // `check` then rolled the move back for it — an order the move could never complete in.
+  expect(
+    /vocabulary name\(s\) 1\.1\.0 asks for[^\n]*\n\s+BED_KEY/.test(moved.out),
+    `deadlock: the move should name the vocabulary it still asks for, after it succeeds — got ${moved.out}`,
+  );
+  expect(
+    bed(['check', '--project', dir]).out.includes('vocabulary is missing {{BED_KEY}}'),
+    'deadlock: once the move is over, check reports the name again',
+  );
   expect(
     !moved.out.includes('CLAUDE.md project.3') && (await readFile(join(dir, 'CLAUDE.md'), 'utf8')).includes('The release says this until the project does.'),
     `upgrade: a new slot the release writes itself composes, and is not asked of the project — got ${moved.out}`,
