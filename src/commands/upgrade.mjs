@@ -184,12 +184,27 @@ export async function upgrade(argv, ctx) {
   }
 
   const from = layerRootFor(ctx.root, profile.core);
+  if (from.error) {
+    console.error(`  ${from.error}\n`);
+    return 1;
+  }
+  // The release asked for is not one this install carries: the installed package is older than it. Said
+  // as that, with the install that fixes it. It used to read "profile pins core <version>", about a pin the
+  // profile did not hold, right after an install that had failed.
   const onto = layerRootFor(ctx.root, to);
-  for (const r of [from, onto]) {
-    if (r.error) {
-      console.error(`  ${r.error}\n`);
-      return 1;
+  if (onto.error) {
+    let installed = '?';
+    try {
+      installed = JSON.parse(await readFile(join(ctx.root, 'package.json'), 'utf8')).version;
+    } catch {
+      // An install with no manifest still says what to run.
     }
+    console.error(
+      to === 'dev'
+        ? `  ${onto.error}\n`
+        : `  ${to} is not a release the installed NINA (${installed}) carries — install it first: pnpm add -D -E @xhulz/nina@${to}\n`,
+    );
+    return 1;
   }
 
   const surfaces = profile.surfaces ?? [];
