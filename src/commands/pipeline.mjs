@@ -10,14 +10,15 @@
  * back and draws it.
  */
 
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { dim, pink } from '../look.mjs';
-import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
+import { HARNESS } from '../paths.mjs';
 import { TERMINALS, parseGraph } from '../graph.mjs';
 import { required } from '../tools.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { frontmatter } from './pills.mjs';
+import { storedRecords } from './snapshot.mjs';
 
 /** A stage line under "## Stages": "- `name` — what it does". */
 const STAGE_LINE = /^- `([a-z][a-z-]*)` — (.*)$/;
@@ -161,37 +162,6 @@ export function historyOf(records, since) {
 }
 
 /**
- * The project's records in the measurement store, under the name Claude Code gives its directory — as
- * given, or with its links resolved, since either may be the one the sessions ran in.
- *
- * @param {string} dir - The project.
- * @returns {object[]|null} Null when the store has nothing for it.
- */
-function storedRuns(dir) {
-  const names = new Set([slugFor(dir)]);
-  try {
-    names.add(slugFor(realpathSync(dir)));
-  } catch {
-    // A directory that cannot be resolved is looked up as given.
-  }
-  for (const name of names) {
-    const file = join(snapshotsDir(), `${name}.jsonl`);
-    if (!existsSync(file)) continue;
-    return readFileSync(file, 'utf8')
-      .split('\n')
-      .filter(Boolean)
-      .flatMap((l) => {
-        try {
-          return [JSON.parse(l)];
-        } catch {
-          return [];
-        }
-      });
-  }
-  return null;
-}
-
-/**
  * Runs the command.
  *
  * @param {string[]} argv - `[--project <dir>] [--for <number or words>] [--since <YYYY-MM-DD>]`.
@@ -314,7 +284,7 @@ export async function pipeline(argv) {
     specs.set(file.replace(/\.md$/, ''), readFileSync(join(agentsDir, file), 'utf8'));
   }
   const since = arg('--since') || new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const runs = storedRuns(dir);
+  const runs = storedRecords(dir);
   const history = runs ? historyOf(runs, since) : null;
   const stages = [...graph.stages].filter((s) => covered.has(s));
   const col = Math.max(...stages.map((s) => s.length), 10) + 2;

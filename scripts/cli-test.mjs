@@ -2608,6 +2608,35 @@ const dated = (date, status = 'active') =>
   expect(!check('--context').includes('the gate failed'), 'gate: and once handed over it is spent');
   expect(run(['gate', '--selftest', '--project', bed]).status === 0, 'gate: and reports each failure once, not on every turn');
 
+  // Live: the reports the transcripts show, set against the verdicts the gate recorded. Fed events written
+  // here, the dry run passes whatever Claude Code sends the hooks today; a gate that stopped reading them
+  // records nothing and lets every loop through.
+  const gateData = join(data, 'gate', slugFor(realpathSync(bed)));
+  expect(existsSync(join(gateData, 'checked-since')), 'gate: the selftest keeps when it first ran, so the live check asks only about what came after');
+  await writeFile(join(gateData, 'checked-since'), '2026-09-01T00:00:00.000Z\n');
+  const reported = (n, extra = {}) =>
+    Array.from({ length: n }, (_, i) =>
+      JSON.stringify({ project: slugFor(realpathSync(bed)), dispatch_id: `toolu_live${i}`, session: 'sess-live', role: 'reviewer', ts: `2026-09-25T10:0${i}:00.000Z`, result_ts: `2026-09-25T10:0${i}:30.000Z`, verdict: 'APPROVED', verdict_source: 'handback', ...extra }),
+    );
+  await mkdir(join(data, 'snapshots'), { recursive: true });
+  const store = join(data, 'snapshots', `${slugFor(realpathSync(bed))}.jsonl`);
+  await writeFile(store, `${reported(4).join('\n')}\n`);
+  const blind = run(['gate', '--selftest', '--project', bed], { loud: true });
+  expect(blind.status === 1 && blind.out.includes('the transcripts show 4 report(s) with a verdict line and the gate recorded 0'), `gate: a gate that recorded none of the reports the transcripts show is a finding — got ${blind.out}`);
+  const ledgerFile = join(gateData, 'sess-live.jsonl');
+  await writeFile(ledgerFile, `${[0, 1, 2, 3].map((i) => JSON.stringify({ k: 'verdict', at: `2026-09-25T10:0${i}:30.000Z`, agent: `a${i}`, role: 'reviewer', verdict: 'APPROVED', declared: true })).join('\n')}\n`);
+  expect(run(['gate', '--selftest', '--project', bed]).status === 0, 'gate: and one that recorded them is not');
+  await rm(ledgerFile);
+  // The session asked about is the last with enough reports to say something, not the last of all.
+  const later = JSON.stringify({ ...JSON.parse(reported(1)[0]), dispatch_id: 'toolu_later', session: 'sess-later', ts: '2026-09-25T12:00:00.000Z', result_ts: '2026-09-25T12:00:30.000Z' });
+  await writeFile(store, `${[...reported(4), later].join('\n')}\n`);
+  expect(run(['gate', '--selftest', '--project', bed]).status === 1, 'gate: a session with one report after it does not hide a blind one');
+  await writeFile(store, `${reported(2).join('\n')}\n`);
+  expect(run(['gate', '--selftest', '--project', bed]).status === 0, 'gate: two reports are not yet a pattern');
+  await writeFile(store, `${reported(4, { ts: '2026-08-01T10:00:00.000Z', result_ts: '2026-08-01T10:00:30.000Z' }).join('\n')}\n`);
+  expect(run(['gate', '--selftest', '--project', bed]).status === 0, 'gate: and what came before the check first ran was never the gate\'s to see');
+  await rm(store);
+
   // A gate script that runs and holds nothing — wired, writable, never failing — is what only the dry
   // run can catch.
   const gatePath = join(bed, 'scripts', 'loop-gate.mjs');

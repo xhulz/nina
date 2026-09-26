@@ -91,8 +91,15 @@ It fails open, and only acts where the pinned version ships it: a composed file 
 composed it, and wired hooks run whatever is on disk, so the script asks the pin. An error lets the call
 through and is logged, and `nina gate --selftest` — a detector in every project's `harness:check` —
 reports what nothing else would notice: missing hooks or matchers that do not reach their tools (read the
-way Claude Code reads them), a ledger it cannot write, failures since anyone was told (each reported
-once, to whichever hook runs first), and a dry run of a whole loop through the project's own hook
-command, which must send exactly the round past the cap to the owner. What it cannot see is stated
+way Claude Code reads them), a ledger it cannot write, failures since the model was told (each reported
+until the prompt hook hands it over — see `docs/installing.md`), a dry run of a whole loop through the
+project's own hook command, which must send exactly the round past the cap to the owner, and whether the
+gate saw what the pipeline actually did. The dry run feeds the gate events written in the shape Claude
+Code sent when they were written, so it passes whatever Claude Code sends today, and the transcripts have
+changed shape twice under this harness; a gate reading fields that moved would record nothing and let
+every loop through. So the reports of the last session with at least three — each round whose first line
+declares a verdict, as the snapshot read it from the transcripts — are set against the verdicts that
+session's ledger holds, and fewer than half recorded is a finding. Only what came after the check first ran
+in the project is asked about, since what came before was never the gate's to see. What it cannot see is stated
 rather than hidden: a fix the orchestrator makes itself without a subagent, and "the same issue" beyond
 what the verdicts show — so `router.md` still asks the model to keep its own count.
