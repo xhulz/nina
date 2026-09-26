@@ -1,6 +1,6 @@
 {
   "name": "@xhulz/nina",
-  "version": "0.28.14",
+  "version": "0.28.15",
   "description": "Composes an agent harness into a project from a versioned core, its surfaces, and the project's own layer.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "Marcos Schulz",
