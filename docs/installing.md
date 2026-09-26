@@ -153,7 +153,20 @@ as 57 lines under a hint about hand edits.
 It never composes over a file of the project's own. A `CLAUDE.md` or an agent spec written by hand
 before the harness arrived — the adoption case — or a symlink where a composed file goes, would be
 destroyed; `init` names them, composes nothing, and the TODO says to move them aside (or into the
-project layer as fragments) and run `nina compose`.
+project layer as fragments) and run `nina compose`. `compose` asks the same question of every path it
+writes, before it writes any (`projectOwned`): a file of its kind with no notice, or anything that is not a
+plain file, and it names them and writes nothing. It used to ask nothing, so the compose the TODO advised
+wrote over whatever was still in the way, with no copy kept, and so did every compose after a surface was
+added to a profile by hand. `upgrade --force` still replaces such a file, keeping a copy in
+`.nina/replaced/`, and puts it back if the move rolls back.
+
+`init --force` starts a project over and asks again only about its surfaces, which is what `init` itself
+advises for adding one. It keeps the pin, every vocabulary value the layers still use or that overrides a
+default, the integrations while the surface stays, and any other key the profile holds, and says what it
+kept. A pin given with `--core` that is not the one the project has is refused: a pin moves with `upgrade`,
+which says what the move costs and rolls it back when it fails. Started over from nothing, as it used to
+be, a project that had filled thirteen vocabulary values and two integrations kept none, and its pin moved
+to the newest release past every check `upgrade` makes.
 
 `--detector` is `check` as a detector, and it differs in two ways. Inside `nina upgrade --apply` it
 stays quiet, because the move measures `check` itself, before and after: a new core that adds this

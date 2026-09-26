@@ -19,7 +19,7 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { defaultVocabulary } from '../vocabulary.mjs';
 
@@ -328,6 +328,34 @@ export async function composedPaths(layerRoot, surfaces = []) {
 }
 
 /**
+ * The files of the project's own that sit where the harness composes one: a CLAUDE.md or an agent spec
+ * written by hand before the harness arrived, or a symlink, which a compose would write through. A file
+ * that carries a notice can say it was composed; one with no notice where every composed file of its kind
+ * has one is the project's, and composing over it would destroy it. `init` refused to compose over one and
+ * told the owner to move it aside and run `compose` — which then wrote over whatever was still there, with
+ * no copy kept; so did every compose after a surface was added to a profile by hand.
+ *
+ * @param {string} target - The project.
+ * @param {Iterable<string>} paths - Paths the harness composes, relative to it.
+ * @returns {string[]} The ones in the way, sorted.
+ */
+export function projectOwned(target, paths) {
+  const out = [];
+  for (const p of paths) {
+    let entry;
+    try {
+      entry = lstatSync(join(target, p));
+    } catch {
+      continue;
+    }
+    const stamped = p.endsWith('.md') || SCRIPT.test(p);
+    // Read without following links, a link is not a file: it is the project's, whatever it points at.
+    if (!entry.isFile() || (stamped && !readFileSync(join(target, p), 'utf8').includes('nina:generated'))) out.push(p);
+  }
+  return out.sort();
+}
+
+/**
  * Composes one project, and reports what it did.
  *
  * Separated from the CLI wrapper so tests can assert on the result rather than parse
@@ -367,6 +395,22 @@ export async function composeProject(target, ctx, options = {}) {
 
   /** Layers whose fragments are expected to exist: the declared surfaces, plus the project's own. */
   const declared = new Set([...surfaces, 'project']);
+
+  // Nothing is written while a file of the project's own sits where one would go, so a compose that
+  // refuses leaves the project as it found it.
+  const owned = check ? [] : projectOwned(target, await composedPaths(layerRoot, surfaces));
+  if (owned.length > 0) {
+    return {
+      error:
+        `${owned.length} file(s) of this project's own sit where the harness composes one, and composing would destroy them — ` +
+        `nothing was written:\n${owned.map((p) => `  ${p}`).join('\n')}\n` +
+        `Move each aside, or put its text in ${HARNESS}/project/tree/<the same path> as the fragment that fills its slot, then compose again.`,
+      written,
+      differ,
+      unfilled: [],
+      skipped,
+    };
+  }
 
   /** Slots the core expects a declared layer to fill, and no layer did. */
   const unfilled = [];

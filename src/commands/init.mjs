@@ -16,9 +16,9 @@ import { createInterface } from 'node:readline/promises';
 import { HARNESS } from '../paths.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { applyWiring, missingWiring, shippedScripts } from '../wiring.mjs';
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
+import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { PINK, useColor } from '../banner.mjs';
@@ -269,6 +269,20 @@ export async function init(argv, ctx) {
     console.error(`  ${target} already has a .nina/profile.json — pass --force to start over.\n`);
     return 1;
   }
+  // Started over, a project keeps what it had declared and asks again only about its surfaces: `init`
+  // itself says to re-run with --force to add one, and doing so used to write a profile from nothing —
+  // every vocabulary value and integration gone, and the pin moved to the newest release past every
+  // check `upgrade` makes.
+  let previous = null;
+  try {
+    previous = JSON.parse(readFileSync(join(harness, 'profile.json'), 'utf8'));
+  } catch {
+    // None, or unreadable: there is nothing to keep.
+  }
+  if (previous?.core && arg('--core') && arg('--core') !== previous.core) {
+    console.error(`  ${target} pins ${previous.core}. A pin moves with \`nina upgrade --to ${arg('--core')}\`, which says what the move costs and rolls it back when it fails.\n`);
+    return 1;
+  }
 
   const tree = await walk(target);
   // Kept as the matched entries, not just their names: the summary prints WHY each surface was
@@ -284,7 +298,7 @@ export async function init(argv, ctx) {
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort(byVersion);
-  const core = arg('--core') ?? releases.at(-1) ?? 'dev';
+  const core = arg('--core') ?? previous?.core ?? releases.at(-1) ?? 'dev';
   const resolved = layerRootFor(ctx.root, core);
   if (resolved.error) {
     console.error(`  ${resolved.error}\n`);
@@ -357,12 +371,19 @@ export async function init(argv, ctx) {
   const defaults = defaultVocabulary(resolved.dir);
   const defaulted = [...vocabulary].filter((name) => name in defaults).sort();
   for (const name of defaulted) vocabulary.delete(name);
+  // What the profile being replaced had filled in, for a name these layers still use or one the release
+  // defaults and the project had chosen its own value for.
+  const kept = Object.entries(previous?.vocabulary ?? {}).filter(([name, value]) => value !== null && value !== undefined && (vocabulary.has(name) || name in defaults));
+  for (const [name] of kept) vocabulary.delete(name);
+  const keptIntegrations = surfaces.includes('integrations') && Array.isArray(previous?.integrations) ? previous.integrations : [];
 
   const profile = {
     core,
     surfaces,
-    ...(surfaces.includes('integrations') ? { integrations: [] } : {}),
-    vocabulary: Object.fromEntries([...vocabulary].sort().map((name) => [name, null])),
+    ...(surfaces.includes('integrations') ? { integrations: keptIntegrations } : {}),
+    vocabulary: Object.fromEntries([...[...vocabulary].map((name) => [name, null]), ...kept].sort(([a], [b]) => a.localeCompare(b))),
+    // Anything else the profile said is the project's, and stays.
+    ...Object.fromEntries(Object.entries(previous ?? {}).filter(([key]) => !['core', 'surfaces', 'integrations', 'vocabulary'].includes(key))),
   };
 
   await mkdir(join(harness, 'project', 'tree'), { recursive: true });
@@ -379,16 +400,7 @@ export async function init(argv, ctx) {
   // Files of the project's own where the harness composes one: a CLAUDE.md or an agent spec written by
   // hand before the harness arrived — the adoption case — or a symlink, which compose would write
   // through. Composing over them would destroy them, so they hold the compose back and are named.
-  const inTheWay = [];
-  for (const p of await composedPaths(resolved.dir, surfaces)) {
-    let entry = null;
-    try {
-      entry = lstatSync(join(target, p));
-    } catch {
-      continue;
-    }
-    if (entry.isSymbolicLink() || !entry.isFile() || !readFileSync(join(target, p), 'utf8').includes('nina:generated')) inTheWay.push(p);
-  }
+  const inTheWay = projectOwned(target, await composedPaths(resolved.dir, surfaces));
 
   const cut = (s) => (s.length > 96 ? `${s.slice(0, 96)}…` : s);
   const owed = await owedDocuments(resolved.dir, surfaces);
@@ -532,6 +544,13 @@ export async function init(argv, ctx) {
   }
 
   console.log(`  initialised ${target}\n`);
+  if (previous) {
+    console.log(
+      `    kept from the profile it replaced: the pin ${core}, ${kept.length} vocabulary value(s)` +
+        (surfaces.includes('integrations') ? `, ${keptIntegrations.length} integration(s)` : '') +
+        '\n',
+    );
+  }
   if (!asked && !canAsk) {
     const greenfield = tree.filter((f) => !f.startsWith('.git') && !f.startsWith(HARNESS)).length === 0;
     if (greenfield) {
