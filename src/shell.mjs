@@ -131,8 +131,12 @@ export function shell({ bin, version, commands }) {
     rl.prompt();
   });
 
+  // Closed, the session reads nothing more: Node 24 goes on handing over the lines already read after
+  // `exit`, and the first of them ran a command and then prompted on a closed interface.
+  let closed = false;
   return new Promise((done) => {
     rl.on('line', (line) => {
+      if (closed) return;
       interrupted = false;
       const typed = words(line);
       // Typed out of habit, the way it is run from the shell.
@@ -167,6 +171,7 @@ export function shell({ bin, version, commands }) {
       rl.prompt();
     });
     rl.on('close', () => {
+      closed = true;
       process.removeListener('SIGINT', stay);
       if (terminal) process.stdout.write('\n');
       done(0);
