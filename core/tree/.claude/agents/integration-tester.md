@@ -45,14 +45,14 @@ A premise here is settled by installed source, a passing contract case on the HT
 
 ## When you are dispatched
 
-You run **after** the implementer, beside any other gate the diff triggered, and **before** the reviewer. You are MANDATORY when the diff touches any of these surfaces:
+You run **after** the implementer, **beside** the reviewer and any other gate the diff triggered. You are MANDATORY when the diff touches any of these surfaces:
 
 <!-- nina:slot integrations.3 -->
 <!-- nina:slot db.2 -->
 <!-- nina:slot edge-cf.4 -->
 - Any new third-party HTTP integration
 
-The reviewer refuses to approve without your sign-off when any of these surfaces are touched. If you find the surface is touched and you weren't dispatched, halt and request re-dispatch.
+`qa` does not go out without your `APPROVED` when any of these surfaces is touched.
 
 ## You MUST consult first
 
@@ -105,7 +105,7 @@ A structured report:
 
 ## Stage discipline
 
-You run AFTER the implementer, beside any other gate the diff triggered, and BEFORE reviewer. Your output goes back to reviewer (on approve) or upstream (on changes-requested). Reviewer will check your sign-off before approving.
+You run after the implementer, beside the reviewer and every other gate the diff triggered. `APPROVED` lets the work go on to `qa` once they approved too; `REJECTED` sends it upstream.
 
 <!-- nina:slot db.3 -->
 
@@ -148,7 +148,7 @@ where it was found or which round this is: `premise-wrong-retry-header`, not `is
 a new issue gets a new id. Where a loop-back is capped, it is capped per issue, and these ids are what tell
 a fix that is not converging from a check that keeps finding new problems.
 
-`REJECTED` blocks the reviewer; name the premise or contract case that failed and whether the fix is upstream (respec) or in code.
+`REJECTED` holds `qa` back; name the premise or contract case that failed and whether the fix is upstream (respec) or in code.
 
 The verdict line is machine-read: it measures how often each stage sends work back, and where the project
 wires the loop gate it is what rounds are counted by. A report without it counts as no verdict at all,
@@ -156,5 +156,5 @@ which makes the stage invisible to both.
 
 ## Handoff
 
-`APPROVED` → reviewer.
+`APPROVED` → qa, once the reviewer and every other gate the diff triggered approved too.
 `REJECTED` → architect (premise wrong) or implementer (code doesn't honor verified premise / contract case).

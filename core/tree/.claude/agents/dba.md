@@ -31,7 +31,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 ## When you are dispatched
 <!-- nina:slot db.3 -->
 
-You may be invoked at any stage — architect, implementer, or reviewer can dispatch you. Reviewer will refuse final approval without your sign-off.
+The orchestrator dispatches you beside the reviewer when a diff touches the schema, a migration or a query, and may ask you earlier to review a spec's migration or data design. `qa` does not go out without your `APPROVED`.
 
 ## Inputs
 <!-- nina:slot db.4 -->
@@ -95,13 +95,13 @@ where it was found or which round this is: `missing-unique-index`, not `issue-1`
 a new issue gets a new id. Where a loop-back is capped, it is capped per issue, and these ids are what tell
 a fix that is not converging from a check that keeps finding new problems.
 
-`REJECTED` blocks the reviewer; list each issue with the schema or query it concerns.
+`REJECTED` holds `qa` back; list each issue with the schema or query it concerns.
 
 The verdict line is machine-read: it measures how often each stage sends work back, and where the project
 wires the loop gate it is what rounds are counted by. A report without it counts as no verdict at all,
 which makes the stage invisible to both.
 
 ## Handoff
-`APPROVED` goes to the reviewer. `REJECTED` goes to the stage that owns the fix — the implementer for a query or schema change in the diff, the architect for the spec's migration or data design — as `.claude/graph.md` routes it. The reviewer verifies your approval before final sign-off.
+`APPROVED` lets the work go on to `qa`, once the reviewer and every other gate the diff triggered approved too. `REJECTED` goes to the stage that owns the fix — the implementer for a query or schema change in the diff, the architect for the spec's migration or data design — as `.claude/graph.md` routes it.
 
 <!-- nina:slot db.18 -->

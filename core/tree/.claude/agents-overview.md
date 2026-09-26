@@ -26,8 +26,8 @@ The pipeline separates thinking from execution, execution from verification, and
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.2 -->
 <!-- nina:slot blockchain.2 -->
-| **reviewer** | Verify the diff: patterns, bugs, security; confirm guardrails ran; gate before qa | `.claude/agents/reviewer.md` |
-| **qa** | Run vitest once at the END of the pipeline (after reviewer approves) for the affected packages; loop back on failures | `.claude/agents/qa.md` |
+| **reviewer** | Verify the diff: patterns, bugs, security; name the gates the diff triggers; gate before qa | `.claude/agents/reviewer.md` |
+| **qa** | Run vitest once at the END of the pipeline (after the reviewer and every gate approve) for the affected packages; loop back on failures | `.claude/agents/qa.md` |
 | **devops** | Owns qa PASS → running where someone can use it: clean build, both targets, migrations, secret parity, smoke against preview, rollback. Prod needs an explicit go | `.claude/agents/devops.md` |
 | **secops** | **Milestone gate.** Audit the whole assembled surface of a completed spec-SET (`6.*`, or one package's build-out) for cross-cutting security/privacy gaps; CRITICAL/HIGH blocks the milestone | `.claude/agents/secops.md` |
 
@@ -41,8 +41,8 @@ Everything between the implementer and qa is **read-only**, so it goes out in on
 than several: `reviewer`, plus every gate the diff triggered — `.claude/graph.md` names the ones this
 project has. On a large diff the reviewer itself fans out by dimension — one per axis of risk,
 such as tenant isolation, patterns and spec-scope — which is both faster and more thorough than one
-agent carrying fifteen checklists. The reviewer is still the gate: it refuses approval until the
-applicable guardrails have signed off. After approval, **qa** runs the suite once, alone.
+agent carrying fifteen checklists. **qa** goes out once the reviewer and every gate approved, and runs
+the suite once, alone.
 
 Concurrent **implementers** are the one write-side exception: only on work that shares no file and
 builds on nothing the other writes, side by side in different packages, each in `isolation: "worktree"`

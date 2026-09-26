@@ -5,13 +5,13 @@
 | Write or audit a Prisma query (architect, implementer, dba, reviewer) | `prisma-client-api` | filters, operators, `$transaction` semantics. a caching or edge layer on top of the client is **NOT covered** — its cache strategy belongs to that layer's own integration doc |
 
 <!-- nina:slot db.3 -->
-| **ANY Prisma change (`*.prisma` or new query)** | **+ dba before reviewer** |
+| **ANY Prisma change (`*.prisma` or new query)** | **+ dba beside the reviewer** |
 
 <!-- nina:slot db.4 -->
 - **dba** → mandatory gate on Prisma schema changes, migrations, and new queries
 
 <!-- nina:slot db.5 -->
-2. **Every Prisma change goes through the dba subagent.** No exceptions. Reviewer must verify dba ran before approving.
+2. **Every Prisma change goes through the dba subagent.** No exceptions. It runs beside the reviewer, which names it on its Gates line, and `qa` does not go out without its `APPROVED`.
 
 <!-- nina:slot db.6 -->
 6. **Every hot Prisma read defines a `cacheStrategy`** (Accelerate `ttl` / `swr`). Implicit cache is a bug. **Never cache a read that feeds a write whose correctness depends on it being fresh** — a stale row contaminates every decision made from it. User-scoped invalidation on every write.

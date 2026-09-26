@@ -15,6 +15,15 @@ The stages that may run as several agents at once are declared the same way, und
 that shares no file, and reviewers fanned out by risk. They were prose too, and `nina pipeline` could not
 mark them on the line it draws. `nina check` refuses one that names no stage.
 
+The gates a diff triggers — the database gate, the integration gate — run beside the reviewer, and each
+hands its approval on to `qa`, as the reviewer does: `qa` goes out once all of them approved. They used to
+hand it to the reviewer, while every document sent the reviewer out beside them and told it to confirm they
+had approved, which a reviewer running at the same time cannot see; told also to dispatch a missing gate,
+it had no tool to. It names the gates the diff triggers on its report's `Gates` line instead, so a gate the
+orchestrator did not send is still caught. `nina pipeline` draws such a gate rejoining the line at `qa`,
+beside the reviewer. The contract gate is the exception: `solidity-auditor` stands before the reviewer,
+since a contract cannot be patched once it is live.
+
 Every loop-back edge carries a **cap**: how many times the same issue may travel it before the
 orchestrator stops and hands the owner every round's report. Before the cap there was no rule anywhere
 that could end a loop.

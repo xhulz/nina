@@ -52,7 +52,7 @@ export function stageWords(text) {
  * - The line: from the first stage no forward edge reaches, the one forward edge each stage takes with no
  *   condition, until a stage has none.
  * - The gates: a stage off the line that a line stage sends work to on a condition, and that hands it on
- *   to the next stage of the line.
+ *   to a later stage of the line — the next one, or one past the stages it runs beside.
  * - The ends: where the line's last stage sends work on a condition, followed forward to a terminal.
  * - The loop-backs: every edge on a verdict that sends work back, to a stage or to the owner, grouped by
  *   the stage that sends it.
@@ -70,10 +70,14 @@ export function shapeOf(graph) {
     if (next.length !== 1) break;
     line.push(next[0].to);
   }
+  // A gate leaves the line on a condition and comes back to it further on: to the next stage, when it runs
+  // before that stage, or past it, when it runs beside the stages it skips — the way the database and
+  // integration gates run beside the reviewer, and `qa` waits for them all.
   const gates = [];
   line.forEach((stage, i) => {
     for (const e of forward.filter((e) => e.from === stage && e.when && !line.includes(e.to) && !TERMINALS.has(e.to))) {
-      if (i + 1 < line.length && forward.some((f) => f.from === e.to && f.to === line[i + 1])) gates.push({ from: stage, gate: e.to, to: line[i + 1], when: e.when });
+      const back = line.findIndex((s, j) => j > i && forward.some((f) => f.from === e.to && f.to === s));
+      if (back !== -1) gates.push({ from: stage, gate: e.to, to: line[back], beside: line.slice(i + 1, back), when: e.when });
     }
   });
   const last = line.at(-1);
@@ -248,7 +252,8 @@ export async function pipeline(argv) {
       const chain = (g) => `${g.from}${arrow}${g.gate}${arrow}${g.to}`;
       const col = Math.max(...shape.gates.map((g) => chain(g).length)) + 4;
       for (const g of shape.gates) {
-        console.log(`    ${name(g.from)}${arrow}${name(g.gate)}${arrow}${name(g.to)}${' '.repeat(col - chain(g).length)}${dim(fit(g.when, width - col - 6))}`);
+        const when = g.beside.length > 0 ? `beside the ${g.beside.join(', ')} · ${g.when}` : g.when;
+        console.log(`    ${name(g.from)}${arrow}${name(g.gate)}${arrow}${name(g.to)}${' '.repeat(col - chain(g).length)}${dim(fit(when, width - col - 6))}`);
       }
     }
   }

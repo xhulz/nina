@@ -18,7 +18,7 @@ a cap.
 <!-- nina:slot db.1 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot blockchain.1 -->
-- `reviewer` — audits the diff against the spec, and confirms every gate the diff triggered ran
+- `reviewer` — audits the diff against the spec, and names every gate the diff triggers
 - `qa` — runs the tests, once, at the end
 - `devops` — deploys to preview and smokes it; production only on the owner's explicit go
 - `secops` — the security gate, once per milestone
@@ -66,7 +66,8 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 ## Concurrency
 
 Stages that only read may run together: after the implementer, the `reviewer` and every gate the diff
-triggered go out in one message; at a milestone's end, `secops` runs beside `qa` or `devops`.
+triggers go out in one message, and `qa` goes out once each of them has approved; at a milestone's end,
+`secops` runs beside `qa` or `devops`.
 `qa` always runs alone. These may run as several agents at once, each on its own share of the work:
 - `architect` × many — the sibling specs of one milestone, each its own spec
 - `implementer` × many — work that shares no file and builds on nothing the other writes: side by side in different packages, each in its own worktree within one

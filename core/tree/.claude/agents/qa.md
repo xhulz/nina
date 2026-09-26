@@ -20,7 +20,7 @@ The project's vitest configs enforce single-worker (`pool: 'forks', singleFork: 
 
 ## Inputs
 - The implementer's diff summary listing which packages were touched.
-- The reviewer's APPROVED verdict.
+- `APPROVED` from the reviewer and from every gate the diff triggered.
 - Current repo state.
 
 ## Outputs
