@@ -85,10 +85,13 @@ export function packageExports(target, module) {
 const CANNOT_START = 'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D -E @xhulz/nina)';
 
 /**
- * What the hooks said before: while NINA reached a project as a vendored `.tgz`, the command was to install
- * that file, which a project installing from npm has no copy of.
+ * Every sentence the hooks said before, oldest first. While NINA reached a project as a vendored `.tgz`, the
+ * command was to install that file, which a project installing from npm has no copy of. The first one was
+ * left out when the second replaced it, and the first project to be wired kept three hooks saying it through
+ * every `wire` after, until a move to npm looked for any hook that still named the `.tgz`.
  */
 const EARLIER_CANNOT_START = [
+  'is @xhulz/nina installed in this project? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)',
   'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)',
 ];
 

@@ -3562,7 +3562,7 @@ const dated = (date, status = 'active') =>
   await writeFile(join(stale, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
   await writeFile(join(stale, 'package.json'), JSON.stringify({ name: 's', scripts: { 'harness:check': 'node scripts/harness-check.mjs', 'harness:compose:check': 'nina compose --check --quiet' } }));
   const staleSeen = run(['wire', '--project', stale], { loud: true });
-  expect(staleSeen.status === 1 && staleSeen.out.includes('before it could say its script did not start'), `wire: names a hook still on the old command — got ${staleSeen.out}`);
+  expect(staleSeen.status === 1 && staleSeen.out.includes('run a command an earlier version wrote'), `wire: names a hook still on the old command — got ${staleSeen.out}`);
   run(['wire', '--project', stale, '--apply']);
   const updated = JSON.parse(await readFile(join(stale, '.claude', 'settings.json'), 'utf8'));
   expect(
@@ -3571,14 +3571,21 @@ const dated = (date, status = 'active') =>
   );
   expect(run(['wire', '--project', stale]).status === 0, 'wire: and is current afterwards');
 
-  // One that says it cannot start the old way, naming a vendored .tgz, learns the npm install.
+  // One that says it cannot start in an earlier sentence, naming a vendored .tgz, learns the npm install:
+  // each sentence the hooks ever said, the first included.
   const current = await readFile(join(stale, '.claude', 'settings.json'), 'utf8');
-  await writeFile(join(stale, '.claude', 'settings.json'), current.replaceAll('(pnpm add -D -E @xhulz/nina)', '(pnpm add -D file:vendor/xhulz-nina-<version>.tgz)'));
-  const vendored = run(['wire', '--project', stale], { loud: true });
-  expect(vendored.status === 1 && current.includes('(pnpm add -D -E @xhulz/nina)'), `wire: a hook that names the vendored .tgz is one to update — got ${vendored.out}`);
-  run(['wire', '--project', stale, '--apply']);
-  const npmed = await readFile(join(stale, '.claude', 'settings.json'), 'utf8');
-  expect(!npmed.includes('file:vendor') && npmed.includes('(pnpm add -D -E @xhulz/nina)') && npmed.includes('# ours'), `wire --apply: and says how to install it now, leaving a customised hook alone — got ${npmed}`);
+  const now = 'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D -E @xhulz/nina)';
+  for (const earlier of [
+    'is @xhulz/nina installed in this project? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)',
+    'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)',
+  ]) {
+    await writeFile(join(stale, '.claude', 'settings.json'), current.replaceAll(now, earlier));
+    const vendored = run(['wire', '--project', stale], { loud: true });
+    expect(vendored.status === 1 && current.includes(now), `wire: a hook that says "${earlier.slice(0, 50)}…" is one to update — got ${vendored.out}`);
+    run(['wire', '--project', stale, '--apply']);
+    const npmed = await readFile(join(stale, '.claude', 'settings.json'), 'utf8');
+    expect(!npmed.includes('file:vendor') && npmed.includes(now) && npmed.includes('# ours'), `wire --apply: and says how to install it now, leaving a customised hook alone — got ${npmed}`);
+  }
 
   // A sound bed: an agent of the project's own is not a stage the graph forgot, and a skill missing on
   // this machine is for `nina check` by hand, not for the detector that speaks before every prompt.

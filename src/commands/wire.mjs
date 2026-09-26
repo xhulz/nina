@@ -62,7 +62,7 @@ export async function wire(argv, ctx) {
     if (missing.length > 0) console.log(`  core ${version} needs, and this project does not have:\n`);
     for (const m of missing) console.log(`    ✗ ${m}`);
     if (stale.length > 0) {
-      console.log(`\n  ${stale.length} hook(s) run the command as it was before it could say its script did not start:`);
+      console.log(`\n  ${stale.length} hook(s) run a command an earlier version wrote, which does not say, or says wrongly, what to do when its script cannot start:`);
       for (const s of stale) console.log(`    · ${s}`);
     }
     const fragment = await missingFragment(target, shipped);
