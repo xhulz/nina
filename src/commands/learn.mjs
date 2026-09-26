@@ -200,7 +200,7 @@ export function applied(records, known) {
  * rate moves with the work. The control does not remove either, but it shows whether the lesson's
  * roles moved differently from everything else, which the lesson's own numbers cannot.
  *
- * @returns {{rel: string, date: string, before: {n: number, loops: number}, after: {n: number, loops: number}, control: {before: {n: number, loops: number}, after: {n: number, loops: number}}}[]}
+ * @returns {{rel: string, date: string, on: string|null, comparable: boolean, was?: string, before?: {n: number, loops: number}, after?: {n: number, loops: number}, control?: {before: {n: number, loops: number}, after: {n: number, loops: number}}}[]}
  */
 export function verified(records, known) {
   const out = [];
@@ -209,15 +209,28 @@ export function verified(records, known) {
       const s = rs.filter(pick);
       return { n: s.length, loops: s.filter((r) => isLoopBack(r.verdict)).length };
     };
-    const mine = records.filter((r) => lesson.roles.includes(r.role) && readable(r.verdict));
+    const all = records.filter((r) => lesson.roles.includes(r.role) && readable(r.verdict));
     const others = records.filter((r) => r.role && !lesson.roles.includes(r.role) && readable(r.verdict));
     const pre = (r) => day(r.ts) < lesson.date;
     const post = (r) => day(r.ts) > lesson.date;
+    if (rate(all, pre).n < VERIFY_MIN || rate(all, post).n < VERIFY_MIN) continue;
+    // Read on one model and effort level: the one the roles ran on most after the lesson. A lesson written
+    // the week a role moved to a stricter model read as making it worse — one project's reviewer went from
+    // 2% to 29% "after" a lesson, and from Sonnet to Opus in the same days. Where the roles ran on it too
+    // little before the lesson, the two sides are not comparable, and that is said rather than a number.
+    const ranOn = (r) => (r.usage_model ? `${r.usage_model}${r.effort ? ` · ${r.effort}` : ''}` : null);
+    const tally = new Map();
+    for (const r of all.filter(post)) if (ranOn(r)) tally.set(ranOn(r), (tally.get(ranOn(r)) ?? 0) + 1);
+    const on = [...tally].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+    const mine = on ? all.filter((r) => ranOn(r) === on) : all;
     const before = rate(mine, pre);
     const after = rate(mine, post);
-    if (before.n >= VERIFY_MIN && after.n >= VERIFY_MIN) {
-      out.push({ rel: lesson.rel, date: lesson.date, before, after, control: { before: rate(others, pre), after: rate(others, post) } });
+    if (before.n < VERIFY_MIN || after.n < VERIFY_MIN) {
+      const was = [...new Set(all.filter(pre).map(ranOn).filter(Boolean))].join(', ') || 'no recorded model';
+      out.push({ rel: lesson.rel, date: lesson.date, on, was, comparable: false });
+      continue;
     }
+    out.push({ rel: lesson.rel, date: lesson.date, on, comparable: true, before, after, control: { before: rate(others, pre), after: rate(others, post) } });
   }
   return out;
 }
@@ -691,8 +704,13 @@ export async function learn(argv, ctx) {
   for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
   if (checks.length === 0) console.log(`  verify    no lesson has ${VERIFY_MIN}+ readable verdicts on both sides of its date yet`);
   checks.forEach((c, i) => {
+    const head = `  ${i === 0 ? 'verify  ' : '        '}  ${c.rel.replace(/^\.claude\/pills\//, '')} (${c.date})`;
+    if (!c.comparable) {
+      console.log(`${head}: not comparable — the role ran on ${c.on} after it, and before it on ${c.was}`);
+      return;
+    }
     console.log(
-      `  ${i === 0 ? 'verify  ' : '        '}  ${c.rel.replace(/^\.claude\/pills\//, '')} (${c.date}): ` +
+      `${head}${c.on ? `, on ${c.on}` : ''}: ` +
         `${pct(c.before.loops, c.before.n)} → ${pct(c.after.loops, c.after.n)} loop-back (n ${c.before.n} → ${c.after.n}); ` +
         `every other role ${pct(c.control.before.loops, c.control.before.n)} → ${pct(c.control.after.loops, c.control.after.n)}`,
     );
