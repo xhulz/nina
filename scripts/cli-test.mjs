@@ -1307,13 +1307,11 @@ async function sound(fixture, core) {
   expect(mode('fail.mjs', 'hook').stdout === '', 'detectors: --hook does not tell the person the same finding again');
   expect(mode('fail.mjs', 'context').stdout.includes('the map is stale'), 'detectors: while the model is still told it before every message');
   // In full once. Told before every message to say it was pending, the model closed every answer with the
-  // same line; unchanged since the last message, the finding is its summary and not to be said again.
+  // same line; and said on its own before every prompt, unchanged, it went into the conversation each time —
+  // 181 times in one session. Unchanged since it was handed over, it is not said again on its own.
   const context = (script, session) => JSON.parse(mode(script, 'context', session).stdout || '{}').hookSpecificOutput?.additionalContext ?? '';
   const again = context('fail.mjs');
-  expect(
-    again.includes('map — the map is stale') && again.includes('Do not tell the user again') && again.includes('`node scripts/harness-check.mjs` prints it in full') && !again.includes('pass over it in silence'),
-    `detectors: a finding the model was handed at the last message, unchanged, is its summary and not to be repeated — got ${again}`,
-  );
+  expect(again === '', `detectors: a finding the model was handed, unchanged since, is not handed again on its own — got ${again}`);
   await writeFile(join(dir, 'summary.mjs'), "console.log('map: 3 stale entries'); process.exit(1);\n");
   expect(context('summary.mjs', 'alone').includes('pass over it in silence'), 'detectors: a finding that is its summary alone is handed over in full the first time');
   await writeFile(join(dir, 'grown.mjs'), "console.log('the map is stale\\nand a new entry is missing'); process.exit(1);\n");
@@ -1331,9 +1329,28 @@ async function sound(fixture, core) {
   );
   const mixed = JSON.parse(two.stdout || '{}').hookSpecificOutput?.additionalContext ?? '';
   expect(
-    mixed.includes('lessons: map: 3 stale entries') && mixed.includes('pass over it in silence') && mixed.includes('Also still pending') && mixed.includes('map — the map is stale.') && !mixed.includes('a new entry is missing'),
+    mixed.includes('lessons: map: 3 stale entries') && mixed.includes('pass over it in silence') && mixed.includes('Also still pending') && mixed.includes('map — the map is stale.') && !mixed.includes('a new entry is missing') &&
+      mixed.includes('Do not tell the user again'),
     `detectors: a new finding goes in full beside the summary of one already handed over — got ${mixed}`,
   );
+  // A subagent's completion notification is submitted as a prompt: the detectors do not run before it.
+  await writeFile(join(dir, 'marks.mjs'), "import { writeFileSync } from 'node:fs'; writeFileSync('ran.txt', 'x'); console.log('marked'); process.exit(1);\n");
+  const hookRun = (script, payload) =>
+    spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `import { runDetectors } from ${JSON.stringify(join(ROOT, 'src', 'detectors.mjs'))};` + `process.exit(runDetectors([{ name: 'marks', script: '${script}', args: [] }], { root: ${JSON.stringify(dir)}, context: true }));`],
+      { encoding: 'utf8', input: JSON.stringify(payload) },
+    );
+  const noted = hookRun('marks.mjs', { session_id: 'n1', hook_event_name: 'UserPromptSubmit', prompt: '<task-notification>\n<task-id>x</task-id>\n</task-notification>' });
+  expect(noted.stdout === '' && !existsSync(join(dir, 'ran.txt')), `detectors: a notification runs no detector and hands nothing over — got ${noted.stdout}`);
+  expect(hookRun('marks.mjs', { session_id: 'n1', hook_event_name: 'UserPromptSubmit', prompt: 'go on' }).stdout.includes('marked'), 'detectors: a message from the person runs them');
+  // A compaction drops what the model was handed: everything is handed over in full again.
+  const transcript = join(dir, 'session.jsonl');
+  await writeFile(transcript, '');
+  expect(hookRun('marks.mjs', { session_id: 'n1', prompt: 'next', transcript_path: transcript }).stdout === '', 'detectors: unchanged, and no compaction since, nothing is handed over');
+  await writeFile(transcript, `${JSON.stringify({ type: 'system', subtype: 'compact_boundary', timestamp: new Date().toISOString() })}\n`);
+  expect(hookRun('marks.mjs', { session_id: 'n1', prompt: 'after', transcript_path: transcript }).stdout.includes('marked'), 'detectors: after a compaction the finding is handed over in full again');
+  expect(hookRun('marks.mjs', { session_id: 'n1', prompt: 'then', transcript_path: transcript }).stdout === '', 'detectors: and once, not before every message after it');
   mode('pass.mjs', 'hook');
   expect(JSON.parse(mode('fail.mjs', 'hook').stdout || '{}').systemMessage?.includes('the map is stale'), 'detectors: a finding that comes back after it was cleared is told again');
   await writeFile(join(dir, 'many.mjs'), "console.log('first thing\\nsecond thing\\nthird thing\\n\\nmap: 3 stale entries'); process.exit(1);\n");

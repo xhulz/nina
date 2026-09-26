@@ -63,9 +63,13 @@ to the one reader who was not about to act on it, and closing any loop meant the
 `--context` emits `additionalContext` for a UserPromptSubmit hook, which Claude Code puts in the model's
 own context before it answers. A project wants both: the Stop hook tells the person what the turn left
 behind, the prompt hook tells the model before the next one. They are not told alike. The model is
-handed every finding before every message, since that is what it acts on, but in full once: one it was
-handed at the last message, unchanged, goes as its detector's summary, with the instruction not to say it
-again and the command that prints it in full. Handed the whole list each time, with the instruction to act
+handed every finding before a message, since that is what it acts on, but in full once: one it was
+handed before, unchanged, goes as its detector's summary beside a new finding, with the instruction not to
+say it again and the command that prints it in full, and on its own goes not at all — until a compaction,
+found in the session's transcript, drops it from the model's context and everything is handed over again.
+Said on its own before every message, the summary went into the conversation 181 times in one session of
+the first new project, over 23 messages of its owner's: Claude Code submits a subagent's completion
+notification as a prompt too, and the hook ran the detectors before each. It runs nothing before one now. Handed the whole list each time, with the instruction to act
 on it or say it was pending, the model in a new project closed every answer, whatever it was about, with
 the same line: the project's name and owner were still unfilled. A finding that changes, or clears and
 comes back, goes in full again, and each copy handed over stays in the conversation, so the summary is
