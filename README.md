@@ -338,14 +338,17 @@ release:
 
 ## Getting started
 
-You need Node 20 or newer. NINA has no dependencies, and a project installs it straight from this repo, with
-the commit pinned in its lockfile:
+You need Node 20 or newer. NINA has no dependencies, and a project installs it from npm at an exact version,
+which its lockfile pins:
 
 ```bash
 pnpm init                          # a new project needs its own package.json first
-pnpm add -D github:xhulz/nina
+pnpm add -D -E @xhulz/nina
 pnpm nina init
 ```
+
+Each release merged to `main` is published by a GitHub Actions workflow through npm's trusted publishing,
+so every version carries the provenance of the build that made it.
 
 `init` works out the surfaces a repo reveals (a Prisma schema means `db`, a wrangler config means `edge-cf`),
 then asks what the project is and one yes-or-no question for each surface no file can settle. It writes

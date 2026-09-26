@@ -2,9 +2,26 @@
   "name": "@xhulz/nina",
   "version": "0.28.14",
   "description": "Composes an agent harness into a project from a versioned core, its surfaces, and the project's own layer.",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Marcos Schulz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xhulz/nina.git"
+  },
+  "homepage": "https://github.com/xhulz/nina#readme",
+  "bugs": {
+    "url": "https://github.com/xhulz/nina/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "agents",
+    "subagents",
+    "harness",
+    "cli"
+  ],
   "type": "module",
   "bin": {
-    "nina": "./bin/nina.mjs"
+    "nina": "bin/nina.mjs"
   },
   "exports": {
     "./detectors": "./src/detectors.mjs",
@@ -22,6 +39,9 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "snapshot": "node bin/nina.mjs snapshot",
     "stats": "node bin/nina.mjs stats",
@@ -30,6 +50,5 @@
     "compose:test": "node scripts/compose-test.mjs",
     "release": "node bin/nina.mjs release",
     "cli:test": "node scripts/cli-test.mjs"
-  },
-  "private": true
+  }
 }

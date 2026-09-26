@@ -81,11 +81,22 @@ export function packageExports(target, module) {
   }
 }
 
-/** The command a hook ran before it could say its script did not start — what `wire` updates. */
-const previousCommand = (h) => command(h.script, h.mode);
-
 /** What a hook says when its script cannot start: the likeliest cause, and the one command that fixes it. */
-const CANNOT_START = 'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)';
+const CANNOT_START = 'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D -E @xhulz/nina)';
+
+/**
+ * What the hooks said before: while NINA reached a project as a vendored `.tgz`, the command was to install
+ * that file, which a project installing from npm has no copy of.
+ */
+const EARLIER_CANNOT_START = [
+  'is @xhulz/nina installed in this project, and no older than the version .nina/profile.json pins? (pnpm add -D file:vendor/xhulz-nina-<version>.tgz)',
+];
+
+/**
+ * The commands a hook ran before its current one, exactly as `init` or `wire` wrote them — what `wire`
+ * updates: the one from before it could say its script did not start, and those that said it the old way.
+ */
+const previousCommands = (h) => [command(h.script, h.mode), ...EARLIER_CANNOT_START.map((said) => command(h.script, h.mode, h.crash(said)))];
 
 /**
  * Every hook a project's settings should carry, in the order a fresh settings file lists them. `why` is
@@ -99,27 +110,27 @@ const CANNOT_START = 'is @xhulz/nina installed in this project, and no older tha
 export const HOOKS = [
   {
     event: 'Stop', script: CHECK, mode: '--hook', timeout: 30, statusMessage: 'Checking the harness...', why: 'nobody is told what a turn left behind',
-    crash: { systemMessage: `NINA: the harness check could not start — ${CANNOT_START}` },
+    crash: (cannot) => ({ systemMessage: `NINA: the harness check could not start — ${cannot}` }),
   },
   {
     event: 'UserPromptSubmit', script: CHECK, mode: '--context', timeout: 60, statusMessage: 'Checking the harness...', why: 'the model never sees a finding',
-    crash: {
+    crash: (cannot) => ({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: `The NINA harness check could not start in this project — ${CANNOT_START} Until it can, no drift, lesson or loop cap is checked: tell the user.`,
+        additionalContext: `The NINA harness check could not start in this project — ${cannot} Until it can, no drift, lesson or loop cap is checked: tell the user.`,
       },
-    },
+    }),
   },
   { event: 'UserPromptSubmit', script: GATE, timeout: 10, why: "the owner's reply never starts a loop's count over" },
   {
     event: 'PreToolUse', matcher: 'Agent|Task|SendMessage', script: GATE, timeout: 10, why: 'the caps in .claude/graph.md stay instructions nothing holds',
-    crash: { systemMessage: `NINA: the loop gate could not start, so the caps in .claude/graph.md are not held — ${CANNOT_START}` },
+    crash: (cannot) => ({ systemMessage: `NINA: the loop gate could not start, so the caps in .claude/graph.md are not held — ${cannot}` }),
   },
   { event: 'PostToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion|SubagentHandback', script: GATE, timeout: 10, why: 'the gate never learns which rounds went out, or that the owner answered' },
   { event: 'SubagentStop', script: GATE, timeout: 10, why: 'the gate misses the verdict of a stage that wrote its report as its last message' },
   {
     event: 'PreToolUse', matcher: 'Edit|Write|MultiEdit|NotebookEdit', script: GUARD, timeout: 10, why: 'a hand edit to a composed file is found only after the turn, as drift, and the next compose overwrites it',
-    crash: { systemMessage: `NINA: the edit guard could not start, so composed files can be edited in place — ${CANNOT_START}` },
+    crash: (cannot) => ({ systemMessage: `NINA: the edit guard could not start, so composed files can be edited in place — ${cannot}` }),
   },
 ];
 
@@ -151,7 +162,7 @@ export async function shippedScripts(layerRoot, surfaces = []) {
 function group(h) {
   return {
     ...(h.matcher ? { matcher: h.matcher } : {}),
-    hooks: [{ type: 'command', command: command(h.script, h.mode, h.crash), timeout: h.timeout, ...(h.statusMessage ? { statusMessage: h.statusMessage } : {}) }],
+    hooks: [{ type: 'command', command: command(h.script, h.mode, h.crash?.(CANNOT_START)), timeout: h.timeout, ...(h.statusMessage ? { statusMessage: h.statusMessage } : {}) }],
   };
 }
 
@@ -245,7 +256,7 @@ export async function missingWiring(target, shipped) {
   if ((shipped.has(CHECK) || shipped.has(GATE) || shipped.has(GUARD)) && !packageInstalled(target)) {
     out.push(
       '@xhulz/nina is not installed in this project, so the composed scripts cannot load and every hook fails — ' +
-        'pnpm add -D file:vendor/xhulz-nina-<version>.tgz, with the .tgz `npm pack` makes in the NINA repo',
+        'pnpm add -D -E @xhulz/nina',
     );
   } else {
     // Installed, but older than the pin: a composed script imports a module the installed package does
@@ -255,7 +266,7 @@ export async function missingWiring(target, shipped) {
       if (shipped.has(script) && !packageExports(target, module)) {
         out.push(
           `the installed @xhulz/nina has no ./${module}, so ${script} cannot load — it is older than the version .nina/profile.json pins; ` +
-            'install the .tgz of that version',
+            'install that version: pnpm add -D -E @xhulz/nina@<version>',
         );
       }
     }
@@ -329,7 +340,7 @@ export async function staleHooks(target, shipped) {
     return [];
   }
   return HOOKS.filter((h) => h.crash && shipped.has(h.script)).filter((h) =>
-    (groupsFor(settings?.hooks, h.event) ?? []).some((g) => (Array.isArray(g?.hooks) ? g.hooks : []).some((x) => x?.command === previousCommand(h))),
+    (groupsFor(settings?.hooks, h.event) ?? []).some((g) => (Array.isArray(g?.hooks) ? g.hooks : []).some((x) => previousCommands(h).includes(x?.command))),
   ).map((h) => `${h.event} → ${h.script}${h.mode ? ` ${h.mode}` : ''}`);
 }
 
@@ -393,12 +404,13 @@ export async function applyWiring(target, shipped, { settings: editSettings = tr
         (hooks[h.event] ??= []).push(group(h));
         added.push(`${h.event}${h.matcher ? ` (${h.matcher})` : ''} → ${h.script}${h.mode ? ` ${h.mode}` : ''}`);
       }
-      // An old command, exactly as it was written, learns to say when its script cannot start.
+      // An old command, exactly as it was written, learns to say when its script cannot start, and how to
+      // install NINA as it is installed now.
       for (const h of HOOKS.filter((h) => h.crash && shipped.has(h.script))) {
         for (const g of hooks[h.event] ?? []) {
           for (const x of Array.isArray(g?.hooks) ? g.hooks : []) {
-            if (x?.command === previousCommand(h)) {
-              x.command = command(h.script, h.mode, h.crash);
+            if (previousCommands(h).includes(x?.command)) {
+              x.command = command(h.script, h.mode, h.crash(CANNOT_START));
               added.push(`${h.event} → ${h.script}${h.mode ? ` ${h.mode}` : ''} (updated to say when it cannot start)`);
             }
           }

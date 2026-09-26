@@ -263,7 +263,7 @@ export async function upgrade(argv, ctx) {
     }
     console.log(`      \`nina wire --to ${to} --apply\` merges them. They stay inert until ${to} is pinned, so wiring first is safe.`);
     if (unwired.some((w) => w.startsWith('@xhulz/nina is not installed'))) {
-      console.log('      The package is the one thing `wire` cannot do: `pnpm add -D file:vendor/xhulz-nina-<version>.tgz`.');
+      console.log('      The package is the one thing `wire` cannot do: `pnpm add -D -E @xhulz/nina`.');
     }
     console.log('');
   }

@@ -35,7 +35,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { handleEdit, noticeOf } from '../src/guard.mjs';
-import { modelFindings } from '../src/tools.mjs';
+import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
@@ -53,6 +53,30 @@ const scratch = () => mkdtemp(join(tmpdir(), 'nina-cli-'));
 // detector snapshots, the gate's selftest checks its ledger can be written — would otherwise write
 // into the real `~/.nina`, and they did: one empty ledger directory per run, per bed.
 process.env.NINA_DATA = await mkdtemp(join(tmpdir(), 'nina-cli-data-'));
+
+// Nor is the machine's own `~/.claude`. A `nina check` by hand asks which skills are installed, and every
+// test bed that ran one passed only on a machine with the owner's: with an empty home, as on a CI runner,
+// seven tests failed on `security-audit`. The suite's home holds the skills the layers bind, each as a
+// user skill or a plugin's, and nothing else — no transcripts, no settings.
+const SUITE_HOME = await mkdtemp(join(tmpdir(), 'nina-cli-home-'));
+{
+  const home = SUITE_HOME;
+  const dirs = [join(ROOT, 'core', 'tree', '.claude', 'agents')];
+  for (const surface of await readdir(join(ROOT, 'surfaces'))) dirs.push(join(ROOT, 'surfaces', surface, 'tree', '.claude', 'agents'));
+  for (const dir of dirs) {
+    for (const file of await readdir(dir).catch(() => [])) {
+      // A surface's fragment has no heading of its own: read every file as if its rows were in the section.
+      const { skills } = required(`## Skills you MUST consult\n${await readFile(join(dir, file), 'utf8')}`);
+      for (const skill of skills) {
+        const [plugin, name] = skill.includes(':') ? skill.split(':') : [null, skill];
+        const at = plugin ? join(home, '.claude', 'plugins', 'cache', 'suite', plugin, '1', 'skills', name) : join(home, '.claude', 'skills', name);
+        await mkdir(at, { recursive: true });
+        await writeFile(join(at, 'SKILL.md'), `---\nname: ${name}\n---\n`);
+      }
+    }
+  }
+  process.env.HOME = home;
+}
 
 /**
  * Runs the CLI against a project.
@@ -76,6 +100,11 @@ const failures = [];
 const expect = (ok, what) => {
   if (!ok) failures.push(what);
 };
+
+expect(
+  homedir() === SUITE_HOME && (await readdir(join(SUITE_HOME, '.claude', 'skills')).catch(() => [])).length > 0,
+  "suite: every command runs in a home of the suite's own, holding the skills the layers bind",
+);
 
 // ─── init: the interview's answers are what lands in the profile ────────────────────────
 {
@@ -3541,6 +3570,15 @@ const dated = (date, status = 'active') =>
     'wire --apply: updates the old command it wrote, and never a customised one',
   );
   expect(run(['wire', '--project', stale]).status === 0, 'wire: and is current afterwards');
+
+  // One that says it cannot start the old way, naming a vendored .tgz, learns the npm install.
+  const current = await readFile(join(stale, '.claude', 'settings.json'), 'utf8');
+  await writeFile(join(stale, '.claude', 'settings.json'), current.replaceAll('(pnpm add -D -E @xhulz/nina)', '(pnpm add -D file:vendor/xhulz-nina-<version>.tgz)'));
+  const vendored = run(['wire', '--project', stale], { loud: true });
+  expect(vendored.status === 1 && current.includes('(pnpm add -D -E @xhulz/nina)'), `wire: a hook that names the vendored .tgz is one to update — got ${vendored.out}`);
+  run(['wire', '--project', stale, '--apply']);
+  const npmed = await readFile(join(stale, '.claude', 'settings.json'), 'utf8');
+  expect(!npmed.includes('file:vendor') && npmed.includes('(pnpm add -D -E @xhulz/nina)') && npmed.includes('# ours'), `wire --apply: and says how to install it now, leaving a customised hook alone — got ${npmed}`);
 
   // A sound bed: an agent of the project's own is not a stage the graph forgot, and a skill missing on
   // this machine is for `nina check` by hand, not for the detector that speaks before every prompt.

@@ -72,7 +72,7 @@ export async function wire(argv, ctx) {
     }
     console.log(`\n  \`nina wire${arg('--to') ? ` --to ${version}` : ''} --apply\` merges them, changing nothing else — a customised command is never touched.`);
     if (missing.some((m) => m.startsWith('@xhulz/nina is not installed'))) {
-      console.log('  The package it cannot install: that one is `pnpm add -D file:vendor/xhulz-nina-<version>.tgz`.');
+      console.log('  The package it cannot install: that one is `pnpm add -D -E @xhulz/nina`.');
     }
     console.log(`wire: ${missing.length} missing${stale.length ? `, ${stale.length} to update` : ''}`);
     return 1;
