@@ -1737,6 +1737,16 @@ const dated = (date, status = 'active') =>
     out.includes('Only 0 of the 30 were declared by the stage'),
     `stats: should separate declared verdicts from inferred ones — got ${out.trim()}`,
   );
+
+  // A blockchain project's auditor is a gate like the others, and its dispatches make the project a
+  // harness project: the lists here once predated its surface and knew neither.
+  const chain = join(await scratch(), 'snaps');
+  await history(chain, '-chain', [...many('solidity-auditor', 0, 25, 'declared'), ...many('solidity-dev', 0, 5), ...many('reviewer', 6, 30)]);
+  const audited = run(['stats', '--snapshots', chain]).out;
+  expect(audited.includes('solidity-auditor: 0 loop-back(s) in 25 readable verdict(s) (0%)'), `stats: a blockchain project's auditor is judged as a gate — got ${audited.trim()}`);
+  const wrote = join(await scratch(), 'snaps');
+  await history(wrote, '-writes', many('solidity-dev', 0, 10));
+  expect(run(['stats', '--snapshots', wrote]).out.includes('solidity-dev'), 'stats: and ten solidity-dev dispatches make a harness project');
 }
 
 
