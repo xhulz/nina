@@ -199,10 +199,10 @@ async function runFixture(name) {
  */
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
-  '.claude/agents/architect.md': 14500,
+  '.claude/agents/architect.md': 15000,
   '.claude/agents/dba.md': 12500,
   '.claude/agents/devops.md': 11500,
-  '.claude/agents/implementer.md': 17000,
+  '.claude/agents/implementer.md': 17500,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   '.claude/agents/qa.md': 12500,

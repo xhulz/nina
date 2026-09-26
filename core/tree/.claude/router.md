@@ -68,7 +68,7 @@ Architect produces a TS spec; implementer consumes the spec; they do not re-read
 
 ### A spec is corrected in place
 A spec sent back is corrected where it is wrong; new work comes as a new step file or spec. Never ask for
-a `Revision N` section, and correct a spec yourself only in place. Point a dispatch at the sections and steps
+a `Revision N` section, and correct a spec yourself only in place, searching it and its steps for what you contradict. Point a dispatch at the sections and steps
 that changed, by number: a history at a spec's head is read first by every stage and applies to
 nothing.<!-- nina:why --> The architect was told to correct in place, and the
 orchestrator went on asking for revisions. The first new project's second spike spec opened with four

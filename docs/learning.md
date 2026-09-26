@@ -77,6 +77,17 @@ pills. **Graduate** had never fired and could not: no pill had ever had `occurre
   a reviewer that catches more rather than one that learned less. Without it, though, the question
   could not even be asked.
 
+The first project started from nothing graduated six lessons in its first two days, the first time the
+whole cycle ran without anyone prompting a link of it. Four were about the code the implementer hands on:
+tests that stayed green under the very mutation they named, branches that reported "ok" on input they
+could not read, a hostname pattern written from a wrong model of the format, and READMEs that described
+the code as intended. One was the architect's: a correction that left older text in the spec saying the
+opposite. One widened Hard Rule #9 to members. All six were answered into the core in 0.28.14, the four
+about code in both the implementer and the reviewer, since a rule the writer holds and the reviewer does
+not check is a rule followed when convenient. The test lesson had graduated once before, from the other
+project, as "name the mutation"; it came back five times because naming it was not the same as walking it
+through the fixture, so the rule now says how the naming fails.
+
 ## Reading the loop-backs: `learn --deep`
 
 `learn` counts: a role sent back three times since its newest lesson is owed one. It cannot say what the
