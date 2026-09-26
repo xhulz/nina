@@ -75,7 +75,7 @@ model each side ran on, rather than print a number that measures the model:
   `--answer <request> --in <layer file>` or `--decline <request> --why <reason>`, into
   `core/answered.json`, which the next release freezes. The `nina upgrade --apply` that installs that
   release closes the request in its project and retires the pill; a decline leaves the pill active,
-  because the lesson is still true where it was learned. The answer is not written into the project
+  because the lesson is still true where it was learned. A pill retired, by either path or by hand, moves to `.claude/pills/retired/<the directory it was read from>/` (`nina pills --tidy` moves any still in place): every agent opens every pill in its directory and in `shared/` to see which apply, and in the first new project 16 KB of the 33 KB it opened on every dispatch was retired. The answer is not written into the project
   from here: this repository does not edit the projects it serves, and an answer only becomes true
   for a project when it installs the release that carries it — and a rule that went into a surface
   the project does not declare closes its request without retiring the pill, since the rule never
