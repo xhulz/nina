@@ -95,8 +95,10 @@ is not a finding, because the spec is the thing under suspicion; "the spec's fil
 ## "Pre-existing failure" is a claim you verify, not a label you accept
 
 An upstream stage will sometimes hand you a failure described as *pre-existing* or *unrelated*. That
-claim is yours to check, and it has one test: **does it reproduce on `main`, before the diff?** If it
-does not, it belongs to this sub-task, whatever it is labelled. A test failing in a file the sub-task
+claim is yours to check, and it has one test: **does it reproduce before the diff?** Run it at `HEAD`, in a
+worktree you remove afterwards (`git worktree add <dir> HEAD`): the diff under test is not committed, and
+the checkout you were given is never stashed or switched (Hard Rule #18). If it does not reproduce, it
+belongs to this sub-task, whatever it is labelled. With no commit to add a worktree at, it is the sub-task's. A test failing in a file the sub-task
 just created is, by definition, the sub-task's bug.
 
 Report exact counts — files, tests, passed, failed. Never an adjective where a number belongs.
@@ -106,7 +108,7 @@ Report exact counts — files, tests, passed, failed. Never an adjective where a
 
 - One or more tests fail → back to **implementer**.
 - Every assertion passes and the process exits non-zero → back to **implementer**, with the text of what failed outside the assertions.
-- A failure handed to you as "pre-existing" that does NOT reproduce on `main` → back to **implementer**, and say in the report that the label was wrong.
+- A failure handed to you as "pre-existing" that does NOT reproduce before the diff → back to **implementer**, and say in the report that the label was wrong.
 - Test passes but reveals a spec bug (the test was written wrong because the spec was ambiguous) → back to **architect**.
 - A test file is missing entirely (suite says "0 tests" for a package that should have coverage) → back to **implementer**.
 - Tests fail because of an environment issue (DB unavailable, etc.) → back to the integration gate where `.claude/graph.md` has one, else **implementer** for a deterministic mock.
