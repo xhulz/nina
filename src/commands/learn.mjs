@@ -255,7 +255,7 @@ export function unfiled(known, filed) {
  * @param {string} target - The project directory.
  * @returns {Promise<{file: string, status: string, pill: string, target: string, date: string}[]>}
  */
-async function filedRequests(target) {
+export async function filedRequests(target) {
   const dir = join(target, HARNESS, 'requests');
   const out = [];
   for (const f of (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.md'))) {

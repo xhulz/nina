@@ -4054,6 +4054,25 @@ const dated = (date, status = 'active') =>
   expect(reasonless.status === 1 && reasonless.out.includes(`"${name}" is deferred with no reason`), `deferred: a deferral with no reason does not count — got ${reasonless.out}`);
 }
 
+// ─── status: one screen for one project ─────────────────────────────────────────────────
+{
+  const bed = await sound('plain', 'dev');
+  const version = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')).version;
+  const shown = run(['status', '--project', bed, '--offline'], { loud: true });
+  expect(
+    shown.status === 0 && shown.out.includes(`pins dev · installed ${version}`) && shown.out.includes('newest unknown (offline)') &&
+      shown.out.includes('every hook its release needs is wired') && shown.out.includes('gate: current') && shown.out.includes('check: declaration is sound') &&
+      shown.out.includes('nothing yet — `nina snapshot` captures it') && shown.out.includes('status: in order'),
+    `status: the pin, the install, the hooks, the gate, check, the history and the learning, on one screen — got ${shown.out}`,
+  );
+  const settingsPath = join(bed, '.claude', 'settings.json');
+  const settings = JSON.parse(await readFile(settingsPath, 'utf8'));
+  delete settings.hooks.SubagentStop;
+  await writeFile(settingsPath, JSON.stringify(settings));
+  const unwired = run(['status', '--project', bed, '--offline'], { loud: true });
+  expect(unwired.status === 1 && unwired.out.includes('1 missing — `nina wire --apply` merges them') && /status: \d+ thing\(s\) to look at/.test(unwired.out), `status: what needs looking at is said, with the command that fixes it — got ${unwired.out}`);
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');
