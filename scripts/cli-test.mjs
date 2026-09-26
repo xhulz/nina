@@ -3743,6 +3743,42 @@ const dated = (date, status = 'active') =>
   );
 }
 
+// ─── the flow: what each stage is told about the ones beside it ────────────────────────
+{
+  const dir = await composed('acme');
+  const read = (rel) => readFile(join(dir, rel), 'utf8');
+  const [graphText, router, claude, reviewer, implementer, dba, tester] = await Promise.all(
+    ['.claude/graph.md', '.claude/router.md', 'CLAUDE.md', '.claude/agents/reviewer.md', '.claude/agents/implementer.md', '.claude/agents/dba.md', '.claude/agents/integration-tester.md'].map(read),
+  );
+  const graph = parseGraph(graphText);
+  const edge = (from, to, token) => graph.edges.some((e) => e.from === from && e.to === to && e.token === token);
+
+  // The gates run beside the reviewer and hand their approval to qa. They used to hand it to the reviewer,
+  // which every document sent out beside them and told to confirm an approval it could not yet see, or to
+  // dispatch a gate it had no tool to dispatch.
+  expect(
+    edge('dba', 'qa', 'APPROVED') && edge('integration-tester', 'qa', 'APPROVED') && !edge('dba', 'reviewer', 'APPROVED') && !edge('integration-tester', 'reviewer', 'APPROVED'),
+    'flow: the database and integration gates hand their approval to qa, beside the reviewer',
+  );
+  expect(
+    reviewer.includes('on your report\'s **Gates** line') && reviewer.includes('- **Gates:** each gate the diff triggers') &&
+      !/dispatch `dba` now|dispatch \*\*dba\*\* now|dispatch \*\*integration-tester\*\* now|dispatch it now|signed off/.test(reviewer),
+    'flow: the reviewer names the gates the diff triggers, and is never told to dispatch one or to confirm it approved',
+  );
+  expect(
+    !/before the reviewer|BEFORE reviewer|blocks the reviewer|goes to the reviewer/.test(dba + tester) && /`qa` does not go out without your `APPROVED`/.test(dba) && /`qa` does not go out without your `APPROVED`/.test(tester),
+    'flow: the gates are told they run beside the reviewer and hold qa, not the reviewer',
+  );
+
+  // A chain with no architect ends somewhere, and its dispatch is its spec.
+  expect(edge('reviewer', 'done', 'APPROVED'), 'flow: a chain with no architect whose change no test covers ends at the review');
+  expect(
+    router.includes('### A chain with no architect: the dispatch is the spec') && implementer.includes('in a chain with no architect, the dispatch') &&
+      reviewer.includes('ask of it none of what only an architect\'s spec carries') && claude.includes('not at all when no test covers the change'),
+    'flow: in a chain with no architect the dispatch is the spec, and the reviewer asks nothing only a spec carries',
+  );
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');

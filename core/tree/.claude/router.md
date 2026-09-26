@@ -66,6 +66,12 @@ One package is not one step, though: the architect still splits a long file list
 ### Architect output is a spec, not code
 Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
 
+### A chain with no architect: the dispatch is the spec
+When a chain starts at the implementer, your dispatch is its spec: the goal, the files it may touch and
+what must hold when it is done. The reviewer reviews against it and asks none of what only an architect's
+spec carries — an Obsolescence list, a preview-deploy plan, a skill citation, integration premises. A
+change that needs one of those needs an architect.
+
 ### A spec is corrected in place
 A spec sent back is corrected where it is wrong; new work comes as a new step file or spec. Never ask for
 a `Revision N` section, and correct a spec yourself only in place, searching it and its steps for what you contradict. Point a dispatch at the sections and steps
