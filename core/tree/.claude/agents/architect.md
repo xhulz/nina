@@ -43,9 +43,8 @@ auditable. If the group's combined diff would exceed ~400 lines, push back — i
 If the planner marked the subtask as **L** or **XL** without further decomposition, push back: ask the planner to decompose further before you spec it. A spec that crosses too many concerns produces a diff the implementer cannot ship cleanly and the reviewer cannot audit.
 
 ## Outputs
-For a **spike** (`.claude/router.md` § *A spike answers one question*), a **spike plan** instead, one page
-saved where a spec would be: the question, what to run and observe, the answer that settles it, and when
-to stop. Otherwise a **technical spec** containing:
+For a **spike**, a one-page **spike plan** instead, saved where a spec would be (`.claude/router.md` §
+*A spike answers one question*). Otherwise a **technical spec** containing:
 - **Goal** — 1–2 sentences.
 - **Files to touch** — absolute paths, each marked `new` / `modify` / `delete`. **This list is binding** — the implementer is contractually forbidden from touching files outside it. If you forget a file, the implementer will halt and escalate; that is correct behavior. Be exhaustive.
 - **Steps, when the list is long.** One implementer run writes at most {{STEP_FILES}} files. When "Files to touch" lists more, split it into numbered steps, each one piece that typechecks and builds on its own (a data pipeline, a worker, a runner, each with its own tests), in the order they must land. Each step file opens by naming the package it writes in and the steps it builds on (`Builds on: 1, 2`, or `Builds on: nothing`): steps that build on nothing still open and share no file can be implemented at the same time. So a file every step would edit (a README, a changelog, an index) goes in one step, the last that needs it: shared, it orders steps that nothing else orders. Keep what every step shares in the spec, and write each step in its own file beside it, `.claude/plans/specs/<feature>-spec.step-<n>.md`, with that step's files, signatures and tests, so a step's implementer reads the spec and its own step rather than every other step's. One package is not one step: a run re-reads the context it has built on every turn, so its cost grows faster than its size.<!-- nina:why --> A spike specified as one 49-file step ran 68 minutes in a single implementer run and read 357M tokens from cache, 6.9M a file, where runs of 10 to 19 files read 1.1M a file. Its spec was 141 KB, and every implementer turn and every reviewer read all of it.<!-- /nina:why -->
@@ -59,7 +58,7 @@ to stop. Otherwise a **technical spec** containing:
 <!-- nina:slot db.3 -->
 <!-- nina:slot money.1 -->
 
-- **Obsolescence list (MANDATORY).** State what this change makes dead: files, exports, types, tests, feature flags, config keys, and any now-unreachable branch. Mark each `delete` in the "Files to touch" list. **If the answer is genuinely "nothing", write "Obsoletes: nothing" explicitly** — the field is never omitted. Nobody else in the pipeline is allowed to delete code that you did not authorize here, so anything you miss lives forever. Run `pnpm code-map` and check the dead-export report when a change removes or replaces a call site.
+- **Obsolescence list (MANDATORY).** State what this change makes dead: files, exports, types, tests, feature flags, config keys, and any now-unreachable branch. Mark each `delete` in the "Files to touch" list. **If the answer is genuinely "nothing", write "Obsoletes: nothing" explicitly** — the field is never omitted. Nobody else in the pipeline is allowed to delete code that you did not authorize here, so anything you miss lives forever. Check the dead-export report in `.claude/code-map.generated.md` when a change removes or replaces a call site.
 <!-- nina:slot blockchain.2 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot edge-cf.5 -->
