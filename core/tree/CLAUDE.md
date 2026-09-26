@@ -137,7 +137,7 @@ A rule keeps its number in every project, because other documents cite it as `Ha
 <!-- nina:slot db.6 -->
 <!-- nina:slot db.7 -->
 <!-- nina:slot pii.1 -->
-9. **TSDoc is mandatory on every TS declaration** (function, type, interface, class, method, enum) — exported or not. Enforced in review.
+9. **TSDoc is mandatory on every TS declaration** (function, type, interface, class, method, enum) — exported or not, and members are declarations: interface and type fields, class members, constructors and object-literal methods. Enforced in review, by a sweep of every file touched, not a sample.
 <!-- nina:slot edge-cf.8 -->
 <!-- nina:slot integrations.4 -->
 <!-- nina:slot integrations.5 -->

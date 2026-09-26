@@ -3287,6 +3287,28 @@ const dated = (date, status = 'active') =>
     router.includes('### A spec is corrected in place') && router.includes('Never ask for\na `Revision N` section') && !router.includes('eighth revision') && !router.includes('The rule\n  used to be'),
     'compose: the orchestrator asks for no revision sections, and the history behind both rules is not composed',
   );
+
+  // The first six lessons a new project graduated, each learned there at least three times in two days,
+  // reach the stage that writes the code, the one that reviews it, and the architect. The history does not.
+  const reviewer = await spec('reviewer');
+  const claude = await readFile(join(dir, 'CLAUDE.md'), 'utf8');
+  expect(
+    implementer.includes("Walk the mutation through the fixture's own values") && implementer.includes('**Fail closed on every branch.**') &&
+      implementer.includes('**A pattern that validates an external identifier**') && implementer.includes('re-read every claim about code you changed') &&
+      !implementer.includes('graduated from the first new project'),
+    'compose: the implementer walks each mutation through its fixture, fails closed, tests patterns on real samples and re-reads its claims',
+  );
+  expect(
+    reviewer.includes('at the call site the production path uses') && reviewer.includes('**Probe every branch that returns ok-or-issues') &&
+      reviewer.includes('**Reject a pattern that validates an external identifier**') && reviewer.includes('**Check every behavioral claim') &&
+      !reviewer.includes('Five tests that could not fail shipped'),
+    'compose: the reviewer checks the same four, and the history behind the mutation rule is not composed',
+  );
+  expect(
+    architect.includes('A correction is done when the whole spec agrees with it') && router.includes('searching it and its steps for what you contradict') &&
+      claude.includes('members are declarations'),
+    'compose: a correction sweeps the whole spec, by the architect or the orchestrator, and Hard Rule #9 covers members',
+  );
 }
 
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
