@@ -1,0 +1,198 @@
+# Agent Router
+
+Decides which subagent (or chain) to dispatch for a given task. Subagent definitions live in `.claude/agents/`.
+
+<!-- nina:slot project.1 track-summary -->
+
+---
+
+## Decision tree
+
+The stages and edges are in `.claude/graph.md`. What follows is this project's own way of sizing a
+task into a chain over them.
+
+<!-- nina:slot project.2 decision-tree -->
+
+---
+
+## Track flow
+
+<!-- nina:slot project.3 track-flow-diagram -->
+
+The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated. Every gate the diff triggers runs beside the reviewer, and `qa` goes out once all of them approved. The reviewer's `Gates` line names the gates the diff triggers: send any you did not.
+
+**Every loop has a cap.** Before dispatching a loop-back, count the rounds the SAME issue has already made on that edge. At the cap `.claude/graph.md` gives it, do not dispatch again: stop and hand {{OWNER}} the report from every round. A third attempt at a fix that failed twice is rarely different from the second, each round costs minutes to hours<!-- nina:why -->, and until this rule existed nothing in the pipeline could stop a loop at all<!-- /nina:why -->. A different issue on the same edge starts its own count. A stage that sends work back names each issue on the `ISSUES` line under its verdict; when you dispatch a round — the fix, and the check of the fix — copy that line into both dispatches, so the stage that checks can keep the id of an issue that is still open. That id is what your count is of.
+
+Where the project wires the **loop gate** (`scripts/loop-gate.mjs`, run by hooks — `nina wire` puts them
+in place), the cap is held for you. It counts a round when a dispatch acts on a loop-back a stage
+declared on its `VERDICT` line — per issue, while every report the loop's rounds act on named its issues
+on the `ISSUES` line, and per edge from the first round one did not until the loop closes; several
+dispatches acting on the same verdicts are one round; a review that saw the fix and passed closes the
+loop, while a sibling that approved alongside a rejection releases nothing; and {{OWNER}}'s next message
+starts every count over. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
+what the graph says — hand them each round's report and ask how to proceed — and do not route around the
+refusal by resuming the fixer or making the fix yourself.
+
+The gate trusts the ids it is given: an issue renamed between rounds starts its count over, so an edge
+still goes to {{OWNER}} once it has gone round more than twice its cap with no approval between. It does
+not see a fix you make without a subagent — so keep your own count as well, gate or no gate. When you
+dispatch a second round on an edge, say "round 2 of max 2 on <edge>" in the dispatch itself, so the
+count is in the transcript and the next reader of it — you after a compaction, or `nina stats` — can see
+it.
+
+### Milestone gate
+
+**secops** is a milestone gate, not a per-sub-step stage: when the LAST sub-step of a numbered set (`6.*`)
+or phase passes qa, dispatch it beside devops to audit the whole assembled surface. The set is not done
+until it returns `SECURE`; a `BLOCKED` goes back to the architect or implementer, then to a re-audit.
+
+---
+
+## Rules
+<!-- nina:slot db.1 -->
+<!-- nina:slot integrations.1 -->
+<!-- nina:slot blockchain.1 -->
+
+### Planner only for ambiguous, multi-step, or multi-package work
+If the task fits in one head and lives in a single package, skip to architect (or implementer for trivial things).
+One package is not one step, though: the architect still splits a long file list into steps (see *A spec's steps are passes of their own*).
+
+### Architect output is a spec, not code
+Architect produces a TS spec; implementer consumes the spec; they do not re-read the original user message.
+
+### A chain with no architect: the dispatch is the spec
+When a chain starts at the implementer, your dispatch is its spec: the goal, the files it may touch and
+what must hold when it is done. The reviewer reviews against it and asks none of what only an architect's
+spec carries — an Obsolescence list, a preview-deploy plan, a skill citation, integration premises. A
+change that needs one of those needs an architect.
+
+### A spec is corrected in place
+A spec sent back is corrected where it is wrong; new work comes as a new step file or spec. Never ask for
+a `Revision N` section, and correct a spec yourself only in place, searching it and its steps for what you contradict. Point a dispatch at the sections and steps
+that changed, by number: a history at a spec's head is read first by every stage and applies to
+nothing.<!-- nina:why --> The architect was told to correct in place, and the
+orchestrator went on asking for revisions. The first new project's second spike spec opened with four
+revision sections, one of them written by the orchestrator, and every dispatch told the stage to read them
+first. Its first spec reached an eighth revision, which had become the way new work was asked for.<!-- /nina:why -->
+
+### A spike answers one question
+A spike is an experiment: it answers a question about a service, a library or the data before anything is
+designed on it, and its code is evidence, kept in a directory of its own outside the product's packages.
+The architect writes a spike plan, one page, not a spec: the question, what to run and observe, the
+answer that settles it, and when to stop. The reviewer checks that it measures what it says it measures.
+No qa, devops or secops. Its plan is corrected at most twice; past that, or when its answer raises a new
+question, stop and ask {{OWNER}}: a new question is a new spike, and a spike revised past its question is
+the product being designed without a spec.
+
+### Reviewer audits; QA runs tests
+Reviewer runs `{{TYPECHECK_CMD}}` / `{{LINT_CMD}}` (and `{{BUILD_CMD}}` for frontend) and verifies clean, confirms guardrails ran, but **does not run vitest**. QA runs vitest once after approval.
+
+### A stage that returns no verdict
+A report with no `VERDICT` line, a run that stopped, or one out of context is not a pass. Resume it once
+with `SendMessage` for its report; failing that, dispatch the stage again, saying what the first run left
+in the tree. Nothing builds on its work until a verdict does.
+
+### A round of work goes to a fresh run
+A resumed run is billed its whole history again on every turn. Resume one only for something short: its missing report, or a re-check of a few files. A fix, a revised spec or a re-run of flows goes to a new run of the stage, dispatched with what it needs: the spec's path, the findings with their `ISSUES` line, and the files they name.<!-- nina:why --> In the project this was learned in, a resumed fix began at a 526k-token context and re-read 60M tokens, twice a first round, and resumed rounds held three quarters of everything the pipeline read.<!-- /nina:why -->
+
+### A report that sends work two ways
+When one report names issues for the architect and for the implementer, the architect goes first, and the
+implementer fixes against the corrected spec.
+
+### Pipeline is not sacred
+If reviewer finds a design flaw, loop back to the architect. Don't paper over with implementation hacks.
+
+### Plugin skills are part of the pipeline
+The mandatory triggers are the table in `CLAUDE.md` and each spec's own § *Skills you MUST consult*; every
+stage invokes them through the `Skill` tool. The architect cites which skill informed the spec, and the
+reviewer rejects a spec touching a surface with a mandatory skill that cites none and says nothing of why.
+
+### Devops owns the deploy
+Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change, quoted in the dispatch.**
+<!-- nina:slot frontend.2 -->
+
+### Look at every loop-back for a lesson
+
+When a stage loops back (qa → implementer on a test failure, reviewer rejects a diff, a gate blocks) **or** the user corrects something, the orchestrator asks one question: **would this happen again?** If it would, the lesson goes into a pill under `.claude/pills/<role>/` (or `shared/` if it spans roles) so the responsible agent does not repeat it. If it would not — a typo, a flake, a one-off — say so in one line and move on. The question is not optional; the pill is its answer when the answer is yes. <!-- nina:why -->The rule used to be "a pill on every loop-back", and it was followed 3% of the time. <!-- /nina:why -->A rule that demands a lesson from a typo trains everyone to skip the ones that were lessons. `harness:check` watches the outcome<!-- nina:why --> instead of the ritual<!-- /nina:why --> — a role sent back three times since its newest lesson is reported every turn until one is written (`nina learn`). Skip it only if the lesson is really a code convention (→ `patterns.md`/`CLAUDE.md`) or a library premise (→ `integrations/<lib>.md`) — those surfaces own it, and a recurring pill should eventually **graduate** there and be marked `retired`. If the lesson already has a pill, do **not** write a second one — increment that pill's `occurrences` and set `last_seen` to today — the counter that decides when a correction has recurred often enough to graduate into a rule. At three, `harness:check` sends it to the harness on its own; commit the request it writes together with the pill. Each subagent already reads its own pills before acting, and `nina pills` checks that what was written is well formed and filed where its audience will actually read it (see `.claude/pills/README.md`).
+
+---
+
+## Parallelization
+
+**The rule that decides everything here: a stage that only reads can always run beside another
+stage that only reads. A stage that writes files owns those files alone.** Most of this pipeline is
+read-only, so most of it can overlap — the default of running every stage nose-to-tail is a
+habit, not a constraint.
+
+Dispatch concurrent agents **in a single message with multiple Agent tool calls**. Separate messages
+run them one after another and buy nothing.
+
+### Run these in parallel
+
+| Together | Why it is safe | What it buys |
+|---|---|---|
+| **`reviewer` ∥ every gate the diff triggered** after the implementer | all read-only + Bash | the gates stop being a serial prefix to the review |
+| **`reviewer` fanned out by dimension** — one per axis of risk the diff carries, such as tenant isolation, patterns and spec-scope | read-only; they never touch the same output | **the biggest single win.** One reviewer carrying ~15 checklists over a 500-line diff misses things; three narrow ones do not. Faster *and* better |
+| **`architect` across the sibling specs of one milestone** (`<feature>-spec1..N`) | each writes its own file under `.claude/plans/specs/` | the specs share context, so designing them together is more coherent than one-at-a-time, and the whole milestone is specced in one pass |
+| **`devops` ∥ `secops`** at the end of a milestone | devops only reads code; what it writes is a deploy target, not the tree | the audit and the preview deploy stop being sequential |
+| **`Explore` fan-out** for "where does X live" | read-only | one search instead of every stage re-grepping the tree |
+
+### Implementers side by side
+
+Two implementers write at once only on work that shares no file and builds on nothing the other writes:
+the planner's `PARALLEL-SAFE`, a step's `Builds on` and the binding file lists say which. Where decides how:
+
+- **In different packages, each checked on its own** (typecheck, lint and build scoped to it, as
+  `{{API_DIR}}` and `{{APP_DIR}}` are): side by side in this checkout.
+- **In one package, or where a check spans packages:** each with **`isolation: "worktree"`**. A worktree
+  holds only what is committed — every closed pass is (§ *Commits*) — and lacks what git does not track,
+  such as dependencies or a virtual environment, until its implementer sets it up.
+- You merge a worktree's work, in step order. Never let two agents merge.<!-- nina:why --> The rule
+  used to be one implementer per package, always in a worktree. The first new project had no commit for a
+  worktree to hold, so it ran two implementers side by side in one checkout, one per spike directory, and
+  neither disturbed the other. It also ran two steps of one spec one after the other that built on the
+  same two steps and nothing else, only because they shared a package and both edited its README.<!-- /nina:why -->
+
+### A spec's steps are passes of their own
+
+When the architect splits a spec into steps, each step is its own pass from the implementer on: an
+implementer for that step alone, then the reviewer and every gate its diff triggers, then qa. A step's
+implementer goes out only once every step it builds on has closed its pass, so no step is built on one
+that was sent back. Steps whose turn comes together and share no file go out together, as § *Implementers side by side*
+says; their reviews go out together too, and their qa runs one after the other. Parallel steps save
+time, not tokens: each run builds its own context, and a step that builds on another is never one of
+them. Never hand one implementer several steps, or a spec that lists more than {{STEP_FILES}} files with no
+steps: that spec goes back to the architect to be split. The planner's `ONE-SPEC` and `ONE-REVIEW` group
+its own sibling steps into one spec and one review; they never put two of an architect's steps in one
+implementer run.
+
+### Commits
+
+When a pass closes — `qa` returns `PASS`, or the reviewer approves a chain that ends there — commit what
+it changed, with a message naming the step and its spec. Commit on a working branch: never on the
+project's default branch, so before a piece of work's first commit there, create a branch named for its
+spec. Never push, amend, rebase or force; {{OWNER}} merges. A pass sent back is not committed. You are
+the only one who commits (Hard Rule #18): a commit is what a worktree holds, what `secops` audits a
+milestone by, and what `qa` checks a "pre-existing" failure against.
+
+### Keep these serial
+
+- **`qa`.** Vitest is ~2–3 GB per worker; concurrent invocations take the machine down. One run, at
+  the end of each pass. This is not negotiable and is not a speed problem — the suites are seconds, except the
+  `{{API_DIR}}` integration suite, which is slow for its own reasons (real DB).
+- **The merge**, always.
+- **A loop-back.** When a stage rejects, fix and re-run that stage; do not fan out around a failure.
+
+---
+
+## Examples
+
+| User request | Pipeline |
+|---|---|
+<!-- nina:slot project.5 dispatch-examples -->
+
+---
+
+## Quick triage
+
+When the doubt is whether a critical path is touched, take the heavier chain; when it is only how much ceremony, the lighter one (`CLAUDE.md` § *If you are uncertain which chain applies*).
