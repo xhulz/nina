@@ -101,7 +101,7 @@ must not break.
 | `check`, `where`, `pipeline` | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
-| `snapshot`, `stats`, cost, models, proportion, `eval`, `export`, `langfuse` | [`docs/measurement.md`](docs/measurement.md) |
+| `snapshot`, `stats`, `runs`, cost, the cost watch, models, proportion, `eval`, `export`, `langfuse` | [`docs/measurement.md`](docs/measurement.md) |
 | `pills`, `learn` and `learn --deep`, `requests` | [`docs/learning.md`](docs/learning.md) |
 
 Each document says why its mechanism ended up the way it did — usually because the obvious version was
@@ -123,6 +123,7 @@ nina pills --project ../thing                 # is the pipeline's own corpus of 
 nina learn --project ../thing [--deep]        # is the pipeline learning? --deep reads why it sent work back
 nina requests                                 # the lessons projects have graduated to the harness
 nina snapshot && nina stats                   # measure what the pipeline did, and what it cost
+nina runs --project ../thing                  # what each piece of work cost: its cycles, stages, rounds, time
 nina langfuse login && nina langfuse on       # keys once; then this project sends its runs after every turn
 nina export --langfuse [--dry-run]            # by hand: the history from before a project was turned on
 nina eval --release <a> --release <b>         # which release's reviewer catches more planted defects
@@ -134,7 +135,7 @@ nina release <version>                        # freeze the working layers; never
 ```
 bin/nina.mjs          entry point and command table
 src/shell.mjs         `nina` alone on a terminal: one banner, then each typed command run under it
-src/commands/         init, compose, check, where, pipeline, pills, learn, wire, gate, upgrade, release, snapshot, stats, eval, export, langfuse
+src/commands/         init, compose, check, where, pipeline, pills, learn, wire, gate, upgrade, release, snapshot, stats, runs, eval, export, langfuse
 src/graph.mjs         parses and validates a composed pipeline graph (check + compose suite)
 src/gate.mjs          the loop gate: the ledger, what counts as a round, one answer per hook event
 src/guard.mjs         the edit guard: refuses an edit to a composed file, quoting where it belongs

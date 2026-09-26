@@ -172,6 +172,17 @@ said of it, and every snapshot read it again: one project's 744 such runs, two s
 an answer on every turn. A run is read again now only when its transcript has grown, or when a round that
 handed its report back holds a verdict from somewhere else.
 
+### What a piece of work cost: `nina runs`
+
+`stats` answers per stage over a window, which is the question for a gate and not the owner's, which is
+what a feature, a spike or a fix came to. `nina runs`, inside a project or with `--project`, lists its
+cycles newest first — the unit `stats` sizes, a session's rounds up to the verdict that closes one
+(`cyclesOf`) — each with when it began, how long it took, what its rounds cost, how it ended, and each
+stage's rounds and what they sent back, named by the description the orchestrator gave its first
+dispatch, the one name the record keeps. The first new project's newest six cost $320, the costliest a
+spike step at $79 whose reviewer sent back two rounds of three. A cycle is a shape, not a feature's
+boundary: work run side by side in one session can share one.
+
 ### While a run is still running: the cost watch
 
 `stats` says what a run cost after it ended, and by then the money is spent. Three quarters of the first
