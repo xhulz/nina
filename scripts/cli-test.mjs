@@ -3984,6 +3984,38 @@ const dated = (date, status = 'active') =>
   );
 }
 
+// ─── runs: what each piece of work cost ────────────────────────────────────────────────
+{
+  // stats answers per stage; the owner's question is what a feature or a spike came to.
+  const dir = realpathSync(await scratch());
+  await mkdir(join(dir, '.nina'), { recursive: true });
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const round = (id, role, verdict, ts, extra = {}) => ({
+    project: slugFor(dir), dispatch_id: id, session: 's-runs', role, verdict, ts, result_ts: ts.replace(':00.000Z', ':30.000Z'),
+    tokens: { input: 0, output: 1e5, write_5m: 0, write_1h: 0, read: 0 }, usage_model: 'claude-sonnet-5', desc: 'Build the export', ...extra,
+  });
+  await mkdir(join(process.env.NINA_DATA, 'snapshots'), { recursive: true });
+  await writeFile(
+    join(process.env.NINA_DATA, 'snapshots', `${slugFor(dir)}.jsonl`),
+    `${[
+      round('t1', 'architect', 'SPEC-READY', '2026-09-20T10:00:00.000Z', { desc: 'Spec the export' }),
+      round('t2', 'implementer', 'DIFF-READY', '2026-09-20T10:10:00.000Z', { files_touched: 7 }),
+      round('t3', 'reviewer', 'REJECTED', '2026-09-20T10:20:00.000Z'),
+      round('t3#2', 'reviewer', 'APPROVED', '2026-09-20T10:40:00.000Z', { round: 2 }),
+      round('t4', 'qa', 'PASS', '2026-09-20T11:00:00.000Z'),
+      round('t5', 'implementer', 'DIFF-READY', '2026-09-21T09:00:00.000Z', { desc: 'Fix the label', files_touched: 1 }),
+    ].map((r) => JSON.stringify(r)).join('\n')}\n`,
+  );
+  const { status, out } = run(['runs', '--project', dir], { loud: true });
+  expect(status === 0 && out.indexOf('Fix the label') < out.indexOf('Spec the export'), `runs: the cycles, newest first — got ${out}`);
+  expect(
+    /2026-09-20 10:00 · 1h01 · \$5\.00 · ended at qa PASS/.test(out) && /architect 1 · implementer 1 · reviewer 2 rounds, 1 sent back · qa 1 · largest write 7 file\(s\)/.test(out),
+    `runs: each with its time, its cost as its rounds', how it ended, and each stage's rounds and what they sent back — got ${out}`,
+  );
+  expect(out.includes('still open where the record ends') && out.includes('2 cycle(s): $6.00 in all; the costliest, $5.00'), `runs: and the total, with the costliest named — got ${out}`);
+  expect(run(['runs', '--project', await scratch()], { loud: true }).status === 1, 'runs: a directory with no profile says so');
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');

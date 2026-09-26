@@ -348,29 +348,15 @@ const WRITERS = new Set(['implementer', 'solidity-dev']);
 const DESIGNERS = new Set(['planner', 'architect']);
 
 /**
- * How the size of a change sat against the weight of the chain it went through: the core's first hard
- * rule, which nothing had measured. A cycle is a session's dispatches up to the verdict that closes one
- * (`CYCLE_ENDS`), so a loop-back's fix rounds stay with the design that preceded them — the owner's own
- * prompts were tried as the boundary first, and every "pode seguir" after a spec cut a pipeline in two.
- * Two more things end a cycle, both found in real sessions: a design stage dispatched after code was
- * written starts the next change — the light chain has no qa to close it, and it was absorbed into the
- * design that followed — unless the verdict before it sent work back, which the graph routes into both
- * designers; and a closing stage whose verdict cannot be read still closes it, counted as unreadable,
- * because a qa run with no verdict line otherwise let one cycle swallow a dozen pipelines. A cycle is
- * sized by the most files any one of its writers wrote, not their sum, so three fix rounds on two files
- * stay two files; and only edits through the edit tools count, so a file written from a shell is missed
- * and the size is a floor.
+ * A session's records cut into cycles: each up to the verdict that closes one, or to the next design stage
+ * after code was written unless a loop-back sent the work there, or to a closing stage whose verdict cannot
+ * be read (see `proportionReport`). What `stats` sizes and `nina runs` prices.
  *
- * It reports a distribution, not verdicts. A critical path is gated in full at any size and cannot be
- * seen from a file count, and one spec legitimately covers sibling steps (`ONE-SPEC`), so a cycle with
- * no architect of its own is not by itself a skipped gate. What the table can show is the shape: how
- * often a design stage ran for a change of one or two files, and how the large changes were carried.
- *
- * @param {object[]} records - The runs in the window.
+ * @param {object[]} records - Records of any number of sessions and projects.
+ * @returns {{runs: object[], end: 'closed'|'unreadable'|'next'|'open'}[]} In the order they happened within
+ *   each session.
  */
-function proportionReport(records, stepLimit = () => null) {
-  const measured = records.filter((r) => WRITERS.has(r.role) && typeof r.files_touched === 'number');
-  if (measured.length === 0) return;
+export function cyclesOf(records) {
   /** @type {Map<string, object[]>} */
   const bySession = new Map();
   for (const r of [...records].sort((a, b) => String(a.ts).localeCompare(String(b.ts)))) {
@@ -398,6 +384,34 @@ function proportionReport(records, stepLimit = () => null) {
     }
     end('open');
   }
+  return cycles;
+}
+
+/**
+ * How the size of a change sat against the weight of the chain it went through: the core's first hard
+ * rule, which nothing had measured. A cycle is a session's dispatches up to the verdict that closes one
+ * (`CYCLE_ENDS`), so a loop-back's fix rounds stay with the design that preceded them — the owner's own
+ * prompts were tried as the boundary first, and every "pode seguir" after a spec cut a pipeline in two.
+ * Two more things end a cycle, both found in real sessions: a design stage dispatched after code was
+ * written starts the next change — the light chain has no qa to close it, and it was absorbed into the
+ * design that followed — unless the verdict before it sent work back, which the graph routes into both
+ * designers; and a closing stage whose verdict cannot be read still closes it, counted as unreadable,
+ * because a qa run with no verdict line otherwise let one cycle swallow a dozen pipelines. A cycle is
+ * sized by the most files any one of its writers wrote, not their sum, so three fix rounds on two files
+ * stay two files; and only edits through the edit tools count, so a file written from a shell is missed
+ * and the size is a floor.
+ *
+ * It reports a distribution, not verdicts. A critical path is gated in full at any size and cannot be
+ * seen from a file count, and one spec legitimately covers sibling steps (`ONE-SPEC`), so a cycle with
+ * no architect of its own is not by itself a skipped gate. What the table can show is the shape: how
+ * often a design stage ran for a change of one or two files, and how the large changes were carried.
+ *
+ * @param {object[]} records - The runs in the window.
+ */
+function proportionReport(records, stepLimit = () => null) {
+  const measured = records.filter((r) => WRITERS.has(r.role) && typeof r.files_touched === 'number');
+  if (measured.length === 0) return;
+  const cycles = cyclesOf(records);
   const rows = [
     { label: '1–2 files', from: 1, to: 2 },
     { label: '3–9 files', from: 3, to: 9 },

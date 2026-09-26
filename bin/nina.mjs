@@ -28,6 +28,7 @@ import { evalCommand } from '../src/commands/eval.mjs';
 import { exportCommand } from '../src/commands/export.mjs';
 import { langfuse } from '../src/commands/langfuse.mjs';
 import { pipeline } from '../src/commands/pipeline.mjs';
+import { runs } from '../src/commands/runs.mjs';
 
 /** The NINA install directory (the parent of `bin/`). */
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -37,6 +38,7 @@ const COMMANDS = {
   init: { run: init, help: 'start a harness for a project: profile, surfaces, and what to fill' },
   snapshot: { run: snapshot, help: 'capture pipeline history from the Claude Code transcripts' },
   stats: { run: stats, help: 'report loop-back rate per stage from the snapshots' },
+  runs: { run: runs, help: 'what each piece of work cost: its cycles, their stages and rounds, what was sent back, time and cost' },
   check: { run: check, help: "validate a project's profile, vocabulary and integrations" },
   compose: { run: compose, help: 'rebuild a project\'s .claude/ from core + its surfaces' },
   where: { run: where, help: 'say which layer owns a path, and where a change to it goes' },
