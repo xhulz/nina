@@ -26,7 +26,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor, snapshotsDir } from '../paths.mjs';
-import { isLoopBack } from '../transcripts.mjs';
+import { isLoopBack, runOf } from '../transcripts.mjs';
 import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
 import { GRADUATION_AT, frontmatter, graduationTarget, list, pillFiles, roleGates } from './pills.mjs';
 import { decodeProjectDir } from './stats.mjs';
@@ -172,13 +172,17 @@ export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS) {
  */
 export function applied(records, known) {
   const taught = new Set(known.filter((l) => !l.retired).flatMap((l) => l.roles));
-  // Only records captured after the field existed can answer; the rest are unknown, not "no".
-  const measured = records.filter((r) => taught.has(r.role) && 'lessons_read' in r);
+  // Only records captured after the field existed can answer; the rest are unknown, not "no". Asked of
+  // runs, not rounds: a lesson a run read in its first round is in front of it in every round after.
+  const runs = new Map();
+  for (const r of records.filter((r) => taught.has(r.role) && 'lessons_read' in r)) runs.set(runOf(r), [...(runs.get(runOf(r)) ?? []), r]);
+  const measured = [...runs.values()];
+  const read = (rounds) => rounds.some((r) => r.lessons_read > 0);
   return {
     measured: measured.length,
-    read: measured.filter((r) => r.lessons_read > 0).length,
-    listed: measured.filter((r) => !(r.lessons_read > 0) && r.lessons_listed).length,
-    from: measured.map((r) => day(r.ts)).sort()[0] ?? null,
+    read: measured.filter(read).length,
+    listed: measured.filter((rounds) => !read(rounds) && rounds.some((r) => r.lessons_listed)).length,
+    from: measured.map((rounds) => day(rounds[0].ts)).sort()[0] ?? null,
   };
 }
 
@@ -652,7 +656,7 @@ export async function learn(argv, ctx) {
   console.log(`\n  learning — core ${profile.core}\n`);
   console.log(
     records.length
-      ? `  observe   ${records.length} dispatch(es) recorded, ${span}`
+      ? `  observe   ${new Set(records.map(runOf)).size} run(s) in ${records.length} round(s) recorded, ${span}`
       : '  observe   ✗ nothing recorded — no transcripts found for this project, so no link below can be measured',
   );
   if (late.length === 0) console.log(`  capture   ✓ no role has looped back ${CAPTURE_AT}+ times without a lesson in the last ${days} days`);

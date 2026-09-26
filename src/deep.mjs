@@ -17,11 +17,11 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { createReadStream, existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import { callsDir, childEnv, forgetProject, runFailure } from './commands/eval.mjs';
 import { isLoopBack, transcriptsOf } from './transcripts.mjs';
+import { readRun } from './agentrun.mjs';
 
 /** Reports per map call, and how much of each is sent: the cause is in the first screen of a report. */
 const BATCH = 15;
@@ -70,34 +70,6 @@ export const REDUCE_SCHEMA = {
 };
 
 /**
- * The report a run handed back last — its final verdict and reasons — from its own transcript: the
- * `SubagentHandback` it called, or, for a run from before Claude Code had that tool, its last message,
- * which was the report then.
- *
- * @param {string} file - A subagent transcript.
- * @returns {Promise<string|null>}
- */
-async function handback(file) {
-  let report = null;
-  let last = null;
-  const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-  for await (const line of rl) {
-    const handed = line.includes('SubagentHandback');
-    if (!handed && !line.includes('"type":"assistant"')) continue;
-    try {
-      const row = JSON.parse(line);
-      for (const block of row?.message?.content ?? []) {
-        if (block?.type === 'tool_use' && block.name === 'SubagentHandback' && typeof block.input?.message === 'string') report = block.input.message;
-        if (row.type === 'assistant' && block?.type === 'text' && block.text.trim()) last = block.text;
-      }
-    } catch {
-      // A torn line loses one message, not the run.
-    }
-  }
-  return report ?? last;
-}
-
-/**
  * The loop-back reports still on disk for a project's records, newest first.
  *
  * @param {object[]} records - The project's snapshot records.
@@ -121,7 +93,8 @@ export async function loopBackReports(records, projectDir, since) {
   let gone = 0;
   for (const r of wanted.sort((a, b) => String(b.ts).localeCompare(String(a.ts)))) {
     const file = files.get(r.agent_id);
-    const text = file ? await handback(file) : null;
+    // The round's own report: a run resumed after it reported holds one per round, and the last is not this one's.
+    const text = file ? (await readRun(file, r.round ?? 1))?.report : null;
     if (!text) {
       gone += 1;
       continue;

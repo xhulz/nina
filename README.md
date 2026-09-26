@@ -248,7 +248,7 @@ link at a time, and its first audit found four of the five links broken. Here's 
 after I redesigned it:
 
 ```text
-  observe   826 dispatch(es) recorded, 2026-08-12 → 2026-09-22
+  observe   826 run(s) in 843 round(s) recorded, 2026-08-12 → 2026-09-22
   capture   ✗ reviewer: 24 loop-back(s) since its newest lesson (2026-09-03)
   apply     592 of 646 run(s) of roles that have lessons opened their pills (92%)
   graduate  0 lesson(s) at 3+ occurrences · 0 request(s) open
@@ -256,7 +256,7 @@ after I redesigned it:
 ```
 
 ```text
-  observe   826 dispatch(es) recorded, 2026-08-12 → 2026-09-22
+  observe   826 run(s) in 843 round(s) recorded, 2026-08-12 → 2026-09-22
   capture   ✓ no role has looped back 3+ times without a lesson in the last 14 days
   apply     581 of 720 run(s) of roles that have lessons read one (81%); 81 only listed the directory — measured since 2026-08-12. Reading is not obeying; nothing here can see that.
   graduate  3 lesson(s) at 3+ occurrences · 0 request(s) open

@@ -271,6 +271,85 @@ const LOOP_BACK = new Set(['REJECTED', 'BLOCKED', 'FAIL', 'FAILED']);
 export const isLoopBack = (verdict) => LOOP_BACK.has(verdict);
 
 /**
+ * The run a record is a round of: the dispatch id of its first round. A run is one agent, from the Agent
+ * call that started it to the last report it handed back; a round is one pass of it that ends in a report —
+ * the dispatch itself, or a `SendMessage` that resumed the agent after it had reported. The first round is
+ * recorded under the dispatch's id, and each later one under that id with `#<round>` after it.
+ *
+ * A record with no id is a run of its own: read as one id they share, every such record would be one run.
+ *
+ * @param {{dispatch_id?: string}} record - A snapshot record.
+ * @returns {string}
+ */
+export function runOf(record) {
+  if (record?.dispatch_id) return String(record.dispatch_id).split('#')[0];
+  if (!unnamed.has(record)) {
+    named += 1;
+    unnamed.set(record, `(unnamed ${named})`);
+  }
+  return unnamed.get(record);
+}
+
+/** An id for each record that has none, for as long as the record is held. */
+const unnamed = new WeakMap();
+let named = 0;
+
+/**
+ * Whether a parsed row of a subagent's transcript is the run handing its report back.
+ *
+ * @param {object|null} row - A parsed transcript row.
+ * @returns {boolean}
+ */
+const handsBack = (row) =>
+  row?.type === 'assistant' && Array.isArray(row.message?.content) && row.message.content.some((b) => b?.type === 'tool_use' && b.name === 'SubagentHandback');
+
+/**
+ * Whether a parsed row of a subagent's transcript is something said to the agent, as opposed to a tool's
+ * result or a reminder: the prompt that starts a run, or the message that resumes it.
+ *
+ * @param {object|null} row - A parsed transcript row.
+ * @returns {boolean}
+ */
+const saidToAgent = (row) => {
+  if (row?.type !== 'user') return false;
+  const content = row.message?.content;
+  if (Array.isArray(content) && content.some((b) => b?.type === 'tool_result')) return false;
+  return !textOf(content).trimStart().startsWith('<system-reminder>');
+};
+
+/**
+ * Tells, line by line, which round of its run each line of a subagent's transcript belongs to. A round
+ * ends when the run hands its report back, and the next opens with the next thing said to the agent: a
+ * resume is written into the agent's own transcript as a message, and everything after it up to its next
+ * handback is that round's. What the agent writes after it reports and before anyone speaks to it again
+ * stays in the round it closed; a message that reaches it before it reports is part of the round it is in.
+ *
+ * The snapshot, the context sent to Langfuse and `learn --deep` all read rounds through this, so the three
+ * cannot disagree about where one ends. Only a line that could open a round or close one is parsed.
+ *
+ * @returns {(line: string) => number} Called on each line in order; returns the round it belongs to.
+ */
+export function roundsOf() {
+  let round = 1;
+  let reported = false;
+  const parse = (line) => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return null;
+    }
+  };
+  return (line) => {
+    if (reported && line.includes('"user"') && saidToAgent(parse(line))) {
+      round += 1;
+      reported = false;
+    }
+    if (line.includes('SubagentHandback') && handsBack(parse(line))) reported = true;
+    return round;
+  };
+}
+
+/**
  * Every place a transcript line can carry text.
  *
  * A completion notification has appeared in two shapes: a `user` message whose
@@ -331,8 +410,10 @@ async function completeLineOffset(file, size, lastLine) {
  * Scans one project's transcripts and returns a record per subagent dispatch.
  *
  * A dispatch may notify more than once (an agent resumed via SendMessage re-notifies
- * under the same id). The last notification wins and `resumes` counts the extras —
- * counting every notification as a separate run inflates the totals roughly fivefold.
+ * under the same id), and every copy of one notification is one result. Where the run
+ * handed its reports back, each resume after a report is a round of its own, read from
+ * the agent's transcript (`attachAgentDetail`); a run from before the handback keeps
+ * its last notification's verdict.
  *
  * Reading is incremental: a per-file byte cursor means a session that has already been
  * captured is not re-read, which matters because this runs from a Stop hook and the
@@ -411,7 +492,6 @@ export async function scanProject(projectDir, prior = {}) {
             result_ts: null,
             duration_s: null,
             result_chars: null,
-            resumes: 0,
             status: null,
             agent_id: null,
             skills: [],
@@ -449,29 +529,29 @@ export async function scanProject(projectDir, prior = {}) {
       if (!record) continue;
 
       const result = /<result>([\s\S]*?)(?:<\/result>|$)/.exec(text)?.[1] ?? '';
-      // The same notification read twice is not a second result. Taking it as one counted a resume
-      // that never happened. It is read twice when bytes are re-walked after a cursor went back, and
-      // since Claude Code 2.1.282 one notification is also written up to three times: queued, taken
-      // off the queue or absorbed mid-turn, and delivered as a message, each at its own time. The
-      // agent's usage block (its time so far) tells a copy from a resume, which has run for longer;
-      // a notification without one is told by its time, as before.
+      // The same notification read twice is not a second result. It is read twice when bytes are
+      // re-walked after a cursor went back, and since Claude Code 2.1.282 one notification is also
+      // written up to three times: queued, taken off the queue or absorbed mid-turn, and delivered as a
+      // message, each at its own time. The agent's usage block (its time so far) tells a copy from a
+      // resume, which has run for longer; a notification without one is told by its time, as before.
       const spentMs = Number(/<duration_ms>(\d+)<\/duration_ms>/.exec(text)?.[1] ?? Number.NaN);
       const timed = Number.isFinite(spentMs);
       if (timed ? record.notified_ms === spentMs : record.result_ts && record.result_ts === (row.timestamp ?? null)) continue;
-      if (timed ? record.notified_ms != null : record.result_ts) record.resumes += 1;
       if (timed) record.notified_ms = spentMs;
       record.status = /<status>(.*?)<\/status>/.exec(text)?.[1] ?? null;
-      record.result_ts = row.timestamp ?? null;
       // A notification whose run handed its report back says only that: "delivered to you as a
       // message … it is not repeated here". Read for a verdict, it replaced the one the handback
       // declared with none, and since the subagent's transcript had not grown, nothing read it again.
-      if (!String(record.verdict_source ?? '').startsWith('handback')) {
-        const { verdict, source } = classifyVerdict(result, record.role);
-        record.result_chars = result.length;
-        record.verdict = verdict;
-        record.verdict_source = source;
-        record.issues = issueCount(result, verdict, source);
-      }
+      // Nor does it time the round the handback closed: a resumed run notifies again under the
+      // dispatch's id, and taken as the first round's end, that notification stretched the round
+      // across every hour the agent sat waiting to be resumed.
+      if (String(record.verdict_source ?? '').startsWith('handback')) continue;
+      record.result_ts = row.timestamp ?? null;
+      const { verdict, source } = classifyVerdict(result, record.role);
+      record.result_chars = result.length;
+      record.verdict = verdict;
+      record.verdict_source = source;
+      record.issues = issueCount(result, verdict, source);
       if (record.ts && record.result_ts) {
         record.duration_s = Math.round((Date.parse(record.result_ts) - Date.parse(record.ts)) / 1000);
       }
@@ -487,8 +567,8 @@ export async function scanProject(projectDir, prior = {}) {
 }
 
 /**
- * Reads each subagent's own transcript for the two things only it knows: the report it
- * handed back, and the skills it invoked.
+ * Reads each subagent's own transcript for what only it knows: the reports it handed back, the skills
+ * it invoked, what it spent, and what it wrote — round by round.
  *
  * The report is the authoritative source for a verdict. Claude Code 2.1.276 moved the
  * hand-off to a `SubagentHandback` tool call, whose `message` is the report itself —
@@ -496,17 +576,25 @@ export async function scanProject(projectDir, prior = {}) {
  * live session that notification may not be written at all. Reading the subagent's own
  * file works across both, and is where the mandatory-skill rule can be checked.
  *
+ * A run the orchestrator resumed after it reported is recorded as a round per report (`roundsOf`). It
+ * used to be one record holding its last verdict, so a reviewer that rejected twice and then approved was
+ * one approval: over one project's first two days the gate's ledger held 34 loop-backs where the snapshot
+ * held 5, since the orchestrator resumed the same reviewer, architect and implementer through every fix.
+ * Each round keeps its own verdict, time, spend, files and skills, so every report reads rounds and none
+ * has to know that a run can have more than one.
+ *
  * These per-agent transcripts are pruned sooner than the session's own, so the snapshot
  * captures this while it exists.
  *
  * @param {string} projectDir - The project's transcript directory.
- * @param {Map<string, object>} dispatches - Records to enrich, keyed by dispatch id.
+ * @param {Map<string, object>} dispatches - Records to enrich, keyed by dispatch id; a run's later rounds
+ *   are added to it.
  */
 async function attachAgentDetail(projectDir, dispatches) {
-  /** @type {Map<string, object[]>} agent id → the dispatches that ran under it */
+  /** @type {Map<string, object[]>} agent id → the dispatches that ran under it, first rounds only */
   const byAgent = new Map();
   for (const record of dispatches.values()) {
-    if (!record.agent_id) continue;
+    if (!record.agent_id || (record.round ?? 1) !== 1) continue;
     if (!byAgent.has(record.agent_id)) byAgent.set(record.agent_id, []);
     byAgent.get(record.agent_id).push(record);
   }
@@ -522,45 +610,78 @@ async function attachAgentDetail(projectDir, dispatches) {
       const agentId = /^agent-([a-f0-9]+)\.jsonl$/.exec(file)?.[1];
       const records = agentId && byAgent.get(agentId);
       if (!records) continue;
+      const run = records[0];
+      const later = [];
+      for (let k = 2; dispatches.has(`${run.dispatch_id}#${k}`); k += 1) later.push(dispatches.get(`${run.dispatch_id}#${k}`));
       // A run read in full whose transcript has not grown since has nothing new to say. It was assumed
       // a finished run's transcript never changes, and 14 in 1,389 did: resumed after reporting, with a
       // median 42% of their tokens — and their final verdict — written after the first handback, so the
-      // first read froze a partial bill. A run still in flight has no handback yet and is read again;
+      // first read froze a partial bill. A run still in flight is read again when its transcript grows;
       // a record from before a field existed is read once more; and one whose transcript is gone is
       // never reached here, so it keeps what it had rather than being dropped, which is what a
-      // --rebuild would do to every run older than Claude Code's transcript retention. A run read in
-      // full has a verdict from its handback; one whose verdict says otherwise lost it to a notification
-      // read after it, and is read once more to get it back.
+      // --rebuild would do to every run older than Claude Code's transcript retention. A round that
+      // handed its report back has its verdict from the handback; one whose verdict says otherwise lost
+      // it to a notification read after it, and is read once more to get it back. A run from before the
+      // handback existed is read once, not on every snapshot: skipping only runs with a handback re-read
+      // 744 of one project's 826 in full on every turn, two seconds before the person saw an answer.
       const size = (await stat(join(dir, file)).catch(() => null))?.size ?? null;
-      const whole = (r) => r.agent_read && String(r.verdict_source ?? '').startsWith('handback') && r.agent_read_bytes === size;
-      if (records.every((r) => whole(r) && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r)) continue;
+      const settled = (r) => r.handed_back === false || String(r.verdict_source ?? '').startsWith('handback');
+      if (
+        run.agent_read_bytes === size &&
+        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r)
+      ) {
+        continue;
+      }
+      // A run captured before rounds were, holding every round's spend and its last verdict. Its later
+      // rounds are marked, so an export that already sent the whole run does not send them again.
+      const legacy = !('round' in run) && 'tokens' in run;
 
-      const skills = new Set();
-      // Lessons this run read, and whether it only listed the directory. Every spec tells its role
-      // to read its pills before acting, and until this was counted nothing could say whether one
-      // ever had. Only the count is kept, never the path or the content — this record is metadata.
-      const lessonsRead = new Set();
-      let lessonsListed = false;
-      let handback = null;
-      let handbackTs = null;
-      /**
-       * Each API message's final usage, by message id. A streamed message is written once per content
-       * block under the same id, and its output count grows until the last copy — summing the rows
-       * counted the same input three or four times over.
-       */
-      const usage = new Map();
-      /** The files the run wrote through the edit tools. Only their number is kept. */
-      const written = new Set();
+      /** What one round did, read into as the transcript goes. */
+      const fresh = () => ({
+        start: null,
+        branch: null,
+        skills: new Set(),
+        // Lessons this round read, and whether it only listed the directory. Every spec tells its role
+        // to read its pills before acting, and until this was counted nothing could say whether one
+        // ever had. Only the count is kept, never the path or the content — this record is metadata.
+        lessonsRead: new Set(),
+        lessonsListed: false,
+        handback: null,
+        handbackTs: null,
+        /**
+         * Each API message's final usage, by message id. A streamed message is written once per content
+         * block under the same id, and its output count grows until the last copy — summing the rows
+         * counted the same input three or four times over.
+         */
+        usage: new Map(),
+        /** The files the round wrote through the edit tools. Only their number is kept. */
+        written: new Set(),
+      });
+      const rounds = [fresh()];
+      const roundOf = roundsOf();
 
       const rl = createInterface({ input: createReadStream(join(dir, file)), crlfDelay: Infinity });
       for await (const line of rl) {
+        const n = roundOf(line);
+        if (n > rounds.length) {
+          // The line that opened the round: the message that resumed the run, and when.
+          rounds.push(fresh());
+          try {
+            const opened = JSON.parse(line);
+            rounds[n - 1].start = opened.timestamp ?? null;
+            rounds[n - 1].branch = opened.gitBranch ?? null;
+          } catch {
+            // Unreachable: a line that opens a round was parsed to tell that it does.
+          }
+        }
+        const round = rounds[n - 1];
         const hasSkill = line.includes('"Skill"');
         const hasHandback = line.includes('SubagentHandback');
         if (/"name":"(Edit|Write|MultiEdit|NotebookEdit)"/.test(line)) {
           try {
             for (const block of JSON.parse(line)?.message?.content ?? []) {
               const path = block?.type === 'tool_use' ? block.input?.[WRITES[block.name]] : null;
-              if (typeof path === 'string') written.add(path);
+              if (typeof path === 'string') round.written.add(path);
             }
           } catch {
             // A torn line loses one edit, not the run's.
@@ -571,18 +692,18 @@ async function attachAgentDetail(projectDir, dispatches) {
             const row = JSON.parse(line);
             const message = row?.message;
             const effort = typeof row?.effort === 'string' ? row.effort : null;
-            if (message?.id && message.usage) usage.set(message.id, { usage: message.usage, model: message.model ?? null, effort });
+            if (message?.id && message.usage) round.usage.set(message.id, { usage: message.usage, model: message.model ?? null, effort });
           } catch {
             // A torn line loses one message's count, not the run's.
           }
         }
         const touched = pillReads(line);
-        for (const lesson of touched.read) lessonsRead.add(lesson);
-        if (touched.listed) lessonsListed = true;
+        for (const lesson of touched.read) round.lessonsRead.add(lesson);
+        if (touched.listed) round.lessonsListed = true;
         if (!hasSkill && !hasHandback) continue;
 
         if (hasSkill) {
-          for (const m of line.matchAll(/"skill"\s*:\s*"([^"]+)"/g)) skills.add(m[1]);
+          for (const m of line.matchAll(/"skill"\s*:\s*"([^"]+)"/g)) round.skills.add(m[1]);
         }
         if (!hasHandback) continue;
 
@@ -598,43 +719,73 @@ async function attachAgentDetail(projectDir, dispatches) {
           if (block?.type !== 'tool_use' || block?.name !== 'SubagentHandback') continue;
           const message = block?.input?.message;
           if (typeof message !== 'string') continue;
-          handback = message;
-          handbackTs = row.timestamp ?? null;
+          round.handback = message;
+          round.handbackTs = row.timestamp ?? null;
         }
       }
 
-      const spent = tokensOf(usage);
-      // One transcript, one bill: were two records ever to share an agent, the second would count it again.
-      records.forEach((record, i) => {
-        record.tokens = i === 0 ? spent.tokens : null;
-        record.usage_model = spent.model;
-        record.effort = spent.effort;
-        record.files_touched = written.size;
-      });
-      for (const record of records) {
-        record.skills = [...skills];
-        record.lessons_read = lessonsRead.size;
-        record.lessons_listed = lessonsListed;
-        // The first definition, which counted a listing or a citation as a read. Dropped rather
-        // than kept beside the new one, so no report can pick up the inflated figure by name.
-        delete record.pills_read;
-        delete record.pills_looked;
-        if (handback) {
-          const { verdict, source } = classifyVerdict(handback, record.role);
+      rounds.forEach((round, i) => {
+        // A round nothing happened in — something said to the agent after it reported that it never
+        // answered — is not a round.
+        if (i > 0 && !round.handback && round.usage.size === 0) return;
+        const id = `${run.dispatch_id}#${i + 1}`;
+        let targets = records;
+        if (i > 0) {
+          if (!dispatches.has(id)) {
+            dispatches.set(id, {
+              dispatch_id: id,
+              ts: round.start,
+              role: run.role,
+              desc: run.desc,
+              model: run.model,
+              branch: round.branch ?? run.branch,
+              session: run.session,
+              verdict: null,
+              verdict_source: null,
+              issues: null,
+              result_ts: null,
+              duration_s: null,
+              result_chars: null,
+              status: null,
+              agent_id: run.agent_id,
+              skills: [],
+              ...(legacy ? { backfilled: true } : {}),
+            });
+          }
+          targets = [dispatches.get(id)];
+        }
+        const spent = tokensOf(round.usage);
+        targets.forEach((record, j) => {
+          // One transcript, one bill: were two records ever to share an agent, the second would count it again.
+          record.tokens = j === 0 ? spent.tokens : null;
+          record.usage_model = spent.model;
+          record.effort = spent.effort;
+          record.files_touched = round.written.size;
+          record.skills = [...round.skills];
+          record.lessons_read = round.lessonsRead.size;
+          record.lessons_listed = round.lessonsListed;
+          record.round = i + 1;
+          record.handed_back = Boolean(round.handback);
+          record.agent_read = true;
+          // Fields a record no longer carries: the first definition of a lesson read, which counted a
+          // listing or a citation as one, and the count of resumes, which rounds replaced.
+          delete record.pills_read;
+          delete record.pills_looked;
+          delete record.resumes;
+          if (!round.handback) return;
+          const { verdict, source } = classifyVerdict(round.handback, record.role);
           record.verdict = verdict;
           record.verdict_source = source === 'declared' ? 'handback' : `handback:${source}`;
-          record.issues = issueCount(handback, verdict, source);
-          record.result_chars = handback.length;
-          record.result_ts = record.result_ts ?? handbackTs;
+          record.issues = issueCount(round.handback, verdict, source);
+          record.result_chars = round.handback.length;
+          record.status = record.status ?? 'completed';
+          record.result_ts = round.handbackTs ?? record.result_ts;
           if (record.ts && record.result_ts) {
-            record.duration_s = Math.round(
-              (Date.parse(record.result_ts) - Date.parse(record.ts)) / 1000,
-            );
+            record.duration_s = Math.round((Date.parse(record.result_ts) - Date.parse(record.ts)) / 1000);
           }
-          record.agent_read = true;
-          record.agent_read_bytes = size;
-        }
-      }
+        });
+      });
+      run.agent_read_bytes = size;
     }
   }
 }
