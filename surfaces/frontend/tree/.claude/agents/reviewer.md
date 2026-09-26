@@ -1,5 +1,5 @@
 <!-- nina:slot frontend.2 -->
-- **If the diff touches `{{APP_DIR}}/**`: the spec must carry a Visual acceptance section, and you check the render against it — see *Visual gate* below.** No section → REJECT upstream to the architect.
+- **If the diff touches `{{APP_DIR}}/**`: the spec — or the dispatch, in a chain with no architect — must carry a Visual acceptance section, and you check the render against it — see *Visual gate* below.** No section → REJECT upstream to whoever wrote it.
 
 <!-- nina:slot frontend.3 -->
 - `{{BUILD_CMD}}` for the affected frontend packages (`{{APP_DIR}}`)
@@ -14,36 +14,30 @@ this pipeline and frontend work does not — the frontend defects were never exp
 
 For any diff touching `{{APP_DIR}}/**`:
 
-1. Build and serve it — you already run `{{BUILD_CMD}}` for frontend diffs; serve that build locally.
-   Every protected screen redirects to `/login` without a session, so a plain static server
-   screenshots the login page. Use `scripts/visual-fixture-server.mjs`, which serves the built
-   `dist` AND a canned API from ONE origin (no auth, no DB, no backend):
+1. Build and serve it. Every protected screen redirects to the login without a session, so a plain
+   static server screenshots the login page: this project serves the build beside a canned API, from
+   one origin, with no auth, database or backend —
 
    ```bash
-   export PATH=/opt/homebrew/opt/node@22/bin:$PATH
-   cd {{APP_DIR}} && VITE_API_BASE_URL=http://localhost:5199 npx vite build --outDir /tmp/dist-vis
-   node ../../scripts/visual-fixture-server.mjs /tmp/dist-vis 5199
+   {{VISUAL_SERVE}}
    ```
 
-   `VITE_API_BASE_URL` must match the fixture's origin at BUILD time — Vite inlines it, and a
-   mismatch ships a screen that renders but fetches nothing. The fixture logs `UNSTUBBED: <path>`
-   for any endpoint it does not know; add a handler there rather than screenshotting a broken
-   screen. `FIXTURE_EMPTY=1` switches list endpoints to `[]` to exercise empty states, and
-   `FIXTURE_ERROR=<CODE>` fails every write with that error code so an error state is
-   reachable at all — otherwise reaching one means finding real data that collides, which
-   usually means you cannot reach it.
+   The API's address is fixed at build time, and one that does not match the fixture's origin ships a
+   screen that renders but fetches nothing. A request the fixture does not answer is a gap in it: add
+   the handler rather than screenshot a broken screen. It must also reach the empty and error states the
+   change has; a state you cannot reach is a state nobody reviewed.
 2. `browser_navigate` to the changed screen. Screenshot at **1440** and at **375**
    (`browser_resize` first — the viewport resets to a narrow default across navigations, so
    resize AFTER navigating and confirm the width in the screenshot before you judge it).
 
-   Many screens are not reachable by URL. Tabs on `/identification` and `/settings` are local
-   React state, never reflected in the route, so `browser_click` is the ONLY way in — a
-   navigate-and-screenshot lands on the default tab and proves nothing about the changed one.
+   Many screens are not reachable by URL: a tab kept in component state is never in the route, so
+   `browser_click` is the ONLY way in — a navigate-and-screenshot lands on the default tab and proves
+   nothing about the changed one.
 3. **Measure, do not squint.** `browser_evaluate` turns "looks fine" into a number, and an
    overflow you can measure is one you can attribute. To decide whether horizontal scroll is
    yours or pre-existing, measure `document.documentElement.scrollWidth` vs `clientWidth` on
-   the changed screen AND on an untouched one (`/dashboard`) — and, when it matters, build the
-   parent commit into a second dist and measure both. Reporting a pre-existing app-wide defect
+   the changed screen AND on an untouched one — and, when it matters, build `HEAD` into a second
+   dist from a worktree (Hard Rule #18) and measure both. Reporting a pre-existing app-wide defect
    as a regression wastes a cycle; excusing a real one as "probably pre-existing" ships it.
 4. Check each screenshot against the spec's **Visual acceptance** list, item by item. Not "looks
    fine" — the specific claims the spec made.

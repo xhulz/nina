@@ -35,6 +35,7 @@
     "SECRETS_PROD": "wrangler secret put",
     "EMITTING_PKGS": "`db`, `core`",
     "PAGES_PROJECT": "acme-app",
-    "API_STAGING": "acme-api-staging"
+    "API_STAGING": "acme-api-staging",
+    "VISUAL_SERVE": "pnpm --filter @acme/app visual"
   }
 }
