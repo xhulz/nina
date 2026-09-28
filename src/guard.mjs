@@ -35,15 +35,108 @@ const EDITS = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', N
 /** The git subcommands that move the checkout or write its history — Hard Rule #18's. */
 const MOVES = new Set(['stash', 'checkout', 'switch', 'reset', 'restore', 'clean', 'commit', 'merge', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'pull', 'push']);
 
-/** Words that run the next word as the command: `env X=1 git …`, `command git …`. */
-const RUNNERS = new Set(['env', 'command', 'exec', 'time', 'nohup', 'nice']);
+/** Words before the command word that leave it the command: `env X=1 git …`, `command git …`, `{ git …; }`. */
+const RUNNERS = new Set(['env', 'command', 'exec', 'time', 'nohup', 'nice', '{', '}', '!']);
 
 /** A `-C` or a `cd` to one of these is still the tree the stage was dispatched into. */
 const HERE = new Set(['.', './']);
 
+/** Where a heredoc's delimiter word ends. */
+const DELIMITER_ENDS = new Set([' ', '\t', '\r', '\n', ';', '&', '|', '(', ')', '<', '>']);
+
 /**
- * The git subcommand in a shell command that would move the checkout the command runs in, or null. Read segment
- * by segment, in order, as the shell runs it: a `cd` exempts only what comes after it — `git stash && cd /tmp`
+ * A shell command as the shell reads it: its simple commands, in order, each as its words with the quotes removed.
+ * `&&`, `||`, `;`, `|`, `&`, a newline and a parenthesis end one; a quoted string is part of a word — `"git" stash`
+ * is git — and never a separator or a command of its own, across lines too; a comment and a heredoc's body are not
+ * read. One pass, no pattern: the command is a model's, and a pattern that backtracks on it is one a stage could
+ * stall the guard with.
+ *
+ * @param {string} command
+ * @returns {string[][]}
+ */
+export function simpleCommands(command) {
+  const text = String(command);
+  const commands = [[]];
+  const heredocs = [];
+  let word = null;
+  const end = () => {
+    if (word !== null) commands.at(-1).push(word);
+    word = null;
+  };
+  const next = () => {
+    end();
+    if (commands.at(-1).length) commands.push([]);
+  };
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === "'") {
+      const close = text.indexOf("'", i + 1);
+      const stop = close === -1 ? text.length : close;
+      word = (word ?? '') + text.slice(i + 1, stop);
+      i = stop + 1;
+    } else if (c === '"') {
+      let quoted = '';
+      i += 1;
+      while (i < text.length && text[i] !== '"') {
+        if (text[i] === '\\' && i + 1 < text.length) i += 1;
+        quoted += text[i];
+        i += 1;
+      }
+      word = (word ?? '') + quoted;
+      i += 1;
+    } else if (c === '\\') {
+      if (text[i + 1] !== '\n') word = (word ?? '') + (text[i + 1] ?? '');
+      i += 2;
+    } else if (c === '#' && word === null) {
+      const line = text.indexOf('\n', i);
+      i = line === -1 ? text.length : line;
+    } else if (c === '\n') {
+      next();
+      i += 1;
+      for (const delimiter of heredocs.splice(0)) {
+        while (i < text.length) {
+          const line = text.indexOf('\n', i);
+          const stop = line === -1 ? text.length : line;
+          const body = text.slice(i, stop);
+          i = stop + 1;
+          if (body.trim() === delimiter) break;
+        }
+      }
+    } else if (c === '<' && text.startsWith('<<<', i)) {
+      word = (word ?? '') + '<<<';
+      i += 3;
+    } else if (c === '<' && text[i + 1] === '<') {
+      end();
+      i += text[i + 2] === '-' ? 3 : 2;
+      while (text[i] === ' ' || text[i] === '\t') i += 1;
+      let delimiter = '';
+      while (i < text.length && !DELIMITER_ENDS.has(text[i])) {
+        if (text[i] !== "'" && text[i] !== '"' && text[i] !== '\\') delimiter += text[i];
+        i += 1;
+      }
+      if (delimiter) heredocs.push(delimiter);
+    } else if (c === '&' && (text[i + 1] === '>' || word?.endsWith('>') || word?.endsWith('<'))) {
+      word = (word ?? '') + c;
+      i += 1;
+    } else if (c === ';' || c === '&' || c === '|' || c === '(' || c === ')') {
+      next();
+      i += (c === '&' || c === '|') && text[i + 1] === c ? 2 : 1;
+    } else if (c === ' ' || c === '\t' || c === '\r') {
+      end();
+      i += 1;
+    } else {
+      word = (word ?? '') + c;
+      i += 1;
+    }
+  }
+  end();
+  return commands.filter((words) => words.length);
+}
+
+/**
+ * The git subcommand in a shell command that would move the checkout the command runs in, or null. Read command
+ * by command, in order, as the shell runs it: a `cd` exempts only what comes after it — `git stash && cd /tmp`
  * stashed the tree all the same, and a test of the whole string for a `cd` let it through — and `-C .` is not
  * another directory. A git command is one whose command word is `git`, not a phrase in a quoted string or a
  * heredoc's body; its subcommand is the word after its global options, so `merge-base` is not `merge`; and a
@@ -54,43 +147,32 @@ const HERE = new Set(['.', './']);
  */
 export function checkoutMove(command) {
   let moved = false;
-  let heredoc = null;
-  for (const line of String(command).split('\n')) {
-    if (heredoc !== null) {
-      if (line.trim() === heredoc) heredoc = null;
+  for (const words of simpleCommands(command)) {
+    while (words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || RUNNERS.has(words[0]))) words.shift();
+    if (words[0] === 'cd' || words[0] === 'pushd') {
+      moved ||= !HERE.has(words[1] ?? '');
       continue;
     }
-    const opens = /<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/.exec(line)?.[1] ?? null;
-    const bare = line.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 'Q');
-    for (const part of bare.split(/&&|\|\||;|\|/)) {
-      const words = part.trim().replace(/^[({]\s*/, '').replace(/\s*[)}]+$/, '').split(/\s+/).filter(Boolean);
-      while (words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || RUNNERS.has(words[0]))) words.shift();
-      if (words[0] === 'cd' || words[0] === 'pushd') {
-        moved ||= !HERE.has(words[1] ?? '');
-        continue;
+    if (words[0] !== 'git') continue;
+    let i = 1;
+    let elsewhere = false;
+    while (words[i]?.startsWith('-')) {
+      if (words[i] === '-C') {
+        elsewhere ||= !HERE.has(words[i + 1] ?? '.');
+        i += 2;
+      } else if (words[i] === '-c') {
+        i += 2;
+      } else {
+        if (/^--(git-dir|work-tree)\b/.test(words[i])) elsewhere = true;
+        i += 1;
       }
-      if (words[0] !== 'git') continue;
-      let i = 1;
-      let elsewhere = false;
-      while (words[i]?.startsWith('-')) {
-        if (words[i] === '-C') {
-          elsewhere ||= !HERE.has(words[i + 1] ?? '.');
-          i += 2;
-        } else if (words[i] === '-c') {
-          i += 2;
-        } else {
-          if (/^--(git-dir|work-tree)\b/.test(words[i])) elsewhere = true;
-          i += 1;
-        }
-      }
-      const sub = words[i];
-      if (!MOVES.has(sub) || moved || elsewhere) continue;
-      const rest = words.slice(i + 1);
-      if (sub === 'stash' && ['list', 'show'].includes(rest[0])) continue;
-      if (sub === 'apply' && rest.some((w) => ['--check', '--stat', '--numstat', '--summary'].includes(w)) && !rest.includes('--apply')) continue;
-      return sub;
     }
-    if (opens !== null) heredoc = opens;
+    const sub = words[i];
+    if (!MOVES.has(sub) || moved || elsewhere) continue;
+    const rest = words.slice(i + 1);
+    if (sub === 'stash' && ['list', 'show'].includes(rest[0])) continue;
+    if (sub === 'apply' && rest.some((w) => ['--check', '--stat', '--numstat', '--summary'].includes(w)) && !rest.includes('--apply')) continue;
+    return sub;
   }
   return null;
 }
