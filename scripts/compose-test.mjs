@@ -117,8 +117,8 @@ async function runFixture(name) {
       }
     }
 
-    // 1. The vocabulary covers what the core says.
-    for (const hole of new Set(text.match(PLACEHOLDER) ?? [])) {
+    // 1. The vocabulary covers what the core says — a placeholder left raw, or composed as owed.
+    for (const hole of new Set([...(text.match(PLACEHOLDER) ?? []), ...(text.match(/\[[A-Z][A-Z0-9_]*: not declared yet\]/g) ?? [])])) {
       failures.push(`${rel}: unresolved ${hole}`);
     }
 

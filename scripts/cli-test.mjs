@@ -3501,7 +3501,10 @@ const dated = (date, status = 'active') =>
   expect((await reviewer()).includes('- `uv run mypy .` for the affected packages'), 'vocabulary: a project that declares a name changes it');
   await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, TYPECHECK_CMD: null } }, null, 2));
   run(['compose', '--project', dir]);
-  expect((await reviewer()).includes('{{TYPECHECK_CMD}}'), 'vocabulary: declaring one as null takes it over, and it stands until filled');
+  expect(
+    (await reviewer()).includes('[TYPECHECK_CMD: not declared yet]') && !(await reviewer()).includes('{{TYPECHECK_CMD}}'),
+    'vocabulary: declaring one as null takes it over, and it composes as owed — a noun the stage knows it lacks, not a raw placeholder',
+  );
   expect(run(['check', '--project', dir], { loud: true }).out.includes('{{TYPECHECK_CMD}} is declared but not filled in'), 'vocabulary: and check says so, as compose leaves it');
 
   // A pinned project composes its release's defaults, never the working tree's — the release froze them.

@@ -441,7 +441,7 @@ export async function init(argv, ctx) {
     `## 1. Vocabulary — ${vocabulary.size} entries`,
     '',
     `Every name below appears in a rule the chosen core and surfaces state generically. Fill each one`,
-    `in \`.nina/profile.json\`; a \`null\` leaves the placeholder standing in the composed output.`,
+    `in \`.nina/profile.json\`; a \`null\` composes as \`[NAME: not declared yet]\` until it is filled.`,
     '',
     ...[...vocabulary].sort().map((name) => `- [ ] \`${name}\``),
     ...(defaulted.length > 0

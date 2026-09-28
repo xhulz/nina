@@ -21,7 +21,7 @@ import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { NAME, defaultVocabulary } from '../vocabulary.mjs';
+import { NAME, PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 
 /**
  * Matches a slot marker on its own line, with an optional label.
@@ -558,8 +558,8 @@ export async function composeProject(target, ctx, options = {}) {
     let text = out.join('\n');
     if (text.includes('nina:why')) malformed.push(rel);
     for (const [name, value] of Object.entries(profile.vocabulary ?? {})) {
-      // `null` means "declared but not filled in yet" — leave the placeholder standing so
-      // it is reported, rather than composing the rule with a hole where a noun should be.
+      // `null` means "declared but not filled in yet": it composes as owed, below, and `check` reports it,
+      // rather than the rule composing with a hole where a noun should be.
       if (value === null || value === undefined) continue;
       text = text.split(`{{${name}}}`).join(value);
     }
@@ -574,6 +574,10 @@ export async function composeProject(target, ctx, options = {}) {
     for (const [name, why] of Object.entries(profile.deferred ?? {})) {
       if (typeof why === 'string' && why.trim() && NAME.test(name)) text = text.split(`{{${name}}}`).join(`[${name}: not decided yet]`);
     }
+    // What is still a placeholder is owed: no default answers it, and the project has not declared it, or has
+    // declared it null. Left raw, it reached a stage as `{{TENANT_KEY}}` — once inside a shell block it was told to
+    // run — and reads as an editing slip to guess past. Said, it is a noun the stage knows it does not have.
+    text = text.replace(PLACEHOLDER, (_, name) => `[${name}: not declared yet]`);
 
     // Only what has a comment syntax the notice knows. A layer that one day composes JSON
     // would be corrupted by it rather than marked, so it gets nothing and says nothing.
