@@ -15,7 +15,7 @@
 import { createInterface } from 'node:readline/promises';
 import { HARNESS, readProfile, surfacesIn } from '../paths.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { applyWiring, missingWiring, shippedScripts } from '../wiring.mjs';
+import { applyWiring, lacksPackage, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, closedGate, composedPaths, composeProject, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
@@ -600,7 +600,7 @@ export async function init(argv, ctx) {
         : `    composed:  ${composed.written.length} file(s), with holes where .nina/TODO.md §1–§3 go`,
     );
   }
-  const uninstalled = unwired.some((w) => w.startsWith('@xhulz/nina is not installed'));
+  const uninstalled = lacksPackage(unwired);
   if (uninstalled) {
     console.log('    first:     install @xhulz/nina here — until then no hook can load, and nothing tells the model anything');
   }
