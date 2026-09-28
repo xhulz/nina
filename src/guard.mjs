@@ -42,11 +42,14 @@ const RUNNERS = new Set(['env', 'command', 'exec', 'time', 'nohup', 'nice', '{',
 const HERE = new Set(['.', './']);
 
 /** Where a heredoc's delimiter word ends. */
-const DELIMITER_ENDS = new Set([' ', '\t', '\r', '\n', ';', '&', '|', '(', ')', '<', '>']);
+const DELIMITER_ENDS = new Set([' ', '\t', '\r', '\n', ';', '&', '|', '(', ')', '`', '<', '>']);
+
+/** The characters that can end a run of plain word characters. */
+const SPECIAL = new Set(["'", '"', '\\', '#', '\n', '<', '&', ';', '|', '(', ')', '`', ' ', '\t', '\r']);
 
 /**
  * A shell command as the shell reads it: its simple commands, in order, each as its words with the quotes removed.
- * `&&`, `||`, `;`, `|`, `&`, a newline and a parenthesis end one; a quoted string is part of a word — `"git" stash`
+ * `&&`, `||`, `;`, `|`, `&`, a newline, a parenthesis and a backquote end one; a quoted string is part of a word — `"git" stash`
  * is git — and never a separator or a command of its own, across lines too; a comment and a heredoc's body are not
  * read. One pass, no pattern: the command is a model's, and a pattern that backtracks on it is one a stage could
  * stall the guard with.
@@ -76,14 +79,18 @@ export function simpleCommands(command) {
       word = (word ?? '') + text.slice(i + 1, stop);
       i = stop + 1;
     } else if (c === '"') {
-      let quoted = '';
+      const parts = [];
       i += 1;
+      let from = i;
       while (i < text.length && text[i] !== '"') {
-        if (text[i] === '\\' && i + 1 < text.length) i += 1;
-        quoted += text[i];
-        i += 1;
+        if (text[i] === '\\' && i + 1 < text.length) {
+          parts.push(text.slice(from, i));
+          from = i + 1;
+          i += 2;
+        } else i += 1;
       }
-      word = (word ?? '') + quoted;
+      parts.push(text.slice(from, i));
+      word = (word ?? '') + parts.join('');
       i += 1;
     } else if (c === '\\') {
       if (text[i + 1] !== '\n') word = (word ?? '') + (text[i + 1] ?? '');
@@ -110,24 +117,24 @@ export function simpleCommands(command) {
       end();
       i += text[i + 2] === '-' ? 3 : 2;
       while (text[i] === ' ' || text[i] === '\t') i += 1;
-      let delimiter = '';
-      while (i < text.length && !DELIMITER_ENDS.has(text[i])) {
-        if (text[i] !== "'" && text[i] !== '"' && text[i] !== '\\') delimiter += text[i];
-        i += 1;
-      }
+      const from = i;
+      while (i < text.length && !DELIMITER_ENDS.has(text[i])) i += 1;
+      const delimiter = text.slice(from, i).replaceAll("'", '').replaceAll('"', '').replaceAll('\\', '');
       if (delimiter) heredocs.push(delimiter);
     } else if (c === '&' && (text[i + 1] === '>' || word?.endsWith('>') || word?.endsWith('<'))) {
       word = (word ?? '') + c;
       i += 1;
-    } else if (c === ';' || c === '&' || c === '|' || c === '(' || c === ')') {
+    } else if (c === ';' || c === '&' || c === '|' || c === '(' || c === ')' || c === '`') {
       next();
       i += (c === '&' || c === '|') && text[i + 1] === c ? 2 : 1;
     } else if (c === ' ' || c === '\t' || c === '\r') {
       end();
       i += 1;
     } else {
-      word = (word ?? '') + c;
+      const from = i;
       i += 1;
+      while (i < text.length && !SPECIAL.has(text[i])) i += 1;
+      word = (word ?? '') + text.slice(from, i);
     }
   }
   end();
