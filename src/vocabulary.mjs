@@ -17,6 +17,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
+ * A vocabulary name: capitals, digits and `_`, from a letter — `{{S3_BUCKET}}` as much as `{{OWNER}}`. Every
+ * reader of a placeholder reads it with this one grammar. Compose took any name the profile declared while
+ * `check`, `init` and `upgrade` looked only for capitals and `_`, so `{{S3_BUCKET}}` was reported as declared
+ * and referenced by nothing, and deleting it on that advice composed the placeholder raw, with nobody saying so.
+ */
+export const NAME = /^[A-Z][A-Z0-9_]*$/;
+
+/** A placeholder in a text, its name captured. */
+export const PLACEHOLDER = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+
+/**
  * The defaults a layer root supplies, name → value. Anything that is not a string under an
  * upper-case name is ignored rather than trusted: a default reaches every project that pins it.
  *
@@ -26,7 +37,7 @@ import { join } from 'node:path';
 export function defaultVocabulary(layerRoot) {
   try {
     const parsed = JSON.parse(readFileSync(join(layerRoot, 'core', 'vocabulary.json'), 'utf8'));
-    return Object.fromEntries(Object.entries(parsed).filter(([name, value]) => /^[A-Z_]+$/.test(name) && typeof value === 'string'));
+    return Object.fromEntries(Object.entries(parsed).filter(([name, value]) => NAME.test(name) && typeof value === 'string'));
   } catch {
     return {};
   }

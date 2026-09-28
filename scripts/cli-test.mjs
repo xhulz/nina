@@ -30,7 +30,7 @@ import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk }
 import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
-import { defaultVocabulary } from '../src/vocabulary.mjs';
+import { NAME as VOCABULARY_NAME, defaultVocabulary } from '../src/vocabulary.mjs';
 import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
@@ -148,8 +148,8 @@ expect(
   const keys = Object.keys(profile.vocabulary);
   expect(keys.length > 0, 'init: derived no vocabulary at all');
   expect(
-    keys.every((k) => /^[A-Z_]+$/.test(k)),
-    `init: vocabulary keys must be bare names — got ${keys.find((k) => !/^[A-Z_]+$/.test(k))}`,
+    keys.every((k) => VOCABULARY_NAME.test(k)),
+    `init: vocabulary keys must be bare names — got ${keys.find((k) => !VOCABULARY_NAME.test(k))}`,
   );
   expect(
     Object.values(profile.vocabulary).every((v) => v === null),
@@ -1962,6 +1962,25 @@ const dated = (date, status = 'active') =>
     (await composedText(crlf)).includes('Saved with CRLF.') && (await composedText(bom)).includes('Saved with a BOM.') && run(['compose', '--project', bed, '--check']).status === 0,
     `compose: a fragment with CRLF line ends, or a BOM, fills its slots — got ${run(['compose', '--project', bed, '--check'], { loud: true }).out}`,
   );
+}
+
+// ─── vocabulary: one grammar for a name, digits included ─────────────────────────────────
+{
+  // Compose filled any name the profile declared, while check, init and upgrade looked for capitals and `_`
+  // only: {{S3_BUCKET}} read as declared and referenced by nothing, and deleting it on that advice composed
+  // the placeholder raw, with nobody saying so.
+  const bed = await sound('plain', 'dev');
+  const tree = join(bed, '.nina', 'project', 'tree');
+  const [fragment] = (await walk(tree)).filter((rel) => rel.endsWith('.md')).sort();
+  await writeFile(join(tree, fragment), (await readFile(join(tree, fragment), 'utf8')).replace(/Owned by the project\./, 'Uploads go to {{S3_BUCKET}}.'));
+  const profilePath = join(bed, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, S3_BUCKET: 'uploads' } }, null, 2));
+  const declared = run(['check', '--project', bed], { loud: true });
+  expect(!declared.out.includes('S3_BUCKET}} is declared but nothing references it'), `check: a name with a digit that a fragment uses is referenced — got ${declared.out}`);
+  await writeFile(profilePath, JSON.stringify(profile, null, 2));
+  const dropped = run(['check', '--project', bed], { loud: true });
+  expect(dropped.status === 1 && dropped.out.includes('vocabulary is missing {{S3_BUCKET}}'), `check: and one no longer declared is owed, not composed raw in silence — got ${dropped.out}`);
 }
 
 // ─── packaged install: the two things that only exist in a checkout ─────────────────────

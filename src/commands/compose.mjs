@@ -21,7 +21,7 @@ import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { defaultVocabulary } from '../vocabulary.mjs';
+import { NAME, defaultVocabulary } from '../vocabulary.mjs';
 
 /**
  * Matches a slot marker on its own line, with an optional label.
@@ -572,7 +572,7 @@ export async function composeProject(target, ctx, options = {}) {
     // A name the project deferred, with its reason, reads as not decided: a stage that meets it asks
     // instead of guessing, and the raw placeholder it would otherwise read looks like an editing slip.
     for (const [name, why] of Object.entries(profile.deferred ?? {})) {
-      if (typeof why === 'string' && why.trim() && /^[A-Z][A-Z0-9_]*$/.test(name)) text = text.split(`{{${name}}}`).join(`[${name}: not decided yet]`);
+      if (typeof why === 'string' && why.trim() && NAME.test(name)) text = text.split(`{{${name}}}`).join(`[${name}: not decided yet]`);
     }
 
     // Only what has a comment syntax the notice knows. A layer that one day composes JSON

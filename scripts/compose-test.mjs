@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { REQUIRES, SLOT, composeProject, defaultsTree, stripWhy } from '../src/commands/compose.mjs';
 import { NOTICE_HEAD } from '../src/guard.mjs';
 import { ANSWERED, answers } from '../src/commands/learn.mjs';
+import { PLACEHOLDER } from '../src/vocabulary.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const verbose = process.argv.includes('--verbose');
@@ -116,7 +117,7 @@ async function runFixture(name) {
     }
 
     // 1. The vocabulary covers what the core says.
-    for (const hole of new Set(text.match(/\{\{[A-Z_]+\}\}/g) ?? [])) {
+    for (const hole of new Set(text.match(PLACEHOLDER) ?? [])) {
       failures.push(`${rel}: unresolved ${hole}`);
     }
 

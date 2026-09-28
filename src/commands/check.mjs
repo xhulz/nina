@@ -17,7 +17,7 @@ import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { REQUIRES, SLOT, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
-import { defaultVocabulary } from '../vocabulary.mjs';
+import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 import { NEEDS } from '../surfaces.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
@@ -56,13 +56,13 @@ export async function referencedVocabulary(layerRoot, surfaces, target) {
       const t = await readFile(join(layerRoot, 'surfaces', s, 'tree', rel), 'utf8').catch(() => null);
       if (t !== null) texts.push(t);
     }
-    for (const [, name] of stripWhy(texts.join('\n')).matchAll(/\{\{([A-Z_]+)\}\}/g)) found.add(name);
+    for (const [, name] of stripWhy(texts.join('\n')).matchAll(PLACEHOLDER)) found.add(name);
   }
   if (target) {
     const projectTree = join(target, HARNESS, 'project', 'tree');
     for (const rel of await walk(projectTree)) {
       const text = stripWhy((await readLayerText(join(projectTree, rel))) ?? '');
-      for (const [, name] of text.matchAll(/\{\{([A-Z_]+)\}\}/g)) found.add(name);
+      for (const [, name] of text.matchAll(PLACEHOLDER)) found.add(name);
     }
   }
   return found;

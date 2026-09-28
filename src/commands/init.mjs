@@ -20,7 +20,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
-import { defaultVocabulary } from '../vocabulary.mjs';
+import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 import { PINK, useColor } from '../banner.mjs';
 import { DETECTABLE, NEEDS } from '../surfaces.mjs';
 
@@ -350,7 +350,7 @@ export async function init(argv, ctx) {
   const released = await defaultedSlots(resolved.dir);
   for (const { rel, core, fragments } of files) {
     const lines = core.split('\n');
-    for (const [, name] of [core, ...fragments].join('\n').matchAll(/\{\{([A-Z_]+)\}\}/g)) {
+    for (const [, name] of [core, ...fragments].join('\n').matchAll(PLACEHOLDER)) {
       vocabulary.add(name);
     }
     /** The nearest non-empty neighbour, naming it when it is another slot. */
