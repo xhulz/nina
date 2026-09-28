@@ -26,10 +26,10 @@ The stages, and the edges between them, are in `.claude/graph.md` — the one pl
 Where the project wires the **loop gate** (`scripts/loop-gate.mjs`, run by hooks — `nina wire` puts them
 in place), the cap is held for you. It counts a round when a dispatch acts on a loop-back a stage
 declared on its `VERDICT` line — per issue, while every report the loop's rounds act on named its issues
-on the `ISSUES` line, and per edge from the first round one did not until the loop closes; several
-dispatches acting on the same verdicts are one round; a review that saw the fix and passed closes the
-loop, while a sibling that approved alongside a rejection releases nothing; and {{OWNER}}'s next message
-starts every count over. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
+on the `ISSUES` line, and per loop from the first round one did not until it closes — whichever stage the fix
+went to; several dispatches acting on the same verdicts are one round; a review that saw the fix and passed
+closes the loop, while a sibling that approved alongside a rejection releases nothing; and each message from
+{{OWNER}} gives every open loop one round more — your own `AskUserQuestion` does not. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
 what the graph says — hand them each round's report and ask how to proceed — and do not route around the
 refusal by resuming the fixer or making the fix yourself.
 
