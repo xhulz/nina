@@ -49,8 +49,12 @@ const SMALLER = [
 /** Scores per ingestion request. */
 const SCORES_PER_REQUEST = 100;
 
-/** What a record held when it was sent, as a digest: a record that changes afterwards is noticed. */
-export const digest = (record) => createHash('sha256').update(JSON.stringify(record)).digest('hex').slice(0, 16);
+/**
+ * What was sent for a record, as a digest: the span it becomes, so a change to what went is noticed and a change
+ * to what never goes is not. Taken over the whole record, a run resumed after it was sent — its first round
+ * learning how much it read, when it was told, its status — read as changed, about half of one project's runs.
+ */
+export const digest = (record) => createHash('sha256').update(JSON.stringify(spanOf(record, ''))).digest('hex').slice(0, 16);
 
 /** Where each project's record of what was sent lives. */
 const sentPath = (slug) => join(exportsDir(), 'langfuse', `${slug}.json`);
