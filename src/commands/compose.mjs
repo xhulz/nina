@@ -17,11 +17,13 @@
  */
 
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { HARNESS, readProfile } from '../paths.mjs';
+import { HARNESS, layerRootFor, readProfile } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { NAME, PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
+
+export { layerRootFor };
 
 /**
  * Matches a slot marker on its own line, with an optional label.
@@ -197,33 +199,6 @@ export function stamp(text, rel, slots) {
   const preamble = (script ? SHEBANG.exec(text) : FRONTMATTER.exec(text))?.[0] ?? '';
   const body = text.slice(preamble.length).replace(/^\n+/, '');
   return `${preamble}${generatedNotice(rel, slots, script)}\n\n${body}`;
-}
-
-/**
- * Where a project's layers are read from.
- *
- * A project pins a frozen release, or tracks the working tree with "dev". A pinned release
- * that is missing is an error, never a silent fall back to whatever the harness happens to
- * look like right now: that would compose an unreviewed core into a project that asked for
- * a reviewed one, and nothing downstream would say so.
- *
- * @param {string} root - The NINA install directory.
- * @param {string|undefined} core - The profile's `core` field.
- * @returns {{dir: string}|{error: string}}
- */
-export function layerRootFor(root, core) {
-  if (!core || core === 'dev') {
-    // `dev` means "track the layers as they are being worked on", which only exists in a
-    // checkout of this repo. An installed package ships frozen releases and nothing else,
-    // so say that rather than composing an empty tree and reporting nothing wrong.
-    if (!existsSync(join(root, 'core'))) {
-      return { error: `profile pins core "dev", which tracks the NINA working tree — ${root} is an installed package and has only releases` };
-    }
-    return { dir: root };
-  }
-  const dir = join(root, 'releases', core);
-  if (!existsSync(dir)) return { error: `profile pins core ${core}, which is not in ${join(root, 'releases')}` };
-  return { dir };
 }
 
 /**

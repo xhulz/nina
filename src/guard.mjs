@@ -21,7 +21,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, realpathSync }
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NOTICE_HEAD, composedPaths, noticeOf } from './commands/compose.mjs';
-import { HARNESS } from './paths.mjs';
+import { HARNESS, layerRootFor, readProfile } from './paths.mjs';
 
 // Read here and by the suites from here; the test itself lives beside the compiler that writes the notice.
 export { NOTICE_HEAD, noticeOf };
@@ -229,11 +229,10 @@ const HEAD_BYTES = 16 * 1024;
  */
 function pinnedLayers(root, pkg = PACKAGE) {
   try {
-    const profile = JSON.parse(readFileSync(join(root, HARNESS, 'profile.json'), 'utf8'));
-    if (typeof profile.core !== 'string' || !/^[A-Za-z0-9._-]+$/.test(profile.core)) return null;
-    const layers = profile.core === 'dev' ? pkg : join(pkg, 'releases', profile.core);
-    if (!existsSync(join(layers, 'core', 'tree', 'scripts', 'edit-guard.mjs'))) return null;
-    return { layers, surfaces: Array.isArray(profile.surfaces) ? profile.surfaces : [] };
+    const { profile } = readProfile(root);
+    const layers = profile ? layerRootFor(pkg, profile.core) : { error: 'no profile' };
+    if (layers.error || !existsSync(join(layers.dir, 'core', 'tree', 'scripts', 'edit-guard.mjs'))) return null;
+    return { layers: layers.dir, surfaces: Array.isArray(profile.surfaces) ? profile.surfaces : [] };
   } catch {
     return null;
   }

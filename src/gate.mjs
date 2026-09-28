@@ -59,7 +59,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSyn
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TERMINALS, declaredTokens, parseGraph } from './graph.mjs';
-import { gateDir, slugFor } from './paths.mjs';
+import { gateDir, layerRootFor, readProfile, slugFor } from './paths.mjs';
 import { declaredIssues, isLoopBack, saidToAgent } from './transcripts.mjs';
 import { lessonIndex } from './lessons.mjs';
 
@@ -137,10 +137,9 @@ export function ledgerPath(root, session) {
  */
 function pinnedShipsGate(root, pkg = PACKAGE) {
   try {
-    const core = JSON.parse(readFileSync(join(root, '.nina', 'profile.json'), 'utf8')).core;
-    if (typeof core !== 'string' || !/^[A-Za-z0-9._-]+$/.test(core)) return false;
-    const layers = core === 'dev' ? pkg : join(pkg, 'releases', core);
-    return existsSync(join(layers, 'core', 'tree', 'scripts', 'loop-gate.mjs'));
+    const { profile } = readProfile(root);
+    const layers = profile ? layerRootFor(pkg, profile.core) : { error: 'no profile' };
+    return !layers.error && existsSync(join(layers.dir, 'core', 'tree', 'scripts', 'loop-gate.mjs'));
   } catch {
     return false;
   }
