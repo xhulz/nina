@@ -21,9 +21,9 @@ This is the closest thing the harness has to RAG for development. Treat it as au
 **Rule:** Before grepping the repo to find which files participate in a domain, load `.claude/code-map.md`. Two layers:
 
 - **`.claude/code-map.md`** — hand-curated. Purpose, invariants, the critical paths, what to reuse. **Read this one.**
-- **`.claude/code-map.generated.md`** — the exhaustive mechanical inventory (every module, its exports, its test) plus the dead-export and untested-module reports. Produced by `pnpm code-map`. Go here when you need the full list.
+- **`.claude/code-map.generated.md`** — the exhaustive mechanical inventory (every module, its exports, its test) plus the dead-export and untested-module reports, produced by the project's generator. Go here when you need the full list.
 
-`pnpm code-map:check` fails when the curated map has drifted from the tree, and a Stop hook runs it automatically. **A "does this helper already exist?" question is answered here, not by writing a second one.**
+Where the project checks the curated map against the tree, its `harness:check` runs that check every turn. **A "does this helper already exist?" question is answered here, not by writing a second one.**
 
 ## Load on demand
 
@@ -63,7 +63,7 @@ belongs in a `project.N` slot, or **a rule for every project**, which cannot be 
 | A plan for work in progress | `.claude/plans/**` — yours, and nothing composes it, ever | whoever is planning |
 | Anything that is not one of the above | `nina where <the path>` — it will say "not harness", which is an answer: the file is ordinary project code and the harness has no opinion about it | whoever is editing it |
 | New subagent role | `.claude/pipeline.md`, `.claude/router.md`, existing `.claude/agents/*.md` | human decision |
-| Package / route / service / RPC method added or removed | `.claude/code-map.md` — update the curated map, then run `pnpm code-map:check` | whoever shipped the change, at the close of the step |
+| Package / route / service / RPC method added or removed | `.claude/code-map.md` — update the curated map, and its check where the project has one | whoever shipped the change, at the close of the step |
 | Update this map | the project's slot in it — `nina where .claude/retrieval.md` names it; a row every project needs is a request against the pinned core | architect (light) → reviewer |
 
 ---
