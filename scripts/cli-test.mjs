@@ -1943,6 +1943,27 @@ const dated = (date, status = 'active') =>
   );
 }
 
+// ─── compose: a fragment saved on Windows fills its slots all the same ──────────────────
+{
+  // The slot marker's pattern ends at `-->`, and a line saved with CRLF ends in `\r`: the whole fragment
+  // composed to nothing, and the only sign was the count of unfilled slots. A BOM did it to the first slot.
+  const bed = await sound('plain', 'dev');
+  const tree = join(bed, '.nina', 'project', 'tree');
+  const [crlf, bom] = (await walk(tree)).filter((rel) => rel.endsWith('.md')).sort();
+  const rewrite = async (rel, mark, shape) => {
+    const text = (await readFile(join(tree, rel), 'utf8')).replace(/Owned by the project\./, mark);
+    await writeFile(join(tree, rel), shape(text));
+  };
+  await rewrite(crlf, 'Saved with CRLF.', (t) => t.replace(/\n/g, '\r\n'));
+  await rewrite(bom, 'Saved with a BOM.', (t) => `\uFEFF${t}`);
+  run(['compose', '--project', bed]);
+  const composedText = async (rel) => readFile(join(bed, rel), 'utf8');
+  expect(
+    (await composedText(crlf)).includes('Saved with CRLF.') && (await composedText(bom)).includes('Saved with a BOM.') && run(['compose', '--project', bed, '--check']).status === 0,
+    `compose: a fragment with CRLF line ends, or a BOM, fills its slots — got ${run(['compose', '--project', bed, '--check'], { loud: true }).out}`,
+  );
+}
+
 // ─── packaged install: the two things that only exist in a checkout ─────────────────────
 {
   // An installed package ships `releases/` and no working tree, so a `dev` pin — which means

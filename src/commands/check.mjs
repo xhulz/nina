@@ -16,7 +16,7 @@ import { frontmatterFindings, installedSkills, modelFindings, toolFindings } fro
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { REQUIRES, SLOT, defaultedSlots, layerRootFor, noticeOf, stripWhy, walk } from './compose.mjs';
+import { REQUIRES, SLOT, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { NEEDS } from '../surfaces.mjs';
 
@@ -61,7 +61,7 @@ export async function referencedVocabulary(layerRoot, surfaces, target) {
   if (target) {
     const projectTree = join(target, HARNESS, 'project', 'tree');
     for (const rel of await walk(projectTree)) {
-      const text = stripWhy(await readFile(join(projectTree, rel), 'utf8'));
+      const text = stripWhy((await readLayerText(join(projectTree, rel))) ?? '');
       for (const [, name] of text.matchAll(/\{\{([A-Z_]+)\}\}/g)) found.add(name);
     }
   }
@@ -100,7 +100,7 @@ export async function filledSlots(target) {
   const tree = join(target, HARNESS, 'project', 'tree');
   const filled = new Set();
   for (const rel of await walk(tree)) {
-    for (const line of (await readFile(join(tree, rel), 'utf8')).split('\n')) {
+    for (const line of ((await readLayerText(join(tree, rel))) ?? '').split('\n')) {
       const marker = SLOT.exec(line);
       if (marker) filled.add(`${rel} ${marker[1]}`);
     }

@@ -284,6 +284,20 @@ export async function walk(dir) {
 }
 
 /**
+ * A layer file's text, read the way every reader of the layers must read it: with a byte-order mark taken
+ * off and Windows line ends made `\n`. A fragment saved with CRLF matched no slot marker — the marker's
+ * pattern ends at `-->` and the line ended in a `\r` — so the whole file composed to nothing, and the only
+ * sign was the count of unfilled slots. A BOM did the same to the first slot.
+ *
+ * @param {string} path - A file in a layer's tree.
+ * @returns {Promise<string|null>} Null when there is no such file.
+ */
+export async function readLayerText(path) {
+  const text = await readFile(path, 'utf8').catch(() => null);
+  return text === null ? null : text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+}
+
+/**
  * Reads the fragments one layer declares for one file.
  *
  * Slot ids are scoped to the file, not to the layer: `db.1` in `reviewer.md` and `db.1`
@@ -296,7 +310,7 @@ export async function walk(dir) {
  */
 async function readFragments(path) {
   const bySlot = new Map();
-  const text = await readFile(path, 'utf8').catch(() => null);
+  const text = await readLayerText(path);
   if (text === null) return bySlot;
   let current = null;
   const buffer = [];
