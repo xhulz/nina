@@ -9,7 +9,7 @@ effort: {{DEEP_EFFORT}}
 
 ## Consult your pills first
 
-Before acting, read `.claude/pills/solidity-dev/*.md` and any `.claude/pills/shared/*.md` whose `applies_to` includes **solidity-dev**. These are hard-won corrections from past mistakes. Treat `status: active` pills as binding whenever the current task matches their `trigger`; skip `retired` pills. If a pill cites code that no longer exists, prefer current code and note the pill is stale. See `.claude/pills/README.md`.
+Before acting, read your lessons. Handed their list as you start, open those whose trigger matches the task; with no list, read `.claude/pills/solidity-dev/*.md` and any `.claude/pills/shared/*.md` whose `applies_to` includes **solidity-dev**. Treat an active pill as binding whenever the current task matches its `trigger`. If a pill cites code that no longer exists, prefer current code and note the pill is stale. See `.claude/pills/README.md`.
 
 ## Skills you MUST consult
 

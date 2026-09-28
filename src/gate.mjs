@@ -60,6 +60,7 @@ import { fileURLToPath } from 'node:url';
 import { TERMINALS, declaredTokens, parseGraph } from './graph.mjs';
 import { gateDir, slugFor } from './paths.mjs';
 import { declaredIssues, isLoopBack, saidToAgent } from './transcripts.mjs';
+import { lessonIndex } from './lessons.mjs';
 
 /** The package this runs from: its releases say whether a pinned version ships the gate at all. */
 const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -718,6 +719,12 @@ export function handle(input, { root, now = new Date(), pkg = PACKAGE }) {
         return null;
       case 'SubagentStop':
         return onStop(input, project, path, at);
+      case 'SubagentStart': {
+        // Not the loop's business, but the one hook every stage passes through as it begins: its lessons.
+        const role = input.agent_type;
+        const text = role && project.graph.stages.has(role) ? lessonIndex(root, role) : null;
+        return text ? { hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: text } } : null;
+      }
       case 'PostToolUse':
         return onPost(input, project, path, at);
       case 'PreToolUse':

@@ -8,7 +8,7 @@ effort: {{WORK_EFFORT}}
 
 ## Consult your pills first
 
-Before acting, read `.claude/pills/qa/*.md` and any `.claude/pills/shared/*.md` whose `applies_to` includes **qa**. These are hard-won corrections from past mistakes. Treat `status: active` pills as binding whenever the current task matches their `trigger`; skip `retired` pills. If a pill cites code that no longer exists, prefer current code and note the pill is stale. See `.claude/pills/README.md`.
+Before acting, read your lessons. Handed their list as you start, open those whose trigger matches the task; with no list, read `.claude/pills/qa/*.md` and any `.claude/pills/shared/*.md` whose `applies_to` includes **qa**. Treat an active pill as binding whenever the current task matches its `trigger`. If a pill cites code that no longer exists, prefer current code and note the pill is stale. See `.claude/pills/README.md`.
 
 <!-- nina:slot project.2 role-intro -->
 

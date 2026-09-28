@@ -83,10 +83,29 @@ model each side ran on, rather than print a number that measures the model:
   write a lesson it had already written three times, and nothing prompted the second at all. The
   compose suite checks every answer names a layer file that exists, since the upgrade tells the
   project its rule lives there.
-- Verify is a before/after of the lesson's roles' loop-back rate. It is not proof — the work changes
-  and small samples swing, and the first two readings went UP after their lessons, which may mean
-  a reviewer that catches more rather than one that learned less. Without it, though, the question
-  could not even be asked.
+- **A lesson belongs to the stage whose work was sent back.** Capture counted a loop-back against the
+  stage that gave the verdict, so the reviewer owed the implementer's lessons, and only a pill naming every
+  checker in its `applies_to` ever settled the count. Each loop-back is now the lesson of the stage it sent
+  work to — the next one dispatched in its session among those the graph routes that verdict to, or the only
+  one. Read that way, both projects' history named the architect as owing a lesson where the old count
+  named nobody.
+- **Verify reads a stage by how often its work is still sent back.** It read a lesson's stage by its own
+  verdicts — an implementer lesson by its BLOCKED rate — pooled the stages a lesson named, and compared
+  all of history either side. It now reads each stage on its own, as the share of its rounds sent back to
+  it, over the same fourteen days before and after, beside the other stages the graph sends work back to;
+  calls a change only where the two 95% intervals part; and says why a lesson cannot be measured — too few
+  rounds, a stage that changed model, or one nothing sends work back to — instead of dropping it. It is
+  still not proof: the work changes too.
+- **A rule that did not hold goes back.** A retired pill's count was read by nothing: one lesson graduated
+  twice and came back a third time, and two retired pills went from 3 to 8 and from 5 to 11 with nobody
+  told. A pill counted more times than when its now-closed request was filed reopens it: `--check` files a
+  request naming where the rule went and in which release, and `nina requests` marks it as a rule that did
+  not hold.
+- **A stage is handed its lessons.** Every spec told its stage to read its pills, and a stage found them by
+  opening every file in its directory and every shared one to see whether it applied — one reviewer read
+  one in seven runs of fifteen while twelve applied to it. The loop gate's hook on `SubagentStart` now hands
+  each stage the list of its active pills with their triggers, as the subagent begins; it opens the ones
+  that match.
 
 The first project started from nothing graduated six lessons in its first two days, the first time the
 whole cycle ran without anyone prompting a link of it. Four were about the code the implementer hands on:
