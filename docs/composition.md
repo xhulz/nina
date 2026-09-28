@@ -51,7 +51,8 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
 10. Every composed file fits its size budget (`BUDGETS` in the suite), and no `nina:why` passage
    survives. Every dispatch pays for what its spec says, so a file that outgrows its budget is a decision
    made in the commit that raises it, where a reviewer sees the context grow — not an accretion nobody
-   chose.
+   chose. Nor does history left unmarked: a count of one project's own runs ("2 times in 743 runs") or an
+   event it lived through, which composed into every other project's CLAUDE.md until the suite looked for it.
 11. A command that kills processes by pattern keeps to the checkout's own, with `grep -F "$ROOT/"` on
    the same line. qa used to sweep `vitest|workerd` across the whole machine before and after its run,
    which took every other project's suite with it, and the owner's `wrangler dev`.
