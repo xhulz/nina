@@ -1,5 +1,5 @@
 <!-- nina:slot integrations.1 -->
-- `integration-tester` — gate: runs the real dependency when the diff touches what its spec lists as its trigger
+- `integration-tester` — gate: runs the real dependency when the diff touches what its spec lists
 
 <!-- nina:slot integrations.2 -->
 - `implementer` → `integration-tester` on `DIFF-READY` — the diff touches what its spec lists
