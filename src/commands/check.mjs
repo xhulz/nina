@@ -9,7 +9,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { HARNESS, legacyHint } from '../paths.mjs';
+import { HARNESS, describeMove, interruptedMove, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
 import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
@@ -229,6 +229,10 @@ export async function check(argv, ctx) {
     console.error(`  ${resolved.error}\n`);
     return 1;
   }
+
+  // The move measures this check itself while its journal is written, and that journal is not a problem then.
+  const stopped = process.env.NINA_UPGRADE ? null : interruptedMove(target);
+  if (stopped) problems.push(`${describeMove(stopped)} \`nina upgrade --abort\` undoes it`);
 
   const surfaces = profile.surfaces ?? [];
   const available = (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true }))

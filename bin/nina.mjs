@@ -80,6 +80,7 @@ function help() {
   console.log('    --check            compose: report drift instead of writing');
   console.log('    --quiet            compose/pills: say nothing unless something is wrong');
   console.log('    --apply            upgrade: write the new version, once it is safe');
+  console.log('    --abort            upgrade: undo a move that was stopped before it finished');
   console.log('    --since <date>     stats: YYYY-MM-DD');
   console.log('    --snapshots <dir>  stats: read the history from somewhere else');
   console.log('    --out <dir>        snapshot: where to write\n');

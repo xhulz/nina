@@ -2165,6 +2165,59 @@ const dated = (date, status = 'active') =>
     /still failing, as it was before the upgrade/.test(applied.out),
     `upgrade: a pre-existing failure must be reported, not rolled back for — got ${applied.out}`,
   );
+  const journalOf = (dir) => [join(dir, '.nina', 'upgrade.json'), join(dir, '.nina', 'upgrade-saved')];
+  expect(
+    [...journalOf(good), ...journalOf(bad)].every((p) => !existsSync(p)),
+    'upgrade: a move that finished, verified or rolled back, leaves no journal behind',
+  );
+
+  // A move stopped half-way. The project's detector sleeps once the new pin is on disk, which is where the
+  // move is stopped: by Ctrl-C to the whole process group, as a terminal sends it, and by a kill of the
+  // upgrade alone, as a crash or a closed laptop would leave it.
+  const { spawn } = await import('node:child_process');
+  const sleeper = `grep -q '"core": "${to}"' .nina/profile.json && { touch .nina/sleeping; sleep 5; }; echo "harness: current (1 detector clean)"`;
+  const stop = async (dir, signal) => {
+    const child = spawn(process.execPath, [NINA, 'upgrade', '--project', dir, '--to', to, '--apply'], {
+      cwd: dir,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    child.stdout.on('data', (chunk) => (out += chunk));
+    child.stderr.on('data', (chunk) => (out += chunk));
+    const exited = new Promise((done) => child.on('close', (status, sig) => done({ status, sig })));
+    const end = Date.now() + 60_000;
+    while (!existsSync(join(dir, '.nina', 'sleeping')) && Date.now() < end) await new Promise((done) => setTimeout(done, 50));
+    if (signal === 'SIGINT') process.kill(-child.pid, 'SIGINT');
+    else process.kill(child.pid, signal);
+    const { status, sig } = await exited;
+    await rm(join(dir, '.nina', 'sleeping'), { force: true });
+    return { status, sig, out };
+  };
+  const pinOf = async (dir) => JSON.parse(await readFile(join(dir, '.nina', 'profile.json'), 'utf8')).core;
+
+  const interrupted = await project(sleeper);
+  const ctrlC = await stop(interrupted, 'SIGINT');
+  expect(
+    ctrlC.status === 1 && /rolling back to /.test(ctrlC.out) && (await pinOf(interrupted)) === from && journalOf(interrupted).every((p) => !existsSync(p)),
+    `upgrade: Ctrl-C half-way rolls the move back and leaves no journal, rather than dying with the pin moved — got ${ctrlC.status}/${ctrlC.sig} pin ${await pinOf(interrupted)}\n${ctrlC.out}`,
+  );
+
+  const crashed = await project(sleeper);
+  run(['compose', '--project', crashed]);
+  await writeFile(join(crashed, 'CLAUDE.md'), `${await readFile(join(crashed, 'CLAUDE.md'), 'utf8')}edited by hand\n`);
+  const before = await readFile(join(crashed, 'CLAUDE.md'), 'utf8');
+  const killed = await stop(crashed, 'SIGKILL');
+  expect(killed.sig === 'SIGKILL' && (await pinOf(crashed)) === to && existsSync(journalOf(crashed)[0]), `upgrade: (a killed move leaves its journal — got ${killed.sig}, pin ${await pinOf(crashed)})`);
+  const again = run(['upgrade', '--project', crashed, '--to', to, '--apply'], { loud: true });
+  expect(again.status === 1 && again.out.includes('stopped before it finished') && again.out.includes('--abort'), `upgrade: a move stopped half-way is named, not reported as "already pins" — got ${again.out}`);
+  const checked = run(['check', '--project', crashed], { loud: true });
+  expect(checked.status === 1 && checked.out.includes('stopped before it finished'), `check: names a move stopped half-way — got ${checked.out}`);
+  const aborted = run(['upgrade', '--project', crashed, '--abort'], { loud: true });
+  expect(
+    aborted.status === 0 && (await pinOf(crashed)) === from && (await readFile(join(crashed, 'CLAUDE.md'), 'utf8')) === before && journalOf(crashed).every((p) => !existsSync(p)),
+    `upgrade --abort: puts the pin and the owner's own edits back as they were, and clears the journal — got ${aborted.out}`,
+  );
 }
 
 // ─── release: the package version is written rather than remembered ─────────────────────

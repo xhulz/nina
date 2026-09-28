@@ -57,6 +57,18 @@ loop gate on disk, run by hooks the owner had just wired for it, on a pin that h
 needs cannot be forced past either: `upgrade` prints them and refuses until
 `nina wire --to <version> --apply` has put them in.
 
+A move can also be stopped from outside: Ctrl-C, a `kill`, a terminal closed half-way. It used to die
+with the pin already moved and the tree half-composed, and the owner's own edits it was about to put back
+lived only in the dead process's memory; running it again said "already pins" and exited 0, so nothing
+could finish it or undo it. Before the pin moves, the move now writes down every file it can touch in
+`.nina/upgrade-saved/` and then a journal, `.nina/upgrade.json`, naming both versions and the files it
+composes for the first time. While it runs it holds Ctrl-C, which still reaches the step running in a child:
+that child dies, its step fails, and the move rolls back like any other failed step. Both are removed once
+the move is verified or rolled back. One still there is a move that was stopped: `upgrade` refuses to do
+anything else, `check` names it (and so `status`), and `nina upgrade --abort` puts the pin and every file
+back as they were, from the copies. The move is then run again from the start — resuming one half-way
+would have to trust a tree nothing verified.
+
 There is one failure it must **not** roll back for: a project slot the move itself creates. A new core
 can introduce one, and it cannot be filled before the core that introduces it is pinned — so failing
 on it leaves no order in which the upgrade ever completes. The preview already works out which slots

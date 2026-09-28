@@ -6,14 +6,13 @@
  * already wrote that the new harness has nowhere to put. A slot that was renamed or dropped
  * takes the project's own text out of the composition with it, silently, because a fragment
  * nothing references composes to nothing and no check notices. So this reports first and
- * writes only when told to, and what it writes is one field: the version. Reconciling the
- * fragments is work, and work does not get done by a flag.
+ * writes only when told to. Reconciling the fragments is work, and work does not get done by a flag.
  */
 
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { HARNESS, legacyHint } from '../paths.mjs';
-import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { HARNESS, describeMove, interruptedMove, legacyHint, moveJournal, movedFrom } from '../paths.mjs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
 import { NEEDS, detected } from '../surfaces.mjs';
@@ -24,6 +23,9 @@ import { tidyRetired } from './pills.mjs';
 import { missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
+
+/** What stops a move from outside it: Ctrl-C, a `kill`, the terminal closing. */
+const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
 /** Banner lines, which are for a person watching and only noise inside a captured log. */
 const BANNER = /^[\s█╗╔╝║═╚▄▀]*$|harness orchestration ·/;
@@ -75,7 +77,7 @@ function nina(ctx, target, args) {
     cwd: target,
     encoding: 'utf8',
   });
-  const out = [result.stdout ?? '', result.stderr ?? '']
+  const out = [result.stdout ?? '', result.stderr ?? '', result.signal ? `stopped by ${result.signal}` : '']
     .join('\n')
     .split('\n')
     .filter((line) => line.trim() && !BANNER.test(line))
@@ -121,7 +123,7 @@ function shell(target, script) {
     encoding: 'utf8',
     env: { ...process.env, PATH: `${join(target, 'node_modules', '.bin')}:${process.env.PATH ?? ''}` },
   });
-  const out = [result.stdout ?? '', result.stderr ?? ''].join('\n').split('\n').filter((l) => l.trim()).join('\n');
+  const out = [result.stdout ?? '', result.stderr ?? '', result.signal ? `stopped by ${result.signal}` : ''].join('\n').split('\n').filter((l) => l.trim()).join('\n');
   return { ok: result.status === 0, out, summary: summarise(out) };
 }
 
@@ -158,6 +160,74 @@ function summarise(out) {
 }
 
 /**
+ * Puts a project back on the version a move started from: the pin, then the files the move composed for the
+ * first time removed, a recompose, and every file it could touch written back as it was — the recompose alone
+ * would write the old composition over the owner's own edits and call it restored.
+ *
+ * @param {{root: string}} ctx - CLI context.
+ * @param {string} target - The project.
+ * @param {string} profilePath - Its profile.
+ * @param {object} profile - The profile as read, whose pin is set back.
+ * @param {string} version - The version the move started from.
+ * @param {string[]} created - Paths the move composed where nothing was.
+ * @param {Map<string, Buffer>} saved - Every file the move could touch, as it was.
+ * @returns {boolean} Whether the recompose passed.
+ */
+function restore(ctx, target, profilePath, profile, version, created, saved) {
+  profile.core = version;
+  writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  for (const p of created) rmSync(join(target, p), { force: true });
+  const recomposed = nina(ctx, target, ['compose', '--project', target]);
+  for (const [p, bytes] of saved) {
+    mkdirSync(dirname(join(target, p)), { recursive: true });
+    writeFileSync(join(target, p), bytes);
+  }
+  return recomposed.ok;
+}
+
+/**
+ * `nina upgrade --abort`: undoes a move that was stopped before it finished, from what it wrote down first.
+ *
+ * @param {{root: string}} ctx - CLI context.
+ * @param {string} target - The project.
+ * @param {string} profilePath - Its profile.
+ * @param {object} profile - The profile as read.
+ * @param {ReturnType<typeof interruptedMove>} stopped - The move it was left in.
+ * @returns {number} Process exit code.
+ */
+function abort(ctx, target, profilePath, profile, stopped) {
+  if (!stopped) {
+    console.log('  no upgrade was stopped half-way here — there is nothing to undo.\n');
+    return 0;
+  }
+  if (stopped.unreadable) {
+    console.error(
+      `  ${describeMove(stopped)} Nothing can be undone from it: set "core" in ${HARNESS}/profile.json back by hand, run \`nina compose\`, ` +
+        `and delete ${HARNESS}/upgrade.json.\n`,
+    );
+    return 1;
+  }
+  const saved = new Map();
+  for (const p of stopped.saved ?? []) {
+    const copy = join(movedFrom(target), p);
+    if (existsSync(copy)) saved.set(p, readFileSync(copy));
+  }
+  const lost = (stopped.saved ?? []).filter((p) => !saved.has(p));
+  if (lost.length > 0) {
+    console.error(`  ${lost.length} of the files the move kept are missing from ${HARNESS}/upgrade-saved/, so it cannot be undone exactly: ${lost.slice(0, 5).join(', ')}${lost.length > 5 ? ', …' : ''}\n`);
+    return 1;
+  }
+  const recomposed = restore(ctx, target, profilePath, profile, stopped.from, stopped.created ?? [], saved);
+  rmSync(moveJournal(target), { force: true });
+  rmSync(movedFrom(target), { recursive: true, force: true });
+  console.log(
+    `  undid the move to ${stopped.to}: pinned ${stopped.from} again and put ${saved.size} file(s) back as they were.` +
+      `${recomposed ? '' : ' Recomposing failed along the way — run `nina compose` yourself.'} Run the move again when ready.\n`,
+  );
+  return recomposed ? 0 : 1;
+}
+
+/**
  * `nina upgrade`.
  *
  * @param {string[]} argv - Command arguments; `--to <version>` names the target core.
@@ -175,6 +245,15 @@ export async function upgrade(argv, ctx) {
     return 1;
   }
   const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+
+  // A move stopped half-way comes before anything else asked of this command: its pin may already name the
+  // version it was moving to, and "already pins" left the tree half-moved for good.
+  const stopped = interruptedMove(target);
+  if (argv.includes('--abort')) return abort(ctx, target, profilePath, profile, stopped);
+  if (stopped) {
+    console.error(`  ${describeMove(stopped)} \`nina upgrade --abort --project ${target}\` undoes it; then run the move again.\n`);
+    return 1;
+  }
 
   const to = arg('--to');
   if (!to) {
@@ -354,10 +433,6 @@ export async function upgrade(argv, ctx) {
   }
 
   const previous = profile.core;
-  const pin = async (version) => {
-    profile.core = version;
-    await writeFile(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
-  };
 
   // What was already failing is not this upgrade's doing, and rolling back for it would blame
   // the move for a problem the project brought with it. Measured before anything is written,
@@ -449,7 +524,31 @@ export async function upgrade(argv, ctx) {
     writeFileSync(copy, saved.get(p) ?? readFileSync(join(target, p)));
   }
 
-  await pin(to);
+  // All of it written down before the pin moves, copies first and the journal last, so a journal always has
+  // its copies. A move stopped from here on — Ctrl-C, a closed terminal, a crash — left the pin moved, the tree
+  // half-composed, and the owner's own edits, held only in this process's memory, gone; now the next run says
+  // so, and `--abort` undoes it.
+  rmSync(movedFrom(target), { recursive: true, force: true });
+  for (const [p, bytes] of saved) {
+    mkdirSync(dirname(join(movedFrom(target), p)), { recursive: true });
+    writeFileSync(join(movedFrom(target), p), bytes);
+  }
+  const journal = { from: previous, to, started: new Date().toISOString(), created, saved: [...saved.keys()] };
+  writeFileSync(`${moveJournal(target)}.tmp`, `${JSON.stringify(journal, null, 2)}\n`);
+  renameSync(`${moveJournal(target)}.tmp`, moveJournal(target));
+  // Ctrl-C reaches the step running in a child too, which dies of it, and its step fails: with this process
+  // still alive, that is an ordinary failed step, and the move rolls back. Without a listener this process died
+  // first, half-way through, with nothing left to roll anything back.
+  const hold = () => {};
+  for (const s of SIGNALS) process.on(s, hold);
+  const settle = () => {
+    for (const s of SIGNALS) process.off(s, hold);
+    rmSync(moveJournal(target), { force: true });
+    rmSync(movedFrom(target), { recursive: true, force: true });
+  };
+
+  profile.core = to;
+  writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
   console.log(`  pinned ${to}\n`);
 
   const steps = [
@@ -473,6 +572,7 @@ export async function upgrade(argv, ctx) {
   const { failed } = runSteps(steps);
 
   if (!failed) {
+    settle();
     delete process.env.NINA_UPGRADE;
     console.log(`\n  upgrade: ${previous} → ${to} applied and verified.`);
     if (removable.length > 0) console.log(`\n  removed ${removable.length} file(s) ${to} no longer composes: ${removable.join(', ')}`);
@@ -530,15 +630,10 @@ export async function upgrade(argv, ctx) {
   }
 
   console.log(`\n  ✗ ${failed.label} failed — rolling back to ${previous}.\n`);
-  await pin(previous);
-  for (const p of created) rmSync(join(target, p), { force: true });
-  const recomposed = nina(ctx, target, ['compose', '--project', target]);
-  for (const [p, bytes] of saved) {
-    mkdirSync(dirname(join(target, p)), { recursive: true });
-    writeFileSync(join(target, p), bytes);
-  }
+  const recomposed = restore(ctx, target, profilePath, profile, previous, created, saved);
+  settle();
   console.log(
-    recomposed.ok
+    recomposed
       ? `  rolled back: pinned ${previous} and recomposed. The tree is as it was.\n`
       : `  rolled back the pin to ${previous}, but recomposing failed — run \`nina compose\` yourself.\n`,
   );
