@@ -225,7 +225,7 @@ export function fixtureDiff(fixture) {
 }
 
 /** What the judge must answer: a call on every planted defect, with the words it rests on, and on everything else. */
-export const JUDGE_SCHEMA = {
+const JUDGE_SCHEMA = {
   type: 'object',
   properties: {
     defects: {

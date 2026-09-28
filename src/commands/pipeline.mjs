@@ -33,7 +33,7 @@ const HISTORY_DAYS = 30;
  * @param {string} text - The composed `.claude/graph.md`.
  * @returns {Map<string, string>}
  */
-export function stageWords(text) {
+function stageWords(text) {
   const out = new Map();
   let inStages = false;
   for (const line of text.split('\n')) {

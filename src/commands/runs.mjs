@@ -34,7 +34,7 @@ const ENDS = {
  * @param {{runs: object[], end: string}} cycle
  * @returns {{start: string, end: string, minutes: number|null, cost: number, unpriced: number, name: string, how: string, stages: {role: string, runs: number, rounds: number, back: number}[], files: number|null, peak: number|null}}
  */
-export function summarize(cycle) {
+function summarize(cycle) {
   const rounds = cycle.runs;
   const start = rounds.map((r) => String(r.ts)).sort()[0];
   const end = rounds.map((r) => String(r.result_ts ?? r.ts)).sort().at(-1);

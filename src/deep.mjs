@@ -30,7 +30,7 @@ const REPORT_CHARS = 1500;
 /** The default model: grouping sentences, not reviewing code. */
 const MODEL = 'haiku';
 
-export const MAP_SCHEMA = {
+const MAP_SCHEMA = {
   type: 'object',
   properties: {
     causes: {
@@ -45,7 +45,7 @@ export const MAP_SCHEMA = {
   required: ['causes'],
 };
 
-export const REDUCE_SCHEMA = {
+const REDUCE_SCHEMA = {
   type: 'object',
   properties: {
     clusters: {
@@ -134,7 +134,7 @@ export function mapPrompt(batch) {
 }
 
 /** The reduce prompt: the causes grouped, set against the pills already written. */
-export function reducePrompt(causes, known) {
+function reducePrompt(causes, known) {
   return [
     'Below are root causes of work a software pipeline sent back, one per report, and the lessons ("pills") already',
     'written for it. Group the causes that are the same mistake. For each group give the refs, the pill that already',

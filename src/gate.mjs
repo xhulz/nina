@@ -135,7 +135,7 @@ export function ledgerPath(root, session) {
  * @param {string} [pkg] - The NINA install to look in.
  * @returns {boolean}
  */
-export function pinnedShipsGate(root, pkg = PACKAGE) {
+function pinnedShipsGate(root, pkg = PACKAGE) {
   try {
     const core = JSON.parse(readFileSync(join(root, '.nina', 'profile.json'), 'utf8')).core;
     if (typeof core !== 'string' || !/^[A-Za-z0-9._-]+$/.test(core)) return false;

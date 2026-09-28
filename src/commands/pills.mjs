@@ -124,7 +124,7 @@ export function list(value) {
  * @param {string} citation - `path` or `path:line`.
  * @returns {{state: 'ok'|'gone'|'truncated', path: string, line: number|null, lines?: number}}
  */
-export function resolveCitation(target, citation) {
+function resolveCitation(target, citation) {
   const at = /^(.*):(\d+)$/.exec(citation);
   const path = at ? at[1] : citation;
   const line = at ? Number(at[2]) : null;
@@ -153,7 +153,7 @@ export function resolveCitation(target, citation) {
  * @param {string} path - A path inside it.
  * @returns {string | null} `YYYY-MM-DD`, or `null` when git cannot say.
  */
-export function lastChanged(target, path) {
+function lastChanged(target, path) {
   const git = spawnSync('git', ['-C', target, 'log', '-1', '--format=%cs', '--', path], { encoding: 'utf8' });
   if (git.status !== 0) return null;
   const when = git.stdout.trim();
