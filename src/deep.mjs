@@ -153,6 +153,28 @@ export function reducePrompt(causes, known) {
 }
 
 /**
+ * The causes a batch's answer adds: one per report the batch held, the first the answer gave for it. Checked
+ * against the causes already taken, a ref an answer repeated was taken twice, and the count of reports given
+ * no cause came out short by as many.
+ *
+ * @param {{ref: string}[]} taken - Causes from earlier batches.
+ * @param {{ref: string}[]} batch - The reports this answer is about.
+ * @param {unknown[]} answered - What the answer gave.
+ * @returns {{ref: string, cause: string}[]}
+ */
+export function newCauses(taken, batch, answered) {
+  const refs = new Set(batch.map((r) => r.ref));
+  const seen = new Set(taken.map((c) => c.ref));
+  const out = [];
+  for (const c of Array.isArray(answered) ? answered : []) {
+    if (!c || !refs.has(c.ref) || seen.has(c.ref) || typeof c.cause !== 'string') continue;
+    seen.add(c.ref);
+    out.push(c);
+  }
+  return out;
+}
+
+/**
  * Reads the loop-backs and says what they were about.
  *
  * @param {{records: object[], known: object[], projectDir: string, since: string, model?: string, api?: boolean, dry?: boolean, progress?: (line: string) => void}} input
@@ -178,9 +200,7 @@ export async function deepLearn({ records, known, projectDir, since, model, api,
     made += 1;
     if (failed || !Array.isArray(answer?.causes)) return stop(failed ?? 'the map answer was not the shape asked for');
     cost += spent;
-    const refs = new Set(batch.map((r) => r.ref));
-    const seen = new Set(causes.map((c) => c.ref));
-    causes.push(...answer.causes.filter((c) => refs.has(c.ref) && !seen.has(c.ref) && typeof c.cause === 'string'));
+    causes.push(...newCauses(causes, batch, answer.causes));
   }
   progress('reduce');
   const { answer, cost: spent, failed } = ask(reducePrompt(causes, known), REDUCE_SCHEMA, options);
@@ -189,7 +209,9 @@ export async function deepLearn({ records, known, projectDir, since, model, api,
   cost += spent;
   // Believed only as far as it can be checked: refs that were read, and pills that exist.
   const read = new Set(causes.map((c) => c.ref));
-  const pills = new Set(known.map((p) => p.rel));
+  // Only an active pill covers a cause here: the grouping is shown no retired one, and one named is a lesson that
+  // left this project for the harness, not one this project still holds.
+  const pills = new Set(known.filter((p) => !p.retired).map((p) => p.rel));
   const clusters = answer.clusters
     .map((c) => ({
       ...c,
