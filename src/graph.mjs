@@ -102,7 +102,7 @@ export function declaredTokens(spec) {
  * @param {Set<string>} known - Every stage name that could be meant.
  * @returns {Set<string>}
  */
-export function proseRoutes(spec, known) {
+function proseRoutes(spec, known) {
   const routes = new Set();
   for (const m of spec.matchAll(/(?:back to|→)\s+\*\*([A-Za-z-]+)\*\*/g)) {
     const name = m[1].toLowerCase();

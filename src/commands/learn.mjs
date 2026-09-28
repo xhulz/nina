@@ -39,7 +39,7 @@ import { autoExport } from './export.mjs';
 import { beforeModel } from '../detectors.mjs';
 
 /** Loop-backs from one role, since its newest lesson, that make a lesson overdue. */
-export const CAPTURE_AT = 3;
+const CAPTURE_AT = 3;
 
 /**
  * How far back a loop-back still counts. Older ones are history nobody remembers well enough to
@@ -226,7 +226,7 @@ const shift = (date, days) => new Date(Date.parse(`${date}T12:00:00Z`) + days * 
  * @param {number} n - Out of how many.
  * @returns {[number, number]}
  */
-export function wilson(k, n) {
+function wilson(k, n) {
   if (n === 0) return [0, 1];
   const z = 1.96;
   const p = k / n;
@@ -349,7 +349,7 @@ export function relapsed(known, filed) {
  * @param {{pill: string}[]} filed - Requests already written, open or closed.
  * @returns {Awaited<ReturnType<typeof lessons>>}
  */
-export function unfiled(known, filed) {
+function unfiled(known, filed) {
   const asked = new Set(filed.map((r) => r.pill));
   return known.filter((l) => !l.retired && l.occurrences >= GRADUATION_AT && !asked.has(l.rel));
 }

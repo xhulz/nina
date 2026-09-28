@@ -164,7 +164,7 @@ export function projectName(encoded) {
  * @param {string[]} projects - The encoded project names in the report.
  * @returns {Promise<{total:number, retired:number, undated:number, dates:string[], unresolved:string[]}>}
  */
-export async function harvest(projects) {
+async function harvest(projects) {
   const out = { total: 0, retired: 0, undated: 0, dates: [], unresolved: [] };
   for (const name of projects) {
     const dir = decodeProjectDir(name);
@@ -431,7 +431,7 @@ const RULE_SINCE = { issues: '0.22.0', stepFiles: '0.28.8' };
  * @param {keyof RULE_SINCE} rule - The rule.
  * @returns {boolean}
  */
-export const ranUnder = (record, rule) => typeof record.core === 'string' && (record.core === 'dev' || byVersion(record.core, RULE_SINCE[rule]) >= 0);
+const ranUnder = (record, rule) => typeof record.core === 'string' && (record.core === 'dev' || byVersion(record.core, RULE_SINCE[rule]) >= 0);
 
 /** The stages that write code, whose runs' file counts size a cycle. */
 export const WRITERS = new Set(['implementer', 'solidity-dev']);

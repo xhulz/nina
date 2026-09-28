@@ -27,7 +27,7 @@ import { exportsDir, slugFor } from '../paths.mjs';
 import { projectName } from './stats.mjs';
 
 /** Where the keys and the switches live. */
-export const configPath = () => join(exportsDir(), 'langfuse.json');
+const configPath = () => join(exportsDir(), 'langfuse.json');
 
 /** What a project sends, in words, by `contextMode`. */
 const LABELS = { full: "with each stage's own context", prompts: "with each stage's prompt and report", none: 'as metadata only' };

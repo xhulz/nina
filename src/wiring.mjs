@@ -22,11 +22,11 @@ import { join } from 'node:path';
 /** The composed scripts the hooks run. */
 export const CHECK = 'scripts/harness-check.mjs';
 export const GATE = 'scripts/loop-gate.mjs';
-export const GUARD = 'scripts/edit-guard.mjs';
-export const COST = 'scripts/cost-watch.mjs';
+const GUARD = 'scripts/edit-guard.mjs';
+const COST = 'scripts/cost-watch.mjs';
 
 /** The npm scripts the detectors hang off: the reviewer runs one, the other is a detector itself. */
-export const SCRIPTS = {
+const SCRIPTS = {
   'harness:check': 'node scripts/harness-check.mjs',
   'harness:compose:check': 'nina compose --check --quiet',
 };
@@ -73,7 +73,7 @@ export function packageInstalled(target) {
  * @param {string} module - `gate`, `guard`, …
  * @returns {boolean}
  */
-export function packageExports(target, module) {
+function packageExports(target, module) {
   try {
     createRequire(join(target, 'package.json')).resolve(`@xhulz/nina/${module}`);
     return true;
@@ -111,7 +111,7 @@ const previousCommands = (h) => [command(h.script, h.mode), ...EARLIER_CANNOT_ST
  * loop gate has four, one per fact it keeps: a verdict, a dispatch, the owner speaking, and the
  * decision itself; and a fifth, as each stage starts, that hands the stage its lessons (`src/lessons.mjs`).
  */
-export const HOOKS = [
+const HOOKS = [
   {
     event: 'Stop', script: CHECK, mode: '--hook', timeout: 30, statusMessage: 'Checking the harness...', why: 'nobody is told what a turn left behind',
     crash: (cannot) => ({ systemMessage: `NINA: the harness check could not start — ${cannot}` }),

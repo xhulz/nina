@@ -57,7 +57,7 @@ const SPECIAL = new Set(["'", '"', '\\', '#', '\n', '<', '&', ';', '|', '(', ')'
  * @param {string} command
  * @returns {string[][]}
  */
-export function simpleCommands(command) {
+function simpleCommands(command) {
   const text = String(command);
   const commands = [[]];
   const heredocs = [];
@@ -227,7 +227,7 @@ const HEAD_BYTES = 16 * 1024;
  * @param {string} [pkg] - The NINA install to look in.
  * @returns {{layers: string, surfaces: string[]}|null}
  */
-export function pinnedLayers(root, pkg = PACKAGE) {
+function pinnedLayers(root, pkg = PACKAGE) {
   try {
     const profile = JSON.parse(readFileSync(join(root, HARNESS, 'profile.json'), 'utf8'));
     if (typeof profile.core !== 'string' || !/^[A-Za-z0-9._-]+$/.test(profile.core)) return null;

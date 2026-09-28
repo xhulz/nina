@@ -21,7 +21,7 @@ const UNREAD = new Set(['UNCLEAR', 'NONE', null, undefined]);
  * @param {string} text - The file.
  * @returns {object[]}
  */
-export function parseStore(text) {
+function parseStore(text) {
   return String(text)
     .split('\n')
     .filter((l) => l.trim())
@@ -74,7 +74,7 @@ export function readStoreFile(file, { raw = false } = {}) {
  * @param {string} dir - The project.
  * @returns {string[]}
  */
-export function storeNamesOf(dir) {
+function storeNamesOf(dir) {
   const names = new Set([slugFor(dir)]);
   try {
     names.add(slugFor(realpathSync(dir)));
