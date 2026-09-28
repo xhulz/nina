@@ -20,7 +20,7 @@
 
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,7 @@ import { readStoreFile } from '../store.mjs';
 import { readConfig, statusPath, targetOf } from './langfuse.mjs';
 import { projectName } from './stats.mjs';
 import { handsToModel } from '../detectors.mjs';
+import { takeLock } from '../lock.mjs';
 
 /** The CLI, for the export the detector starts in the background. */
 const BIN = fileURLToPath(new URL('../../bin/nina.mjs', import.meta.url));
@@ -82,37 +83,6 @@ async function sentOf(slug) {
   } catch (error) {
     return `${sentPath(slug)} is damaged (${error.message}); nothing was sent, since reading it as empty would send everything again — move it aside only if Langfuse holds none of this project`;
   }
-}
-
-/**
- * Holds a project's export for one run. Two at once would each read what was sent before either wrote,
- * and send the same runs twice. A lock left by a run that died is taken over: it names its process.
- *
- * @returns {Promise<(() => Promise<void>)|null>} The release, or null when another export holds it.
- */
-async function lock(slug) {
-  await mkdir(join(exportsDir(), 'langfuse'), { recursive: true });
-  const path = join(exportsDir(), 'langfuse', `${slug}.lock`);
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const handle = await open(path, 'wx');
-      await handle.writeFile(String(process.pid));
-      await handle.close();
-      return () => rm(path, { force: true });
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      const pid = Number(await readFile(path, 'utf8').catch(() => ''));
-      let alive = false;
-      try {
-        alive = pid > 0 && process.kill(pid, 0);
-      } catch (e) {
-        alive = e.code === 'EPERM';
-      }
-      if (alive) return null;
-      await rm(path, { force: true });
-    }
-  }
-  return null;
 }
 
 /** Writes it by rename, so an interruption leaves the last whole version. */
@@ -203,7 +173,7 @@ export async function exportCommand(argv, ctx = {}) {
   if (auto) {
     const setting = config.projects[only ?? ''];
     if (!setting || !target.publicKey || !target.secretKey) return 0;
-    const release = await lock(only);
+    const release = await takeLock(join(exportsDir(), 'langfuse', `${only}.lock`));
     if (!release) return 0;
     try {
       const result = await exportProject({ slug: only, name: projectName(only), file: join(snapshotsDir(), `${only}.jsonl`), target, now: ctx.now, since: setting.since, quiet: true, content: contextMode(setting) });
@@ -236,7 +206,7 @@ export async function exportCommand(argv, ctx = {}) {
   let failed = false;
   for (const slug of slugs) {
     const name = projectName(slug);
-    const release = dry ? async () => {} : await lock(slug);
+    const release = dry ? async () => {} : await takeLock(join(exportsDir(), 'langfuse', `${slug}.lock`));
     if (!release) {
       console.log(`  ${name}: ✗ another export of this project is running — nothing sent`);
       failed = true;
