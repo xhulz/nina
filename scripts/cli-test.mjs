@@ -42,7 +42,7 @@ import { chainsByShape, historyOf, pickShape, shapeOf } from '../src/commands/pi
 import { deepLearn, loopBackReports, mapPrompt } from '../src/deep.mjs';
 import { realpathSync } from 'node:fs';
 import { MAX_BODY, digest, due, exportCommand } from '../src/commands/export.mjs';
-import { BATCH as SPAN_BATCH, spanIdOf } from '../src/langfuse.mjs';
+import { BATCH as SPAN_BATCH, spanIdOf, spansOf } from '../src/langfuse.mjs';
 import { readRun, redact } from '../src/agentrun.mjs';
 import { watch } from '../src/cost.mjs';
 
@@ -4568,6 +4568,38 @@ const dated = (date, status = 'active') =>
   // What context mode masks, and what it leaves.
   const masked = redact(`API_KEY=abcd1234xyz password: "hunter2x" max_tokens: 100000 Authorization: Bearer ${'t'.repeat(20)} sk-ant-api03-${'A'.repeat(24)} -----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY----- kept`);
   expect(masked === 'API_KEY=[redacted] password: "[redacted]" max_tokens: 100000 Authorization: Bearer [redacted] [redacted] [redacted private key] kept', `redact: secrets masked, a count of tokens left alone — got ${masked}`);
+  // Formats the first masking let through, each with the part that must not leave the machine.
+  const leaks = [
+    ['postgres://app:s3cretpass@db.host:5432/x', 's3cretpass'],
+    ['DATABASE_URL=postgres://app:pw12345678@h/db', 'pw12345678'],
+    [`sk_live_${'a'.repeat(24)} whsec_${'b'.repeat(24)}`, 'aaaaaaaaaaaa'],
+    [`eyJ${'a'.repeat(12)}.eyJ${'b'.repeat(12)}.${'c'.repeat(12)}`, 'cccccccccccc'],
+    [`Authorization: Token ${'d'.repeat(20)}`, 'dddddddddddd'],
+    [`x-api-key: ${'e'.repeat(20)}`, 'eeeeeeeeeeee'],
+    ['password: "correct horse battery staple"', 'battery'],
+    ['DB_PASS=verysecret1 SIGNING_KEY=alsosecret2', 'secret'],
+    ['SENTRY_DSN=https://abc123def@o1.ingest.sentry.io/1', 'abc123def'],
+    [`npm_${'f'.repeat(36)} hf_${'g'.repeat(34)} ASIA${'H'.repeat(16)}`, 'ffffffffffff'],
+    [JSON.stringify({ content: 'API_KEY=abc123def456\nDB_PASSWORD=hunter2hunter2' }), 'hunter2'],
+  ];
+  for (const [text, secret] of leaks) expect(!redact(text).includes(secret), `redact: masks ${text.slice(0, 40)} — got ${redact(text)}`);
+  const plain = 'max_tokens: 100000 AUTH_LIB=better-auth bypass=allowed compass: north';
+  expect(redact(plain) === plain, `redact: leaves what only looks like a name — got ${redact(plain)}`);
+  const slow = Date.now();
+  for (const text of ['a='.repeat(100_000), 'ab:'.repeat(70_000), 'x://'.repeat(50_000)]) redact(text);
+  expect(Date.now() - slow < 2000, `redact: linear in what it reads — ${Date.now() - slow} ms on 600 KB of near-assignments`);
+  // A tool's input goes out serialized, and a Write of a .env inside it went out whole.
+  const env = { file_path: '.env', content: 'API_KEY=abc123def456\nDB_PASSWORD=hunter2hunter2', password: 'correct horse' };
+  const [, sent] = spansOf(
+    { ts: '2026-01-01T00:00:00Z', role: 'implementer', dispatch_id: 'd1', session: 's1' },
+    'p',
+    { prompt: 'p', report: 'r', messages: [], tools: [{ id: 't1', name: 'Write', input: env, output: 'ok', start: '2026-01-01T00:00:01Z', end: '2026-01-01T00:00:02Z' }] },
+  );
+  const input = sent?.attributes.find((a) => a.key === 'langfuse.observation.input')?.value?.stringValue ?? '';
+  expect(
+    input.includes('.env') && !/abc123def456|hunter2|correct horse/.test(input),
+    `langfuse: a tool's input is masked, the values inside it included — got ${input}`,
+  );
   const saved = { data: process.env.NINA_DATA, pk: process.env.LANGFUSE_PUBLIC_KEY, sk: process.env.LANGFUSE_SECRET_KEY, host: process.env.LANGFUSE_HOST };
   const data = await scratch();
   process.env.NINA_DATA = data;

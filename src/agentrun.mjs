@@ -30,18 +30,53 @@ export function clip(text, chars) {
 }
 
 /** Names whose value is a credential when they are assigned one. */
-const SECRET_NAME = /(?:secret|token|passw(?:or)?d|api_?key|private_?key|access_?key|credential)/i;
+const SECRET_NAME = /(?:secret|token|passw(?:or)?d|(?:^|[_-])pass$|api[_-]?key|private[_-]?key|access[_-]?key|signing[_-]?key|credential|dsn$)/i;
 
 /** Token formats that are credentials on sight. */
-const SECRET_TOKEN = /\b(?:sk-(?:ant-|lf-|proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})/g;
+const SECRET_TOKEN = new RegExp(
+  [
+    'sk-(?:ant-|lf-|proj-)?[A-Za-z0-9_-]{16,}',
+    'gh[pousr]_[A-Za-z0-9]{30,}',
+    'github_pat_[A-Za-z0-9_]{30,}',
+    'glpat-[A-Za-z0-9_-]{20,}',
+    'xox[abprs]-[A-Za-z0-9-]{10,}',
+    '(?:AKIA|ASIA)[0-9A-Z]{16}',
+    'AIza[0-9A-Za-z_-]{35}',
+    '(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}',
+    'whsec_[A-Za-z0-9+/=]{16,}',
+    'npm_[A-Za-z0-9]{30,}',
+    'hf_[A-Za-z0-9]{30,}',
+    'SG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}',
+    'eyJ[A-Za-z0-9_-]{8,}\\.eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}',
+  ]
+    .map((p) => `\\b${p}`)
+    .join('|'),
+  'g',
+);
 
-/** `NAME=value`, `NAME: value`, `"name": "value"` — the name bounded, so the match cannot run away. */
-const ASSIGNMENT = /\b([A-Za-z0-9_]{0,40})(["']?\s{0,3}[:=]\s{0,3}["']?)([^\s"'`,;]{6,})/g;
+/** `scheme://user:password@host` — the password, however the URL is named. */
+const URL_CREDENTIAL = /\b([a-z][a-z0-9+.-]{1,20}:\/\/[^\s:/@]{0,64}):[^\s@/]{1,256}@/gi;
+
+/**
+ * `NAME=value`, `NAME: value`, `"name": "value"` — the name and what joins it to a value of six characters or
+ * more, and not the value: {@link redact} takes that only for a secret's name. Every part is bounded, so no
+ * position costs more than a few dozen steps, whatever follows it.
+ */
+const ASSIGNMENT = /\b([A-Za-z0-9_-]{0,40})(["']?\s{0,3}[:=]\s{0,3}["']?)(?=[^\s"'`,;]{6})/g;
+
+/** The value that follows an assignment, read from where {@link ASSIGNMENT} stopped. */
+const VALUE = /[^\s"'`,;]+/y;
+
+/** The same with the value in quotes, which may hold spaces: `password: "correct horse battery"`. */
+const QUOTED = /\b([A-Za-z0-9_-]{1,40})(["']?\s{0,3}[:=]\s{0,3})(["'])([^"'\n]{1,256})\3/g;
+
+/** Whether a name and the value assigned to it make a credential. A count is not one: `max_tokens: 100000`. */
+const secretPair = (name, value) => SECRET_NAME.test(name) && !/^\d+$/.test(value) && value !== '[redacted]';
 
 /**
  * Text with the secrets it obviously carries masked: private keys, the token formats of the common
- * providers, an `Authorization` value, and anything assigned to a name that says it is a secret. A value
- * of digits only is left: `max_tokens: 100000` is not a credential.
+ * providers, the password in a URL, an `Authorization` value, and anything assigned to a name that says it
+ * is a secret. A value of digits only is left: `max_tokens: 100000` is not a credential.
  *
  * @param {string} text
  * @returns {string}
@@ -57,10 +92,26 @@ export function redact(text) {
     out = `${out.slice(0, start)}[redacted private key]${close === -1 ? '' : out.slice(close + 5)}`;
   }
   out = out.replace(SECRET_TOKEN, '[redacted]');
-  out = out.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{16,}/g, '$1 [redacted]');
-  return out.replace(ASSIGNMENT, (whole, name, sep, value) =>
-    SECRET_NAME.test(name) && !/^\d+$/.test(value) && value !== '[redacted]' ? `${name}${sep}[redacted]` : whole,
-  );
+  out = out.replace(URL_CREDENTIAL, '$1:[redacted]@');
+  out = out.replace(/\b(Bearer|Basic|Token|Bot)\s+[A-Za-z0-9._~+/=-]{16,}/g, '$1 [redacted]');
+  out = out.replace(QUOTED, (whole, name, sep, quote, value) => (secretPair(name, value) ? `${name}${sep}${quote}[redacted]${quote}` : whole));
+  // By hand rather than by `replace`: an assignment to a name that is not a secret's leaves its value to be
+  // read, so one inside it still is. Replaced whole, `{"content":"API_KEY=…"}` took the key's value with it.
+  // The value is taken once, and only for a secret's name, which keeps the whole pass linear.
+  let masked = '';
+  let last = 0;
+  ASSIGNMENT.lastIndex = 0;
+  for (let m = ASSIGNMENT.exec(out); m !== null; m = ASSIGNMENT.exec(out)) {
+    const [head, name, sep] = m;
+    if (!SECRET_NAME.test(name)) continue;
+    VALUE.lastIndex = m.index + head.length;
+    const value = VALUE.exec(out)?.[0] ?? '';
+    if (!secretPair(name, value)) continue;
+    masked += `${out.slice(last, m.index)}${name}${sep}[redacted]`;
+    last = VALUE.lastIndex;
+    ASSIGNMENT.lastIndex = last;
+  }
+  return masked + out.slice(last);
 }
 
 /** A tool result's text: a string, or the text blocks of a list, with images named rather than sent. */

@@ -328,8 +328,12 @@ generation per message it wrote, with that message's tokens and cost; and a tool
 with what went in and what came back. The usage sits on the messages and not on the root, so no sum
 counts a token twice. Every text is cut (20,000 characters for a prompt, a report or a message, 8,000 for
 a tool's input or result), the owner's home directory is written `~`, and obvious secrets are masked:
-private keys, the token formats of the common providers, an `Authorization` value, and anything assigned
-to a name that says it is a secret. That is a floor, not a promise. A secret that looks like none of them
+private keys, the token formats of the common providers (payment and webhook keys and JWTs among them),
+the password in a URL, an `Authorization` value, and anything assigned to a name that says it is a secret,
+quoted values with spaces included. An assignment to any other name is read into, not over: a tool's input
+goes out serialized, and `{"content": "API_KEY=…"}` once took the `.env` a `Write` carried out whole, as
+one value of `content`. The scan is linear in what it reads, and a test holds it there. That is a floor,
+not a promise. A secret that looks like none of them
 goes as it is, and so does every line of code a stage read, which is why context is a switch per project.
 
 It is also far more data. Over one project's 826 runs, context meant 70,863 observations and 166 MB,
