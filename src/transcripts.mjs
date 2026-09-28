@@ -317,7 +317,7 @@ const handsBack = (row) =>
  * @param {object|null} row - A parsed transcript row.
  * @returns {boolean}
  */
-const saidToAgent = (row) => {
+export const saidToAgent = (row) => {
   if (row?.type !== 'user') return false;
   const content = row.message?.content;
   if (Array.isArray(content) && content.some((b) => b?.type === 'tool_result')) return false;
