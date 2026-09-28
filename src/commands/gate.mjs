@@ -178,6 +178,9 @@ function dryRun(target) {
     { name: 'same', what: 'a loop naming one issue', rounds: (max) => max + 1, line: () => '\nISSUES: selftest-same-issue', issue: () => 'selftest-same-issue' },
     { name: 'none', what: 'a loop naming no issue', rounds: (max) => max + 1, line: () => '', issue: () => undefined },
     { name: 'new', what: 'a loop naming a new issue each round', rounds: (max) => 2 * max + 1, line: (i) => `\nISSUES: selftest-issue-${i}`, issue: (max) => `selftest-issue-${2 * max + 1}` },
+    // Most real rounds after the first resume an agent rather than launch one — 60 of one project's 99
+    // dispatches — and whether a message is a resume rests on one field of the tool's response.
+    { name: 'resume', what: 'a loop whose rounds resume the same agents', rounds: (max) => max + 1, line: () => '', issue: () => undefined, resume: true },
   ];
   const loops = [];
   const events = [];
@@ -190,15 +193,26 @@ function dryRun(target) {
       { hook_event_name: 'PreToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: role }, tool_use_id: id },
       { hook_event_name: 'PostToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: role }, tool_use_id: id, tool_response: { agentId: agent } },
     ];
+    const resume = (id, agent) => [
+      { hook_event_name: 'PreToolUse', session_id: session, tool_name: 'SendMessage', tool_input: { to: agent }, tool_use_id: id },
+      { hook_event_name: 'PostToolUse', session_id: session, tool_name: 'SendMessage', tool_input: { to: agent }, tool_use_id: id, tool_response: { resumedAgentId: agent } },
+    ];
+    // Launched in the first round, and in a resuming shape resumed in every round after.
+    const out = (role, id, agent, first) => (shape.resume && !first ? resume(id, agent) : launch(role, id, agent));
+    const fixer = (i) => `selftest-${n}-fixer-${shape.resume ? 1 : i}`;
     for (let i = 1; i <= rounds; i += 1) {
-      const agent = `selftest-${n}-${edge.source}-${i}`;
-      events.push(...launch(edge.source, `selftest-${n}-review-${i}`, agent));
+      const agent = `selftest-${n}-${edge.source}-${shape.resume ? 1 : i}`;
+      events.push(...out(edge.source, `selftest-${n}-review-${i}`, agent, i === 1));
       events.push({ hook_event_name: 'PostToolUse', session_id: session, tool_name: 'SubagentHandback', agent_id: agent, agent_type: edge.source, tool_input: { message: `VERDICT: ${edge.token}${shape.line(i)}\nthe fix did not hold` } });
       events.push({ hook_event_name: 'SubagentStop', session_id: session, agent_id: agent, agent_type: edge.source, stop_hook_active: false, last_assistant_message: 'done' });
       if (i === rounds) break;
-      events.push(...launch(edge.to, `selftest-${n}-fix-${i}`, `selftest-${n}-fixer-${i}`));
+      events.push(...out(edge.to, `selftest-${n}-fix-${i}`, fixer(i), i === 1));
     }
-    events.push({ hook_event_name: 'PreToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: edge.to }, tool_use_id: `selftest-${n}-last` });
+    events.push(
+      shape.resume
+        ? { hook_event_name: 'PreToolUse', session_id: session, tool_name: 'SendMessage', tool_input: { to: fixer(rounds) }, tool_use_id: `selftest-${n}-last` }
+        : { hook_event_name: 'PreToolUse', session_id: session, tool_name: 'Agent', tool_input: { subagent_type: edge.to }, tool_use_id: `selftest-${n}-last` },
+    );
   }));
 
   let settings = null;
