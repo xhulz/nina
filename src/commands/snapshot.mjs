@@ -151,6 +151,25 @@ export async function snapshot(argv, ctx) {
   return 0;
 }
 
+/** Whether a round's verdict came from the report it handed back: the one reading nothing later corrects. */
+const settledByHandback = (r) => r?.verdict_source === 'handback';
+
+/**
+ * A round as a re-read after lost cursors leaves it. What the store held stands, field by field, and the
+ * re-read fills only what it lacked — unless the re-read settled the round from the report its stage handed
+ * back and the store had not: a verdict read from a notification is the one a handback corrects, and kept
+ * over it, a round the store had as REJECTED stayed so after its stage had said APPROVED, and stayed so for
+ * good once that stage's transcript was pruned.
+ *
+ * @param {object} held - The round as the store held it.
+ * @param {object} reread - The round as the re-read found it.
+ * @returns {object}
+ */
+export function rereadOver(held, reread) {
+  const defined = (record) => Object.fromEntries(Object.entries(record).filter(([, v]) => v !== null && v !== undefined));
+  return settledByHandback(reread) && !settledByHandback(held) ? { ...held, ...defined(reread) } : { ...reread, ...defined(held) };
+}
+
 /**
  * The release a project pins now, or null when its directory or profile cannot be found.
  *
@@ -190,8 +209,7 @@ async function snapshotProject(project, { outDir, rebuild, quiet, legacy }) {
   // by field, and the re-read adds only what it lacked; the cursors it leaves hold from then on.
   const reread = !rebuild && prior.length > 0 && Object.keys(cursors).length === 0;
   const held = new Map(prior.map((r) => [r.dispatch_id, r]));
-  const kept = (r) =>
-    reread && held.has(r.dispatch_id) ? { ...r, ...Object.fromEntries(Object.entries(held.get(r.dispatch_id)).filter(([, v]) => v !== null && v !== undefined)) } : r;
+  const kept = (r) => (reread && held.has(r.dispatch_id) ? rereadOver(held.get(r.dispatch_id), r) : r);
   // The release the project pinned when a round was first captured, so a rule is judged only on the rounds
   // that ran under it. A round already on record keeps what it had — a rebuild included, which would
   // otherwise stamp today's pin on weeks of history — and only a new one takes today's.
