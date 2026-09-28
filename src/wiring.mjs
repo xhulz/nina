@@ -109,7 +109,7 @@ const previousCommands = (h) => [command(h.script, h.mode), ...EARLIER_CANNOT_ST
  * The harness check has two: `Stop` tells the person what a turn left behind, `UserPromptSubmit` puts
  * the same findings in the model's context before it answers — the only one of the two it reads. The
  * loop gate has four, one per fact it keeps: a verdict, a dispatch, the owner speaking, and the
- * decision itself.
+ * decision itself; and a fifth, as each stage starts, that hands the stage its lessons (`src/lessons.mjs`).
  */
 export const HOOKS = [
   {
@@ -132,6 +132,7 @@ export const HOOKS = [
   },
   { event: 'PostToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion|SubagentHandback', script: GATE, timeout: 10, why: 'the gate never learns which rounds went out, or that the owner answered' },
   { event: 'SubagentStop', script: GATE, timeout: 10, why: 'the gate misses the verdict of a stage that wrote its report as its last message' },
+  { event: 'SubagentStart', script: GATE, timeout: 10, why: 'a stage is not handed its lessons, and opens every shared pill to find them, or none' },
   {
     event: 'PreToolUse', matcher: 'Edit|Write|MultiEdit|NotebookEdit', script: GUARD, timeout: 10, why: 'a hand edit to a composed file is found only after the turn, as drift, and the next compose overwrites it',
     crash: (cannot) => ({ systemMessage: `NINA: the edit guard could not start, so composed files can be edited in place — ${cannot}` }),

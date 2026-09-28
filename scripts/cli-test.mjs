@@ -2780,6 +2780,23 @@ const dated = (date, status = 'active') =>
       hook('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'implementer [3fa9c1]' } })?.hookSpecificOutput?.permissionDecision === 'ask',
     'gate: and so does resuming it by name, as a listing prints it or not',
   );
+  // A stage is handed its lessons as it starts: it found them by opening every pill in its directory and every
+  // shared one to see whether it applied, and one reviewer read one in seven runs of fifteen while twelve applied.
+  const pill = async (rel, fields) => {
+    await mkdir(dirname(join(project, '.claude', 'pills', rel)), { recursive: true });
+    await writeFile(join(project, '.claude', 'pills', rel), `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\nbody\n`);
+  };
+  await pill('reviewer/migrations.md', { applies_to: '[reviewer]', status: 'active', trigger: 'the diff touches a migration' });
+  await pill('shared/names.md', { applies_to: '[reviewer, qa]', status: 'active', trigger: 'a test is added' });
+  await pill('shared/qa-only.md', { applies_to: '[qa]', status: 'active', trigger: 'running vitest' });
+  await pill('reviewer/graduated.md', { applies_to: '[reviewer]', status: 'retired', trigger: 'anything' });
+  const handed = hook('SubagentStart', { agent_type: 'reviewer', agent_id: 'r-start' })?.hookSpecificOutput;
+  expect(
+    handed?.hookEventName === 'SubagentStart' && handed.additionalContext.includes('.claude/pills/reviewer/migrations.md` — when the diff touches a migration') &&
+      handed.additionalContext.includes('shared/names.md') && !handed.additionalContext.includes('qa-only') && !handed.additionalContext.includes('graduated'),
+    `gate: a stage is handed its active lessons and their triggers as it starts, and no one else's — got ${JSON.stringify(handed)}`,
+  );
+  expect(hook('SubagentStart', { agent_type: 'Explore', agent_id: 'e-start' }) === null, 'gate: an agent outside the pipeline is handed nothing');
   // A fixer launched under a name of its own, and resumed by that name, is held like one resumed by its stage's.
   const other = 's-gate-named';
   const on = (event, fields = {}) => handle({ hook_event_name: event, session_id: other, ...fields }, { root: project });
