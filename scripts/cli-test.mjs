@@ -2714,6 +2714,22 @@ const dated = (date, status = 'active') =>
       hook('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'implementer [3fa9c1]' } })?.hookSpecificOutput?.permissionDecision === 'ask',
     'gate: and so does resuming it by name, as a listing prints it or not',
   );
+  // A fixer launched under a name of its own, and resumed by that name, is held like one resumed by its stage's.
+  const other = 's-gate-named';
+  const on = (event, fields = {}) => handle({ hook_event_name: event, session_id: other, ...fields }, { root: project });
+  const rejectedBy = (agent) => {
+    on('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: `t-${agent}`, tool_response: { agentId: agent } });
+    on('PostToolUse', { tool_name: 'SubagentHandback', agent_id: agent, agent_type: 'reviewer', tool_input: { message: 'VERDICT: REJECTED' } });
+  };
+  rejectedBy('nr1');
+  on('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer', name: 'fixer' }, tool_use_id: 't-f1', tool_response: { agentId: 'f1' } });
+  rejectedBy('nr2');
+  on('PostToolUse', { tool_name: 'SendMessage', tool_input: { to: 'fixer' }, tool_use_id: 't-f2', tool_response: { resumedAgentId: 'f1' } });
+  rejectedBy('nr3');
+  expect(
+    on('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'fixer' }, tool_use_id: 't-f3' })?.hookSpecificOutput?.permissionDecision === 'ask',
+    'gate: a fixer resumed by the name it was launched with is held at the cap too',
+  );
   // The recipient is whatever the model wrote, read on every dispatch: its ` [ref]` is found by position,
   // because the pattern that did it took half a second on 20,000 `[` and grew with the square.
   const slow = Date.now();

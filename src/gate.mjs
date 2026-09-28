@@ -473,15 +473,17 @@ function withoutRef(to) {
 }
 
 /**
- * Who a SendMessage goes to: an agent id the ledger has seen, or — since the tool tells the model to
- * prefer names — a name, which in this pipeline is the stage's own, with or without the ` [ref]` a
- * listing appends.
+ * Who a SendMessage goes to: an agent id the ledger has seen, the name an agent was launched with, or the
+ * stage's own name, with or without the ` [ref]` a listing appends. A fixer launched as `fixer` and resumed
+ * by that name was seen only after it went out, so no resume of it was ever asked about.
  *
  * @returns {{agent: string|null, role: string|null}}
  */
 function recipient(entries, project, to) {
-  const agent = withoutRef(to) || null;
-  const role = roleOf(entries, agent) ?? (agent && project.graph.stages.has(agent) ? agent : null);
+  const said = withoutRef(to) || null;
+  const named = said ? entries.findLast((e) => e.k === 'dispatch' && e.name === said && e.agent) : null;
+  const agent = named?.agent ?? said;
+  const role = roleOf(entries, agent) ?? (said && project.graph.stages.has(said) ? said : null);
   return { agent, role };
 }
 
@@ -590,7 +592,9 @@ function onPost(input, project, path, at) {
   }
   if (!role || !project.graph.stages.has(role)) return null;
   const resumed = tool === 'SendMessage' ? Boolean(response.resumedAgentId) : undefined;
-  append(path, { k: 'dispatch', at, role, agent, via: tool, id: input.tool_use_id ?? null, ...(resumed === undefined ? {} : { resumed }) });
+  // The name an agent was launched with, if any: a later SendMessage may reach it by that name alone.
+  const name = tool !== 'SendMessage' && typeof input.tool_input?.name === 'string' ? input.tool_input.name.slice(0, 80) : null;
+  append(path, { k: 'dispatch', at, role, agent, via: tool, id: input.tool_use_id ?? null, ...(name ? { name } : {}), ...(resumed === undefined ? {} : { resumed }) });
   return null;
 }
 
