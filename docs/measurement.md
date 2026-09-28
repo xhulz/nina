@@ -329,8 +329,9 @@ with what went in and what came back. The usage sits on the messages and not on 
 counts a token twice. Every text is cut (20,000 characters for a prompt, a report or a message, 8,000 for
 a tool's input or result), the owner's home directory is written `~`, and obvious secrets are masked:
 private keys, the token formats of the common providers (payment and webhook keys and JWTs among them),
-the password in a URL, an `Authorization` value, and anything assigned to a name that says it is a secret,
-quoted values with spaces included. An assignment to any other name is read into, not over: a tool's input
+the password in a URL, an `Authorization` value under any scheme, a cookie header, a value passed after a
+command-line option that names a secret (`--password …`, `-u user:…`), and anything assigned to a name that
+says it is a secret, quoted values with spaces included. An assignment to any other name is read into, not over: a tool's input
 goes out serialized, and `{"content": "API_KEY=…"}` once took the `.env` a `Write` carried out whole, as
 one value of `content`. The scan is linear in what it reads, and a test holds it there. That is a floor,
 not a promise. A secret that looks like none of them

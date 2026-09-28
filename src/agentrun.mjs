@@ -70,6 +70,18 @@ const VALUE = /[^\s"'`,;]+/y;
 /** The same with the value in quotes, which may hold spaces: `password: "correct horse battery"`. */
 const QUOTED = /\b([A-Za-z0-9_-]{1,40})(["']?\s{0,3}[:=]\s{0,3})(["'])([^"'\n]{1,256})\3/g;
 
+/** A command-line option with its value after a space — `--password hunter2`, `--api-key "a b"`. */
+const FLAG = /(--?[A-Za-z0-9][A-Za-z0-9_-]{0,40})\s{1,3}(?:(["'])([^"'\n]{1,256})\2|([^\s"'`]{3,}))/g;
+
+/** curl's and friends' `-u user:password`. */
+const USER_FLAG = /((?:^|\s)(?:-u|--user)\s{1,3}[^\s:]{1,64}):[^\s]{1,256}/g;
+
+/** A cookie header's whole value: every cookie in it may be a session. */
+const COOKIE = /\b((?:Set-)?Cookie["']?\s{0,3}:\s{0,3})[^\n"]{1,2000}/gi;
+
+/** An `Authorization` value under any scheme, or none — `ApiKey …` and a bare token as much as `Bearer …`. */
+const AUTHORIZATION = /\b((?:Proxy-)?Authorization["']?\s{0,3}[:=]\s{0,3}["']?)(?:([A-Za-z][A-Za-z0-9_-]{0,20})\s+)?[^\s"',;]{8,}/gi;
+
 /** Whether a name and the value assigned to it make a credential. A count is not one: `max_tokens: 100000`. */
 const secretPair = (name, value) => SECRET_NAME.test(name) && !/^\d+$/.test(value) && value !== '[redacted]';
 
@@ -94,6 +106,13 @@ export function redact(text) {
   out = out.replace(SECRET_TOKEN, '[redacted]');
   out = out.replace(URL_CREDENTIAL, '$1:[redacted]@');
   out = out.replace(/\b(Bearer|Basic|Token|Bot)\s+[A-Za-z0-9._~+/=-]{16,}/g, '$1 [redacted]');
+  out = out.replace(AUTHORIZATION, (whole, head, scheme) => `${head}${scheme ? `${scheme} ` : ''}[redacted]`);
+  out = out.replace(COOKIE, '$1[redacted]');
+  out = out.replace(USER_FLAG, '$1:[redacted]');
+  // The shell is where most of a stage's input is written, and it passes a secret after a space.
+  out = out.replace(FLAG, (whole, flag, quote, quoted, bare) =>
+    secretPair(flag.replace(/^-+/, ''), quoted ?? bare) ? `${flag} ${quote ?? ''}[redacted]${quote ?? ''}` : whole,
+  );
   out = out.replace(QUOTED, (whole, name, sep, quote, value) => (secretPair(name, value) ? `${name}${sep}${quote}[redacted]${quote}` : whole));
   // By hand rather than by `replace`: an assignment to a name that is not a secret's leaves its value to be
   // read, so one inside it still is. Replaced whole, `{"content":"API_KEY=…"}` took the key's value with it.

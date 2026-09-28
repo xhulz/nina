@@ -4705,12 +4705,19 @@ const dated = (date, status = 'active') =>
     ['SENTRY_DSN=https://abc123def@o1.ingest.sentry.io/1', 'abc123def'],
     [`npm_${'f'.repeat(36)} hf_${'g'.repeat(34)} ASIA${'H'.repeat(16)}`, 'ffffffffffff'],
     [JSON.stringify({ content: 'API_KEY=abc123def456\nDB_PASSWORD=hunter2hunter2' }), 'hunter2'],
+    // What a stage's shell commands carry, which is most of what it sends.
+    ['mysql --password hunter2x -h db', 'hunter2x'],
+    ['deploy --api-key "correct horse battery"', 'battery'],
+    ['curl -u admin:sup3rSecretPass123 https://x', 'sup3rSecret'],
+    ['Set-Cookie: session=abcdef123456; Path=/', 'abcdef123456'],
+    ['Authorization: ApiKey abcdefghijkl123', 'abcdefghijkl'],
+    ['Authorization: rawtoken1234567890', 'rawtoken'],
   ];
   for (const [text, secret] of leaks) expect(!redact(text).includes(secret), `redact: masks ${text.slice(0, 40)} — got ${redact(text)}`);
-  const plain = 'max_tokens: 100000 AUTH_LIB=better-auth bypass=allowed compass: north';
+  const plain = 'max_tokens: 100000 AUTH_LIB=better-auth bypass=allowed compass: north mkdir -p dir --project /Users/x --max-tokens 100000';
   expect(redact(plain) === plain, `redact: leaves what only looks like a name — got ${redact(plain)}`);
   const slow = Date.now();
-  for (const text of ['a='.repeat(100_000), 'ab:'.repeat(70_000), 'x://'.repeat(50_000)]) redact(text);
+  for (const text of ['a='.repeat(100_000), 'ab:'.repeat(70_000), 'x://'.repeat(50_000), '--token '.repeat(60_000), 'Authorization: '.repeat(30_000)]) redact(text);
   expect(Date.now() - slow < 2000, `redact: linear in what it reads — ${Date.now() - slow} ms on 600 KB of near-assignments`);
   // A tool's input goes out serialized, and a Write of a .env inside it went out whole.
   const env = { file_path: '.env', content: 'API_KEY=abc123def456\nDB_PASSWORD=hunter2hunter2', password: 'correct horse' };
