@@ -9,9 +9,9 @@
  */
 
 import { copyFile, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { slugFor, snapshotsDir } from '../paths.mjs';
-import { createReadStream, existsSync, readFileSync, realpathSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { snapshotsDir } from '../paths.mjs';
+import { readStoreFile } from '../store.mjs';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { listProjects, scanProject } from '../transcripts.mjs';
 
@@ -47,31 +47,6 @@ async function writeAtomicText(path, text) {
 }
 
 /**
- * Reads the records already captured for a project.
- *
- * @param {string} file - Path to the snapshot JSONL.
- * @returns {Promise<object[]>} The records, or an empty list.
- */
-async function readRecords(file) {
-  const records = [];
-  try {
-    await readFile(file, { flag: 'r' });
-  } catch {
-    return records;
-  }
-  const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      records.push(JSON.parse(line));
-    } catch {
-      /* a torn line loses one record, never the file */
-    }
-  }
-  return records;
-}
-
-/**
  * Writes the snapshot through a temp file, so an interrupted run cannot leave a
  * truncated one behind.
  *
@@ -84,37 +59,6 @@ async function writeAtomic(file, records) {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(tmp, `${records.map((r) => JSON.stringify(r)).join('\n')}\n`);
   await rename(tmp, file);
-}
-
-/**
- * A project's records in the measurement store, under the name Claude Code gives its directory — as
- * given, or with its links resolved, since either may be the one the sessions ran in.
- *
- * @param {string} dir - The project.
- * @returns {object[]|null} Null when the store has nothing for it.
- */
-export function storedRecords(dir) {
-  const names = new Set([slugFor(dir)]);
-  try {
-    names.add(slugFor(realpathSync(dir)));
-  } catch {
-    // A directory that cannot be resolved is looked up as given.
-  }
-  for (const name of names) {
-    const file = join(snapshotsDir(), `${name}.jsonl`);
-    if (!existsSync(file)) continue;
-    return readFileSync(file, 'utf8')
-      .split('\n')
-      .filter(Boolean)
-      .flatMap((l) => {
-        try {
-          return [JSON.parse(l)];
-        } catch {
-          return [];
-        }
-      });
-  }
-  return null;
 }
 
 /**
@@ -214,7 +158,7 @@ async function snapshotProject(project, { outDir, rebuild, quiet, legacy }) {
   // The store is the only copy of history older than the transcripts, and a rebuild re-reads only what is
   // still on disk: the record it replaces is kept beside it first.
   if (rebuild && existsSync(file)) await copyFile(file, `${file}.before-rebuild-${new Date().toISOString().replace(/[:.]/g, '-')}`);
-  const prior = rebuild ? [] : await readRecords(file);
+  const prior = rebuild ? [] : readStoreFile(file, { raw: true });
   const own = rebuild ? {} : await readJson(join(outDir, `${project.slug}.state.json`));
   const cursors = rebuild ? {} : (own.cursors ?? legacy[project.slug]?.cursors ?? {});
 

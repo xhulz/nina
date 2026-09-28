@@ -28,6 +28,7 @@ import { readRun, runFile } from '../agentrun.mjs';
 import { BATCH, SETTLE_MINUTES, contextMode, postScore, postScores, postSpans, scoreOf, settled, spanOf, spansOf } from '../langfuse.mjs';
 import { runOf, transcriptsOf } from '../transcripts.mjs';
 import { exportsDir, snapshotsDir } from '../paths.mjs';
+import { readStoreFile } from '../store.mjs';
 import { readConfig, statusPath, targetOf } from './langfuse.mjs';
 import { projectName } from './stats.mjs';
 import { handsToModel } from '../detectors.mjs';
@@ -54,19 +55,6 @@ export const digest = (record) => createHash('sha256').update(JSON.stringify(rec
 /** Where each project's record of what was sent lives. */
 const sentPath = (slug) => join(exportsDir(), 'langfuse', `${slug}.json`);
 
-/** Reads one project's snapshot records. */
-async function recordsOf(file) {
-  return (await readFile(file, 'utf8'))
-    .split('\n')
-    .filter((l) => l.trim())
-    .flatMap((l) => {
-      try {
-        return [JSON.parse(l)];
-      } catch {
-        return [];
-      }
-    });
-}
 
 /**
  * What was sent for a project: a digest per span, and the scores. Only a file that is not there means
@@ -267,7 +255,7 @@ export async function exportCommand(argv, ctx = {}) {
  */
 async function exportProject({ slug, name, file, target, dry, now, since = '', quiet = false, content = null }) {
   const say = quiet ? () => {} : (line) => console.log(line);
-  const records = await recordsOf(file);
+  const records = readStoreFile(file);
   const sent = await sentOf(slug);
   if (typeof sent === 'string') {
     say(`  ${name}: ✗ ${sent}`);

@@ -21,7 +21,7 @@ import { join, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
 import { LEDGER_TAIL, ledgerPath, loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
-import { storedRecords } from './snapshot.mjs';
+import { projectRecords } from '../store.mjs';
 import { layerRootFor } from './compose.mjs';
 import { handsToModel } from '../detectors.mjs';
 
@@ -113,7 +113,7 @@ function liveness(target, project) {
     return null;
   }
   const now = Date.now();
-  const reports = (storedRecords(target) ?? []).filter(
+  const reports = (projectRecords(target) ?? []).filter(
     (r) =>
       r.verdict_source === 'handback' &&
       r.session &&

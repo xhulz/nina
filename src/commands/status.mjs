@@ -22,7 +22,7 @@ import { amber, bold, dim, green, pink } from '../look.mjs';
 import { byVersion, layerRootFor } from './compose.mjs';
 import { filedRequests } from './learn.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
-import { storedRecords } from './snapshot.mjs';
+import { projectRecords } from '../store.mjs';
 
 /** How long the registry gets to say which version is newest; a status is not worth waiting on. */
 const REGISTRY_MS = 3000;
@@ -123,7 +123,7 @@ export async function status(argv, ctx) {
   const check = verdictOf(bin, ['check', '--project', target]);
   row('check', check.ok ? green(check.line) : warn(`${check.line} — \`nina check\` lists them`));
 
-  const records = storedRecords(target) ?? [];
+  const records = projectRecords(target) ?? [];
   if (records.length === 0) {
     row('measured', dim('nothing yet — `nina snapshot` captures it'));
   } else {
