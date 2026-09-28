@@ -9,7 +9,8 @@
  * the verdict a dispatch answers may not be on disk when the dispatch is about to go out, and the file
  * is mostly replay: a session resumed over a bridge rewrites its history, three quarters of the bytes
  * in the one measured. The gate keeps its own ledger instead — one small file per session, metadata
- * only, with the ids a report gave its issues as the one thing a model wrote — written by the hooks
+ * only, with the ids a report gave its issues and the name an agent was launched with as the only things a
+ * model wrote — written by the hooks
  * that see each fact as it happens:
  *
  *   PostToolUse on SubagentHandback   the report a stage handed back, verbatim — its verdict
@@ -473,15 +474,17 @@ function withoutRef(to) {
 }
 
 /**
- * Who a SendMessage goes to: an agent id the ledger has seen, the name an agent was launched with, or the
- * stage's own name, with or without the ` [ref]` a listing appends. A fixer launched as `fixer` and resumed
- * by that name was seen only after it went out, so no resume of it was ever asked about.
+ * Who a SendMessage goes to: an agent id the ledger has seen, or a name, with or without the ` [ref]` a
+ * listing appends. A name is the one an agent was launched with, or — launched with none — its stage's; and,
+ * as Claude Code resolves it, the latest agent to go by it is the one reached. A fixer launched as `fixer` and
+ * resumed by that name was seen only after it went out, so no resume of it was ever asked about.
  *
  * @returns {{agent: string|null, role: string|null}}
  */
 function recipient(entries, project, to) {
   const said = withoutRef(to) || null;
-  const named = said ? entries.findLast((e) => e.k === 'dispatch' && e.name === said && e.agent) : null;
+  const goesBy = (e) => e.name ?? (e.via === 'SendMessage' ? null : e.role);
+  const named = said ? entries.findLast((e) => e.k === 'dispatch' && e.agent && goesBy(e) === said) : null;
   const agent = named?.agent ?? said;
   const role = roleOf(entries, agent) ?? (said && project.graph.stages.has(said) ? said : null);
   return { agent, role };

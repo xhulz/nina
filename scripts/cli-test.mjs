@@ -2739,6 +2739,24 @@ const dated = (date, status = 'active') =>
     on('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'fixer' }, tool_use_id: 't-f3' })?.hookSpecificOutput?.permissionDecision === 'ask',
     'gate: a fixer resumed by the name it was launched with is held at the cap too',
   );
+  // A name is reached as Claude Code reaches it: the latest agent to go by it. A reviewer once launched as
+  // `architect` does not stand for the architect launched after it, which goes by its stage's name.
+  const third = 's-gate-latest';
+  const by = (event, fields = {}) => handle({ hook_event_name: event, session_id: third, ...fields }, { root: project });
+  const rejectedIn = (agent) => {
+    by('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: `t-${agent}`, tool_response: { agentId: agent } });
+    by('PostToolUse', { tool_name: 'SubagentHandback', agent_id: agent, agent_type: 'reviewer', tool_input: { message: 'VERDICT: REJECTED' } });
+  };
+  by('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer', name: 'architect' }, tool_use_id: 't-rn', tool_response: { agentId: 'rn' } });
+  rejectedIn('lr1');
+  by('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'architect' }, tool_use_id: 't-a1', tool_response: { agentId: 'a1' } });
+  rejectedIn('lr2');
+  by('PostToolUse', { tool_name: 'SendMessage', tool_input: { to: 'architect' }, tool_use_id: 't-a2', tool_response: { resumedAgentId: 'a1' } });
+  rejectedIn('lr3');
+  expect(
+    by('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'architect' }, tool_use_id: 't-a3' })?.hookSpecificOutput?.permissionDecision === 'ask',
+    'gate: a name reaches the latest agent to go by it, as Claude Code resolves it',
+  );
   // The recipient is whatever the model wrote, read on every dispatch: its ` [ref]` is found by position,
   // because the pattern that did it took half a second on 20,000 `[` and grew with the square.
   const slow = Date.now();
