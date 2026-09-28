@@ -21,7 +21,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 - **Input:** user request, often ambiguous or multi-step.
 - **Output:** ordered list of subtasks, each tagged with a 1-line goal + scope (S/M/L) + retrieval list + parallelization tag (`SEQUENTIAL` / `PARALLEL-SAFE`).
-- **Tools:** Read, Grep, Glob, WebSearch, WebFetch. **No edits except planning artifacts.**
+- **Tools:** what its spec's `tools:` grants. **No edits except planning artifacts.**
 - **Exit criteria:** each subtask is small enough for an architect to design in a single pass.
 - **Skip if:** task is already small, single-concern, and concrete.
 
@@ -29,14 +29,14 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 - **Input:** one subtask from planner, or a well-scoped direct request.
 - **Output:** technical spec — files to touch, function signatures, data flow, edge cases, tests to add, patterns to follow. Marks which gates in `.claude/graph.md` the change will trigger — the database gate if the schema or a query will be touched, the integration gate if an integration boundary will be — AND, for the latter, includes an **Integration premises** section: every behavior the implementation depends on, each carrying the evidence its kind requires — a `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` citation, a contract-test case, an observed response, or a `P<n>` reference into `.claude/integrations/<slug>.md`. No premise without a citation.
-- **Tools:** Read, Write, Edit, Grep, Glob, WebSearch, WebFetch. **No edits except spec files + `.claude/integrations/**`.**
+- **Tools:** what its spec's `tools:` grants. **No edits except spec files + `.claude/integrations/**`.**
 - **Exit criteria:** implementer can code without re-planning AND the integration gate, where `.claude/graph.md` has one, can verify each premise / contract case without re-deriving it.
 
 ### Implementer
 
 - **Input:** architect's spec.
 - **Output:** working TS code + tests. `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend) `{{BUILD_CMD}}` clean for the affected packages. Diff scoped to the spec. **Does NOT run vitest.**
-- **Tools:** Read, Write, Edit, Glob, Grep, Bash.
+- **Tools:** what its spec's `tools:` grants.
 - **Exit criteria:** typecheck/lint/build pass; no scope creep; if the database was touched, says so on first line; if an external service surface touched, says so.
 <!-- nina:slot db.1 -->
 <!-- nina:slot integrations.1 -->
@@ -45,7 +45,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 - **Input:** implementer's diff + all upstream artifacts.
 - **Output:** `APPROVED`, or `REJECTED` with `path:line` references.
-- **Tools:** Read, Grep, Glob, Bash, WebFetch. **No edits. No vitest.**
+- **Tools:** what its spec's `tools:` grants. **No edits. No vitest.**
 - **Exit criteria:**
   - `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}` pass; `{{BUILD_CMD}}` when frontend touched.
   - Diff matches spec (reject scope creep).
@@ -60,7 +60,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 - **Input:** `APPROVED` from the reviewer and every gate the diff triggered + the implementer's touched-package list.
 - **Output:** PASS (ready for deploy) or FAIL (loops back to implementer/architect).
-- **Tools:** Read, Grep, Glob, Bash.
+- **Tools:** what its spec's `tools:` grants.
 - Runs vitest **once**, per affected package, **sequentially** (configs enforce single-fork). Kills stray test processes at start and end. See `.claude/agents/qa.md`.
 
 ### Devops (deploy)
@@ -68,7 +68,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 - **Trigger:** qa PASS on a step that changes a deployed surface. Not for test-only, docs-only or harness-only steps.
 - **Input:** qa PASS + the touched-package list + the architect spec's preview-deploy plan.
 - **Output:** `DEPLOYED` (targets, migrations, the smoke it actually ran, the rollback) or `BLOCKED` (what stopped it, which stage owns the fix).
-- **Tools:** Read, Grep, Glob, Bash, WebFetch. **No edits to code, tests or config.**
+- **Tools:** what its spec's `tools:` grants. **No edits to code, tests or config.**
 - **Checks:** clean rebuild of emitting packages; both targets when the API surface changed; every variable the bundle reads present at build time; migrations applied in order against the intended database; secret parity; smoke against preview exercising the changed path; a named rollback.
 - **Production:** never on its own initiative — an explicit go from {{OWNER}}, for that change.
 
@@ -88,7 +88,7 @@ Each stage produces a **written artifact** — spec, diff, review comments. The 
 
 User: "Fix the typo in the dashboard page title."
 
-No planner, no architect. Implementer fixes, typecheck passes, reviewer verifies scope. → QA (only if a test file changed). Done.
+No stage: a trivial edit goes through no chain (`CLAUDE.md`, the task table). Edit it directly, run the typecheck, and commit.
 
 ---
 
