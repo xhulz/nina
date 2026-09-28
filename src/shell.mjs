@@ -13,8 +13,9 @@ import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
-import { PINK, printBanner, useColor } from './banner.mjs';
+import { printBanner } from './banner.mjs';
 import { shellHistoryFile } from './paths.mjs';
+import { dim, pink } from './look.mjs';
 
 /** Words the session answers itself rather than handing to a command. */
 const LEAVE = new Set(['exit', 'quit', 'q']);
@@ -87,8 +88,7 @@ function keep(line) {
  */
 export function shell({ bin, version, commands }) {
   const terminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const dim = (s) => (useColor() ? `\x1b[2m${s}\x1b[0m` : s);
-  const prompt = useColor() ? `\x1b[38;2;${PINK.join(';')}mnina ›\x1b[0m ` : 'nina › ';
+  const prompt = `${pink('nina ›')} `;
 
   printBanner(version);
   console.log(dim('  type a command — stats, check, upgrade --to <version> — `help` lists them, `clear` starts the screen over, `exit` leaves\n'));

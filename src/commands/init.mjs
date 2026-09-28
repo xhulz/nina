@@ -21,8 +21,8 @@ import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
-import { PINK, useColor } from '../banner.mjs';
 import { DETECTABLE, NEEDS } from '../surfaces.mjs';
+import { bold, dim, green, pink } from '../look.mjs';
 
 /**
  * The question each surface answers. Detection can confirm three of them from files; all
@@ -72,11 +72,10 @@ export function askOrder(available) {
   return [...available].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
-/** The interview's colors — the banner's pink, on a terminal that takes color, and plain everywhere else. */
-const tint = (code, text) => (useColor() ? `\x1b[${code}m${text}\x1b[0m` : text);
-const strong = (text) => tint(`1;38;2;${PINK.join(';')}`, text);
-const faint = (text) => tint('2', text);
-const found = (text) => tint('32', text);
+/** The interview's colors — the reports' own, on a terminal that takes color, and plain everywhere else. */
+const strong = (text) => bold(pink(text));
+const faint = dim;
+const found = green;
 
 /**
  * What declaring a surface actually adds, counted from the layer rather than described.
