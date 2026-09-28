@@ -29,7 +29,8 @@
  *      restricted — the subagent inherits every tool the session has — so a role told it is
  *      read-only is not, and nothing says so. A `model:` it declares is an alias or a model id.
  *   9. Every numbered list composes as 1, 2, 3 — except the hard rules, whose numbers are ids.
- *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives.
+ *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives, nor history
+ *      left unmarked: a count of one project's runs ("2 times in 743 runs") composed into every other's.
  *      Every dispatch pays for what its spec says, so a file that grows past its budget is a decision to
  *      make in the commit that raises it, not an accretion nobody chose.
  *  11. A command that kills processes by pattern keeps to the checkout's own (`grep -F "$ROOT/"`).
@@ -106,6 +107,8 @@ async function runFixture(name) {
     if (rel.endsWith('.md') && !(rel in BUDGETS)) failures.push(`${rel}: composed with no size budget — add one to BUDGETS, deliberately`);
     else if (rel in BUDGETS && text.length > BUDGETS[rel]) failures.push(`${rel}: ${text.length} characters, over its budget of ${BUDGETS[rel]}`);
     if (text.includes('nina:why')) failures.push(`${rel}: a nina:why passage survived composition`);
+    // History left unmarked: a count of one project's own runs, composed into every other project's.
+    for (const [said] of text.matchAll(HISTORY)) failures.push(`${rel}: "${said}" is history — mark it nina:why, keep the rule`);
 
     // 5. A reference to a rule number that this project does not have.
     for (const match of text.matchAll(/#(\d+)/g)) {
@@ -220,6 +223,9 @@ const KILLS = /\b(?:pkill|killall)\b|\bxargs\b[^|]*\bkill\b|\bkill\b[^|]*\$\(\s*
 
 /** The filter that keeps such a line to processes run from under the checkout's root. */
 const OWN_CHECKOUT = 'grep -F "$ROOT/"';
+
+/** How history reads when it was left unmarked: a count of one project's own runs, or an event it lived through. */
+const HISTORY = /\b\d+ (?:times|invocations|runs|rounds) (?:in|out of) \d+\b[^.]*|\b\d+% of the time\b|\bhappened here once\b/g;
 
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
