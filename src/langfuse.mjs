@@ -13,10 +13,11 @@
  *
  * Observations go over OpenTelemetry (`/api/public/otel/v1/traces`, OTLP/HTTP as JSON), the path
  * Langfuse's v4 data model takes, with the session and trace attributes on every span, as its guide asks.
- * Verdicts go to `/api/public/scores` as categorical scores. Langfuse keeps what it was first sent: the
+ * Verdicts go as categorical scores, in batches to `/api/public/ingestion`, or one at a time to
+ * `/api/public/scores` where the batch endpoint is gone. Langfuse keeps what it was first sent: the
  * same span id sent again is a second observation, not an update, and every sum counts both; a score is
- * replaced only when its id, name and date all match, and that endpoint takes no date — it stamps the
- * day it is called. So each is sent once, and only for a run that has settled. No dependency: `fetch`
+ * replaced only when its id, name and date all match, and the scores endpoint takes no date — it stamps
+ * the day it is called. So each is sent once, and only for a run that has settled. No dependency: `fetch`
  * is enough.
  */
 
@@ -40,13 +41,13 @@ export const BATCH = 100;
 export const SETTLE_MINUTES = 15;
 
 /** How long a run that never returned is waited for before it is sent as it is. */
-export const UNRETURNED_HOURS = 24;
+const UNRETURNED_HOURS = 24;
 
 /** A stable hex id of a given length, from what it identifies. */
 const hexId = (text, length) => createHash('sha256').update(String(text)).digest('hex').slice(0, length);
 
 /** The trace a dispatch becomes, and the observation at its root. */
-export const traceIdOf = (record) => hexId(`trace|${record.dispatch_id}`, 32);
+const traceIdOf = (record) => hexId(`trace|${record.dispatch_id}`, 32);
 export const spanIdOf = (record) => hexId(record.dispatch_id, 16);
 
 /** An ISO time, as OTLP's nanoseconds since the epoch — a string, since it outgrows a double. */
@@ -230,7 +231,7 @@ export function scoreOf(record) {
 }
 
 /** The OTLP request body for a batch of spans. */
-export function otlpBody(spans) {
+function otlpBody(spans) {
   return {
     resourceSpans: [
       {
@@ -247,8 +248,8 @@ export function otlpBody(spans) {
  * request cut off after Langfuse took it is the one way a span goes twice, so a batch of spans, the one
  * request that carries real weight, gets the longer wait.
  */
-export const REQUEST_MS = 30_000;
-export const SPANS_MS = 120_000;
+const REQUEST_MS = 30_000;
+const SPANS_MS = 120_000;
 
 /** The headers every request carries. */
 const headersFor = ({ publicKey, secretKey }) => ({
