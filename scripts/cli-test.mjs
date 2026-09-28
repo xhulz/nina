@@ -4337,7 +4337,8 @@ const dated = (date, status = 'active') =>
   await writeFile(
     join(process.env.NINA_DATA, 'snapshots', `${slugFor(dir)}.jsonl`),
     `${[
-      round('t1', 'architect', 'SPEC-READY', '2026-09-20T10:00:00.000Z', { desc: 'Spec the export' }),
+      // A spec of twelve files is not twelve files of code: the largest write is the implementer's seven.
+      round('t1', 'architect', 'SPEC-READY', '2026-09-20T10:00:00.000Z', { desc: 'Spec the export', files_touched: 12 }),
       round('t2', 'implementer', 'DIFF-READY', '2026-09-20T10:10:00.000Z', { files_touched: 7 }),
       round('t3', 'reviewer', 'REJECTED', '2026-09-20T10:20:00.000Z', { round: 1, turns: 20, tool_calls: 30, context_start: 30_000, context_peak: 150_000, prompt_chars: 2500 }),
       round('t3#2', 'reviewer', 'APPROVED', '2026-09-20T10:40:00.000Z', { round: 2, turns: 8, tool_calls: 8, context_start: 212_000, context_peak: 251_000, prompt_chars: 800 }),
