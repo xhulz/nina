@@ -81,14 +81,17 @@ const CITATION = /^[^\s:]+(:\d+)?$/;
  * @param {string} text - The whole file.
  * @returns {Record<string, string> | null} The fields, or `null` when there is no frontmatter.
  */
-export function frontmatter(text) {
+export function frontmatter(raw) {
+  // Saved on Windows, a pill read as having no frontmatter at all; and `occurrences: 4  # seen in 5.1` read as
+  // 1 — a comment after a value is YAML's, and ends at the value.
+  const text = String(raw ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
   if (!text.startsWith('---\n')) return null;
   const end = text.indexOf('\n---', 3);
   if (end === -1) return null;
   const fields = {};
   for (const line of text.slice(4, end + 1).split('\n')) {
     const field = /^([a-z_]+):\s*(.*)$/.exec(line);
-    if (field) fields[field[1]] = field[2].trim();
+    if (field) fields[field[1]] = field[2].replace(/\s+#.*$/, '').trim();
   }
   return fields;
 }
@@ -308,6 +311,9 @@ export function validate(pill, text, roles, today) {
     problems.push(`${label} has last_seen "${fields.last_seen}" — expected YYYY-MM-DD`);
   } else if (fields.last_seen && fields.date && fields.last_seen < fields.date) {
     problems.push(`${label} was last seen ${fields.last_seen}, before it was first learned (${fields.date})`);
+  } else if (fields.last_seen && fields.last_seen > today) {
+    // The capture detector counts loop-backs after a stage's newest lesson: one seen in the future silenced it.
+    problems.push(`${label} was last seen ${fields.last_seen}, which is in the future — no loop-back of its stage would be counted until then`);
   }
   if (fields.occurrences !== undefined && !/^[1-9]\d*$/.test(fields.occurrences)) {
     problems.push(`${label} has occurrences "${fields.occurrences}" — expected a positive whole number`);
