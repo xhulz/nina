@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { HARNESS, describeMove, interruptedMove, legacyHint, moveJournal, movedFrom } from '../paths.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
+import { REMOVED, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
 import { NEEDS, detected } from '../surfaces.mjs';
 import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
 import { EXPECT_ENV } from '../expected.mjs';
@@ -576,9 +576,16 @@ export async function upgrade(argv, ctx) {
     delete process.env.NINA_UPGRADE;
     console.log(`\n  upgrade: ${previous} → ${to} applied and verified.`);
     if (removable.length > 0) console.log(`\n  removed ${removable.length} file(s) ${to} no longer composes: ${removable.join(', ')}`);
-    if (keptEdited.length > 0) {
-      console.log(`\n  kept ${keptEdited.length} file(s) ${to} no longer composes, because they carry edits of yours — delete them once nothing in them is needed:`);
-      for (const p of keptEdited) console.log(`      ${p}`);
+    // A file gated on a surface the project does not declare is moved aside by compose itself, edited or not.
+    const stillKept = keptEdited.filter((p) => entryAt(p));
+    const setAside = keptEdited.filter((p) => !entryAt(p));
+    if (stillKept.length > 0) {
+      console.log(`\n  kept ${stillKept.length} file(s) ${to} no longer composes, because they carry edits of yours — delete them once nothing in them is needed:`);
+      for (const p of stillKept) console.log(`      ${p}`);
+    }
+    if (setAside.length > 0) {
+      console.log(`\n  moved ${setAside.length} file(s) with edits of yours to ${REMOVED}/, since ${to} composes them only for a surface this project does not declare:`);
+      for (const p of setAside) console.log(`      ${p}`);
     }
     if (occupied.length > 0) {
       console.log(`\n  replaced ${occupied.length} file(s) of yours with what ${to} composes there — the originals are in ${HARNESS}/replaced/:`);

@@ -16,7 +16,7 @@
  * sit unenforceable for three months here.
  */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { HARNESS, legacyHint } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
@@ -138,6 +138,9 @@ export function generatedNotice(rel, slots, script = false) {
   }
   return script ? lines.map((line) => `// ${line}`).join('\n') : `<!-- ${lines.join('\n     ')} -->`;
 }
+
+/** Where compose keeps a copy of each file it stops composing when a surface leaves the profile. */
+export const REMOVED = join(HARNESS, 'removed');
 
 /**
  * How far into a file the notice is looked for: below a frontmatter block, or a shebang. The compose
@@ -405,13 +408,15 @@ export function projectOwned(target, paths) {
  * @param {string} target - The project directory.
  * @param {{root: string}} ctx - CLI context; `root` is the NINA install directory.
  * @param {{check?: boolean}} [options] - `check` compares without writing.
- * @returns {Promise<{error?: string, written: string[], differ: string[], unfilled: string[], skipped: string[]}>}
+ * @returns {Promise<{error?: string, written: string[], differ: string[], unfilled: string[], skipped: string[], removed?: string[]}>}
  */
 export async function composeProject(target, ctx, options = {}) {
   const check = options.check === true;
   const written = [];
   const differ = [];
   const skipped = [];
+  /** Files composed for a surface this profile no longer declares, moved to {@link REMOVED}. */
+  const removed = [];
 
   const profilePath = join(target, HARNESS, 'profile.json');
   if (!existsSync(profilePath)) {
@@ -464,9 +469,23 @@ export async function composeProject(target, ctx, options = {}) {
     if (requires) {
       core = core.slice(requires[0].length);
       if (!surfaces.includes(requires[1])) {
-        // The project has no such surface, so the file does not exist for it.
+        // The project has no such surface, so the file does not exist for it. One composed for it before the
+        // surface left the profile is still dispatched as a stage the graph no longer has, and was reported as
+        // drift that no compose cleared: it goes, with a copy kept. A file there with no notice is the project's.
         skipped.push(rel);
-        if (check && existsSync(dest)) differ.push(`${rel} (present, but no '${requires[1]}' surface)`);
+        let stale = false;
+        try {
+          stale = lstatSync(dest).isFile() && noticeOf(await readFile(dest, 'utf8')) !== null;
+        } catch {
+          // Not there.
+        }
+        if (stale && check) differ.push(`${rel} (present, but no '${requires[1]}' surface)`);
+        if (stale && !check) {
+          await mkdir(dirname(join(target, REMOVED, rel)), { recursive: true });
+          await writeFile(join(target, REMOVED, rel), await readFile(dest));
+          await rm(dest);
+          removed.push(rel);
+        }
         continue;
       }
     }
@@ -557,7 +576,7 @@ export async function composeProject(target, ctx, options = {}) {
     if (previous !== null && previous !== text) differ.push(rel);
   }
 
-  return { written, differ, unfilled, skipped, malformed };
+  return { written, differ, unfilled, skipped, malformed, removed };
 }
 
 /**
@@ -616,6 +635,10 @@ export async function compose(argv, ctx) {
     return bad === 0 ? 0 : 1;
   }
   console.log(`composed ${result.written.length} file(s) → ${relative(process.cwd(), target) || '.'}`);
+  if (result.removed.length > 0) {
+    console.log(`  removed ${result.removed.length} file(s) composed for a surface this profile no longer declares — a copy of each is in ${REMOVED}/:`);
+    for (const rel of result.removed) console.log(`    ${rel}`);
+  }
   // The one place a pointer to `nina where` costs nothing. Put it in the notice instead and
   // every composed file in every project differs until it recomposes — for a pointer, not a
   // fix. This line is written to no file, so it can say what it likes, and it reaches whoever

@@ -45,7 +45,11 @@ through with it. It is excused now only for what it already said: a failure the 
 move's doing, and rolls it back — or, under `--force`, is listed once the move is done. Notes are not
 failures, so a slot the move creates, reported as a note, can never roll it back.
 
-Compose writes and never deletes, so the move does the deleting. Right after it composes — before
+Compose removes one kind of file only: one composed for a surface the profile no longer declares, which
+it moves to `.nina/removed/` with a line naming it. Left in place, a `dba` spec from a dropped `db` was
+dispatched as a stage the graph no longer had, and reported as drift that no compose cleared. A file there
+with no notice is the project's and stays. Everything else compose only writes, so the move does the rest
+of the deleting. Right after it composes — before
 anything is verified, so what is verified is what stays — it removes the files the old version composed
 and the new one does not, unless they carry edits of the project's own, which are kept and named. If it
 rolls back, it removes the files it composed for the first time, recomposes the old version, and then

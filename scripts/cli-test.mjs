@@ -1914,6 +1914,35 @@ const dated = (date, status = 'active') =>
   );
 }
 
+// ─── compose: a surface taken out of the profile takes its files with it ────────────────
+{
+  // Compose only ever wrote. A surface dropped from the profile left its files behind — a dba spec
+  // dispatched as a stage the graph no longer had, and drift that every compose reported and none cleared.
+  const bed = await sound('ledger', 'dev');
+  run(['compose', '--project', bed]);
+  const dba = join(bed, '.claude', 'agents', 'dba.md');
+  const composedDba = await readFile(dba, 'utf8');
+  const profilePath = join(bed, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  await writeFile(profilePath, `${JSON.stringify({ ...profile, surfaces: profile.surfaces.filter((s) => s !== 'db') }, null, 2)}\n`);
+  const recomposed = run(['compose', '--project', bed], { loud: true });
+  expect(
+    recomposed.status === 0 && !existsSync(dba) && (await readFile(join(bed, '.nina', 'removed', '.claude', 'agents', 'dba.md'), 'utf8').catch(() => '')) === composedDba &&
+      recomposed.out.includes('.claude/agents/dba.md'),
+    `compose: a file composed for a surface the profile dropped is removed, with a copy kept and named — got ${recomposed.out}`,
+  );
+  expect(run(['compose', '--project', bed, '--check', '--drift']).status === 0, 'compose: and the drift it left is cleared by composing');
+
+  // One of the project's own at that path, with no notice, is the project's.
+  const own = '---\nname: dba\ndescription: our own\ntools: Read\n---\nours\n';
+  await writeFile(dba, own);
+  run(['compose', '--project', bed]);
+  expect(
+    (await readFile(dba, 'utf8')) === own && run(['compose', '--project', bed, '--check', '--drift']).status === 0,
+    'compose: a file of the project\'s own where a dropped surface composed one is left alone, and is not drift',
+  );
+}
+
 // ─── packaged install: the two things that only exist in a checkout ─────────────────────
 {
   // An installed package ships `releases/` and no working tree, so a `dev` pin — which means
