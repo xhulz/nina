@@ -1,0 +1,2 @@
+<!-- nina:slot pii.1 -->
+- **Privacy (Hard Rule #8)** — the categories declared in `.claude/architecture.md` § *Privacy* must never appear in logs, in responses that do not need them, in error paths, or in the database in clear text. Check every endpoint that returns a person's record for fields it includes by accident: a `select` that quietly grew a column is the usual way this leaks. Check the error paths too — they are written last and reviewed least.
