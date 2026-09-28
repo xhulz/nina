@@ -64,6 +64,8 @@ const scratch = () => mkdtemp(join(tmpdir(), 'nina-cli-'));
 // Every run measures into a scratch store. The detectors a composed test bed runs — the lessons
 // detector snapshots, the gate's selftest checks its ledger can be written — would otherwise write
 // into the real `~/.nina`, and they did: one empty ledger directory per run, per bed.
+// The reports read days where the machine is; the suite reads them in one zone, whatever the machine's.
+process.env.TZ = 'UTC';
 process.env.NINA_DATA = await mkdtemp(join(tmpdir(), 'nina-cli-data-'));
 
 // Nor is the machine's own `~/.claude`. A `nina check` by hand asks which skills are installed, and every
@@ -4377,6 +4379,15 @@ const dated = (date, status = 'active') =>
   );
   expect(out.includes('still open where the record ends') && out.includes('2 cycle(s): $6.00 in all; the costliest, $5.00'), `runs: and the total, with the costliest named — got ${out}`);
   expect(/largest write 7 file\(s\) · context up to 251k/.test(out) && !/Fix the label[^▌]*context up to/.test(out), `runs: a cycle names the largest context a turn in it re-read, where it was measured — got ${out}`);
+  // Days and times are the owner's: the round at 09:00 UTC on the 21st ran on the evening of the 20th in Pago Pago.
+  const west = run(['runs', '--project', dir, '--since', '2026-09-20'], { loud: true, env: { TZ: 'Pacific/Pago_Pago' } }).out;
+  const inUtc = run(['runs', '--project', dir, '--since', '2026-09-20'], { loud: true }).out;
+  expect(
+    west.includes('2026-09-20 22:00') && !west.includes('Spec the export') && inUtc.includes('Spec the export') && west.includes('times in Pacific/Pago_Pago'),
+    `runs: --since and the times it prints are read in the machine's zone, and say which — got ${west}`,
+  );
+  const none = run(['runs', '--project', dir, '--since', '2027-01-01'], { loud: true }).out;
+  expect(none.includes('nothing measured since 2027-01-01') && !none.includes('no measured history'), `runs: a --since past every round says so, not that there is no history — got ${none}`);
   const stats = run(['stats', '--project', slugFor(dir), '--all'], { loud: true }).out;
   expect(
     /reviewer\s+first\s+1\s+20\s+1\.50\s+30k\s+150k\s+2,500/.test(stats) && /^\s+resumed\s+1\s+8\s+1\.00\s+212k\s+251k\s+800$/m.test(stats),

@@ -18,7 +18,7 @@ import { TERMINALS, parseGraph } from '../graph.mjs';
 import { required } from '../tools.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { frontmatter } from './pills.mjs';
-import { projectRecords } from '../store.mjs';
+import { localDay, projectRecords } from '../store.mjs';
 
 /** A stage line under "## Stages": "- `name` — what it does". */
 const STAGE_LINE = /^- `([a-z][a-z-]*)` — (.*)$/;
@@ -149,7 +149,7 @@ export function historyOf(records, since) {
   const byRole = new Map();
   const seen = new Map();
   for (const r of records) {
-    if (!r.role || r.status === 'denied' || String(r.ts ?? '') < since) continue;
+    if (!r.role || r.status === 'denied' || localDay(r.ts) < since) continue;
     const s = byRole.get(r.role) ?? { runs: 0, rounds: 0, read: 0, back: 0 };
     const runs = seen.get(r.role) ?? new Set();
     runs.add(runOf(r));
@@ -288,7 +288,7 @@ export async function pipeline(argv) {
   for (const file of existsSync(agentsDir) ? readdirSync(agentsDir).filter((f) => f.endsWith('.md')).sort() : []) {
     specs.set(file.replace(/\.md$/, ''), readFileSync(join(agentsDir, file), 'utf8'));
   }
-  const since = arg('--since') || new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const since = arg('--since') || localDay(new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString());
   const runs = projectRecords(dir);
   const history = runs ? historyOf(runs, since) : null;
   const stages = [...graph.stages].filter((s) => covered.has(s));

@@ -18,7 +18,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, r
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { ROLE_TOKENS, isLoopBack, runOf, transcriptsOf } from '../transcripts.mjs';
-import { namesFor, readStoreFile } from '../store.mjs';
+import { localDay, namesFor, readStoreFile } from '../store.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
@@ -65,7 +65,7 @@ async function load(dir, opts) {
     : (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.jsonl')).map((f) => f.slice(0, -'.jsonl'.length));
   return names
     .flatMap((name) => readStoreFile(join(dir, `${name}.jsonl`)))
-    .filter((r) => !opts.since || String(r.ts).slice(0, 10) >= opts.since);
+    .filter((r) => !opts.since || localDay(r.ts) >= opts.since);
 }
 
 
@@ -374,7 +374,7 @@ function modelReport(records) {
         .map((rs) => rs.map((r) => (r.tokens ? costOf(r.tokens, r.usage_model) : null)).filter((c) => c !== null))
         .filter((cs) => cs.length > 0)
         .map((cs) => cs.reduce((a, b) => a + b, 0));
-      const dates = rounds.map((r) => String(r.ts).slice(0, 10)).sort();
+      const dates = rounds.map((r) => localDay(r.ts)).sort();
       lines.push(
         `    ${i === 0 ? `${pink(role)}${' '.repeat(Math.max(20 - role.length, 1))}` : ''.padEnd(20)}${model.padEnd(26)}${String(runs.size).padStart(5)} run(s)  ${dim(`${dates[0]} → ${dates.at(-1)}`)}` +
           (clear.length ? `  loop-back ${pct(loops, clear.length)} of ${clear.length}` : '  no readable verdict') +
@@ -703,7 +703,7 @@ export async function stats(argv, ctx) {
     if (typeof r.duration_s === 'number') s.durations.push(r.duration_s);
   }
 
-  const span = [records[0]?.ts, records.at(-1)?.ts].map((t) => String(t).slice(0, 10));
+  const span = [records[0]?.ts, records.at(-1)?.ts].map(localDay);
   const projectCount = new Set(records.map((r) => r.project)).size;
   const run = byRun(records.filter((r) => r.status !== 'denied')).size;
   console.log(
@@ -856,7 +856,7 @@ export async function stats(argv, ctx) {
         : note(`${pills.retired} of ${pills.total} pill(s) retired into a rule.`, 'ok'),
     );
     if (newest) {
-      const since = records.filter((r) => String(r.ts).slice(0, 10) > newest).length;
+      const since = records.filter((r) => localDay(r.ts) > newest).length;
       if (since > 0) console.log(note(`${since} round(s) since the newest pill (${newest}).`));
     }
   }

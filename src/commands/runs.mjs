@@ -16,7 +16,7 @@ import { HARNESS } from '../paths.mjs';
 import { costOf } from '../prices.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { amber, bold, dim, pink } from '../look.mjs';
-import { projectRecords } from '../store.mjs';
+import { localDay, localMinute, projectRecords, zone } from '../store.mjs';
 import { WRITERS, cyclesOf, projectName } from './stats.mjs';
 
 /** What ended a cycle, in words. */
@@ -93,9 +93,14 @@ export async function runs(argv) {
   }
   const since = arg('--since');
   const last = Math.max(1, Number(arg('--last') ?? 10) || 10);
-  const records = (projectRecords(dir) ?? []).filter((r) => r.status !== 'denied' && (!since || String(r.ts).slice(0, 10) >= since));
+  const stored = (projectRecords(dir) ?? []).filter((r) => r.status !== 'denied');
+  const records = stored.filter((r) => !since || localDay(r.ts) >= since);
   if (records.length === 0) {
-    console.error('  no measured history for this project yet — `nina snapshot` captures it\n');
+    console.error(
+      stored.length === 0
+        ? '  no measured history for this project yet — `nina snapshot` captures it\n'
+        : `  nothing measured since ${since} (${zone()}) — the newest round is from ${localDay(stored.map((r) => String(r.ts)).sort().at(-1))}\n`,
+    );
     return 1;
   }
   const cycles = cyclesOf(records)
@@ -104,10 +109,10 @@ export async function runs(argv) {
   const shown = cycles.slice(0, last);
   console.log(
     `  ${bold(pink(projectName(records[0].project)))} · ${cycles.length} cycle(s)` +
-      dim(`  newest first${cycles.length > shown.length ? `, the last ${shown.length} — --last N for more` : ''}; a cycle runs up to the verdict that closes it`),
+      dim(`  newest first${cycles.length > shown.length ? `, the last ${shown.length} — --last N for more` : ''}; a cycle runs up to the verdict that closes it; times in ${zone()}`),
   );
   for (const c of shown) {
-    const when = `${c.start.slice(0, 10)} ${c.start.slice(11, 16)}`;
+    const when = localMinute(c.start);
     console.log(`\n  ${pink('▌')} ${bold(when)} · ${span(c.minutes)} · ${bold(money(c.cost))}${c.unpriced ? dim(` + ${c.unpriced} unpriced`) : ''} · ${dim(c.how)}`);
     console.log(`    ${c.name.length > 96 ? `${c.name.slice(0, 95)}…` : c.name}`);
     const chain = c.stages.map((s) => {
@@ -123,7 +128,7 @@ export async function runs(argv) {
   const costliest = shown.reduce((a, c) => (c.cost > a.cost ? c : a), shown[0]);
   console.log(
     `\n  ${shown.length} cycle(s): ${bold(money(total))} in all` +
-      (shown.length > 1 ? `; the costliest, ${money(costliest.cost)}, ${costliest.start.slice(0, 10)} — ${costliest.name.slice(0, 60)}` : '') +
+      (shown.length > 1 ? `; the costliest, ${money(costliest.cost)}, ${localDay(costliest.start)} — ${costliest.name.slice(0, 60)}` : '') +
       '\n',
   );
   return 0;
