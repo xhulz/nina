@@ -18,7 +18,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { applyWiring, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
+import { REQUIRES, SLOT, byVersion, closedGate, composedPaths, composeProject, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 import { DETECTABLE, NEEDS } from '../surfaces.mjs';
@@ -148,14 +148,13 @@ async function applicableFiles(root, surfaces) {
   const out = [];
   for (const rel of (await walk(coreTree)).sort()) {
     const core = await readFile(join(coreTree, rel), 'utf8');
-    const requires = REQUIRES.exec(core);
-    if (requires && !surfaces.includes(requires[1])) continue;
+    if (closedGate(core, surfaces)) continue;
     const fragments = [];
     for (const s of surfaces) {
       const text = await readFile(join(root, 'surfaces', s, 'tree', rel), 'utf8').catch(() => null);
       if (text !== null) fragments.push(text);
     }
-    out.push({ rel, core: requires ? core.slice(requires[0].length) : core, fragments });
+    out.push({ rel, core: core.replace(REQUIRES, ''), fragments });
   }
   return out;
 }

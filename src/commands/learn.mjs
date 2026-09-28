@@ -28,7 +28,7 @@ import { join, relative, resolve } from 'node:path';
 import { HARNESS, readProfile, slugFor, snapshotsDir } from '../paths.mjs';
 import { localDay, projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
-import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
+import { byVersion, closedGate, layerRootFor } from './compose.mjs';
 import { GRADUATION_AT, RETIRED, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
 import { decodeProjectDir } from './stats.mjs';
 import { snapshot } from './snapshot.mjs';
@@ -473,8 +473,7 @@ async function missingSurface(layerRoot, layerPath, surfaces) {
   const own = /^surfaces\/([^/]+)\/tree\//.exec(layerPath)?.[1];
   if (own && !surfaces.includes(own)) return own;
   const core = await readFile(join(layerRoot, 'core', 'tree', composedPath(layerPath)), 'utf8').catch(() => '');
-  const gate = REQUIRES.exec(core)?.[1] ?? null;
-  return gate && !surfaces.includes(gate) ? gate : null;
+  return closedGate(core, surfaces);
 }
 
 /**
