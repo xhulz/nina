@@ -486,6 +486,9 @@ export async function scanProject(projectDir, prior = {}) {
             model: block?.input?.model ?? row?.message?.model ?? null,
             branch: row.gitBranch ?? null,
             session: row.sessionId ?? null,
+            // The Claude Code that ran the dispatch: a change in how its transcripts are written first shows
+            // as a parser that stops finding something, and this says which version it stopped at.
+            claude_code: row.version ?? null,
             verdict: null,
             verdict_source: null,
             issues: null,
@@ -757,6 +760,7 @@ async function attachAgentDetail(projectDir, dispatches) {
               model: run.model,
               branch: round.branch ?? run.branch,
               session: run.session,
+              claude_code: run.claude_code ?? null,
               verdict: null,
               verdict_source: null,
               issues: null,
