@@ -101,7 +101,7 @@ a request against the pinned version, quoting the composed file and line, and it
 <!-- nina:slot db.3 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot blockchain.2 -->
-| **ANY step that changes a deployed surface** (API, frontend, schema, deploy config, secrets, bindings) | **+ devops after qa** — preview deploy + smoke; prod only on an explicit go |
+| **ANY step that changes a deployed surface** (API, frontend, schema, deploy config, secrets, bindings) | **+ devops after qa** — preview deploy + smoke; prod only on an explicit go; with no preview target yet, the step ends at qa |
 <!-- nina:slot frontend.2 -->
 | **END of a spec-SET / milestone** (a numbered set like `6.*`, or a phase like one package's build-out) | **+ secops after the last sub-step's qa** — milestone security gate; `SECURE` required before the milestone is declared done |
 
@@ -126,7 +126,7 @@ a request against the pinned version, quoting the composed file and line, and it
 <!-- nina:slot blockchain.3 -->
 - **reviewer** → verify diff matches spec, run typecheck/lint/build (NOT vitest), name every gate the diff triggers, confirm spec has a preview-deploy plan
 - **qa** → runs vitest once at the END of the pipeline (after the reviewer and every gate approve) for the affected packages; loops back to implementer on failures
-- **devops** → **deploy owner.** Runs after **qa PASS** on any step that changes a deployed surface. Deploys to preview or staging first; production needs an explicit go. Smokes the deployed preview for a blank page and a clean console — judging whether the screen is *right* is the reviewer's job, not his. Executes Hard Rule #14: clean build, every deploy target, build-time env, migrations in order against the right DB, secret parity, **smoke against preview**, named rollback. Deploys preview/staging on its own; **a production deploy requires an explicit go from {{OWNER}} for that change.** Read-only on code — a failed deploy caused by bad code loops back, it does not get patched here.
+- **devops** → **deploy owner.** Runs after **qa PASS** on any step that changes a deployed surface, once the project has a preview target. Deploys to preview or staging first; production needs an explicit go. Smokes the deployed preview for a blank page and a clean console — judging whether the screen is *right* is the reviewer's job, not his. Executes Hard Rule #14: clean build, every deploy target, build-time env, migrations in order against the right DB, secret parity, **smoke against preview**, named rollback. Deploys preview/staging on its own; **a production deploy requires an explicit go from {{OWNER}} for that change.** Read-only on code — a failed deploy caused by bad code loops back, it does not get patched here.
 - **secops** → **milestone security gate.** Runs once at the END of a completed spec-SET (a numbered milestone like `6.*`, or a phase like one package's build-out), after the last sub-step's qa — NOT per sub-step. Audits as an attacker and a privacy auditor (auth/session, tenant isolation, secrets and config exposure, PII leakage, abuse of any irreversible operation and its idempotency seams, injection/SSRF, dependency and binding posture). **Scoped to the milestone diff by default; a whole-tree sweep runs only on explicit request** (it surfaces pre-existing debt mid-task → scope-creep). Read-only; CRITICAL/HIGH findings in the milestone's own surface BLOCK it and loop back until re-audited.
 
 <!-- nina:slot project.6 doc-pointers -->
