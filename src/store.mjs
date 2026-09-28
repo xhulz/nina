@@ -126,3 +126,33 @@ export function namesFor(value, store = snapshotsDir()) {
   if (names.includes(value)) return [value];
   return names.filter((n) => n.includes(value));
 }
+
+/** Two digits. */
+const two = (n) => String(n).padStart(2, '0');
+
+/**
+ * The day a moment fell on where this machine is, as `YYYY-MM-DD`. The store keeps UTC; the reports read
+ * the owner's day. Cut from the UTC string, `--since` and the days a report printed moved a round from the
+ * evening it ran in to the next morning for anyone west of Greenwich — 20 of one project's 130.
+ *
+ * @param {unknown} ts - An ISO timestamp.
+ * @returns {string} The day, or the first ten characters of whatever could not be read as a moment.
+ */
+export function localDay(ts) {
+  const d = new Date(String(ts ?? ''));
+  return Number.isNaN(d.getTime()) ? String(ts ?? '').slice(0, 10) : `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}
+
+/**
+ * A moment where this machine is, as `YYYY-MM-DD HH:MM`.
+ *
+ * @param {unknown} ts - An ISO timestamp.
+ * @returns {string}
+ */
+export function localMinute(ts) {
+  const d = new Date(String(ts ?? ''));
+  return Number.isNaN(d.getTime()) ? String(ts ?? '') : `${localDay(ts)} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+/** The zone the reports read days in, named where a report prints a time. */
+export const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'local time';

@@ -26,7 +26,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor, snapshotsDir } from '../paths.mjs';
-import { projectRecords } from '../store.mjs';
+import { localDay, projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
 import { GRADUATION_AT, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
@@ -53,7 +53,8 @@ const VERIFY_MIN = 5;
 export { slugFor };
 
 /** The day part of a timestamp or a date. */
-const day = (ts) => String(ts ?? '').slice(0, 10);
+/** The owner's day a moment fell on: a pill's date is written in it. */
+const day = localDay;
 
 /** A verdict the parser actually read, as opposed to one it could not find. */
 const readable = (v) => Boolean(v) && v !== 'UNCLEAR' && v !== 'NONE';
@@ -475,7 +476,7 @@ async function deepReport(target, records, known, argv) {
  */
 async function fileRequest(target, profile, layerRoot, lesson) {
   const target_ = graduationTarget(lesson.roles, await roleGates(layerRoot));
-  const date = new Date().toISOString().slice(0, 10);
+  const date = localDay(new Date().toISOString());
   // The directory separator becomes `__`, so `reviewer/a.b.md` and `reviewer-a/b.md` stay two
   // names — flattening both `/` and `.` to `-` gave them the same one.
   const name = lesson.rel.replace(/^\.claude\/pills\//, '').replace(/\.md$/, '').replace(/\//g, '__');
