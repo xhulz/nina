@@ -13,10 +13,10 @@
  */
 
 import { createInterface } from 'node:readline/promises';
-import { HARNESS } from '../paths.mjs';
+import { HARNESS, readProfile } from '../paths.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { applyWiring, missingWiring, shippedScripts } from '../wiring.mjs';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, composeProject, composedPaths, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
@@ -270,21 +270,15 @@ export async function init(argv, ctx) {
   // itself says to re-run with --force to add one, and doing so used to write a profile from nothing —
   // every vocabulary value and integration gone, and the pin moved to the newest release past every
   // check `upgrade` makes.
-  let previous = null;
-  try {
-    previous = JSON.parse(readFileSync(join(harness, 'profile.json'), 'utf8'));
-  } catch (error) {
-    // None: there is nothing to keep. One that is there but cannot be read still holds the pin and every
-    // value the project declared — read as "none", a trailing comma moved the pin to the newest release and
-    // wrote every vocabulary value away.
-    if (error.code !== 'ENOENT') {
-      console.error(
-        `  ${HARNESS}/profile.json cannot be read (${error.message}). Starting over would write a new one over it and keep ` +
-          'nothing it declares — fix it and run this again, or move it aside to start from nothing.\n',
-      );
-      return 1;
-    }
+  // None: there is nothing to keep. One that is there but cannot be read still holds the pin and every value
+  // the project declared — read as "none", a trailing comma moved the pin to the newest release and wrote every
+  // vocabulary value away.
+  const read = readProfile(target);
+  if (read.error && !read.missing) {
+    console.error(`  ${read.error}. Starting over would write a new one over it and keep nothing it declares — fix it and run this again, or move it aside to start from nothing.\n`);
+    return 1;
   }
+  const previous = read.profile ?? null;
   if (previous?.core && arg('--core') && arg('--core') !== previous.core) {
     console.error(`  ${target} pins ${previous.core}. A pin moves with \`nina upgrade --to ${arg('--core')}\`, which says what the move costs and rolls it back when it fails.\n`);
     return 1;

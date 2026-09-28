@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { dim, pink } from '../look.mjs';
-import { HARNESS } from '../paths.mjs';
+import { readProfile } from '../paths.mjs';
 import { TERMINALS, parseGraph } from '../graph.mjs';
 import { required } from '../tools.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
@@ -210,12 +210,8 @@ export async function pipeline(argv) {
   const shownStage = (s) => `${name(s)}${many.has(s) ? ' ×n' : ''}`;
   const padName = (s, n) => `${name(s)}${' '.repeat(Math.max(n - s.length, 1))}`;
 
-  let profile = {};
-  try {
-    profile = JSON.parse(readFileSync(join(dir, HARNESS, 'profile.json'), 'utf8'));
-  } catch {
-    // A pipeline composed by hand draws all the same; only the header has less to say.
-  }
+  // A pipeline composed by hand draws all the same; only the header has less to say.
+  const profile = readProfile(dir).profile ?? {};
   const surfaces = (profile.surfaces ?? []).slice().sort();
   console.log(`  pipeline · ${basename(dir)}${profile.core ? ` · core ${profile.core}` : ''}${surfaces.length ? ` · surfaces ${surfaces.join(', ')}` : ''}`);
 

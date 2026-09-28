@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { HARNESS, legacyHint, slugFor } from '../paths.mjs';
+import { readProfile, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
 import { LEDGER_TAIL, ledgerPath, loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
 import { projectRecords } from '../store.mjs';
@@ -279,16 +279,9 @@ export async function gate(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   if (argv.includes('--hook')) return runGate({ root: target });
 
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    console.error(`  no ${HARNESS}/profile.json under ${target}${legacyHint(target)}\n`);
-    return 2;
-  }
-  let profile;
-  try {
-    profile = JSON.parse(readFileSync(profilePath, 'utf8'));
-  } catch (error) {
-    console.error(`  ${profilePath} is not valid JSON — ${error.message}\n`);
+  const { profile, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return 2;
   }
   const resolved = layerRootFor(ctx.root, profile.core);

@@ -21,7 +21,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { HARNESS, legacyHint } from '../paths.mjs';
+import { HARNESS, readProfile } from '../paths.mjs';
 import { REQUIRES, SLOT, defaultedSlots, generatedNotice, layerRootFor } from './compose.mjs';
 import { filledSlots, owedDocuments } from './check.mjs';
 import { roleGates } from './pills.mjs';
@@ -71,16 +71,9 @@ export async function where(argv, ctx) {
     return 1;
   }
 
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    console.error(`  no ${HARNESS}/profile.json under ${target}${legacyHint(target)}\n`);
-    return 1;
-  }
-  let profile;
-  try {
-    profile = JSON.parse(await readFile(profilePath, 'utf8'));
-  } catch (error) {
-    console.error(`  ${profilePath} is not valid JSON — ${error.message}\n`);
+  const { profile, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return 1;
   }
 

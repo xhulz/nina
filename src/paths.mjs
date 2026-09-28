@@ -102,6 +102,29 @@ export function legacyHint(target) {
 }
 
 /**
+ * A project's profile, read the one way every command reads it: `{profile, path}`, or `{path, error}` — one
+ * line saying what is wrong, with `missing` when there is no profile at all. Commands that parsed it on
+ * their own answered a stray comma with a stack trace, and each that did not said so differently.
+ *
+ * @param {string} target - The project.
+ * @returns {{path: string, profile?: object, error?: string, missing?: boolean}}
+ */
+export function readProfile(target) {
+  const path = join(target, HARNESS, 'profile.json');
+  if (!existsSync(path)) {
+    const hint = legacyHint(target) || ' — run `nina init` first, or name the project with --project';
+    return { path, missing: true, error: `no ${HARNESS}/profile.json under ${target}${hint}` };
+  }
+  try {
+    const profile = JSON.parse(readFileSync(path, 'utf8'));
+    if (profile === null || typeof profile !== 'object' || Array.isArray(profile)) return { path, error: `${path} is not a JSON object` };
+    return { path, profile };
+  } catch (error) {
+    return { path, error: `${path} cannot be read — ${error.message}` };
+  }
+}
+
+/**
  * Where `nina upgrade --apply` writes down a move while it is in flight: the versions it moves between, the
  * files it composes for the first time, and — under {@link movedFrom} — every file it can touch, as it was.
  * It is written before the pin moves and removed once the move is verified or rolled back, so one that is

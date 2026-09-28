@@ -25,7 +25,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { HARNESS, legacyHint, slugFor, snapshotsDir } from '../paths.mjs';
+import { HARNESS, readProfile, slugFor, snapshotsDir } from '../paths.mjs';
 import { localDay, projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
@@ -494,7 +494,7 @@ async function missingSurface(layerRoot, layerPath, surfaces) {
  */
 export async function closeAnswered(target, layerRoot, version) {
   const given = await answers(layerRoot);
-  const profile = JSON.parse(await readFile(join(target, HARNESS, 'profile.json'), 'utf8').catch(() => '{}'));
+  const profile = readProfile(target).profile ?? {};
   const out = [];
   for (const r of (await filedRequests(target)).filter((r) => r.status === 'open' && given[r.id])) {
     const a = given[r.id];
@@ -685,12 +685,11 @@ export async function learn(argv, ctx) {
   const check = argv.includes('--check');
   const days = argv.includes('--days') ? Number(argv[argv.indexOf('--days') + 1]) || CAPTURE_DAYS : CAPTURE_DAYS;
 
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    console.error(`  no ${HARNESS}/profile.json under ${target}${legacyHint(target)}\n`);
+  const { profile, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return check ? 2 : 1;
   }
-  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
   const resolved = layerRootFor(ctx.root, profile.core);
   if (resolved.error) {
     console.error(`  ${resolved.error}\n`);
