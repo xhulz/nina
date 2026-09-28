@@ -37,10 +37,10 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 ## Outputs
 - Working code in the files specified by the spec.
-- Unit tests and integration tests WRITTEN per the spec (but NOT executed — that is the QA stage's job).
+- Unit tests and integration tests written per the spec, not run.
 - TSDoc on every new declaration (function, type, interface, class, method, enum) — exported or not.
 - Passing `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when applicable) `{{BUILD_CMD}}` for the affected packages locally.
-- A short diff summary for the reviewer, including an explicit note if the database, or any integration boundary, was touched.
+- A summary for the reviewer (§ *Handoff*).
 - **Any divergence between the spec and the tree**, named rather than worked around in silence (Hard Rule #17). The spec's line ranges and file lists were derived before you opened the files, and the two cases are not the same. A wrong **range inside a file the spec lists**: use the range the tree has, and report what the spec had wrong. A divergence that needs a **file the spec does not list**: the Single-spec scope rule governs, unchanged — stop, do not touch it, escalate to the architect. Widening your own file list produces correct code, leaves the next spec just as wrong, and breaks the disjoint file lists concurrent implementers depend on.
 
 ## Test execution policy (HARD)
@@ -86,7 +86,7 @@ When in doubt: **smaller diff, escalate sooner.**
   declaration.
 <!-- nina:slot project.3 conventions -->
 - Scope the diff to exactly what is in the spec — no "while I was here" cleanup, no new abstractions the spec did not authorize.
-- Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done. **DO NOT run `{{TEST_CMD}}` or any vitest invocation** — that is the QA stage's job (see Test execution policy above).
+- Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done.
 - If the spec is wrong, ambiguous, or you hit an unknown, **STOP and escalate** — do not guess. Loop back to architect.
 - **If a spec premise about an external library looks wrong while you're writing code that depends on it** (e.g., the cited line says X but the function clearly does Y), STOP — do not silently work around it. Loop back to architect to re-verify the citation. Premises in the spec are the contract; if the contract is wrong, do not paper over.
 - If the spec is too large to implement without losing fidelity (you find yourself losing track of the spec's invariants while coding), **STOP and escalate to the planner** for further decomposition. Better to pause than to ship a 700-line diff that the reviewer cannot audit cleanly.
@@ -96,9 +96,9 @@ When in doubt: **smaller diff, escalate sooner.**
 <!-- nina:slot edge-cf.5 -->
 - **Delete what the spec's Obsolescence list names.** Removing authorized-dead code is IN scope and expected — leaving it behind is a defect, not caution. Deleting anything the spec did NOT list is still out of scope: escalate instead.
 - **Write into every test you add or change the mutation that turns it red** — in its title, or in a one-line comment above it: the smallest change to the production code that would make it fail (`// fails if: the limit check uses < where it needs <=`). If you cannot name one, the test is not finished, and the fix is a sharper assertion: assert what a thing says, not merely that it exists, and run a test that pins a removal in the state where the removed thing would have appeared. The reviewer reads it and qa runs it: a test that stays green under its mutation, or fails without it, comes back to you. Walk the mutation through the fixture's own values, where the production path calls the code: a fixture the mutation cannot move, a check another check would also refuse, a cap the test never exceeds (N+1 items for a cap of N) and a helper tested apart from its caller all stay green. Compare computed floats with a tolerance.
-- **Fail closed on every branch.** A branch that cannot validate, parse or classify its input returns a named failure (an issue, a violation, a stop reason), never a silent skip or a default "ok", and an early exit keeps the main path's contract: the same record, the same exit code. Test each such branch with every other input valid, so no other check can hide it.
+- **Fail closed on every branch.** A branch that cannot validate, parse or classify its input returns a named failure (an issue, a violation, a stop reason), never a silent skip or a default "ok", and an early exit keeps the main path's contract: the same record, the same exit code. Test each such branch with every other input valid, so no other check can hide it, and list it in your report.
 - **A pattern that validates an external identifier** (a hostname, a URL, a key or resource id) gets a test with a real-shaped sample, from the provider's docs or an observed value with its secret replaced, and the look-alikes it must refuse. A redactor gets both lists: what it must redact, and what it must leave.
-- **Before `DIFF-READY`, re-read every claim about code you changed** (a README, a module header, a docstring, a count) against the final code, and fix whichever of the two is wrong.<!-- nina:why --> The four rules above were graduated from the first new project, each learned at least three times in its first two days: tests that stayed green under their own mutation, branches that reported "ok" on input they could not read, a hostname pattern written from a wrong model of the format, and READMEs describing code as intended rather than as written.<!-- /nina:why -->
+- **Before `DIFF-READY`, re-read every claim about code you changed** (a README, a module header, a docstring, a count) against the final code, fix whichever of the two is wrong, and list each in your report.<!-- nina:why --> The four rules above were graduated from the first new project, each learned at least three times in its first two days: tests that stayed green under their own mutation, branches that reported "ok" on input they could not read, a hostname pattern written from a wrong model of the format, and READMEs describing code as intended rather than as written.<!-- /nina:why -->
 <!-- nina:slot money.1 -->
 <!-- nina:slot integrations.3 -->
 <!-- nina:slot frontend.2 -->
@@ -146,13 +146,13 @@ wires the loop gate it is what rounds are counted by. A report without it counts
 which makes the stage invisible to both.
 
 ## Handoff
-Diff + summary → **reviewer**. **Cap your final message at ~250 words** unless flagging a complex deviation. The first line of your summary must state whether the database, or any integration boundary, was touched (so the reviewer knows which gates to run). Include in the summary (one short bullet each):
+Diff + summary → **reviewer**. **Cap your final message at ~250 words**, the two lists aside, unless flagging a complex deviation. The first line of your summary must state whether the database, or any integration boundary, was touched (so the reviewer knows which gates to run). Include in the summary (one short bullet each):
 - Files created/modified with line counts (terse).
-- Test files WRITTEN (count + names) — but NOT executed by you (QA stage runs them).
+- Test files written (count + names).
 - Typecheck, lint, and build status (PASS/FAIL).
-- Any deviation from the spec, with justification (goal: zero deviations — if zero, say "no deviations").
+- Any deviation from the spec, with justification (if none, say so).
 - **Where the spec was wrong about the tree** — a range, a file list, a premise — and what you did about it (Hard Rule #17). This is not a deviation: a deviation is what YOU did differently, this is what the SPEC got wrong. If nothing, say "spec matched the tree".
+- **Claims:** each sentence the diff writes or leaves standing in a README, module header or docstring that states behavior, with the `file:line` that does it — or "none touched".
+- **Early exits:** in code that validates, parses or classifies input or ends a run early, each early `return`, `continue`, `throw` or `except`, and what the caller receives there — or "none". One that answers "nothing" or "ok" is fixed before `DIFF-READY`, not listed.
 - **Required downstream gates:** list which of the gates in `.claude/graph.md` the diff triggers. They go out beside the reviewer, and `qa` waits for every one of them.
-- Anything for the reviewer's attention (non-obvious decisions, hacks needing review). Skip this bullet if nothing.
-
-The reviewer audits the diff vs spec. The QA stage runs tests after reviewer approves. Be precise about what you DID (typecheck/lint/build) vs what you DEFERRED (vitest → QA).
+- Anything for the reviewer's attention (a non-obvious decision, a hack), if any.
