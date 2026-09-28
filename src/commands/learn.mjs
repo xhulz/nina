@@ -29,7 +29,7 @@ import { HARNESS, legacyHint, slugFor, snapshotsDir } from '../paths.mjs';
 import { localDay, projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
-import { GRADUATION_AT, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
+import { GRADUATION_AT, RETIRED, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
 import { decodeProjectDir } from './stats.mjs';
 import { snapshot } from './snapshot.mjs';
 import { loadProject, projectGateDir, readLedger, replay } from '../gate.mjs';
@@ -304,6 +304,30 @@ export function verified(records, known, { owners = new Map(), targets = null } 
 }
 
 /**
+ * Lessons that came back after the rule they graduated into reached this project: their newest request is
+ * closed, and the pill has been counted more times since it was filed. The pill is retired by then, and
+ * nothing read a retired pill's count — one project's lesson graduated twice and was learned a third time,
+ * while two retired pills went from 3 to 8 and from 5 to 11 without a word to anyone.
+ *
+ * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills, retired ones included.
+ * @param {Awaited<ReturnType<typeof filedRequests>>} filed - Its requests.
+ * @returns {{lesson: object, request: object, recurred: number}[]}
+ */
+export function relapsed(known, filed) {
+  const newest = new Map();
+  for (const r of filed) if (r.pill && (!newest.has(r.pill) || r.date >= newest.get(r.pill).date)) newest.set(r.pill, r);
+  const out = [];
+  for (const [pill, request] of newest) {
+    if (request.status !== 'closed') continue;
+    const shelved = pill.replace(/^\.claude\/pills\//, `.claude/pills/${RETIRED}/`);
+    const lesson = known.find((l) => l.rel === pill || l.rel === shelved);
+    const then = Number(request.occurrences);
+    if (lesson && Number.isFinite(then) && lesson.occurrences > then) out.push({ lesson, request, recurred: lesson.occurrences - then });
+  }
+  return out;
+}
+
+/**
  * Lessons that have recurred often enough to graduate and have no request yet. Before this, the
  * threshold was a note in a report someone had to go and read; the per-turn detector now files
  * the request itself.
@@ -328,7 +352,17 @@ export async function filedRequests(target) {
   const out = [];
   for (const f of (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.md'))) {
     const fields = frontmatter(await readFile(join(dir, f), 'utf8')) ?? {};
-    out.push({ file: f, id: f.replace(/\.md$/, ''), status: fields.status ?? '', pill: fields.pill ?? '', target: fields.target ?? '', date: fields.date ?? '' });
+    out.push({
+      file: f,
+      id: f.replace(/\.md$/, ''),
+      status: fields.status ?? '',
+      pill: fields.pill ?? '',
+      target: fields.target ?? '',
+      date: fields.date ?? '',
+      occurrences: fields.occurrences ?? '',
+      rule_in: fields.rule_in ?? '',
+      answered_in: fields.answered_in ?? '',
+    });
   }
   return out;
 }
@@ -552,15 +586,21 @@ async function deepReport(target, records, known, argv) {
  * @param {Awaited<ReturnType<typeof lessons>>[number]} lesson - A lesson that names its roles.
  * @returns {Promise<{file: string, layer: string, why: string}>}
  */
-async function fileRequest(target, profile, layerRoot, lesson) {
+async function fileRequest(target, profile, layerRoot, lesson, { reopens = null, recurred = 0 } = {}) {
   const target_ = graduationTarget(lesson.roles, await roleGates(layerRoot));
   const date = localDay(new Date().toISOString());
+  // Asked about the pill where it was learned, a retired one included: its request names that path.
+  const pill = reopens?.pill ?? lesson.rel;
   // The directory separator becomes `__`, so `reviewer/a.b.md` and `reviewer-a/b.md` stay two
   // names — flattening both `/` and `.` to `-` gave them the same one.
-  const name = lesson.rel.replace(/^\.claude\/pills\//, '').replace(/\.md$/, '').replace(/\//g, '__');
+  const name = pill.replace(/^\.claude\/pills\//, '').replace(/\.md$/, '').replace(/\//g, '__');
   const dir = join(target, HARNESS, 'requests');
-  const file = `${date}-${name}.md`;
+  const file = existsSync(join(dir, `${date}-${name}.md`)) ? `${date}-${name}-again.md` : `${date}-${name}.md`;
   await mkdir(dir, { recursive: true });
+  const heading = reopens
+    ? `**A lesson that graduated into \`${reopens.rule_in || reopens.target}\` in ${reopens.answered_in || 'a release'} came back ${recurred} time(s) since** — ` +
+      `the rule did not hold here. It reopens ${HARNESS}/requests/${reopens.file}.`
+    : `**A lesson this project has learned ${lesson.occurrences} time(s), proposed as a rule in \`${target_.layer}\`** — ${target_.why}.`;
   await writeFile(
     join(dir, file),
     [
@@ -569,12 +609,13 @@ async function fileRequest(target, profile, layerRoot, lesson) {
       'status: open',
       `date: ${date}`,
       `core: ${profile.core}`,
-      `target: ${target_.layer}`,
-      `pill: ${lesson.rel}`,
+      `target: ${reopens?.target || target_.layer}`,
+      `pill: ${pill}`,
       `occurrences: ${lesson.occurrences}`,
+      ...(reopens ? [`reopens: ${reopens.file}`, `rule_in: ${oneLine(reopens.rule_in)}`] : []),
       '---',
       '',
-      `**A lesson this project has learned ${lesson.occurrences} time(s), proposed as a rule in \`${target_.layer}\`** — ${target_.why}.`,
+      heading,
       '',
       `Learned against core ${profile.core}. The rule lands in a release of the harness, and the`,
       '`nina upgrade` that installs that release closes this request and retires the pill — not before.',
@@ -696,20 +737,22 @@ export async function learn(argv, ctx) {
     // once. The per-line actions matter too: one hint for the whole detector told a project to
     // "write the lesson" when the lesson was written three times over and only needed sending.
     const sent = [];
-    const stuck = owed
-      .filter((l) => l.roles.length === 0)
-      .map((lesson) => ({ lesson, why: 'names no role in applies_to, so no layer can take it', fix: 'fix its frontmatter — `nina pills` says what is wrong' }));
+    // A lesson that came back after its rule shipped goes back to the harness the way it went the first time.
+    const outgoing = [...owed.map((lesson) => ({ lesson })), ...relapsed(known, filed).map(({ lesson, request, recurred }) => ({ lesson, reopens: request, recurred }))];
+    const stuck = outgoing
+      .filter((o) => o.lesson.roles.length === 0)
+      .map((o) => ({ ...o, why: 'names no role in applies_to, so no layer can take it', fix: 'fix its frontmatter — `nina pills` says what is wrong' }));
     // Sent from the Stop hook, a request was news only the person heard: its one line said the model would
     // be told, and by the next message the lesson was no longer owed, so nothing told it. It is sent by the
     // run that hands its findings to the model, or by hand; the Stop hook says it is about to go.
-    const due = beforeModel() ? owed.filter((l) => l.roles.length > 0) : [];
-    for (const lesson of beforeModel() ? [] : owed.filter((l) => l.roles.length > 0)) {
+    const due = beforeModel() ? outgoing.filter((o) => o.lesson.roles.length > 0) : [];
+    for (const o of beforeModel() ? [] : outgoing.filter((o) => o.lesson.roles.length > 0)) {
       // A detector that throws is reported as one that could not run, every turn, and takes the
       // rest of its findings with it — so a request that cannot be written is a finding instead.
       try {
-        sent.push({ lesson, ...(await fileRequest(target, profile, resolved.dir, lesson)) });
+        sent.push({ ...o, ...(await fileRequest(target, profile, resolved.dir, o.lesson, o)) });
       } catch (error) {
-        stuck.push({ lesson, why: `could not be written to ${HARNESS}/requests/ — ${error.message}`, fix: `make it writable, or send it by hand: \`nina learn --graduate ${lesson.rel}\`` });
+        stuck.push({ ...o, why: `could not be written to ${HARNESS}/requests/ — ${error.message}`, fix: `make it writable, or send it by hand: \`nina learn --graduate ${o.lesson.rel}\`` });
       }
     }
     if (late.length === 0 && sent.length === 0 && due.length === 0 && stuck.length === 0 && !exported) {
@@ -725,15 +768,19 @@ export async function learn(argv, ctx) {
       for (const r of o.recent) console.log(`      ${r.ts}  ${r.desc || '(no description)'}  session ${r.session}`);
       console.log('    → ask of each whether it would happen again; if so, write the pill, or bump `occurrences` and `last_seen` on the one that already says it');
     }
+    const what = (o) =>
+      o.reopens
+        ? `${o.lesson.rel} came back ${o.recurred} time(s) after its rule shipped in ${o.reopens.answered_in || 'a release'} (${o.reopens.rule_in || o.reopens.target})`
+        : `${o.lesson.rel} has recurred ${o.lesson.occurrences} times`;
     for (const s of sent) {
-      console.log(`  ${s.lesson.rel} has recurred ${s.lesson.occurrences} times — sent to the harness as ${HARNESS}/requests/${s.file}, proposing a rule in ${s.layer}`);
+      console.log(`  ${what(s)} — sent to the harness as ${HARNESS}/requests/${s.file}${s.reopens ? ', reopening the rule' : `, proposing a rule in ${s.layer}`}`);
       console.log('    → commit it with the pill; nothing else is owed here. `nina upgrade` to the release that answers it closes it and retires the pill');
     }
-    for (const lesson of due) {
-      console.log(`  ${lesson.rel} has recurred ${lesson.occurrences} times — it goes to the harness as a request before your next message`);
+    for (const o of due) {
+      console.log(`  ${what(o)} — it goes to the harness as a request before your next message`);
     }
     for (const s of stuck) {
-      console.log(`  ${s.lesson.rel} has recurred ${s.lesson.occurrences} times and ${s.why}`);
+      console.log(`  ${what(s)} and ${s.why}`);
       console.log(`    → ${s.fix}`);
     }
     if (exported) console.log(`  ${exported}`);
@@ -785,6 +832,9 @@ export async function learn(argv, ctx) {
   );
   for (const l of ready.filter((l) => owed.includes(l))) console.log(`            not sent yet: ${l.rel} — the next \`harness:check\` sends it`);
   for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
+  for (const r of relapsed(known, filed)) {
+    console.log(`            ✗ ${r.lesson.rel} came back ${r.recurred} time(s) after its rule shipped in ${r.request.answered_in || 'a release'} — the rule did not hold; \`harness:check\` reopens it`);
+  }
   const measured = checks.filter((c) => c.comparable);
   const unmeasured = checks.filter((c) => !c.comparable);
   if (measured.length === 0) console.log(`  verify    no lesson could be measured yet — ${VERIFY_MIN}+ rounds of its stage on the same model are needed in the ${VERIFY_DAYS} days either side of its date`);
@@ -946,7 +996,8 @@ export async function requests(argv = [], ctx = { root: '.' }) {
     }
     // The maintainer's side of graduation used to be "run nina requests and remember to" — the one
     // step with nothing to prompt it. This repo's own harness:check runs this every turn.
-    for (const r of unanswered) console.log(`  ${r.fields.date}  ${r.fields.pill} → ${r.fields.target} (core ${r.fields.core})  ${where(r)}`);
+    const reopened = (r) => (r.fields.reopens ? ` — reopens a rule that did not hold (${r.fields.rule_in || r.fields.target})` : '');
+    for (const r of unanswered) console.log(`  ${r.fields.date}  ${r.fields.pill} → ${r.fields.target} (core ${r.fields.core})${reopened(r)}  ${where(r)}`);
     for (const r of unreleased) console.log(`  answered, not released: ${r.id}`);
     console.log(
       `requests: ${[
@@ -969,7 +1020,7 @@ export async function requests(argv = [], ctx = { root: '.' }) {
       : working[r.id]
         ? 'answered in the working core — cut a release to carry it'
         : `waiting — nina requests --answer ${r.id} --in <layer file>, or --decline … --why …`;
-    console.log(`  ${r.fields.date}  ${r.fields.target.padEnd(20)} core ${r.fields.core}  ${r.fields.pill}`);
+    console.log(`  ${r.fields.date}  ${r.fields.target.padEnd(20)} core ${r.fields.core}  ${r.fields.pill}${r.fields.reopens ? `  — reopens a rule that did not hold (${r.fields.rule_in || r.fields.target})` : ''}`);
     console.log(`              ${where(r)}`);
     console.log(`              ${state}`);
   }
