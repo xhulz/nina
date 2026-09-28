@@ -3082,6 +3082,18 @@ const dated = (date, status = 'active') =>
   const refusedAll = ['git stash && cd /tmp', 'git -C . stash', '(git stash)', 'env GIT_TRACE=1 git reset --hard', 'git commit -m "a && b"'].map(checkoutMove);
   const passedAll = ['git merge-base main HEAD', 'git apply --check fix.diff', 'echo "never run git commit here"', "cat > n.md <<'EOF'\ngit commit -m x\nEOF", 'git -c core.pager=cat log'].map(checkoutMove);
   expect(refusedAll.every(Boolean) && passedAll.every((m) => m === null), `guard: a stage's git is read segment by segment — got ${JSON.stringify({ refusedAll, passedAll })}`);
+  // Quotes are removed, not blanked, and a string runs on across lines; a comment's apostrophe opens nothing, a
+  // here-string or a `<<` in a string opens no heredoc, and a command substitution is a command.
+  const quotedRefused = ['"git" stash', 'git -C "." stash', "# don't\ngit stash", 'echo $(git stash)', 'git \\\nstash', 'grep x <<<y\ngit stash', 'echo "<<EOF"\ngit stash', 'git stash 2>&1 | tail'].map(checkoutMove);
+  const quotedPassed = ['echo "a\ngit stash\nb"', 'git log # then git stash', 'git stash show stash@{0}', 'git status &>/dev/null'].map(checkoutMove);
+  expect(quotedRefused.every(Boolean) && quotedPassed.every((m) => m === null), `guard: a stage's command is read with the shell's quoting — got ${JSON.stringify({ quotedRefused, quotedPassed })}`);
+  // The command is a model's: read in one pass, never by a pattern that backtracks on it. A quoted-string pattern
+  // took 3.3s on 100KB of `\"`, and grew as its square.
+  const started = performance.now();
+  checkoutMove(`"${'\\"'.repeat(50000)}`);
+  checkoutMove(`# ${'a '.repeat(50000)}`);
+  const took = performance.now() - started;
+  expect(took < 250, `guard: a stage's command is read in linear time — took ${Math.round(took)}ms on 200KB`);
   expect((await shell('git commit -m done', {})) === null, 'guard: the orchestrator commits');
   const elsewhere = await scratch();
   await writeFile(join(elsewhere, 'x.md'), '<!-- nina:generated — composed elsewhere -->\n');
