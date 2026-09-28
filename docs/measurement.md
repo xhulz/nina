@@ -137,7 +137,9 @@ recorded verdict is not its handback's is read once more. A project is snapshott
 every Stop, and records and cursors are two writes: interleaved, the cursors of the scan that read further
 could stand beside the records of the one that read less, and what lay between was never captured. A
 snapshot that finds the project's lock taken leaves it to the one holding it; a lock left by a snapshot
-that died is taken over. `--rebuild` keeps the record it replaces beside it
+that died is taken over, by one taker only (`src/lock.mjs`, the export's lock too). The first lock was created
+empty and written after, and a dead one's was removed by every taker that read it: racing eight processes,
+two held it at once in half the runs. `--rebuild` keeps the record it replaces beside it
 (`<project>.jsonl.before-rebuild-<time>`), since it re-reads only what is still on disk. Cursors live beside each project's records, written by rename:
 one shared file, rewritten whole by every project's hook, let the later of two concurrent writers put
 every other project's cursor back.
@@ -222,7 +224,8 @@ boundary: work run side by side in one session can share one.
 new project's implementer spend was the run's own context read again, every turn re-reading everything the
 run had built, so a run's cost grows faster than its work — a median 36M tokens a round there, 159M at
 most. `scripts/cost-watch.mjs`, a composed script the project's hooks run after every tool call
-(`src/cost.mjs`), keeps count while it happens. Claude Code runs a PostToolUse hook for each tool a
+(`src/cost.mjs`), keeps count while it happens; the orchestrator's calls, which it does not watch, leave
+before the package is loaded. Claude Code runs a PostToolUse hook for each tool a
 subagent calls, with the subagent's id, and gives the `additionalContext` it answers to that subagent —
 which was probed on 2.1.283 rather than assumed; the documentation does not say. The watch reads only what
 the run's transcript gained since its last call, keeps each message's cache read by its id (a streamed
