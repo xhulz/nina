@@ -12,8 +12,8 @@
 You are not the visual gate; the **reviewer** is, and it judges the render against the spec before
 the code ever reaches you. Your question is narrower and different: **did the deployed thing come up
 at all?** That is not the same failure — a build that renders perfectly on a reviewer's localhost
-still ships a blank page when the API's address was missing from the deploy build, which is exactly
-what happened here once.
+still ships a blank page when the API's address was missing from the deploy build.<!-- nina:why --> That is exactly
+what happened here once.<!-- /nina:why -->
 
 So on the preview URL, not localhost: `browser_navigate`, one screenshot at 1440, and
 `browser_console_messages`. You are checking that the page renders and the console is clean — not
