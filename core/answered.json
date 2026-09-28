@@ -23,6 +23,9 @@
   "2026-09-26-architect__revision-sweeps-contradicted-text": {
     "in": "core/tree/.claude/agents/architect.md"
   },
+  "2026-09-26-shared__run-the-mutation-not-only-the-assertion": {
+    "in": "core/tree/.claude/agents/qa.md"
+  },
   "2026-09-26-shared__validate-patterns-against-real-samples": {
     "in": "core/tree/.claude/agents/implementer.md"
   }

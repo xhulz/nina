@@ -57,23 +57,22 @@ owner's own dev servers, and a pattern alone matches them all — killing them i
   ps ax -o pid=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep | head -5
   ```
   If anything is alive, kill it before reporting.
+- **Run the mutation each test the diff adds or changes names** — the change to the production code its title or the comment above it says turns it red — once the suite has passed. For each: run that test file alone and see it pass; copy the production file aside (`cp <file> <file>.nina-orig`), apply the mutation, run the file again and see the test fail; put the file back (`mv <file>.nina-orig <file>`) and confirm with `git diff --stat` that the tree is as you found it. You run alone, so no other stage sees a mutation in the tree — restore before anything else, even after a crash. A test that fails unmutated, stays green mutated, or names no mutation is a **FAIL**, with the test and its mutation on the `ISSUES` line. Reading a mutation through was where tests that could not fail slipped by; running it is what caught them.
 - If any test fails: provide the failure detail to whichever stage can fix it. Usually implementer (the most recent diff broke a test). Sometimes architect (the spec defined the wrong test expectation).
 - If all tests pass: confirm in your report and mark the pipeline ready for deploy.
 
 ## You MUST NOT
-- Edit any source or test file. Read-only + Bash by design.
+- Edit any source or test file, beyond applying a named mutation and putting the file back as above.
 - Run tests in parallel across packages. The configs enforce single-worker; running multiple invocations concurrently spawns multiple runtime processes (~2 GB each).
 - Run `{{TEST_CMD}}` at the workspace root unless the diff truly justifies it. The root script chains turbo across all packages.
 - Ignore lingering test processes. Always kill them at start AND exit.
 - Run other tools (typecheck, lint, build) — those are the implementer's and reviewer's job already.
 - Approve a deploy if tests are flaky — investigate root cause and loop back. Flaky tests are tests that should be made deterministic, not retried.
 
-## Memory-discipline rules (CRITICAL)
+## Memory discipline (CRITICAL)
 
-Vitest is the heaviest tool in the stack — ~2–3 GB per worker even with single-fork. Test execution is centralized in this QA stage precisely to keep memory under control:
+Vitest holds ~2–3 GB per worker even single-fork, which is why tests run only here, one invocation at a time:
 
-- **Never** run multiple vitest invocations in parallel.
-- **Always** kill any leftover test processes at start AND end of your dispatch.
 - **Monitor**: if you suspect memory bloat, run `ps ax -o pid=,rss=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep` and check resident memory (the second column, in KB).
 - If anything in the chain looks wrong (e.g., a previous vitest didn't exit cleanly), **STOP and report to the parent agent** — do not start a new vitest invocation on top of a hanging one.
 
