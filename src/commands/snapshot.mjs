@@ -16,9 +16,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { listProjects, scanProject } from '../transcripts.mjs';
 
-/** Where per-project read cursors live, beside the snapshots they describe. */
-const STATE_FILE = '.state.json';
-
 /**
  * Reads a JSON file, or an empty object when it is missing or unreadable. A state file cut short
  * by an interrupted write used to throw on every later snapshot, and observation stopped for every
@@ -115,14 +112,6 @@ export async function snapshot(argv, ctx) {
   const quiet = argv.includes('--quiet');
 
   await mkdir(outDir, { recursive: true });
-  // The cursors used to live in one file shared by every project, rewritten whole and in place.
-  // Two snapshots at once — the global hook and a project's own detector, or two sessions ending
-  // together — each read all of it, updated their own project, and wrote all of it back: the later
-  // writer silently put every other project's cursor back where it had been, and a cursor that
-  // goes back re-reads history. Each project now has its own, beside its records, written by
-  // rename. The shared file is still read, once, so a project's cursor is not lost in the move.
-  const legacy = rebuild ? {} : await readJson(join(outDir, STATE_FILE));
-
   const projects = await listProjects();
   // `--exact` for a caller that knows the slug — a project's own detector. A substring also
   // matched every project nested under it, and snapshotted them all on every turn.
@@ -139,7 +128,7 @@ export async function snapshot(argv, ctx) {
     const release = await lock(join(outDir, `${project.slug}.lock`));
     if (!release) continue;
     try {
-      totalNew += await snapshotProject(project, { outDir, rebuild, quiet, legacy });
+      totalNew += await snapshotProject(project, { outDir, rebuild, quiet });
     } finally {
       await release();
     }
@@ -192,15 +181,18 @@ function pinOf(slug) {
  *
  * @returns {Promise<number>} How many rounds it captured that were not on record.
  */
-async function snapshotProject(project, { outDir, rebuild, quiet, legacy }) {
+async function snapshotProject(project, { outDir, rebuild, quiet }) {
   const file = join(outDir, `${project.slug}.jsonl`);
   // The store is the only copy of history older than the transcripts, and a rebuild re-reads only what is
   // still on disk: the record it replaces is kept beside it first.
   if (rebuild && existsSync(file)) await copyFile(file, `${file}.before-rebuild-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   const stored = readStoreFile(file, { raw: true });
   const prior = rebuild ? [] : stored;
+  // Each project's read cursors live beside its records, written by rename. They once shared one file, rewritten
+  // whole: two snapshots at once each wrote every other project's cursor back where it had been, and a cursor
+  // that goes back re-reads history.
   const own = rebuild ? {} : await readJson(join(outDir, `${project.slug}.state.json`));
-  const cursors = rebuild ? {} : (own.cursors ?? legacy[project.slug]?.cursors ?? {});
+  const cursors = rebuild ? {} : (own.cursors ?? {});
 
   const scanned = await scanProject(project.dir, { cursors, records: prior });
   // With its cursors gone — a state file deleted, or cut short — the transcripts are read again from the start
