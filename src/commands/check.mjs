@@ -143,13 +143,6 @@ export async function owedDocuments(layerRoot, surfaces) {
 }
 
 /**
- * `nina check`.
- *
- * @param {string[]} argv - Command arguments; `--project <dir>` selects the target.
- * @param {{root: string}} ctx - CLI context; `root` is the NINA install directory.
- * @returns {Promise<number>} Process exit code.
- */
-/**
  * Composed scripts that nothing in the project runs.
  *
  * A layer can compose an executable, and `scripts/harness-check.mjs` is one: it holds the
@@ -191,6 +184,13 @@ export async function unwiredScripts(layerRoot, surfaces, target) {
     .sort();
 }
 
+/**
+ * `nina check`.
+ *
+ * @param {string[]} argv - Command arguments; `--project <dir>` selects the target.
+ * @param {{root: string}} ctx - CLI context; `root` is the NINA install directory.
+ * @returns {Promise<number>} Process exit code.
+ */
 export async function check(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   // `--detector`: run by every project's harness:check. Inside `nina upgrade --apply` the move measures

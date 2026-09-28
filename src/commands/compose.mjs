@@ -10,10 +10,10 @@
  * placeholder, filled from the profile. A surface the project does not declare has its
  * markers dropped, so a project with no database never reads a word about Prisma.
  *
- * The test that keeps this honest is a recomposition of the project it was extracted
- * from: the output must be byte-identical to what is running. Anything weaker depends on
- * someone's judgement that no rule was lost, and judgement is what let a mandatory rule
- * sit unenforceable for three months here.
+ * What keeps this honest is `scripts/compose-test.mjs`: every fixture composed and held to the
+ * properties it lists, so no rule is lost on someone's judgement that none was. It began as a
+ * recomposition of the project the harness was extracted from, byte for byte; that oracle went
+ * when projects began pinning frozen releases.
  */
 
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
