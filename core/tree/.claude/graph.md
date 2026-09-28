@@ -54,7 +54,7 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 - `reviewer` → `architect` on `REJECTED` — a design flaw, or no preview-deploy plan · max 2
 - `qa` → `devops` on `PASS` — the change touches a deployed surface
 - `qa` → `secops` on `PASS` — the last step of a milestone
-- `qa` → `done` on `PASS` — nothing to deploy
+- `qa` → `done` on `PASS` — nothing to deploy, or nowhere yet
 - `qa` → `implementer` on `FAIL` — a test fails, the run exits non-zero, or a "pre-existing" failure does not reproduce · max 2
 - `qa` → `architect` on `FAIL` — the test is right and the spec was wrong · max 2
 - `devops` → `done` on `DEPLOYED` — preview is green; production waits for the owner

@@ -27,7 +27,8 @@ Cite in your report which skill informed the deploy. A deploy that ran the platf
 it is a deploy built on recall.
 
 ## When you run
-- After **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings).
+- After **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings) — one the project deploys today.
+- **Not** while the project has no preview target yet: nothing deploys, the step ends at qa, and the first deploy is a step of its own whose spec decides the target.
 - At a milestone's end, in parallel with **secops** — both are read-only on code.
 - **Not** on a step that changes only tests, docs, or the harness.
 
