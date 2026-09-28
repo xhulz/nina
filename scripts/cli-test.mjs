@@ -2244,6 +2244,11 @@ const dated = (date, status = 'active') =>
 
   // The same move, against a project whose detector passes on the old pin and fails on the new.
   const bad = await project(`grep -q "${from}" .nina/profile.json && echo "harness: current" || { echo "harness: the new layers broke me"; exit 1; }`);
+  // A spec left from a surface the profile no longer declares: compose moves it aside during the move, and a
+  // rollback that saved only the declared surfaces' paths left it there while saying the tree was as it was.
+  const stale = '<!-- nina:generated — composed for db, which this profile no longer declares -->\n---\nname: dba\n---\nold\n';
+  await mkdir(join(bad, '.claude', 'agents'), { recursive: true });
+  await writeFile(join(bad, '.claude', 'agents', 'dba.md'), stale);
   const rolled = run(['upgrade', '--project', bad, '--to', to, '--apply'], { loud: true });
   expect(rolled.status === 1, `upgrade: a broken chain must exit non-zero — got ${rolled.status}`);
   expect(/rolling back to /.test(rolled.out), `upgrade: should say it is rolling back — got ${rolled.out}`);
@@ -2254,6 +2259,10 @@ const dated = (date, status = 'active') =>
   expect(
     JSON.parse(await readFile(join(bad, '.nina', 'profile.json'), 'utf8')).core === from,
     'upgrade: a rolled-back chain restores the pin it started from',
+  );
+  expect(
+    (await readFile(join(bad, '.claude', 'agents', 'dba.md'), 'utf8').catch(() => '')) === stale,
+    'upgrade: a rolled-back chain puts back a file compose set aside during it, too',
   );
 
   // A check this project was already failing is not the upgrade's doing, and blaming the move

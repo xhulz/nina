@@ -512,8 +512,12 @@ export async function upgrade(argv, ctx) {
   const keptEdited = dropped.filter((p) => edited.has(p));
   // Every file the move can touch, as it is now, so a rollback puts the tree back exactly — the
   // recompose alone would write the old composition over the owner's own edits and call it restored.
+  // That is every path either version composes for any surface, not only the declared ones: compose moves
+  // a file gated on an undeclared surface to .nina/removed/, and one left out of here stayed there after a
+  // rollback that said the tree was as it was.
+  const reachable = [...(await composedPaths(from.dir, offeredBefore)), ...(await composedPaths(onto.dir, available))];
   const saved = new Map();
-  for (const p of new Set([...pathsBefore, ...pathsAfter])) {
+  for (const p of new Set([...pathsBefore, ...pathsAfter, ...reachable])) {
     const entry = entryAt(p);
     if (entry?.isFile()) saved.set(p, readFileSync(join(target, p)));
   }
