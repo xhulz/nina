@@ -38,7 +38,10 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
    that could edit anything; the check that its frontmatter opened the file passed the whole time.
 8. The composed `.claude/graph.md` holds for the profile: every stage has a spec and every spec is a
    stage, no edge points at a stage the profile lacks, every verdict a stage can emit goes somewhere,
-   every loop-back has a cap, and no spec's prose names a route the graph does not have.
+   every loop-back has a cap of one round or more, and no spec's prose names a route the graph does not
+   have. And the shape of the whole holds: no cycle runs through verdicts that pass work on, which would
+   have no cap and never end; every stage has an edge; and from every stage a chain of edges reaches `done`
+   or `human`, so no stage is where work stops unseen.
 9. Every numbered list composes as 1, 2, 3. Surfaces add items to lists the core starts, so a number
    written in one layer cannot know its neighbours in every profile: a project with no surface read
    router rules that began at 2, and an architect whose outputs ran 1–5, 7, 8, 9, 11b, 15. Those lists

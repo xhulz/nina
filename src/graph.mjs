@@ -158,7 +158,43 @@ export function validateGraph(graph, specs, roles = new Set()) {
     if (isLoopBack(e.token) && !TERMINALS.has(e.to) && e.max === null) {
       problems.push(`graph.md:${e.line}: loop-back \`${e.from}\` → \`${e.to}\` has no cap — add "· max N"`);
     }
+    // A cap of none sends every round to the owner: the edge is one to `human`, said another way.
+    if (e.max !== null && e.max < 1) problems.push(`graph.md:${e.line}: \`${e.from}\` → \`${e.to}\` is capped at ${e.max} — a cap is one round or more`);
+    if (TERMINALS.has(e.from)) problems.push(`graph.md:${e.line}: an edge leaves \`${e.from}\`, where work ends`);
   }
+
+  // The shape of the whole. Each of these held in every graph composed so far and nothing checked it: a
+  // cycle through verdicts that pass work on has no cap and never ends; a stage no edge touches is never
+  // dispatched; and one from which no chain of edges reaches `done` or `human` is where work stops unseen.
+  const forward = new Map();
+  for (const e of edges) if (!isLoopBack(e.token) && stages.has(e.from) && stages.has(e.to)) forward.set(e.from, [...(forward.get(e.from) ?? []), e.to]);
+  const state = new Map();
+  const cycle = (stage, path) => {
+    state.set(stage, 'open');
+    for (const next of forward.get(stage) ?? []) {
+      if (state.get(next) === 'open') return [...path.slice(path.indexOf(next)), next];
+      if (!state.has(next)) {
+        const found = cycle(next, [...path, next]);
+        if (found) return found;
+      }
+    }
+    state.set(stage, 'done');
+    return null;
+  };
+  for (const s of stages) {
+    const found = state.has(s) ? null : cycle(s, [s]);
+    if (found) {
+      problems.push(`the graph goes round ${found.map((x) => `\`${x}\``).join(' → ')} on verdicts that pass work on — a loop with no cap`);
+      break;
+    }
+  }
+  for (const s of stages) if (!edges.some((e) => e.from === s || e.to === s)) problems.push(`stage \`${s}\` has no edge in or out — nothing dispatches it`);
+  const ends = new Set(TERMINALS);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const e of edges) if (ends.has(e.to) && !ends.has(e.from)) grew = ends.add(e.from) && true;
+  }
+  for (const s of stages) if (edges.some((e) => e.from === s) && !ends.has(s)) problems.push(`no chain of edges from \`${s}\` reaches \`done\` or \`human\` — work there never ends`);
 
   // The loop gate reads one cap per edge. Two lines naming the same edge with different caps would
   // leave it guessing which one holds; it would take the larger, but a graph should not need a

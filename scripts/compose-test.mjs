@@ -21,8 +21,9 @@
  *      output, and misplacing it silently un-dispatches a subagent spec.
  *   8. The composed `.claude/graph.md` holds for the profile that composed it: every stage has a
  *      spec and every spec is a stage, no edge points at a stage the profile lacks, every verdict a
- *      stage can emit goes somewhere, every loop-back has a cap, and no spec's prose names a route
- *      the graph does not have. See src/graph.mjs.
+ *      stage can emit goes somewhere, every loop-back has a cap of one round or more, no spec's prose names
+ *      a route the graph does not have, no cycle runs through verdicts that pass work on, every stage has
+ *      an edge, and from every stage a chain of edges reaches `done` or `human`. See src/graph.mjs.
  *   7. Every composed agent spec declares `name:`, `description:` and `tools:` in its frontmatter.
  *      Claude Code does not load a spec with no description at all; and one with no `tools:` is not
  *      restricted — the subagent inherits every tool the session has — so a role told it is
