@@ -6,16 +6,13 @@
  * project forward was six commands in a fixed order, where getting the order wrong quietly
  * overwrote the project's own file — so the order belongs in the tool, not in a message.
  *
- * The animation is a convenience, not the contract: a step reports the same text either way,
- * so a log, a CI run and a pipe all read like the terminal does minus the dots.
+ * On a terminal the step running shows as `...` until its line replaces it. Not animated: a step runs
+ * synchronously, so a timer would never fire while it works. A log, a CI run and a pipe read like the
+ * terminal does, minus that line.
  */
 
-/** Frames of the ellipsis, slow enough to read and fast enough to look alive. */
-const FRAMES = ['.  ', '.. ', '...'];
-const TICK = 220;
-
 /**
- * Whether to animate — a pipe, a CI log and a test all get plain lines instead.
+ * Whether to show the step running — a pipe, a CI log and a test all get plain lines instead.
  *
  * @param {NodeJS.WriteStream} stream
  * @returns {boolean}
@@ -46,24 +43,13 @@ export function runSteps(steps, options = {}) {
       continue;
     }
 
-    let frame = 0;
-    let timer = null;
-    if (live) {
-      stream.write(`  ${FRAMES[0]} ${step.label}`);
-      timer = setInterval(() => {
-        frame = (frame + 1) % FRAMES.length;
-        stream.write(`\r  ${FRAMES[frame]} ${step.label}`);
-      }, TICK);
-      timer.unref?.();
-    }
-
+    if (live) stream.write(`  ... ${step.label}`);
     let result;
     try {
       result = step.run();
     } catch (error) {
       result = { ok: false, log: String(error?.stack ?? error) };
     } finally {
-      if (timer) clearInterval(timer);
       // `\r` alone leaves the tail of the longest line behind when the next one is shorter.
       if (live) stream.write('\r\u001b[K');
     }
