@@ -12,7 +12,14 @@
  */
 
 import { dirname, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { runCostWatch } from '@xhulz/nina/cost';
 
-process.exitCode = await runCostWatch({ root: resolve(dirname(dirname(fileURLToPath(import.meta.url)))), warnAt: Number('{{RUN_READ_WARN}}') * 1e6 });
+// Read before the package is loaded: every tool call passes this hook, and the orchestrator's — which it does
+// not watch — go through without paying for it.
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const raw = Buffer.concat(chunks).toString('utf8');
+if (!/"agent_id"\s*:\s*"[^"]/.test(raw)) process.exit(0);
+const { runCostWatch } = await import('@xhulz/nina/cost');
+process.exitCode = await runCostWatch({ root: resolve(dirname(dirname(fileURLToPath(import.meta.url)))), warnAt: Number('{{RUN_READ_WARN}}') * 1e6, stdin: Readable.from([raw]) });
