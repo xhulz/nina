@@ -3237,6 +3237,10 @@ const dated = (date, status = 'active') =>
   expect(priceOf('claude-opus-5-5').input === 4 && priceOf('claude-opus-5').input === 5, 'cost: the longest model prefix wins — 5.5 is not priced as 5');
   expect(priceOf('claude-opus-4-8[1m]')?.input === 5, 'cost: a context suffix does not hide the model');
   expect(priceOf('opus') === null && costOf({ output: 1 }, 'opus') === null, 'cost: a model the table does not know is left out, not guessed');
+  expect(
+    priceOf('claude-opus-5-6') === null && priceOf('claude-sonnet-5-5') === null && priceOf('claude-haiku-4-5-20251001')?.input === 1,
+    'cost: a model newer than the table is left out, not priced as the one before it — a dated id is still the model it names',
+  );
   expect(Math.abs(costOf({ input: 1e6, output: 1e6, write_5m: 1e6, write_1h: 1e6, read: 1e6 }, 'claude-sonnet-5') - (2 + 10 + 2.5 + 4 + 0.2)) < 1e-9, 'cost: writes at 1.25× and 2× input, reads at 0.1×');
   expect(Math.abs(costOf({ read: 1e6 }, 'claude-fable-5-1') - 0.25) < 1e-9, "cost: a model's own read rate beats the 0.1× rule");
 

@@ -15,7 +15,7 @@
 /** The date the table was read, printed beside every estimate made from it. */
 export const PRICES_AS_OF = '2026-06-24';
 
-/** model id prefix → $/MTok. Longest prefix wins, so `claude-opus-5-5` is not read as `claude-opus-5`. */
+/** model id → $/MTok. */
 const PRICES = {
   'claude-fable-5-1': { input: 10, output: 50, read: 0.25 },
   'claude-mythos-5-1': { input: 10, output: 50 },
@@ -39,12 +39,12 @@ const PRICES = {
  * @returns {{input: number, output: number, read: number, write5m: number, write1h: number}|null}
  */
 export function priceOf(model) {
-  const id = String(model ?? '');
-  const key = Object.keys(PRICES)
-    .filter((k) => id === k || id.startsWith(`${k}-`) || id.startsWith(`${k}[`))
-    .sort((a, b) => b.length - a.length)[0];
-  if (!key) return null;
-  const p = PRICES[key];
+  // The id itself, less the two suffixes a transcript adds to one: a context window (`[1m]`) and a snapshot
+  // date (`-20251001`). Matched by prefix, a model newer than the table was priced as the one before it —
+  // `claude-opus-5-6` as Opus 5, at five times its cache reads.
+  const id = String(model ?? '').replace(/\[[^\]]*\]$/, '').replace(/-\d{8}$/, '');
+  const p = Object.hasOwn(PRICES, id) ? PRICES[id] : null;
+  if (!p) return null;
   return { input: p.input, output: p.output, read: p.read ?? p.input * 0.1, write5m: p.input * 1.25, write1h: p.input * 2 };
 }
 
