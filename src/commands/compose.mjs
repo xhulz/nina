@@ -63,6 +63,19 @@ export function stripWhy(text, { keepLines = false } = {}) {
 export const REQUIRES = /^<!-- nina:requires ([a-z-]+) -->\n/;
 
 /**
+ * The surface a core file is gated on when the project does not declare it — the file is not composed there —
+ * or null. Every reader that asks whether a gated file applies asks this.
+ *
+ * @param {string} text - The core file.
+ * @param {string[]} surfaces - What the project declares.
+ * @returns {string|null}
+ */
+export function closedGate(text, surfaces) {
+  const gate = REQUIRES.exec(text)?.[1] ?? null;
+  return gate && !surfaces.includes(gate) ? gate : null;
+}
+
+/**
  * A slot inside a line — text before it, and the marker last. Filled with its fragment collapsed
  * to one line; dropped, like any slot, when its surface is not declared.
  */
@@ -351,8 +364,7 @@ export async function composedPaths(layerRoot, surfaces = []) {
   const coreTree = join(layerRoot, 'core', 'tree');
   const out = new Set();
   for (const rel of await walk(coreTree)) {
-    const gate = REQUIRES.exec(await readFile(join(coreTree, rel), 'utf8'));
-    if (gate && !surfaces.includes(gate[1])) continue;
+    if (closedGate(await readFile(join(coreTree, rel), 'utf8'), surfaces)) continue;
     out.add(rel);
   }
   return out;
@@ -451,29 +463,27 @@ export async function composeProject(target, ctx, options = {}) {
     let core = await readFile(join(coreTree, rel), 'utf8');
     const dest = join(target, rel);
 
-    const requires = REQUIRES.exec(core);
-    if (requires) {
-      core = core.slice(requires[0].length);
-      if (!surfaces.includes(requires[1])) {
-        // The project has no such surface, so the file does not exist for it. One composed for it before the
-        // surface left the profile is still dispatched as a stage the graph no longer has, and was reported as
-        // drift that no compose cleared: it goes, with a copy kept. A file there with no notice is the project's.
-        skipped.push(rel);
-        let stale = false;
-        try {
-          stale = lstatSync(dest).isFile() && noticeOf(await readFile(dest, 'utf8')) !== null;
-        } catch {
-          // Not there.
-        }
-        if (stale && check) differ.push(`${rel} (present, but no '${requires[1]}' surface)`);
-        if (stale && !check) {
-          await mkdir(dirname(join(target, REMOVED, rel)), { recursive: true });
-          await writeFile(join(target, REMOVED, rel), await readFile(dest));
-          await rm(dest);
-          removed.push(rel);
-        }
-        continue;
+    const closed = closedGate(core, surfaces);
+    core = core.replace(REQUIRES, '');
+    if (closed) {
+      // The project has no such surface, so the file does not exist for it. One composed for it before the
+      // surface left the profile is still dispatched as a stage the graph no longer has, and was reported as
+      // drift that no compose cleared: it goes, with a copy kept. A file there with no notice is the project's.
+      skipped.push(rel);
+      let stale = false;
+      try {
+        stale = lstatSync(dest).isFile() && noticeOf(await readFile(dest, 'utf8')) !== null;
+      } catch {
+        // Not there.
       }
+      if (stale && check) differ.push(`${rel} (present, but no '${closed}' surface)`);
+      if (stale && !check) {
+        await mkdir(dirname(join(target, REMOVED, rel)), { recursive: true });
+        await writeFile(join(target, REMOVED, rel), await readFile(dest));
+        await rm(dest);
+        removed.push(rel);
+      }
+      continue;
     }
 
     // History is stripped from each piece before the pieces are joined. Joined first, an opener left

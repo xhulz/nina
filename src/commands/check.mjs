@@ -16,7 +16,7 @@ import { frontmatterFindings, installedSkills, modelFindings, toolFindings } fro
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { REQUIRES, SLOT, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
+import { SLOT, closedGate, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 import { NEEDS } from '../surfaces.mjs';
 
@@ -49,8 +49,7 @@ export async function referencedVocabulary(layerRoot, surfaces, target) {
   const found = new Set();
   for (const rel of await walk(coreTree)) {
     const core = await readFile(join(coreTree, rel), 'utf8');
-    const requires = REQUIRES.exec(core);
-    if (requires && !surfaces.includes(requires[1])) continue;
+    if (closedGate(core, surfaces)) continue;
     const texts = [core];
     for (const s of surfaces) {
       const t = await readFile(join(layerRoot, 'surfaces', s, 'tree', rel), 'utf8').catch(() => null);
@@ -80,8 +79,7 @@ export async function projectSlots(layerRoot, surfaces) {
   const slots = new Set();
   for (const rel of await walk(coreTree)) {
     const core = await readFile(join(coreTree, rel), 'utf8');
-    const requires = REQUIRES.exec(core);
-    if (requires && !surfaces.includes(requires[1])) continue;
+    if (closedGate(core, surfaces)) continue;
     for (const line of core.split('\n')) {
       const marker = SLOT.exec(line);
       if (marker?.[1].startsWith('project.')) slots.add(`${rel} ${marker[1]}`);

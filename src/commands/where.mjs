@@ -22,7 +22,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { HARNESS, readProfile, surfacesIn } from '../paths.mjs';
-import { REQUIRES, SLOT, defaultedSlots, generatedNotice, layerRootFor } from './compose.mjs';
+import { SLOT, closedGate, defaultedSlots, generatedNotice, layerRootFor } from './compose.mjs';
 import { filledSlots, owedDocuments } from './check.mjs';
 import { roleGates } from './pills.mjs';
 
@@ -90,8 +90,8 @@ export async function where(argv, ctx) {
   const corePath = join(resolved.dir, 'core', 'tree', rel);
   if (existsSync(corePath)) {
     const core = await readFile(corePath, 'utf8');
-    const gate = REQUIRES.exec(core)?.[1] ?? null;
-    if (gate && !surfaces.includes(gate)) {
+    const gate = closedGate(core, surfaces);
+    if (gate) {
       block(`defined in core ${profile.core}, but gated on the "${gate}" surface, which this project
 does not declare — so it is never composed here and is not on disk.
 to get it: add "${gate}" to ${HARNESS}/profile.json and run \`nina compose\`.`);
