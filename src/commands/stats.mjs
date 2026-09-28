@@ -22,7 +22,7 @@ import { namesFor, readStoreFile } from '../store.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
-import { layerRootFor } from './compose.mjs';
+import { byVersion, layerRootFor } from './compose.mjs';
 import { PRICES_AS_OF, costOf } from '../prices.mjs';
 
 /**
@@ -416,6 +416,23 @@ function modelReport(records) {
 /** The verdicts that close a pipeline cycle: the change passed its tests, reached preview, or cleared the audit. */
 const CYCLE_ENDS = { qa: 'PASS', devops: 'DEPLOYED', secops: 'SECURE' };
 
+/**
+ * The release each rule this report judges first shipped in. A round is judged on a rule only when the pin it
+ * was captured under (`core`) carries it: over every round, "0 of 16 loop-backs named their issues" read
+ * reports written before the rule existed as breaking it. Releases are never rewritten, so neither is this.
+ */
+const RULE_SINCE = { issues: '0.22.0', stepFiles: '0.28.8' };
+
+/**
+ * Whether a round ran under a release that carries a rule. One captured before rounds recorded their pin
+ * cannot say, and is left out rather than judged.
+ *
+ * @param {object} record - A round.
+ * @param {keyof RULE_SINCE} rule - The rule.
+ * @returns {boolean}
+ */
+export const ranUnder = (record, rule) => typeof record.core === 'string' && (record.core === 'dev' || byVersion(record.core, RULE_SINCE[rule]) >= 0);
+
 /** The stages that write code, whose runs' file counts size a cycle. */
 export const WRITERS = new Set(['implementer', 'solidity-dev']);
 
@@ -528,7 +545,7 @@ function proportionReport(records, stepLimit = () => null) {
   // cache read per file held near 1M up to 19 files and was 6.9M in a 52-file run. Asked only of a project
   // whose pinned release states the limit.
   const over = records.filter((r) => {
-    if (r.role !== 'implementer' || typeof r.files_touched !== 'number') return false;
+    if (r.role !== 'implementer' || typeof r.files_touched !== 'number' || !ranUnder(r, 'stepFiles')) return false;
     const limit = stepLimit(r.project);
     return limit !== null && r.files_touched > limit;
   });
@@ -743,7 +760,7 @@ export async function stats(argv, ctx) {
 
   // Whether the stages that send work back say what they send back. Counted only over reports read
   // since the record learned the field, and only over declared loop-backs, which are all it asks of.
-  const named = records.filter((r) => typeof r.issues === 'number');
+  const named = records.filter((r) => typeof r.issues === 'number' && ranUnder(r, 'issues'));
   if (named.length > 0) {
     const withIds = named.filter((r) => r.issues > 0).length;
     console.log(

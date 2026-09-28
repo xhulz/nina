@@ -1751,6 +1751,7 @@ async function history(snapshots, project, rows) {
       agent_id: null,
       skills: [],
       ...(r.issues === undefined ? {} : { issues: r.issues }),
+      ...(r.core === undefined ? {} : { core: r.core }),
     }),
   );
   await writeFile(join(snapshots, `${project}.jsonl`), `${lines.join('\n')}\n`);
@@ -1801,7 +1802,11 @@ const dated = (date, status = 'active') =>
   const snapshots = join(await scratch(), 'snaps');
   await history(snapshots, dir.replace(/\//g, '-'), [
     ...TWELVE_RUNS,
-    { role: 'reviewer', verdict: 'REJECTED', ts: '2026-01-20', issues: 2 },
+    { role: 'reviewer', verdict: 'REJECTED', ts: '2026-01-20', issues: 2, core: '0.30.0' },
+    { role: 'qa', verdict: 'FAIL', ts: '2026-01-21', issues: 0, core: '0.30.0' },
+    // A loop-back under a release from before the rule, and one captured before rounds recorded their pin:
+    // neither can break a rule it did not run under.
+    { role: 'qa', verdict: 'FAIL', ts: '2026-01-21', issues: 0, core: '0.21.1' },
     { role: 'qa', verdict: 'FAIL', ts: '2026-01-21', issues: 0 },
     { role: 'qa', verdict: 'PASS', ts: '2026-01-22', issues: null },
   ]);
@@ -3695,13 +3700,15 @@ const dated = (date, status = 'active') =>
     join(snapshots, `${flat(named)}.jsonl`),
     `${[
       line(flat(named), 'architect', 'SPEC-READY'),
-      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 20, tokens: { read: 90_000_000 } }),
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 20, tokens: { read: 90_000_000 }, core: 'dev' }),
+      // The same size under a release from before the limit is not over it.
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 40, tokens: { read: 1 }, core: '0.28.7' }),
       line(flat(named), 'reviewer', 'REJECTED'),
     ].join('\n')}\n`,
   );
   await writeFile(join(snapshots, '-elsewhere.jsonl'), `${[line('-elsewhere', 'reviewer', 'APPROVED'), line('-elsewhere', 'qa', 'PASS')].join('\n')}\n`);
   const everywhere = run(['stats', '--snapshots', snapshots], { loud: true }).out;
-  expect(everywhere.includes('3 runs in 3 rounds · 1 project') && everywhere.includes('1 non-harness project hidden'), `stats: a project with a profile is a harness project at three dispatches — got ${everywhere}`);
+  expect(everywhere.includes('4 runs in 4 rounds · 1 project') && everywhere.includes('1 non-harness project hidden'), `stats: a project with a profile is a harness project at three dispatches — got ${everywhere}`);
 
   // Run inside a project, the report is that project's, and says so; `--all` is every project.
   const inside = (args) => {
@@ -3709,14 +3716,14 @@ const dated = (date, status = 'active') =>
     return `${r.stdout}${r.stderr}`;
   };
   const own = inside([]);
-  expect(own.includes('3 runs in 3 rounds · 1 project') && own.includes('(this project; --all for every project)'), `stats: inside a project it reports that project — got ${own}`);
+  expect(own.includes('4 runs in 4 rounds · 1 project') && own.includes('(this project; --all for every project)'), `stats: inside a project it reports that project — got ${own}`);
   // Each stage's runs as a bar of what went forward, back, or said nothing, with the key under the table;
   // and a history with nothing unread says so rather than "0% of finished rounds report no verdict".
   expect(
-    /reviewer\s+1\s+1\s+1\s+100%\s+100%\s+0%\s+—\s+▓{16}\n/.test(own) && own.includes('█ forward  ▓ sent back  ░ no verdict read') && own.includes("every finished round's verdict could be read.") && !own.includes('0% of finished rounds'),
+    /reviewer\s+1\s+1\s+1\s+100%\s+100%\s+0%\s+—\s+▓{8}\n/.test(own) && own.includes('█ forward  ▓ sent back  ░ no verdict read') && own.includes("every finished round's verdict could be read.") && !own.includes('0% of finished rounds'),
     `stats: each stage's runs drawn as a bar, and a clean history said as one — got ${own}`,
   );
-  expect(inside(['--all']).includes('5 runs in 5 rounds · 2 projects'), 'stats: and --all reports every project in the store');
+  expect(inside(['--all']).includes('6 runs in 6 rounds · 2 projects'), 'stats: and --all reports every project in the store');
 
   // One implementer run past the files one step may write is named, against the limit the project's
   // release states; a project that raises the limit is held to its own.
