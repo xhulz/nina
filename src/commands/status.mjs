@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
-import { HARNESS } from '../paths.mjs';
+import { readProfile } from '../paths.mjs';
 import { costOf } from '../prices.mjs';
 import { runOf } from '../transcripts.mjs';
 import { missingWiring, shippedScripts } from '../wiring.mjs';
@@ -86,12 +86,11 @@ function ago(iso, now) {
  */
 export async function status(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    console.error(`  no ${HARNESS}/profile.json under ${target} — run it inside a project, or name one with --project\n`);
+  const { profile, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return 1;
   }
-  const profile = JSON.parse(readFileSync(profilePath, 'utf8'));
   const bin = join(ctx.root, 'bin', 'nina.mjs');
   const now = Date.now();
   const row = (label, text) => console.log(`  ${pink(label.padEnd(10))} ${text}`);

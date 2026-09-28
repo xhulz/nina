@@ -17,7 +17,7 @@
  */
 
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { HARNESS, legacyHint } from '../paths.mjs';
+import { HARNESS, readProfile } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -432,11 +432,8 @@ export async function composeProject(target, ctx, options = {}) {
   /** Files composed for a surface this profile no longer declares, moved to {@link REMOVED}. */
   const removed = [];
 
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    return { error: `no .nina/profile.json under ${target}${legacyHint(target)}`, written, differ, unfilled: [], skipped };
-  }
-  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  const { profile, error } = readProfile(target);
+  if (error) return { error, written, differ, unfilled: [], skipped };
   const surfaces = profile.surfaces ?? [];
 
   const resolved = layerRootFor(ctx.root, profile.core);

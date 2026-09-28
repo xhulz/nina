@@ -11,7 +11,7 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { HARNESS, describeMove, interruptedMove, legacyHint, moveJournal, movedFrom } from '../paths.mjs';
+import { describeMove, HARNESS, interruptedMove, movedFrom, moveJournal, readProfile } from '../paths.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { REMOVED, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
@@ -239,12 +239,11 @@ export async function upgrade(argv, ctx) {
   const target = resolve(arg('--project') ?? '.');
   const apply = argv.includes('--apply');
 
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    console.error(`  no .nina/profile.json under ${target}${legacyHint(target)}\n`);
+  const { profile, path: profilePath, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return 1;
   }
-  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
 
   // A move stopped half-way comes before anything else asked of this command: its pin may already name the
   // version it was moving to, and "already pins" left the tree half-moved for good.

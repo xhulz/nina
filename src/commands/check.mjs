@@ -9,7 +9,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { HARNESS, describeMove, interruptedMove, legacyHint } from '../paths.mjs';
+import { describeMove, HARNESS, interruptedMove, readProfile } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
 import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
@@ -204,10 +204,9 @@ export async function check(argv, ctx) {
   }
 
   const expected = expectedUnfilled(argv);
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    const hint = legacyHint(target);
-    console.error(`  no .nina/profile.json under ${target}${hint || ' — run `nina init` first.'}\n`);
+  const { profile, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return 1;
   }
 
@@ -215,14 +214,6 @@ export async function check(argv, ctx) {
   const problems = [];
   /** Things that are merely stale — worth saying, not worth failing. */
   const notes = [];
-
-  let profile;
-  try {
-    profile = JSON.parse(await readFile(profilePath, 'utf8'));
-  } catch (error) {
-    console.error(`  .nina/profile.json is not valid JSON: ${error.message}\n`);
-    return 1;
-  }
 
   const resolved = layerRootFor(ctx.root, profile.core);
   if (resolved.error) {

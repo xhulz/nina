@@ -12,10 +12,9 @@
  *                              hook runs its script only once that script is composed
  */
 
-import { existsSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { HARNESS, legacyHint } from '../paths.mjs';
+import { readProfile } from '../paths.mjs';
 import { applyWiring, missingFragment, missingWiring, shippedScripts, staleHooks } from '../wiring.mjs';
 import { layerRootFor } from './compose.mjs';
 
@@ -27,16 +26,9 @@ import { layerRootFor } from './compose.mjs';
 export async function wire(argv, ctx) {
   const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : null);
   const target = resolve(arg('--project') ?? '.');
-  const profilePath = join(target, HARNESS, 'profile.json');
-  if (!existsSync(profilePath)) {
-    console.error(`  no ${HARNESS}/profile.json under ${target}${legacyHint(target)}\n`);
-    return 2;
-  }
-  let profile;
-  try {
-    profile = JSON.parse(await readFile(profilePath, 'utf8'));
-  } catch (error) {
-    console.error(`  ${profilePath} is not valid JSON — ${error.message}\n`);
+  const { profile, error } = readProfile(target);
+  if (error) {
+    console.error(`  ${error}\n`);
     return 2;
   }
   const version = arg('--to') ?? profile.core;

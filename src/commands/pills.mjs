@@ -11,7 +11,7 @@
  */
 
 import { mkdir, readFile, readdir, rename } from 'node:fs/promises';
-import { HARNESS } from '../paths.mjs';
+import { HARNESS, readProfile } from '../paths.mjs';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -383,8 +383,8 @@ export async function pills(argv, ctx) {
   // of a surface, and composition strips that gate — so it has to come from the layers.
   let gates = null;
   try {
-    const profile = JSON.parse(await readFile(join(target, HARNESS, 'profile.json'), 'utf8'));
-    const layers = layerRootFor(ctx?.root ?? '.', profile.core);
+    const { profile } = readProfile(target);
+    const layers = layerRootFor(ctx?.root ?? '.', profile?.core);
     if (!layers.error) gates = await roleGates(layers.dir);
   } catch {
     /* without a profile the candidate is still worth naming; only its target is unknown */

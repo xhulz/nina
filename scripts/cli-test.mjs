@@ -2103,6 +2103,11 @@ const dated = (date, status = 'active') =>
     unread.status === 1 && unread.out.includes('cannot be read') && (await readFile(profilePath, 'utf8')) === broken,
     `init --force: a profile it cannot parse is refused and left as it was, not replaced — got ${unread.out}`,
   );
+  // Every command reads the profile one way, and says in a line that it cannot: four parsed it on their own and
+  // answered a stray comma with a stack trace.
+  const readers = [['compose'], ['status', '--offline'], ['upgrade', '--to', newer], ['learn'], ['check'], ['wire'], ['gate'], ['where', 'CLAUDE.md']].map((args) => [args[0], run([...args, '--project', dir], { loud: true })]);
+  const traced = readers.filter(([, r]) => r.status === 0 || !r.out.includes('cannot be read') || /\bat \S+ \(|SyntaxError/.test(r.out)).map(([name, r]) => `${name}: ${r.status} ${r.out.trim().split('\n').slice(-2).join(' / ')}`);
+  expect(traced.length === 0, `profile: a command that cannot read it says so in a line — got ${traced.join(' | ')}`);
 }
 
 // ─── compose: a surface taken out of the profile takes its files with it ────────────────
