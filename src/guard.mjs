@@ -32,6 +32,47 @@ const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
 /** The tools that change a file, and where each names it. */
 const EDITS = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' };
 
+/**
+ * The git subcommands that move the checkout or write its history — Hard Rule #18's — read as a stage would type
+ * them. A stash's `list` and `show` only read.
+ */
+const MOVES = /\bgit\s+(?:-c\s+\S+\s+)*(stash(?!\s+(?:list|show)\b)|checkout|switch|reset|restore|clean|commit|merge|rebase|cherry-pick|revert|am|apply|pull|push)\b/;
+
+/**
+ * A stage's shell command that would move the checkout it was dispatched into, refused. Only the orchestrator
+ * commits, and the work in flight lives in that tree, uncommitted: one reviewer, told not to edit, stashed it to
+ * compare with the baseline, and its pop failed on a conflict. Git run elsewhere — `-C` another directory, or
+ * after a `cd`, as into the worktree the rule sends a stage to — is not that tree, and goes through.
+ *
+ * @param {object} input - The hook's stdin, parsed.
+ * @param {{layers: string}} pinned - The pinned layers, whose hard rules say whether this one is the project's.
+ * @returns {object|null}
+ */
+function handleShell(input, pinned) {
+  if (!input.agent_id) return null;
+  const command = String(input.tool_input?.command ?? '');
+  if (/\bgit\s+-C\s/.test(command) || /(^|[;&|(]\s*)cd\s/.test(command)) return null;
+  const moves = MOVES.exec(command);
+  if (!moves) return null;
+  let rules = '';
+  try {
+    rules = readFileSync(join(pinned.layers, 'core', 'tree', 'CLAUDE.md'), 'utf8');
+  } catch {
+    return null;
+  }
+  if (!rules.includes('Only the orchestrator commits')) return null;
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason:
+        `NINA: \`git ${moves[1]}\` would move the checkout the pipeline's work in flight lives in — Hard Rule #18: only the orchestrator ` +
+        'commits, and no stage moves the checkout. Read history with git diff, log, show, status or blame, and build or test another ' +
+        'revision in a `git worktree` you remove afterwards.',
+    },
+  };
+}
+
 /** How much of a file is read to find it: the head, not the whole of a large file on every edit. */
 const HEAD_BYTES = 16 * 1024;
 
@@ -83,6 +124,10 @@ function head(path) {
 export async function handleEdit(input, { root, pkg = PACKAGE }) {
   try {
     if (input?.hook_event_name !== 'PreToolUse') return null;
+    if (input.tool_name === 'Bash') {
+      const pinnedShell = input.agent_id ? pinnedLayers(root, pkg) : null;
+      return pinnedShell ? handleShell(input, pinnedShell) : null;
+    }
     const key = EDITS[input.tool_name];
     const path = key ? input.tool_input?.[key] : null;
     const pinned = typeof path === 'string' ? pinnedLayers(root, pkg) : null;

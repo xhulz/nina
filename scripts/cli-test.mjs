@@ -3069,6 +3069,15 @@ const dated = (date, status = 'active') =>
   expect((await edit('Write', join(bed, 'new-file.md'))) === null, 'guard: a new file is let through — it carries no notice yet');
   expect((await edit('NotebookEdit', join(bed, 'notes.md'))) === null, 'guard: a notebook edit is read from its own key');
   expect((await handleEdit({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: join(bed, 'CLAUDE.md') } }, { root: bed })) === null, 'guard: reading a composed file is not editing it');
+  // Hard Rule #18, held rather than asked: a stage's git that moves the checkout its work in flight lives in.
+  const shell = (command, extra = { agent_id: 'stage-1' }) => handleEdit({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, ...extra }, { root: bed });
+  expect(denied(await shell('git stash')) && denied(await shell('git add -A && git commit -m wip')) && denied(await shell('git checkout -- src/a.ts')), 'guard: a stage cannot stash, commit or check out in the tree it was dispatched into');
+  expect(
+    (await shell('git stash list')) === null && (await shell('git diff --stat && git log -3')) === null &&
+      (await shell('git worktree add ../wt HEAD && cd ../wt && git checkout -b probe')) === null && (await shell('git -C ../wt reset --hard')) === null,
+    'guard: it reads history, and moves a worktree of its own',
+  );
+  expect((await shell('git commit -m done', {})) === null, 'guard: the orchestrator commits');
   const elsewhere = await scratch();
   await writeFile(join(elsewhere, 'x.md'), '<!-- nina:generated — composed elsewhere -->\n');
   expect((await edit('Edit', join(elsewhere, 'x.md'))) === null, "guard: a file outside the project is not this project's to guard");
@@ -3091,7 +3100,16 @@ const dated = (date, status = 'active') =>
 
   // End to end: the composed script, run by the exact command the wiring writes, answers the hook.
   const settings = JSON.parse(await readFile(join(bed, '.claude', 'settings.json'), 'utf8'));
-  const command = settings.hooks.PreToolUse.find((g) => g.matcher === 'Edit|Write|MultiEdit|NotebookEdit')?.hooks[0]?.command;
+  const command = settings.hooks.PreToolUse.find((g) => g.hooks[0]?.command.includes('edit-guard.mjs'))?.hooks[0]?.command;
+  // Every shell command passes the guard's hook: the orchestrator's go through before the package is loaded — here,
+  // a copy of the composed script with no package to load at all.
+  const bare = await scratch();
+  await mkdir(join(bare, 'scripts'), { recursive: true });
+  await writeFile(join(bare, 'scripts', 'edit-guard.mjs'), await readFile(join(bed, 'scripts', 'edit-guard.mjs'), 'utf8'));
+  const through = (fields) => spawnSync(process.execPath, [join(bare, 'scripts', 'edit-guard.mjs')], { input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, ...fields }), encoding: 'utf8' });
+  const orchestrator = through({});
+  const stage = through({ agent_id: 'stage-1' });
+  expect(orchestrator.status === 0 && orchestrator.stdout === '' && stage.status !== 0, `guard: the orchestrator's shell commands pass without loading the package, a stage's load it — got ${orchestrator.status}/${stage.status}`);
   expect(Boolean(command) && command.includes('edit-guard.mjs'), `guard: a new project is wired for the guard — got ${JSON.stringify(settings.hooks.PreToolUse)}`);
   const fired = spawnSync('sh', ['-c', command ?? 'false'], {
     input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: join(bed, 'CLAUDE.md') } }),
