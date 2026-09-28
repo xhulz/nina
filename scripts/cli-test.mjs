@@ -212,6 +212,8 @@ expect(
     swallowed.status === 2 && swallowed.out.includes('--project needs a value') && trailing.status === 2 && !trailing.out.includes('TypeError'),
     `arguments: an option that takes a value is given one — got ${swallowed.out}\n${trailing.out}`,
   );
+  const week = run(['stats', '--since', '7d'], { loud: true });
+  expect(week.status === 2 && week.out.includes('takes a day as YYYY-MM-DD'), `arguments: a date is a day as YYYY-MM-DD, not whatever compares as text — got ${week.out}`);
   const extra = run(['stats', 'everything'], { loud: true });
   expect(extra.status === 2 && extra.out.includes('stats takes no argument'), `arguments: an argument a command does not take is refused — got ${extra.out}`);
 
