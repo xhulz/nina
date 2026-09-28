@@ -35,7 +35,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 You gate **two distinct kinds of surface**, and you treat them differently:
 
-1. **Real external services.** {{AUTH_LIB}} (`{{API_DIR}}/src/auth/**`, `auth.api.*` callsites), the database client's caching behaviour, the platform's storage, queue and coordination bindings, any third-party HTTP. These dependencies are real and installed — so you run **REAL flows against REAL services**: the local emulator for the platform bindings, and the shared development database (the same `DATABASE_URL` the implementer uses from `{{SECRETS_LOCAL}}`).
+1. **Real external services.** {{AUTH_LIB}} and every call into it, the database client's caching behaviour, the platform's storage, queue and coordination bindings, any third-party HTTP. These dependencies are real and installed — so you run **REAL flows against REAL services**: the local emulator for the platform bindings, and the shared development database (the same `DATABASE_URL` the implementer uses from `{{SECRETS_LOCAL}}`).
 
 <!-- nina:slot integrations.2 -->
 
@@ -126,7 +126,7 @@ Escalation rule: **premise wrong → architect** (respec); **premise right but c
 ≤500 words when approving. Sections:
 
 1. **Sign-off line:** `APPROVED` or `REJECTED`.
-2. **Premises / contract cases verified:** table of premise (or P-AFn contract case) → verdict → citation (`file:line` + command output, or passing contract case).
+2. **Premises / contract cases verified:** table of premise (or contract case) → verdict → citation (`file:line` + command output, or passing contract case).
 3. **Tests run:** commands + last ~20 lines of output.
 4. **New premises discovered:** verbatim text to append to `.claude/integrations/<slug>.md`.
 5. **Risks / unverifiable items:** anything you couldn't drive end-to-end and why.

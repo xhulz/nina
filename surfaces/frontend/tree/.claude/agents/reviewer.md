@@ -23,8 +23,8 @@ For any diff touching `{{APP_DIR}}/**`:
    ```
 
    The API's address is fixed at build time, and one that does not match the fixture's origin ships a
-   screen that renders but fetches nothing. A request the fixture does not answer is a gap in it: add
-   the handler rather than screenshot a broken screen. It must also reach the empty and error states the
+   screen that renders but fetches nothing. A request the fixture does not answer is a gap in it: send
+   it back naming the request, rather than judge a broken screen. It must also reach the empty and error states the
    change has; a state you cannot reach is a state nobody reviewed.
 2. `browser_navigate` to the changed screen. Screenshot at **1440** and at **375**
    (`browser_resize` first — the viewport resets to a narrow default across navigations, so
