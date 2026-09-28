@@ -230,7 +230,8 @@ function commandHelp(name) {
  */
 function refusal(name, argv) {
   const c = COMMANDS[name];
-  const takes = new Map(Object.keys({ ...c.options, ...EVERYWHERE }).map((k) => [k.split(' ')[0], k.includes(' ')]));
+  // Each option, and the name of the value it takes, if any: `--since <date>` takes a date.
+  const takes = new Map(Object.keys({ ...c.options, ...EVERYWHERE }).map((k) => [k.split(' ')[0], k.split(' ')[1] ?? null]));
   const positional = [];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -241,6 +242,8 @@ function refusal(name, argv) {
     if (!takes.has(a)) return `${name} takes no option ${a}`;
     if (takes.get(a)) {
       if (i + 1 >= argv.length || argv[i + 1].startsWith('--')) return `${a} needs a value`;
+      // Compared as text against the days of the store, anything else — `7d` — matched nothing, or everything.
+      if (takes.get(a) === '<date>' && !/^\d{4}-\d{2}-\d{2}$/.test(argv[i + 1])) return `${a} takes a day as YYYY-MM-DD, and was given ${argv[i + 1]}`;
       i += 1;
     }
   }
