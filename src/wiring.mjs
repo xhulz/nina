@@ -125,7 +125,7 @@ export const HOOKS = [
       },
     }),
   },
-  { event: 'UserPromptSubmit', script: GATE, timeout: 10, why: "the owner's reply never starts a loop's count over" },
+  { event: 'UserPromptSubmit', script: GATE, timeout: 10, why: "the owner's reply never gives an open loop its round more" },
   {
     event: 'PreToolUse', matcher: 'Agent|Task|SendMessage', script: GATE, timeout: 10, why: 'the caps in .claude/graph.md stay instructions nothing holds',
     crash: (cannot) => ({ systemMessage: `NINA: the loop gate could not start, so the caps in .claude/graph.md are not held — ${cannot}` }),
