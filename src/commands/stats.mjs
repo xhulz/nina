@@ -417,7 +417,7 @@ function modelReport(records) {
 const CYCLE_ENDS = { qa: 'PASS', devops: 'DEPLOYED', secops: 'SECURE' };
 
 /** The stages that write code, whose runs' file counts size a cycle. */
-const WRITERS = new Set(['implementer', 'solidity-dev']);
+export const WRITERS = new Set(['implementer', 'solidity-dev']);
 
 /** The stages whose presence makes a cycle a designed one. */
 const DESIGNERS = new Set(['planner', 'architect']);

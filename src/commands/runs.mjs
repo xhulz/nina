@@ -17,7 +17,7 @@ import { costOf } from '../prices.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { amber, bold, dim, pink } from '../look.mjs';
 import { projectRecords } from '../store.mjs';
-import { cyclesOf, projectName } from './stats.mjs';
+import { WRITERS, cyclesOf, projectName } from './stats.mjs';
 
 /** What ended a cycle, in words. */
 const ENDS = {
@@ -55,7 +55,8 @@ export function summarize(cycle) {
     if (isLoopBack(r.verdict)) s.back += 1;
     stages.set(r.role, s);
   }
-  const files = rounds.filter((r) => typeof r.files_touched === 'number').map((r) => r.files_touched);
+  // The code a cycle wrote, as `stats` counts it: an architect's spec or a tester's report is not a write of code.
+  const files = rounds.filter((r) => WRITERS.has(r.role) && typeof r.files_touched === 'number').map((r) => r.files_touched);
   const peaks = rounds.filter((r) => typeof r.context_peak === 'number').map((r) => r.context_peak);
   return {
     start,
