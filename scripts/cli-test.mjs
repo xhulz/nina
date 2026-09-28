@@ -1153,6 +1153,11 @@ async function sound(fixture, core) {
     confounded && !confounded.comparable && confounded.on === 'claude-opus-5 · xhigh' && confounded.was === 'claude-sonnet-5 · xhigh',
     `learn: a lesson whose stage changed model across its date is not compared — got ${JSON.stringify(confounded)}`,
   );
+  // A dispatch days after the report is no telling of where the loop-back went; with two routes, it has no owner.
+  const twoRoutes = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2], ['architect', 2]])]])]]);
+  const late2 = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 5)];
+  const soon = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 9.9)];
+  expect(sentBackTo(late2, twoRoutes).size === 0 && sentBackTo(soon, twoRoutes).get(soon[0]) === 'architect', 'learn: a loop-back is owned by a dispatch soon after it, not one days later');
   // capture: the reviewer's rejections are the implementer's lessons to write.
   const rejected = [3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1)]);
   expect(

@@ -106,6 +106,9 @@ export async function lessons(target) {
   return out;
 }
 
+/** How long after a loop-back's report a dispatch can still be its fix. */
+const SENT_BACK_HOURS = 24;
+
 /**
  * The stage each loop-back sent work back to: the next one dispatched in its session, after it reported, among
  * the stages the project's graph routes that verdict of that stage to — or the only one it routes it to.
@@ -125,7 +128,10 @@ export function sentBackTo(records, loops) {
     const targets = loops.get(r.role)?.get(r.verdict);
     if (!targets || targets.size === 0) continue;
     const back = String(r.result_ts ?? r.ts);
-    const next = (bySession.get(r.session) ?? []).find((x) => String(x.ts) > back && targets.has(x.role));
+    // Within a day of the report: one project ran six weeks in one session, and the next architect there could be
+    // five days on, with no telling it was this loop-back's fix.
+    const within = (x) => Date.parse(x.ts) - Date.parse(back) <= SENT_BACK_HOURS * 3_600_000;
+    const next = (bySession.get(r.session) ?? []).find((x) => String(x.ts) > back && within(x) && targets.has(x.role));
     const to = next?.role ?? (targets.size === 1 ? [...targets.keys()][0] : null);
     if (to) out.set(r, to);
   }
