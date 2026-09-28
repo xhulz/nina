@@ -19,9 +19,9 @@
  */
 
 import { existsSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { HARNESS, readProfile } from '../paths.mjs';
+import { HARNESS, readProfile, surfacesIn } from '../paths.mjs';
 import { REQUIRES, SLOT, defaultedSlots, generatedNotice, layerRootFor } from './compose.mjs';
 import { filledSlots, owedDocuments } from './check.mjs';
 import { roleGates } from './pills.mjs';
@@ -82,9 +82,7 @@ export async function where(argv, ctx) {
     console.error(`  ${resolved.error}\n`);
     return 1;
   }
-  const available = (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  const available = (await surfacesIn(resolved.dir));
   const surfaces = (profile.surfaces ?? []).filter((s) => available.includes(s));
 
   console.log(`  ${posix(rel)}\n`);

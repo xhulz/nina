@@ -12,9 +12,8 @@
  *                              hook runs its script only once that script is composed
  */
 
-import { readdir } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { readProfile } from '../paths.mjs';
+import { resolve } from 'node:path';
+import { readProfile, surfacesIn } from '../paths.mjs';
 import { applyWiring, missingFragment, missingWiring, shippedScripts, staleHooks } from '../wiring.mjs';
 import { layerRootFor } from './compose.mjs';
 
@@ -37,9 +36,7 @@ export async function wire(argv, ctx) {
     console.error(`  ${resolved.error}\n`);
     return 2;
   }
-  const available = (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true }).catch(() => []))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  const available = (await surfacesIn(resolved.dir));
   const shipped = await shippedScripts(resolved.dir, (profile.surfaces ?? []).filter((s) => available.includes(s)));
 
   const missing = await missingWiring(target, shipped);
