@@ -37,8 +37,8 @@ The gate trusts the ids it is given: an issue renamed between rounds starts its 
 still goes to {{OWNER}} once it has gone round more than twice its cap with no approval between. It does
 not see a fix you make without a subagent — so keep your own count as well, gate or no gate. When you
 dispatch a second round on an edge, say "round 2 of max 2 on <edge>" in the dispatch itself, so the
-count is in the transcript and the next reader of it — you after a compaction, or `nina stats` — can see
-it.
+count is in the transcript for whoever reads it next. After a compaction the gate hands you its open loops
+and the documents to read again.
 
 ### Milestone gate
 

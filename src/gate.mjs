@@ -54,6 +54,7 @@
  * gate that could block work on its own crash would be worse than the loops it exists to stop.
  */
 
+import { spawnSync } from 'node:child_process';
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -432,7 +433,18 @@ export function replay(entries, loops, forward = new Map()) {
       }
     }
   });
-  return { effect: (to) => effect(to, entries.length), rounds: made };
+  // What is open when the replay ends: each loop with its rounds, the rounds the owner's replies gave it and the
+  // issues it counted by, and each loop-back no fix has acted on yet — what a compaction takes from the orchestrator.
+  const open = [...streak.entries()]
+    .filter(([key]) => key.split('|').length === 2)
+    .map(([key, s]) => {
+      const [source, token] = key.split('|');
+      const cap = Math.max(0, ...(loops.get(source)?.get(token)?.values() ?? []));
+      const issues = [...streak.keys()].filter((k) => k.startsWith(`${key}|`)).map((k) => k.slice(key.length + 1));
+      return { source, token, rounds: s.n, cap, given: grace.get(key) ?? 0, issues };
+    });
+  const waiting = [...pending.entries()].flatMap(([source, batch]) => batch.filter((v) => isLoopBack(v.verdict)).map((v) => ({ source, verdict: v.verdict, issues: v.issues ?? [] })));
+  return { effect: (to) => effect(to, entries.length), rounds: made, open, waiting };
 }
 
 /**
@@ -660,6 +672,40 @@ function onPre(input, project, path, at) {
   return confirmation(worst);
 }
 
+/**
+ * What the gate hands the orchestrator after its conversation was compacted: the loops still open and the
+ * loop-backs waiting on a fix, the latest dispatches, where the checkout stands, and the two documents to read
+ * again. The graph and the router are read once, at a session's start, and a compaction drops them with every
+ * report; the router told the orchestrator to write "round 2 of max 2" in a dispatch so "you after a
+ * compaction" could see it, and after a compaction it sees only a summary.
+ *
+ * @param {object} project - `loadProject`'s.
+ * @param {string} path - The session's ledger.
+ * @param {string} root - The project.
+ * @returns {object}
+ */
+function afterCompaction(project, path, root) {
+  const entries = readLedger(path);
+  const { open, waiting } = replay(entries, project.loops, project.forward);
+  const lines = ['The conversation was compacted. What the NINA loop gate kept of this session:'];
+  for (const l of open) {
+    lines.push(
+      `- open loop: ${l.source} ${l.token} — ${l.rounds} round(s), capped at ${l.cap}${l.given ? ` and ${l.given} more from the owner's replies` : ''}` +
+        (l.issues.length ? `, issues ${l.issues.join(', ')}` : ''),
+    );
+  }
+  for (const w of waiting) lines.push(`- waiting on a fix: ${w.source} ${w.verdict}${w.issues.length ? `, issues ${w.issues.join(', ')}` : ''}`);
+  if (open.length === 0 && waiting.length === 0) lines.push('- no loop is open');
+  const dispatched = entries.filter((e) => e.k === 'dispatch' && e.role).slice(-4);
+  if (dispatched.length) lines.push(`- the latest dispatches: ${dispatched.map((e) => e.role).join(', ')}, the newest at ${String(dispatched.at(-1).at ?? '').slice(11, 16)} UTC`);
+  const git = (...args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', timeout: 2000 }).stdout?.trim() ?? '';
+  const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
+  const last = git('log', '-1', '--format=%h %s');
+  if (branch) lines.push(`- the checkout: branch ${branch}${last ? `, last commit ${last.slice(0, 100)}` : ''}`);
+  lines.push('Before the next dispatch, read .claude/graph.md and .claude/router.md again: they were read at the start of the session, and are no longer in your context.');
+  return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: lines.join('\n') } };
+}
+
 /** Drops a project's ledgers nobody has written to in a month, and error lines older than a week. */
 function prune(root, now) {
   const dir = projectGateDir(root);
@@ -719,6 +765,8 @@ export function handle(input, { root, now = new Date(), pkg = PACKAGE }) {
         return null;
       case 'SubagentStop':
         return onStop(input, project, path, at);
+      case 'SessionStart':
+        return input.source === 'compact' ? afterCompaction(project, path, root) : null;
       case 'SubagentStart': {
         // Not the loop's business, but the one hook every stage passes through as it begins: its lessons. Claude
         // Code reads `additionalContext` from this event's `hookSpecificOutput` into the subagent's context as it

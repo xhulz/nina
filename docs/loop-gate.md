@@ -104,6 +104,15 @@ taken from the handback. A first version also sent back any report whose first l
 verdicts, it was dropped rather than fixed. A scheduled prompt (`/loop`) carries no such tag, so it gives
 the open loops a round like a person would; that is a known limit.
 
+Two more hooks go through the same script, because every stage and every session passes it. On
+`SubagentStart` it hands the stage its lessons (`docs/learning.md`). On `SessionStart` after a compaction it
+hands the orchestrator what the ledger kept of the session: each open loop with its rounds, its cap, the
+rounds the owner's replies gave it and its issues; each loop-back still waiting on a fix; the latest
+dispatches; the branch and the last commit; and the instruction to read `.claude/graph.md` and
+`.claude/router.md` again. Both are read once, at a session's start, and a compaction drops them with every
+report — the router had told the orchestrator to write each round's number into its dispatch so that it
+could see it after one, and after one it sees only a summary.
+
 It fails open, and only acts where the pinned version ships it: a composed file outlives the version that
 composed it, and wired hooks run whatever is on disk, so the script asks the pin. An error lets the call
 through and is logged, and `nina gate --selftest` — a detector in every project's `harness:check` —

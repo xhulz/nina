@@ -2948,6 +2948,16 @@ const dated = (date, status = 'active') =>
   expect(byHandAnswer?.hookSpecificOutput?.permissionDecision === 'ask', `gate --hook: prints the answer and nothing before it — got ${byHand.stdout.slice(0, 120)}`);
   expect(readLedger(ledgerPath(project, session)).filter((e) => e.k === 'ask').length === questions + 1, `gate: every question put to the owner is on the ledger — ${questions + 1} asked`);
 
+  // After a compaction the orchestrator has a summary where the graph, the router and every report were: the gate
+  // hands it back what it kept, and says to read the two documents again.
+  const compacted = hook('SessionStart', { source: 'compact' })?.hookSpecificOutput;
+  expect(
+    compacted?.hookEventName === 'SessionStart' && /open loop: reviewer REJECTED — \d+ round\(s\), capped at 2/.test(compacted.additionalContext) &&
+      compacted.additionalContext.includes('the latest dispatches:') && compacted.additionalContext.includes('read .claude/graph.md and .claude/router.md again'),
+    `gate: after a compaction it hands back the open loops and the documents to read again — got ${JSON.stringify(compacted)}`,
+  );
+  expect(hook('SessionStart', { source: 'startup' }) === null, 'gate: and says nothing at the start of a session');
+
   // A pin whose version ships no gate: the composed file may still be on disk, and it does nothing.
   const old = await scratch();
   await cp(project, old, { recursive: true });
