@@ -4484,6 +4484,37 @@ const dated = (date, status = 'active') =>
     !(await missingWiring(local, new Set(['scripts/loop-gate.mjs']))).some((w) => w.includes(' has no ')),
     'wiring: hooks in .claude/settings.local.json count as wired',
   );
+  // And wiring does not add them again: `wire --apply` read the shared file alone, and appended a second copy
+  // of every hook kept in the local one — each then ran twice.
+  const gateOnly = new Set(['scripts/loop-gate.mjs']);
+  const localApplied = await applyWiring(local, gateOnly);
+  expect(
+    !localApplied.done.some((d) => d.startsWith('.claude/settings.json')) && !existsSync(join(local, '.claude', 'settings.json')),
+    `wire --apply: adds nothing a local settings file already runs — got ${JSON.stringify(localApplied)}`,
+  );
+  // A group that runs the gate for fewer tools than it needs is widened, not joined by a second group.
+  const narrow = await scratch();
+  await mkdir(join(narrow, '.claude'), { recursive: true });
+  const narrowSettings = JSON.parse(settingsFile(gateOnly));
+  const pre = narrowSettings.hooks.PreToolUse.find((g) => g.hooks[0].command.includes('loop-gate'));
+  pre.matcher = 'Agent|Workflow';
+  await writeFile(join(narrow, '.claude', 'settings.json'), JSON.stringify(narrowSettings, null, 2));
+  await applyWiring(narrow, gateOnly);
+  const widened = JSON.parse(await readFile(join(narrow, '.claude', 'settings.json'), 'utf8')).hooks.PreToolUse.filter((g) => g.hooks.some((x) => x.command.includes('loop-gate')));
+  expect(
+    widened.length === 1 && ['Agent', 'Task', 'SendMessage', 'Workflow'].every((tool) => widened[0].matcher.split('|').includes(tool)),
+    `wire --apply: widens a narrower matcher it finds, keeping the tools the owner added — got ${JSON.stringify(widened)}`,
+  );
+  // One in the local file is left for its owner to widen, and said so, rather than doubled in the shared one.
+  const narrowLocal = await scratch();
+  await mkdir(join(narrowLocal, '.claude'), { recursive: true });
+  await writeFile(join(narrowLocal, '.claude', 'settings.local.json'), JSON.stringify(narrowSettings, null, 2));
+  const leftLocal = await applyWiring(narrowLocal, gateOnly);
+  const sharedGate = JSON.parse(await readFile(join(narrowLocal, '.claude', 'settings.json'), 'utf8').catch(() => '{}')).hooks?.PreToolUse ?? [];
+  expect(
+    leftLocal.problems.some((p) => p.includes('settings.local.json') && p.includes('widen')) && !sharedGate.some((g) => g.hooks.some((x) => x.command.includes('loop-gate'))),
+    `wire --apply: a narrower group in the local file is named, not doubled — got ${JSON.stringify(leftLocal)}`,
+  );
 
   // An old command, exactly as init or wire wrote it, is updated to say when its script cannot start;
   // a customised one is left alone.

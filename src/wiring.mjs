@@ -205,21 +205,57 @@ function groupsFor(hooks, event) {
   return Array.isArray(hooks[event]) ? hooks[event] : null;
 }
 
+/** Whether a settings group runs a hook's script, recognised by what the command runs, not its exact text. */
+function runs(g, h) {
+  return Boolean(g) && typeof g === 'object' && Array.isArray(g.hooks) && g.hooks.some((x) => {
+    const cmd = String(x?.command ?? '');
+    return cmd.includes(h.script) && (!h.mode || cmd.includes(h.mode));
+  });
+}
+
 /**
  * Whether settings already run a hook. Recognised by what the command runs, not by its exact text —
  * a project may have written its own — and by a matcher that reaches every tool the hook needs.
  */
 function covered(hooks, h) {
-  const groups = groupsFor(hooks, h.event) ?? [];
   const need = h.matcher ? h.matcher.split('|') : [];
-  return groups.some((g) => {
-    if (!g || typeof g !== 'object') return false;
-    if (!need.every((tool) => matcherReaches(g.matcher, tool))) return false;
-    return Array.isArray(g.hooks) && g.hooks.some((x) => {
-      const cmd = String(x?.command ?? '');
-      return cmd.includes(h.script) && (!h.mode || cmd.includes(h.mode));
-    });
-  });
+  return (groupsFor(hooks, h.event) ?? []).some((g) => runs(g, h) && need.every((tool) => matcherReaches(g.matcher, tool)));
+}
+
+/**
+ * The hooks a project runs, from both settings files merged by event — Claude Code runs both, so a hook
+ * kept in the local file counts. Every reader asks this one: `wire` used to read the shared file alone,
+ * and appended a second copy of each hook a project kept in its local file, which then ran twice.
+ *
+ * @param {string} target - The project directory.
+ * @param {(event: string) => boolean} [wanted] - Events whose malformed lists are worth a problem.
+ * @returns {Promise<{merged: Record<string, object[]>, problems: string[]}>} Each merged group says `from` which file.
+ */
+async function projectHooks(target, wanted = () => false) {
+  const merged = {};
+  const problems = [];
+  for (const rel of SETTINGS_FILES) {
+    const path = join(target, rel);
+    if (!existsSync(path)) continue;
+    let settings;
+    try {
+      settings = JSON.parse(await readFile(path, 'utf8'));
+    } catch (error) {
+      problems.push(`${rel} is not valid JSON — ${error.message}`);
+      continue;
+    }
+    const shape = settings?.hooks;
+    if (shape === undefined || shape === null) continue;
+    if (typeof shape !== 'object' || Array.isArray(shape)) {
+      problems.push(`${rel} has a "hooks" that is not an object of event lists — no hook in it can run`);
+      continue;
+    }
+    for (const [event, groups] of Object.entries(shape)) {
+      if (Array.isArray(groups)) (merged[event] ??= []).push(...groups.map((g) => (g && typeof g === 'object' ? { ...g, from: rel } : g)));
+      else if (wanted(event)) problems.push(`${rel}'s hooks.${event} is not a list — no hook in it can run`);
+    }
+  }
+  return { merged, problems };
 }
 
 /** The command settings run for a hook, when they run one — the selftest runs it the same way. */
@@ -299,28 +335,8 @@ export async function missingWiring(target, shipped) {
   }
   const wanted = HOOKS.filter((h) => shipped.has(h.script));
   if (wanted.length === 0) return out;
-  const merged = {};
-  for (const rel of SETTINGS_FILES) {
-    const path = join(target, rel);
-    if (!existsSync(path)) continue;
-    let settings;
-    try {
-      settings = JSON.parse(await readFile(path, 'utf8'));
-    } catch (error) {
-      out.push(`${rel} is not valid JSON — ${error.message}`);
-      continue;
-    }
-    const shape = settings?.hooks;
-    if (shape === undefined || shape === null) continue;
-    if (typeof shape !== 'object' || Array.isArray(shape)) {
-      out.push(`${rel} has a "hooks" that is not an object of event lists — no hook in it can run`);
-      continue;
-    }
-    for (const [event, groups] of Object.entries(shape)) {
-      if (Array.isArray(groups)) (merged[event] ??= []).push(...groups);
-      else if (wanted.some((h) => h.event === event)) out.push(`${rel}'s hooks.${event} is not a list — no hook in it can run`);
-    }
-  }
+  const { merged, problems } = await projectHooks(target, (event) => wanted.some((h) => h.event === event));
+  out.push(...problems);
   for (const h of wanted) {
     if (covered(merged, h)) continue;
     out.push(
@@ -359,13 +375,9 @@ export async function staleHooks(target, shipped) {
  * @returns {Promise<string|null>} Null when nothing is missing.
  */
 export async function missingFragment(target, shipped) {
-  let settings = null;
-  try {
-    settings = JSON.parse(await readFile(join(target, '.claude', 'settings.json'), 'utf8'));
-  } catch {
-    // Absent or unreadable: everything is missing, and `missingWiring` says which.
-  }
-  const lacking = HOOKS.filter((h) => shipped.has(h.script) && !covered(settings?.hooks, h));
+  // Absent or unreadable files hold nothing: everything they would have held is missing, and `missingWiring` says why.
+  const { merged } = await projectHooks(target);
+  const lacking = HOOKS.filter((h) => shipped.has(h.script) && !covered(merged, h));
   return lacking.length === 0 ? null : JSON.stringify({ hooks: settingsHooks(lacking) }, null, 2);
 }
 
@@ -405,10 +417,25 @@ export async function applyWiring(target, shipped, { settings: editSettings = tr
     if (readable) {
       const hooks = settings.hooks ?? {};
       const added = [];
+      const { merged } = await projectHooks(target);
       for (const h of HOOKS.filter((h) => shipped.has(h.script))) {
-        if (covered(hooks, h)) continue;
+        if (covered(merged, h)) continue;
+        const named = `${h.event}${h.matcher ? ` (${h.matcher})` : ''} → ${h.script}${h.mode ? ` ${h.mode}` : ''}`;
+        // A group that already runs the script for fewer tools is widened, not joined by a second one: both
+        // would run on the tools they share, and the gate would count each of those events twice.
+        const narrower = (merged[h.event] ?? []).find((g) => runs(g, h));
+        if (narrower) {
+          const own = (hooks[h.event] ?? []).find((g) => runs(g, h));
+          if (narrower.from === '.claude/settings.json' && own && /^[A-Za-z0-9_|]*$/.test(own.matcher ?? '')) {
+            own.matcher = [...new Set([...String(own.matcher ?? '').split('|').filter(Boolean), ...h.matcher.split('|')])].join('|');
+            added.push(`${named} (matcher widened to ${own.matcher})`);
+          } else {
+            problems.push(`${narrower.from} runs ${h.script} for "${narrower.matcher}", which does not reach every one of ${h.matcher} — widen that matcher there; a second group would run it twice`);
+          }
+          continue;
+        }
         (hooks[h.event] ??= []).push(group(h));
-        added.push(`${h.event}${h.matcher ? ` (${h.matcher})` : ''} → ${h.script}${h.mode ? ` ${h.mode}` : ''}`);
+        added.push(named);
       }
       // An old command, exactly as it was written, learns to say when its script cannot start, and how to
       // install NINA as it is installed now.
