@@ -487,13 +487,9 @@ function recipient(entries, project, to) {
   return { agent, role };
 }
 
-/** Where this agent's current completion starts in the ledger: after its latest launch. */
+/** Where this agent's current completion starts in the ledger: after its latest launch. A `pre` names no agent. */
 function currentLaunch(entries, agent) {
-  let at = -1;
-  entries.forEach((e, i) => {
-    if ((e.k === 'dispatch' || e.k === 'pre') && e.agent === agent) at = i;
-  });
-  return at;
+  return entries.findLastIndex((e) => e.k === 'dispatch' && e.agent === agent);
 }
 
 /**
