@@ -1346,6 +1346,32 @@ async function sound(fixture, core) {
   else process.env.NINA_DATA = before;
 }
 
+// ─── learn: a rule that graduated and did not hold goes back to the harness ─────────────
+{
+  // Retired, a pill's count was read by nothing: one project's lesson graduated twice and came back a third time,
+  // and two retired pills went from 3 to 8 and from 5 to 11 with nobody told.
+  const dir = await scratch();
+  const pinned = (await readdir(join(ROOT, 'releases'))).sort(byVersion).at(-1);
+  await mkdir(join(dir, '.nina', 'requests'), { recursive: true });
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ core: pinned, surfaces: [], vocabulary: {} }));
+  await mkdir(join(dir, '.claude', 'pills', 'retired', 'reviewer'), { recursive: true });
+  await writeFile(join(dir, '.claude', 'pills', 'retired', 'reviewer', 'mutation.md'), '---\napplies_to: [reviewer]\nstatus: retired\ndate: 2026-09-01\nlast_seen: 2026-09-20\noccurrences: 5\n---\n**Rule:** run the mutation.\n');
+  const closed = '2026-09-05-reviewer__mutation.md';
+  await writeFile(
+    join(dir, '.nina', 'requests', closed),
+    '---\nkind: harness-request\nstatus: closed\nanswered_in: 0.28.14\nrule_in: core/tree/.claude/agents/implementer.md\ndate: 2026-09-05\ncore: 0.28.13\ntarget: core\npill: .claude/pills/reviewer/mutation.md\noccurrences: 3\n---\n',
+  );
+  const reopened = run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } });
+  const filedNow = (await readdir(join(dir, '.nina', 'requests'))).filter((f) => f !== closed);
+  const request = filedNow.length === 1 ? await readFile(join(dir, '.nina', 'requests', filedNow[0]), 'utf8') : '';
+  expect(
+    reopened.status === 1 && reopened.out.includes('came back 2 time(s) after its rule shipped in 0.28.14') && request.includes(`reopens: ${closed}`) &&
+      request.includes('pill: .claude/pills/reviewer/mutation.md') && request.includes('the rule did not hold here'),
+    `learn: a lesson that came back after its rule shipped reopens the request, where it was learned — got ${reopened.out}\n${request}`,
+  );
+  expect(run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } }).status === 0, 'learn: and once reopened, it is not sent again');
+}
+
 // ─── snapshot: re-reading history never degrades it ─────────────────────────────────────
 {
   // The measurement store is the only copy of history older than Claude Code's transcript
