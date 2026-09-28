@@ -21,6 +21,7 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
+import { asRead } from '../src/store.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
 import { askOrder } from '../src/commands/init.mjs';
@@ -1855,8 +1856,8 @@ const dated = (date, status = 'active') =>
   await history(snapshots, dir.replace(/\//g, '-'), [
     ...many('dba', 1, 30, 'scan'), // a gate that almost never stops anything, and never said so itself
     ...many('reviewer', 9, 30), // a gate that does
-    ...many('architect', 0, 30), // a producer: zero by nature, not by failure
-    ...many('secops', 0, 5), // a gate, but too few verdicts to read a rate from
+    ...many('architect', 0, 30).map((r) => ({ ...r, verdict: 'SPEC-READY' })), // a producer: zero by nature, not by failure
+    ...many('secops', 0, 5).map((r) => ({ ...r, verdict: 'SECURE' })), // a gate, but too few verdicts to read a rate from
     // Runs that declared nothing readable: the rate cannot see them, so the report must say so.
     ...Array.from({ length: 10 }, (_, i) => ({ role: 'dba', verdict: 'UNCLEAR', ts: day(i), source: 'none' })),
   ]);
@@ -1893,6 +1894,28 @@ const dated = (date, status = 'active') =>
   const wrote = join(await scratch(), 'snaps');
   await history(wrote, '-writes', many('solidity-dev', 0, 10));
   expect(run(['stats', '--snapshots', wrote]).out.includes('solidity-dev'), 'stats: and ten solidity-dev dispatches make a harness project');
+}
+
+// ─── the store: one reader, and a verdict a role cannot give is not read as one ─────────
+{
+  // Records captured before the classifier knew the role read a dba's report as `PASS`, qa's token: 21 of
+  // them made a gate that had stopped one change in fourteen look like one that stopped nothing.
+  const dir = await composed('acme');
+  const snapshots = join(await scratch(), 'snaps');
+  const day = (i) => `2026-03-${String((i % 28) + 1).padStart(2, '0')}`;
+  await history(snapshots, dir.replace(/\//g, '-'), [
+    ...Array.from({ length: 21 }, (_, i) => ({ role: 'dba', verdict: 'PASS', ts: day(i), source: 'scan' })),
+    ...Array.from({ length: 14 }, (_, i) => ({ role: 'dba', verdict: i === 0 ? 'REJECTED' : 'APPROVED', ts: day(i) })),
+    ...Array.from({ length: 30 }, (_, i) => ({ role: 'reviewer', verdict: i < 9 ? 'REJECTED' : 'APPROVED', ts: day(i) })),
+  ]);
+  const { out } = run(['stats', '--snapshots', snapshots, '--all'], { loud: true });
+  expect(!/dba: .*gates anything/.test(out), `stats: a verdict outside the role's own tokens is not read — got ${out}`);
+  expect(asRead({ role: 'dba', verdict: 'PASS' }).verdict === 'UNCLEAR' && asRead({ role: 'qa', verdict: 'PASS' }).verdict === 'PASS', 'store: a verdict is read against the vocabulary of the role that gave it');
+
+  // `--project` means one thing in every report: a directory is that project.
+  await history(snapshotsDir(), slugFor(dir), [{ role: 'reviewer', verdict: 'REJECTED', ts: '2026-03-01' }]);
+  const byDir = run(['stats', '--project', dir], { loud: true });
+  expect(byDir.status === 0 && byDir.out.includes('reviewer'), `stats: --project takes a project's directory, as every other report does — got ${byDir.out}`);
 }
 
 
@@ -3447,7 +3470,8 @@ const dated = (date, status = 'active') =>
   // stats prices them when it reads them.
   const snapshots = join(await scratch(), 'snaps');
   await mkdir(snapshots, { recursive: true });
-  const row = (role, output, model = 'claude-sonnet-5') => JSON.stringify({ project: '-x', dispatch_id: `t${Math.random()}`, ts: '2026-09-24T10:00:00.000Z', role, verdict: 'APPROVED', verdict_source: 'declared', tokens: { input: 0, output, write_5m: 0, write_1h: 0, read: 0 }, usage_model: model });
+  const own = { reviewer: 'APPROVED', qa: 'PASS', architect: 'SPEC-READY' };
+  const row = (role, output, model = 'claude-sonnet-5') => JSON.stringify({ project: '-x', dispatch_id: `t${Math.random()}`, ts: '2026-09-24T10:00:00.000Z', role, verdict: own[role], verdict_source: 'declared', tokens: { input: 0, output, write_5m: 0, write_1h: 0, read: 0 }, usage_model: model });
   await writeFile(join(snapshots, '-x.jsonl'), `${[row('reviewer', 5e5), row('reviewer', 1.5e6), row('qa', 5e5), row('qa', 1e6, 'claude-opus-4-1')].join('\n')}\n`);
   const { out } = run(['stats', '--snapshots', snapshots, '--all'], { loud: true });
   // Two reviewer runs of $5 and $15: the median is the upper middle, as the duration column's is.

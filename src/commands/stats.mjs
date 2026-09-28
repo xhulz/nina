@@ -14,11 +14,11 @@
 import { amber, bar, bold, dim, heading, note, pink, stacked } from '../look.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { closeSync, createReadStream, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { ROLE_TOKENS, isLoopBack, runOf, transcriptsOf } from '../transcripts.mjs';
+import { namesFor, readStoreFile } from '../store.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
 import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
@@ -56,27 +56,16 @@ const PIPELINE_ROLES = new Set(Object.keys(ROLE_TOKENS));
  * Loads snapshot records, optionally filtered.
  *
  * @param {string} dir - Snapshot directory.
- * @param {{since: string|null, project: string|null}} opts - Filters.
+ * @param {{since: string|null, project: string|null}} opts - Filters; `project` as every report reads it.
  * @returns {Promise<object[]>} The matching records.
  */
 async function load(dir, opts) {
-  const files = (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.jsonl'));
-  const out = [];
-  for (const file of files) {
-    if (opts.project && !file.includes(opts.project)) continue;
-    const rl = createInterface({ input: createReadStream(join(dir, file)), crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const r = JSON.parse(line);
-        if (opts.since && String(r.ts).slice(0, 10) < opts.since) continue;
-        out.push(r);
-      } catch {
-        /* skip */
-      }
-    }
-  }
-  return out;
+  const names = opts.project
+    ? namesFor(opts.project, dir)
+    : (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.jsonl')).map((f) => f.slice(0, -'.jsonl'.length));
+  return names
+    .flatMap((name) => readStoreFile(join(dir, `${name}.jsonl`)))
+    .filter((r) => !opts.since || String(r.ts).slice(0, 10) >= opts.since);
 }
 
 

@@ -16,7 +16,7 @@ import { HARNESS } from '../paths.mjs';
 import { costOf } from '../prices.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { amber, bold, dim, pink } from '../look.mjs';
-import { storedRecords } from './snapshot.mjs';
+import { projectRecords } from '../store.mjs';
 import { cyclesOf, projectName } from './stats.mjs';
 
 /** What ended a cycle, in words. */
@@ -92,7 +92,7 @@ export async function runs(argv) {
   }
   const since = arg('--since');
   const last = Math.max(1, Number(arg('--last') ?? 10) || 10);
-  const records = (storedRecords(dir) ?? []).filter((r) => r.status !== 'denied' && (!since || String(r.ts).slice(0, 10) >= since));
+  const records = (projectRecords(dir) ?? []).filter((r) => r.status !== 'denied' && (!since || String(r.ts).slice(0, 10) >= since));
   if (records.length === 0) {
     console.error('  no measured history for this project yet — `nina snapshot` captures it\n');
     return 1;

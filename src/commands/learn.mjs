@@ -26,6 +26,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { HARNESS, legacyHint, slugFor, snapshotsDir } from '../paths.mjs';
+import { projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { REQUIRES, byVersion, layerRootFor } from './compose.mjs';
 import { GRADUATION_AT, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
@@ -64,19 +65,7 @@ const readable = (v) => Boolean(v) && v !== 'UNCLEAR' && v !== 'NONE';
  * @returns {Promise<object[]>}
  */
 async function recorded(target) {
-  const file = join(snapshotsDir(), `${slugFor(target)}.jsonl`);
-  const text = await readFile(file, 'utf8').catch(() => '');
-  return text
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => {
-      try {
-        return JSON.parse(l);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
+  return projectRecords(target) ?? [];
 }
 
 /**

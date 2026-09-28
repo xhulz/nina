@@ -18,7 +18,7 @@ import { TERMINALS, parseGraph } from '../graph.mjs';
 import { required } from '../tools.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
 import { frontmatter } from './pills.mjs';
-import { storedRecords } from './snapshot.mjs';
+import { projectRecords } from '../store.mjs';
 
 /** A stage line under "## Stages": "- `name` — what it does". */
 const STAGE_LINE = /^- `([a-z][a-z-]*)` — (.*)$/;
@@ -289,7 +289,7 @@ export async function pipeline(argv) {
     specs.set(file.replace(/\.md$/, ''), readFileSync(join(agentsDir, file), 'utf8'));
   }
   const since = arg('--since') || new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const runs = storedRecords(dir);
+  const runs = projectRecords(dir);
   const history = runs ? historyOf(runs, since) : null;
   const stages = [...graph.stages].filter((s) => covered.has(s));
   const col = Math.max(...stages.map((s) => s.length), 10) + 2;
