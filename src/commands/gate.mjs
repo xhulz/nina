@@ -102,7 +102,8 @@ const LIVE_SAMPLE = 3;
  *
  * @param {string} target - The project directory.
  * @param {{graph: {stages: Set<string>}, tokens: Map<string, Set<string>>}} project - Its composed graph.
- * @returns {string|null}
+ * @returns {{problem: string}|{compared: number}|{unasked: string}} What the comparison found, how many reports it
+ *   compared, or why there was nothing to compare yet — which the selftest used to report as a comparison that passed.
  */
 function liveness(target, project) {
   const dir = projectGateDir(target);
@@ -110,7 +111,7 @@ function liveness(target, project) {
   try {
     since = readFileSync(join(dir, SINCE), 'utf8').trim();
   } catch {
-    return null;
+    return { unasked: 'no session has been measured since the gate was first asked' };
   }
   const now = Date.now();
   const reports = (projectRecords(target) ?? []).filter(
@@ -128,18 +129,20 @@ function liveness(target, project) {
     .filter((rs) => rs.length >= LIVE_SAMPLE)
     .sort((a, b) => String(a.map((r) => r.result_ts).sort().at(-1)).localeCompare(String(b.map((r) => r.result_ts).sort().at(-1))))
     .at(-1);
-  if (!last) return null;
+  if (!last) return { unasked: `no session since then holds ${LIVE_SAMPLE} reports with a verdict line to compare` };
   const path = ledgerPath(target, last[0].session);
   const entries = readLedger(path);
   // A ledger too large to read whole is read from its tail; what came before the tail is not asked about.
   const from = entries.length > 0 && statSync(path).size > LEDGER_TAIL ? String(entries[0].at) : '';
   const shown = last.filter((r) => String(r.result_ts) >= from).length;
   const recorded = entries.filter((e) => e.k === 'verdict').length;
-  if (shown < LIVE_SAMPLE || recorded * 2 >= shown) return null;
-  return (
-    `in session ${last[0].session.slice(0, 8)}, the transcripts show ${shown} report(s) with a verdict line and the gate recorded ${recorded}: ` +
-    `Claude Code may have changed what it sends to the hooks, and a loop the gate does not see is not capped (${path})`
-  );
+  if (shown < LIVE_SAMPLE) return { unasked: `the newest measured session holds ${shown} report(s) with a verdict line, too few to compare` };
+  if (recorded * 2 >= shown) return { compared: shown };
+  return {
+    problem:
+      `in session ${last[0].session.slice(0, 8)}, the transcripts show ${shown} report(s) with a verdict line and the gate recorded ${recorded}: ` +
+      `Claude Code may have changed what it sends to the hooks, and a loop the gate does not see is not capped (${path})`,
+  };
 }
 
 /**
@@ -299,11 +302,14 @@ export async function gate(argv, ctx) {
   // A gate that is not wired sees nothing, and says so above; asked whether it saw the pipeline, it would
   // say the same thing twice.
   const project = composed && unwired.length === 0 ? loadProject(target) : null;
-  const blind = project ? liveness(target, project) : null;
-  if (blind) problems.push(blind);
+  const seen = project ? liveness(target, project) : null;
+  if (seen?.problem) problems.push(seen.problem);
 
   if (problems.length === 0) {
-    console.log(`  wired, writable, no new failure, a dry run through the hook command sent the round past a cap to the owner, and it recorded the reports the transcripts show — ledgers in ${projectGateDir(target)}`);
+    const compared = seen?.compared
+      ? `and it recorded the ${seen.compared} reports the transcripts show`
+      : `and whether it records what the transcripts show is not asked yet — ${seen?.unasked ?? 'nothing to compare'}`;
+    console.log(`  wired, writable, no new failure, a dry run through the hook command sent the round past a cap to the owner, ${compared} — ledgers in ${projectGateDir(target)}`);
     console.log('gate: current');
     return 0;
   }

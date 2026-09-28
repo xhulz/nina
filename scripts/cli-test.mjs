@@ -2974,6 +2974,8 @@ const dated = (date, status = 'active') =>
 
   const self = run(['gate', '--selftest', '--project', bed], { loud: true });
   expect(self.status === 0 && self.out.includes('gate: current'), `gate: the selftest passes on a wired bed — got ${self.status}\n${self.out}`);
+  // With nothing measured to compare, it does not claim a comparison it did not make.
+  expect(self.out.includes('is not asked yet') && !self.out.includes('it recorded the'), `gate: says when there was nothing to compare, rather than that it compared — got ${self.out}`);
   const learned = run(['learn', '--project', bed], { loud: true });
   expect(
     /loops\s+2 round\(s\) on capped edges in 1 session\(s\).*the longest 2 · 2 sent to you at the cap/.test(learned.out),
@@ -3037,7 +3039,8 @@ const dated = (date, status = 'active') =>
   expect(blind.status === 1 && blind.out.includes('the transcripts show 4 report(s) with a verdict line and the gate recorded 0'), `gate: a gate that recorded none of the reports the transcripts show is a finding — got ${blind.out}`);
   const ledgerFile = join(gateData, 'sess-live.jsonl');
   await writeFile(ledgerFile, `${[0, 1, 2, 3].map((i) => JSON.stringify({ k: 'verdict', at: `2026-09-25T10:0${i}:30.000Z`, agent: `a${i}`, role: 'reviewer', verdict: 'APPROVED', declared: true })).join('\n')}\n`);
-  expect(run(['gate', '--selftest', '--project', bed]).status === 0, 'gate: and one that recorded them is not');
+  const live = run(['gate', '--selftest', '--project', bed], { loud: true });
+  expect(live.status === 0 && /it recorded the \d+ reports the transcripts show/.test(live.out), `gate: and one that recorded them is not, and says it compared — got ${live.out}`);
   await rm(ledgerFile);
   // The session asked about is the last with enough reports to say something, not the last of all.
   const later = JSON.stringify({ ...JSON.parse(reported(1)[0]), dispatch_id: 'toolu_later', session: 'sess-later', ts: '2026-09-25T12:00:00.000Z', result_ts: '2026-09-25T12:00:30.000Z' });
