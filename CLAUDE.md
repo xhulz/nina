@@ -88,9 +88,10 @@ must not break.
   transcript when it is sent and never kept here.
 - **Nothing here bills per token by accident.** `nina eval` runs on the Claude Code login and strips every
   billing credential from its child unless `--api` asks for it.
-- **The suites are `node scripts/cli-test.mjs`, `node scripts/compose-test.mjs` and
-  `node scripts/harness-check.mjs`** — each exit code read directly, never through a pipe, where the status
-  is the last command's. A rule change is proven by a mutation: undo the rule, and some test must fail.
+- **The suites are `node scripts/cli-test.mjs` and `node scripts/compose-test.mjs`** — each exit code read
+  directly, never through a pipe, where the status is the last command's. A rule change is proven by a
+  mutation: undo the rule, and some test must fail. `node scripts/harness-check.mjs` is the inbox, not a
+  suite: the requests projects filed, run by the Stop hook every turn, and red there is a request waiting.
 
 ## Before you change something, read
 
