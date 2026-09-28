@@ -5,10 +5,10 @@
  * can be judged by whether it ever stops anything rather than by whether it is in the
  * table.
  *
- * It also reports the one rule that governs the harness's own improvement. The router
- * writes a pill on every loop-back, and nothing ever checked whether that happened — so
- * the rule ran at a fraction of its declared rate for months, invisibly, while the
- * loop-backs it was supposed to harvest were being counted right here.
+ * It also reports the one rule that governs the harness's own improvement: every loop-back is looked
+ * at for a lesson. Nothing ever checked whether that happened — the rule ran at a fraction of its
+ * declared rate for months, invisibly, while the loop-backs it was supposed to harvest were being
+ * counted right here.
  */
 
 import { amber, bar, bold, dim, heading, note, pink, stacked } from '../look.mjs';

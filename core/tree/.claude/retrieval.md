@@ -11,7 +11,7 @@ This is the closest thing the harness has to RAG for development. Treat it as au
 
 ## Pills (per-agent behavioral corrections — loaded by the agent itself)
 
-`.claude/pills/<role>/*.md` + `.claude/pills/shared/*.md` hold hard-won corrections from past mistakes (a loop-back, a rejected diff, a blocked milestone, a user correction). **Each subagent reads its own pills before acting** (the instruction is in every `.claude/agents/<role>.md`). Distinct from the surfaces above: pills capture *agent behavior* ("the implementer did X wrong"), not codebase conventions (→ `patterns.md`) or library premises (→ `integrations/`). The orchestrator writes a pill on every loop-back or user correction. Graduation: when a pill becomes law, move it to `patterns.md`/`CLAUDE.md` and mark the pill `retired`. Format + guardrails: `.claude/pills/README.md`.
+`.claude/pills/<role>/*.md` + `.claude/pills/shared/*.md` hold hard-won corrections from past mistakes (a loop-back, a rejected diff, a blocked milestone, a user correction). **Each subagent reads its own pills before acting** (the instruction is in every `.claude/agents/<role>.md`). Distinct from the surfaces above: pills capture *agent behavior* ("the implementer did X wrong"), not codebase conventions (→ `patterns.md`) or library premises (→ `integrations/`). The orchestrator looks at every loop-back and user correction for a lesson, and writes a pill when it would happen again. Graduation: a lesson learned three times goes to the harness as a request, and the upgrade to the release that answers it retires the pill. Format + guardrails: `.claude/pills/README.md`.
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot project.1 integration-doc-list -->
 <!-- nina:slot integrations.2 -->

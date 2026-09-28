@@ -81,10 +81,11 @@ The two are not interchangeable, and that is why they sit in different places:
    *Graduation* below.
 2. **Staleness.** A pill that cites code rots like any note. `date` flags age and `citations` make
    the rot findable; **verify before trusting**, and prune or update when you next touch the topic.
-3. **Defined authoring trigger.** A pill is written on **every loop-back** (qa → implementer, a
-   reviewer rejection, a mandatory gate blocking) **or user correction**. The orchestrator writes it
-   as a named pipeline step — not "when someone remembers". If the lesson already has a pill, do not
-   write a second one: increment that pill's `occurrences` instead.
+3. **Defined authoring trigger.** Every loop-back (qa → implementer, a reviewer rejection, a mandatory
+   gate blocking) **and every user correction** is looked at for a lesson, and a pill is written when the
+   mistake would happen again — `.claude/router.md` § *Look at every loop-back for a lesson*. The lesson
+   belongs to the stage whose work was sent back. If it already has a pill, do not write a second one:
+   increment that pill's `occurrences` and set `last_seen`.
 4. **Trigger-targeted, not blanket.** The agent reads its pills but **applies only those whose
    `trigger` matches the current task**. This is what lets the corpus grow without drowning the agent.
 
