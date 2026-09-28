@@ -315,9 +315,12 @@ export function verified(records, known, { owners = new Map(), targets = null } 
  * nothing read a retired pill's count — one project's lesson graduated twice and was learned a third time,
  * while two retired pills went from 3 to 8 and from 5 to 11 without a word to anyone.
  *
+ * Each is `due` — it reopens the request — once it came back as many times as a lesson takes to graduate
+ * ({@link CAPTURE_AT}): one recurrence may be noise, and a rule is judged failed on the evidence that made it.
+ *
  * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills, retired ones included.
  * @param {Awaited<ReturnType<typeof filedRequests>>} filed - Its requests.
- * @returns {{lesson: object, request: object, recurred: number}[]}
+ * @returns {{lesson: object, request: object, recurred: number, due: boolean}[]}
  */
 export function relapsed(known, filed) {
   // A pill with a request still open is waiting on the harness, whatever the dates say. Of the closed ones, the
@@ -335,7 +338,10 @@ export function relapsed(known, filed) {
     const shelved = pill.replace(/^\.claude\/pills\//, `.claude/pills/${RETIRED}/`);
     const lesson = known.find((l) => l.rel === pill || l.rel === shelved);
     const then = Number(request.occurrences);
-    if (lesson && Number.isFinite(then) && lesson.occurrences > then) out.push({ lesson, request, recurred: lesson.occurrences - then });
+    if (lesson && Number.isFinite(then) && lesson.occurrences > then) {
+      const recurred = lesson.occurrences - then;
+      out.push({ lesson, request, recurred, due: recurred >= CAPTURE_AT });
+    }
   }
   return out;
 }
@@ -752,7 +758,7 @@ export async function learn(argv, ctx) {
     // "write the lesson" when the lesson was written three times over and only needed sending.
     const sent = [];
     // A lesson that came back after its rule shipped goes back to the harness the way it went the first time.
-    const outgoing = [...owed.map((lesson) => ({ lesson })), ...relapsed(known, filed).map(({ lesson, request, recurred }) => ({ lesson, reopens: request, recurred }))];
+    const outgoing = [...owed.map((lesson) => ({ lesson })), ...relapsed(known, filed).filter((r) => r.due).map(({ lesson, request, recurred }) => ({ lesson, reopens: request, recurred }))];
     const stuck = outgoing
       .filter((o) => o.lesson.roles.length === 0)
       .map((o) => ({ ...o, why: 'names no role in applies_to, so no layer can take it', fix: 'fix its frontmatter — `nina pills` says what is wrong' }));
@@ -847,7 +853,9 @@ export async function learn(argv, ctx) {
   for (const l of ready.filter((l) => owed.includes(l))) console.log(`            not sent yet: ${l.rel} — the next \`harness:check\` sends it`);
   for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
   for (const r of relapsed(known, filed)) {
-    console.log(`            ✗ ${r.lesson.rel} came back ${r.recurred} time(s) after its rule shipped in ${r.request.answered_in || 'a release'} — the rule did not hold; \`harness:check\` reopens it`);
+    const shipped = `came back ${r.recurred} time(s) after its rule shipped in ${r.request.answered_in || 'a release'}`;
+    if (r.due) console.log(`            ✗ ${r.lesson.rel} ${shipped} — the rule did not hold; \`harness:check\` reopens it`);
+    else console.log(`            · ${r.lesson.rel} ${shipped} — watched; it reopens at ${CAPTURE_AT}`);
   }
   const measured = checks.filter((c) => c.comparable);
   const unmeasured = checks.filter((c) => !c.comparable);
