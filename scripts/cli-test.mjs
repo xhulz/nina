@@ -2355,6 +2355,24 @@ const dated = (date, status = 'active') =>
   await release(['2.0.0'], { root: bare });
   console.log = log;
   expect(/package\.json not updated/.test(said), `release: a missing version field must be reported — got ${said.trim()}`);
+
+  // A cut below the newest release moved the package's version backwards, and init would still pin the newest.
+  const err = console.error;
+  let refused = '';
+  console.error = (m) => { refused += `${m}\n`; };
+  console.log = () => {};
+  const below = await release(['1.2.0'], { root: repo });
+  console.error = err;
+  console.log = log;
+  expect(
+    below === 1 && refused.includes('1.2.3 is the newest') && !existsSync(join(repo, 'releases', '1.2.0')) && JSON.parse(await readFile(join(repo, 'package.json'), 'utf8')).version === '1.2.3',
+    `release: a version below the newest is refused, and nothing moves — got ${below}: ${refused.trim()}`,
+  );
+  // A release lands whole: it is frozen beside the releases and moved in, and nothing of the copy stays behind.
+  expect(
+    existsSync(join(repo, 'releases', '1.2.3', 'core', 'tree', 'CLAUDE.md')) && !(await readdir(repo)).some((f) => f.includes('.partial')),
+    'release: the frozen copy is moved in whole, leaving no partial copy behind',
+  );
 }
 
 

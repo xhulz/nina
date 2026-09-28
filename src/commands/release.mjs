@@ -9,9 +9,10 @@
  * Releases are never rewritten. Fixing a release means cutting the next one.
  */
 
-import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { byVersion } from './compose.mjs';
 
 /** A release name: dotted numbers, so the directory sorts and reads like a version. */
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -80,11 +81,28 @@ export async function release(argv, ctx) {
     console.error(`  ${version} already exists — a release is immutable; cut the next one.\n`);
     return 1;
   }
-
-  await mkdir(dest, { recursive: true });
-  for (const layer of ['core', 'surfaces']) {
-    await cp(join(ctx.root, layer), join(dest, layer), { recursive: true });
+  // Above the newest, or `init` pins something older than what the package says it is, and the package's
+  // version moves backwards with the cut.
+  const newest = (await readdir(join(ctx.root, 'releases'), { withFileTypes: true }).catch(() => []))
+    .filter((e) => e.isDirectory() && VERSION.test(e.name))
+    .map((e) => e.name)
+    .sort(byVersion)
+    .at(-1);
+  if (newest && byVersion(version, newest) < 0) {
+    console.error(`  ${newest} is the newest release — a release is cut above it, not below.\n`);
+    return 1;
   }
+
+  // Frozen beside the releases and moved in whole: a cut stopped half-way used to leave a partial release,
+  // immutable by name, which `init` then pinned as the newest.
+  const partial = join(ctx.root, `.release-${version}.partial`);
+  await rm(partial, { recursive: true, force: true });
+  await mkdir(partial, { recursive: true });
+  for (const layer of ['core', 'surfaces']) {
+    await cp(join(ctx.root, layer), join(partial, layer), { recursive: true });
+  }
+  await mkdir(join(ctx.root, 'releases'), { recursive: true });
+  await rename(partial, dest);
 
   const surfaces = (await readdir(join(dest, 'surfaces'), { withFileTypes: true }))
     .filter((e) => e.isDirectory())
