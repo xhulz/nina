@@ -57,7 +57,7 @@ next reader, which is how a second implementation gets written next to the first
 - The same goes for a service's internal result/input shapes, an error code union that never leaves
   its module, and a constant only its own file reads.
 <!-- nina:slot project.1 library-packages -->
-- The standing report is `.claude/code-map.generated.md` § *Rot signals* (`pnpm code-map`). The
+- The standing report is `.claude/code-map.generated.md` § *Rot signals*. The
   reviewer checks it for symbols the current diff introduced: **a new export nothing consumes is
   dead on arrival.**
 
