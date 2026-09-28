@@ -107,6 +107,32 @@ export async function lessons(target) {
 }
 
 /**
+ * The stage each loop-back sent work back to: the next one dispatched in its session, after it reported, among
+ * the stages the project's graph routes that verdict of that stage to — or the only one it routes it to.
+ *
+ * @param {object[]} records - Recorded dispatches.
+ * @param {Map<string, Map<string, Map<string, number>>>|null} loops - The graph's capped loop-back edges.
+ * @returns {Map<object, string>} Loop-back record → the stage it sent work back to, where one can be told.
+ */
+export function sentBackTo(records, loops) {
+  const out = new Map();
+  if (!loops) return out;
+  const bySession = new Map();
+  for (const r of records) if (r.session) bySession.set(r.session, [...(bySession.get(r.session) ?? []), r]);
+  for (const rs of bySession.values()) rs.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  for (const r of records) {
+    if (!readable(r.verdict) || !isLoopBack(r.verdict)) continue;
+    const targets = loops.get(r.role)?.get(r.verdict);
+    if (!targets || targets.size === 0) continue;
+    const back = String(r.result_ts ?? r.ts);
+    const next = (bySession.get(r.session) ?? []).find((x) => String(x.ts) > back && targets.has(x.role));
+    const to = next?.role ?? (targets.size === 1 ? [...targets.keys()][0] : null);
+    if (to) out.set(r, to);
+  }
+  return out;
+}
+
+/**
  * Roles that looped back often enough, since their newest lesson, that one is overdue.
  *
  * @param {object[]} records - Recorded dispatches.
@@ -118,9 +144,13 @@ export async function lessons(target) {
  *   lesson: a count alone sends them digging through weeks of transcripts, which is how a warning
  *   becomes one more thing to ignore.
  */
-export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS) {
+export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS, owners = new Map()) {
   const cutoff = day(new Date(now.getTime() - days * 86_400_000).toISOString());
-  const roles = [...new Set(records.map((r) => r.role).filter(Boolean))];
+  // A loop-back is the lesson of the stage it sent work back to, where that is known (`sentBackTo`): charged
+  // to the stage that gave the verdict, the reviewer owed the implementer's lessons, and only a pill naming
+  // every checker in its applies_to ever settled the count.
+  const ownerOf = (r) => owners.get(r) ?? r.role;
+  const roles = [...new Set(records.map(ownerOf).filter(Boolean))];
   const out = [];
   for (const role of roles) {
     // A retired lesson was still written down: it retired because its rule moved into the harness,
@@ -138,7 +168,7 @@ export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS) {
     // thing capture exists to catch.
     const at = floor === newest ? taught?.at ?? null : null;
     const after = (r) => day(r.ts) > floor || (at !== null && day(r.ts) === floor && String(r.ts) > at);
-    const loops = records.filter((r) => r.role === role && readable(r.verdict) && isLoopBack(r.verdict) && after(r));
+    const loops = records.filter((r) => ownerOf(r) === role && readable(r.verdict) && isLoopBack(r.verdict) && after(r));
     if (loops.length >= CAPTURE_AT) {
       const recent = loops
         .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
@@ -177,50 +207,98 @@ export function applied(records, known) {
   };
 }
 
+/** How many days either side of a lesson's date its role is measured over: the same on both sides. */
+const VERIFY_DAYS = 14;
+
+/** A day as `YYYY-MM-DD`, moved by some days. */
+const shift = (date, days) => new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
 /**
- * The loop-back rate of a lesson's roles before it was written and after.
+ * The 95% Wilson interval of a share.
  *
- * Not proof — the work changes too, and a small sample swings — but without it the pipeline
- * cannot tell a lesson that helped from one that did not, even in principle.
+ * @param {number} k - How many.
+ * @param {number} n - Out of how many.
+ * @returns {[number, number]}
+ */
+export function wilson(k, n) {
+  if (n === 0) return [0, 1];
+  const z = 1.96;
+  const p = k / n;
+  const d = 1 + (z * z) / n;
+  const c = p + (z * z) / (2 * n);
+  const m = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return [(c - m) / d, (c + m) / d];
+}
+
+/**
+ * How often a lesson's stage had its work sent back before the lesson was written and after, stage by stage.
+ *
+ * It measured the rate of the stage's own verdicts. For a lesson about the implementer that was its BLOCKED
+ * rate, mostly unreadable, while the reviewer's rejections of its work — what the lesson was about — went to
+ * the reviewer's account; a lesson for several stages pooled them and read one model; and "before" and
+ * "after" were all of history either side, so a lesson written in a project's first days had nothing to
+ * compare. Now a stage is read on its own, over the same fourteen days either side, as the share of its
+ * rounds that a later stage sent back to it (`sentBackTo`), beside the same share for every other stage the
+ * graph sends work back to. A change is called only where the two intervals do not overlap. Not proof — the
+ * work changes too — but a number where one can be had, and the reason where it cannot.
  *
  * @param {object[]} records - Recorded dispatches.
  * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills.
- * Each comes with a control: every OTHER role, split at the same date. A lesson is written because
- * its role just started failing, so "after" is partly the same bad patch; and the whole pipeline's
- * rate moves with the work. The control does not remove either, but it shows whether the lesson's
- * roles moved differently from everything else, which the lesson's own numbers cannot.
- *
- * @returns {{rel: string, date: string, on: string|null, comparable: boolean, was?: string, before?: {n: number, loops: number}, after?: {n: number, loops: number}, control?: {before: {n: number, loops: number}, after: {n: number, loops: number}}}[]}
+ * @param {{owners?: Map<object, string>, targets?: Set<string>|null}} [graph] - Who each loop-back sent work
+ *   back to, and the stages the graph sends work back to at all.
+ * @returns {{rel: string, date: string, role: string, comparable: boolean, why?: string, on?: string|null,
+ *   was?: string, before?: {n: number, loops: number}, after?: {n: number, loops: number},
+ *   change?: 'lower'|'higher'|'unclear', control?: {before: {n: number, loops: number}, after: {n: number, loops: number}}}[]}
  */
-export function verified(records, known) {
+export function verified(records, known, { owners = new Map(), targets = null } = {}) {
   const out = [];
+  const ownerOf = (r) => owners.get(r) ?? r.role;
+  const sentBack = records.filter((r) => readable(r.verdict) && isLoopBack(r.verdict));
+  const ranOn = (r) => (r.usage_model ? `${r.usage_model}${r.effort ? ` · ${r.effort}` : ''}` : null);
   for (const lesson of known.filter((l) => l.date)) {
-    const rate = (rs, pick) => {
-      const s = rs.filter(pick);
-      return { n: s.length, loops: s.filter((r) => isLoopBack(r.verdict)).length };
-    };
-    const all = records.filter((r) => lesson.roles.includes(r.role) && readable(r.verdict));
-    const others = records.filter((r) => r.role && !lesson.roles.includes(r.role) && readable(r.verdict));
-    const pre = (r) => day(r.ts) < lesson.date;
-    const post = (r) => day(r.ts) > lesson.date;
-    if (rate(all, pre).n < VERIFY_MIN || rate(all, post).n < VERIFY_MIN) continue;
-    // Read on one model and effort level: the one the roles ran on most after the lesson. A lesson written
-    // the week a role moved to a stricter model read as making it worse — one project's reviewer went from
-    // 2% to 29% "after" a lesson, and from Sonnet to Opus in the same days. Where the roles ran on it too
-    // little before the lesson, the two sides are not comparable, and that is said rather than a number.
-    const ranOn = (r) => (r.usage_model ? `${r.usage_model}${r.effort ? ` · ${r.effort}` : ''}` : null);
-    const tally = new Map();
-    for (const r of all.filter(post)) if (ranOn(r)) tally.set(ranOn(r), (tally.get(ranOn(r)) ?? 0) + 1);
-    const on = [...tally].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
-    const mine = on ? all.filter((r) => ranOn(r) === on) : all;
-    const before = rate(mine, pre);
-    const after = rate(mine, post);
-    if (before.n < VERIFY_MIN || after.n < VERIFY_MIN) {
-      const was = [...new Set(all.filter(pre).map(ranOn).filter(Boolean))].join(', ') || 'no recorded model';
-      out.push({ rel: lesson.rel, date: lesson.date, on, was, comparable: false });
-      continue;
+    const from = shift(lesson.date, -VERIFY_DAYS);
+    const until = shift(lesson.date, VERIFY_DAYS);
+    const pre = (r) => day(r.ts) >= from && day(r.ts) < lesson.date;
+    const post = (r) => day(r.ts) > lesson.date && day(r.ts) <= until;
+    for (const role of lesson.roles) {
+      const base = { rel: lesson.rel, date: lesson.date, role };
+      if (targets && !targets.has(role)) {
+        out.push({ ...base, comparable: false, why: `nothing in the graph sends work back to ${role}` });
+        continue;
+      }
+      const rounds = records.filter((r) => r.role === role && readable(r.verdict));
+      const backs = sentBack.filter((r) => ownerOf(r) === role);
+      const side = (pick, mine) => {
+        const n = mine.filter(pick).length;
+        return { n, loops: Math.min(n, backs.filter(pick).length) };
+      };
+      if (side(pre, rounds).n < VERIFY_MIN || side(post, rounds).n < VERIFY_MIN) {
+        const [b, a] = [side(pre, rounds).n, side(post, rounds).n];
+        out.push({ ...base, comparable: false, why: `too few rounds of ${role} either side (${b} before, ${a} after, in ${VERIFY_DAYS} days each)` });
+        continue;
+      }
+      // Read on the model and effort the stage ran on most after the lesson: one written the week its stage moved
+      // to a stricter model read as making it worse — one reviewer went from 2% to 29%, and from Sonnet to Opus.
+      const tally = new Map();
+      for (const r of rounds.filter(post)) if (ranOn(r)) tally.set(ranOn(r), (tally.get(ranOn(r)) ?? 0) + 1);
+      const on = [...tally].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+      const mine = on ? rounds.filter((r) => ranOn(r) === on) : rounds;
+      const before = side(pre, mine);
+      const after = side(post, mine);
+      if (before.n < VERIFY_MIN || after.n < VERIFY_MIN) {
+        const was = [...new Set(rounds.filter(pre).map(ranOn).filter(Boolean))].join(', ') || 'no recorded model';
+        out.push({ ...base, on, was, comparable: false, why: `${role} ran on ${on} after it, and before it on ${was}` });
+        continue;
+      }
+      const [bLo, bHi] = wilson(before.loops, before.n);
+      const [aLo, aHi] = wilson(after.loops, after.n);
+      const change = aHi < bLo ? 'lower' : aLo > bHi ? 'higher' : 'unclear';
+      const others = [...(targets ?? new Set(sentBack.map(ownerOf)))].filter((x) => x !== role);
+      const theirs = records.filter((r) => others.includes(r.role) && readable(r.verdict));
+      const otherBacks = sentBack.filter((r) => others.includes(ownerOf(r)));
+      const control = (pick) => ({ n: theirs.filter(pick).length, loops: Math.min(theirs.filter(pick).length, otherBacks.filter(pick).length) });
+      out.push({ ...base, comparable: true, on, before, after, change, control: { before: control(pre), after: control(post) } });
     }
-    out.push({ rel: lesson.rel, date: lesson.date, on, comparable: true, before, after, control: { before: rate(others, pre), after: rate(others, post) } });
   }
   return out;
 }
@@ -589,7 +667,11 @@ export async function learn(argv, ctx) {
   }
   if (argv.includes('--close')) return close(target, argv[argv.indexOf('--close') + 1] ?? '');
 
-  const late = overdue(records, known, new Date(), days);
+  // Who each loop-back sent work back to, read off the project's own graph.
+  const loops = loadProject(target)?.loops ?? null;
+  const owners = sentBackTo(records, loops);
+  const targets = loops ? new Set([...loops.values()].flatMap((byToken) => [...byToken.values()].flatMap((to) => [...to.keys()]))) : null;
+  const late = overdue(records, known, new Date(), days, owners);
   const filed = await filedRequests(target);
   const owed = unfiled(known, filed);
 
@@ -673,7 +755,7 @@ export async function learn(argv, ctx) {
   const ready = active.filter((l) => l.occurrences >= GRADUATION_AT);
   const open = filed.filter((r) => r.status === 'open');
   const use = applied(records, known);
-  const checks = verified(records, known);
+  const checks = verified(records, known, { owners, targets });
   const span = records.length ? `${day(records[0].ts)} → ${day(records.at(-1).ts)}` : '';
 
   console.log(`\n  learning — core ${profile.core}\n`);
@@ -703,19 +785,25 @@ export async function learn(argv, ctx) {
   );
   for (const l of ready.filter((l) => owed.includes(l))) console.log(`            not sent yet: ${l.rel} — the next \`harness:check\` sends it`);
   for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
-  if (checks.length === 0) console.log(`  verify    no lesson has ${VERIFY_MIN}+ readable verdicts on both sides of its date yet`);
-  checks.forEach((c, i) => {
-    const head = `  ${i === 0 ? 'verify  ' : '        '}  ${c.rel.replace(/^\.claude\/pills\//, '')} (${c.date})`;
-    if (!c.comparable) {
-      console.log(`${head}: not comparable — the role ran on ${c.on} after it, and before it on ${c.was}`);
-      return;
-    }
+  const measured = checks.filter((c) => c.comparable);
+  const unmeasured = checks.filter((c) => !c.comparable);
+  if (measured.length === 0) console.log(`  verify    no lesson could be measured yet — ${VERIFY_MIN}+ rounds of its stage on the same model are needed in the ${VERIFY_DAYS} days either side of its date`);
+  measured.forEach((c, i) => {
+    const said = { lower: 'sent back less since', higher: 'sent back more since', unclear: 'no clear change' }[c.change];
     console.log(
-      `${head}${c.on ? `, on ${c.on}` : ''}: ` +
-        `${pct(c.before.loops, c.before.n)} → ${pct(c.after.loops, c.after.n)} loop-back (n ${c.before.n} → ${c.after.n}); ` +
-        `every other role ${pct(c.control.before.loops, c.control.before.n)} → ${pct(c.control.after.loops, c.control.after.n)}`,
+      `  ${i === 0 ? 'verify  ' : '        '}  ${c.rel.replace(/^\.claude\/pills\//, '')} (${c.date}) · ${c.role}${c.on ? `, on ${c.on}` : ''}: ` +
+        `${pct(c.before.loops, c.before.n)} → ${pct(c.after.loops, c.after.n)} of its rounds sent back (n ${c.before.n} → ${c.after.n}) — ${said}; ` +
+        `the other stages ${pct(c.control.before.loops, c.control.before.n)} → ${pct(c.control.after.loops, c.control.after.n)}`,
     );
   });
+  if (unmeasured.length > 0) {
+    const reasons = new Map();
+    for (const c of unmeasured) {
+      const reason = c.why.startsWith('too few') ? 'too few rounds either side' : c.why.startsWith('nothing') ? 'a stage nothing sends work back to' : 'a stage that changed model across its date';
+      reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+    }
+    console.log(`            ${unmeasured.length} more could not be measured: ${[...reasons].map(([why, n]) => `${n} ${why}`).join(', ')}`);
+  }
   // The loops the lessons are about, as the gate counted them — beside the lessons, because a loop the
   // gate held is a lesson waiting to be asked for.
   const since = new Date(Date.now() - days * 86_400_000).toISOString();

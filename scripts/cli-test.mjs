@@ -24,7 +24,7 @@ import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { asRead } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
-import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
+import { CAPTURE_DAYS, applied, closeAnswered, overdue, sentBackTo, slugFor, verified } from '../src/commands/learn.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
@@ -1120,35 +1120,48 @@ async function sound(fixture, core) {
   );
   expect(rounds.measured === 1 && rounds.read === 1, `learn: apply asks it of runs, not of their rounds — got ${JSON.stringify(rounds)}`);
 
-  // verify: before and after, only with enough on both sides
-  const pass = (d) => ({ role: 'qa', verdict: 'PASS', ts: ago(d) });
-  const fail = (d) => ({ role: 'qa', verdict: 'FAIL', ts: ago(d) });
-  const history = [...[30, 29, 28, 27, 26].map(fail), ...[5, 4, 3, 2, 1].map(pass)];
-  const checked = verified(history, [lesson(['qa'], ago(10).slice(0, 10))]);
+  // verify: a stage's rounds sent back to it, the same fourteen days either side, one stage at a time. It read
+  // the stage's own verdicts — an implementer lesson by the implementer's BLOCKED rate — pooled the stages a
+  // lesson named, and compared all of history either side.
+  const graphLoops = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2]])]])]]);
+  const reviewed = (role, verdict, d, extra = {}) => ({ role, verdict, ts: ago(d), session: 's-v', ...extra });
+  const trial = [
+    ...[15, 14, 13, 12, 11].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1)]),
+    ...[5, 4, 3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'APPROVED', d - 0.1)]),
+  ];
+  const owners = sentBackTo(trial, graphLoops);
+  const graph = { owners, targets: new Set(['implementer']) };
+  const written10 = ago(10).slice(0, 10);
+  const [fixed, reviewerSide] = verified(trial, [lesson(['implementer', 'reviewer'], written10)], graph);
   expect(
-    checked.length === 1 && checked[0].before.loops === 5 && checked[0].after.loops === 0 && 'control' in checked[0],
-    'learn: verify compares the rate before a lesson with the rate after it, beside a control',
+    fixed?.role === 'implementer' && fixed.comparable && fixed.before.loops === 5 && fixed.after.loops === 0 && fixed.change === 'lower' && 'control' in fixed,
+    `learn: verify reads a lesson's stage by how often its work was sent back, before and after — got ${JSON.stringify(fixed)}`,
+  );
+  expect(
+    reviewerSide?.role === 'reviewer' && !reviewerSide.comparable && reviewerSide.why.includes('nothing in the graph sends work back to reviewer'),
+    `learn: each stage a lesson names is read on its own, and one nothing sends back is said to be unmeasurable — got ${JSON.stringify(reviewerSide)}`,
+  );
+  const [thin] = verified(trial.slice(0, 7), [lesson(['implementer'], written10)], graph);
+  expect(thin && !thin.comparable && thin.why.startsWith('too few rounds'), `learn: too few on one side is said, not dropped — got ${JSON.stringify(thin)}`);
+  // Read on one model and effort: a lesson written the week its stage moved to a stricter model read as making
+  // it worse. Before on one model and after on another is not comparable, and says so.
+  const on = (r, model, effort) => ({ ...r, usage_model: model, effort });
+  const moved = trial.map((r) => (r.role === 'implementer' ? on(r, Date.parse(r.ts) < Date.parse(ago(10)) ? 'claude-sonnet-5' : 'claude-opus-5', 'xhigh') : r));
+  const [confounded] = verified(moved, [lesson(['implementer'], written10)], { owners: sentBackTo(moved, graphLoops), targets: graph.targets });
+  expect(
+    confounded && !confounded.comparable && confounded.on === 'claude-opus-5 · xhigh' && confounded.was === 'claude-sonnet-5 · xhigh',
+    `learn: a lesson whose stage changed model across its date is not compared — got ${JSON.stringify(confounded)}`,
+  );
+  // capture: the reviewer's rejections are the implementer's lessons to write.
+  const rejected = [3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1)]);
+  expect(
+    overdue(rejected, [], now, CAPTURE_DAYS, sentBackTo(rejected, graphLoops)).map((o) => o.role).join() === 'implementer',
+    'learn: three rejections of the implementer\'s work are a lesson the implementer owes, not the reviewer',
   );
   const late = overdue(loops('reviewer', 1, 2, 3).map((r, i) => ({ ...r, desc: `review ${i}`, session: 'abcdef123' })), [], now);
   expect(
     late[0]?.recent.length === 3 && late[0].recent[0].desc === 'review 0',
     'learn: a capture warning names the newest loop-backs, not just how many',
-  );
-  expect(verified(history.slice(0, 7), [lesson(['qa'], ago(10).slice(0, 10))]).length === 0, 'learn: too few on one side says nothing');
-  // Read on one model and effort: a lesson written the week its role moved to a stricter model read as making
-  // it worse. Before on one model and after on another is not comparable, and says so.
-  const on = (r, model, effort) => ({ ...r, usage_model: model, effort });
-  const moved = [...[30, 29, 28, 27, 26].map((d) => on(pass(d), 'claude-sonnet-5', 'xhigh')), ...[5, 4, 3, 2, 1].map((d) => on(fail(d), 'claude-opus-5', 'xhigh'))];
-  const [confounded] = verified(moved, [lesson(['qa'], ago(10).slice(0, 10))]);
-  expect(
-    confounded?.comparable === false && confounded.on === 'claude-opus-5 · xhigh' && confounded.was === 'claude-sonnet-5 · xhigh',
-    `learn: a lesson whose role changed model across its date is not compared — got ${JSON.stringify(confounded)}`,
-  );
-  const steady = [...moved, ...[30, 29, 28, 27, 26].map((d) => on(pass(d), 'claude-opus-5', 'xhigh')), ...[5, 4, 3, 2].map((d) => on(pass(d), 'claude-sonnet-5', 'xhigh'))];
-  const [same] = verified(steady, [lesson(['qa'], ago(10).slice(0, 10))]);
-  expect(
-    same?.comparable && same.on === 'claude-opus-5 · xhigh' && same.before.n === 5 && same.before.loops === 0 && same.after.loops === 5,
-    `learn: and one with both sides on the model it ran on after is compared on that model alone — got ${JSON.stringify(same)}`,
   );
 
   // the command end to end: the detector fires, a lesson settles it, graduation writes a request
