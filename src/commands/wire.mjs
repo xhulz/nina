@@ -14,7 +14,7 @@
 
 import { resolve } from 'node:path';
 import { readProfile, surfacesIn } from '../paths.mjs';
-import { applyWiring, missingFragment, missingWiring, shippedScripts, staleHooks } from '../wiring.mjs';
+import { applyWiring, lacksPackage, missingFragment, missingWiring, shippedScripts, staleHooks } from '../wiring.mjs';
 import { layerRootFor } from './compose.mjs';
 
 /**
@@ -60,7 +60,7 @@ export async function wire(argv, ctx) {
       for (const line of fragment.split('\n')) console.log(`    ${line}`);
     }
     console.log(`\n  \`nina wire${arg('--to') ? ` --to ${version}` : ''} --apply\` merges them, changing nothing else — a customised command is never touched.`);
-    if (missing.some((m) => m.startsWith('@xhulz/nina is not installed'))) {
+    if (lacksPackage(missing)) {
       console.log('  The package it cannot install: that one is `pnpm add -D -E @xhulz/nina`.');
     }
     console.log(`wire: ${missing.length} missing${stale.length ? `, ${stale.length} to update` : ''}`);

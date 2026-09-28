@@ -20,7 +20,7 @@ import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
 import { EXPECT_ENV } from '../expected.mjs';
 import { closeAnswered } from './learn.mjs';
 import { tidyRetired } from './pills.mjs';
-import { missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
+import { lacksPackage, missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 
@@ -373,7 +373,7 @@ export async function upgrade(argv, ctx) {
       for (const line of fragment.split('\n')) console.log(`        ${line}`);
     }
     console.log(`      \`nina wire --to ${to} --apply\` merges them. They stay inert until ${to} is pinned, so wiring first is safe.`);
-    if (unwired.some((w) => w.startsWith('@xhulz/nina is not installed'))) {
+    if (lacksPackage(unwired)) {
       console.log('      The package is the one thing `wire` cannot do: `pnpm add -D -E @xhulz/nina`.');
     }
     console.log('');

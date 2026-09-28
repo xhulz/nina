@@ -308,6 +308,17 @@ function settingsHooks(hooks) {
   return out;
 }
 
+/** How {@link missingWiring} opens the sentence that says the package is missing. */
+const NOT_INSTALLED = '@xhulz/nina is not installed in this project';
+
+/**
+ * Whether what {@link missingWiring} found includes the package itself: the one thing `wire` cannot do.
+ *
+ * @param {string[]} unwired - Its sentences.
+ * @returns {boolean}
+ */
+export const lacksPackage = (unwired) => unwired.some((w) => w.startsWith(NOT_INSTALLED));
+
 /**
  * Whatever of the wiring a project lacks, one sentence each.
  *
@@ -320,7 +331,7 @@ export async function missingWiring(target, shipped) {
   // First, because nothing below matters without it: the composed scripts import the package.
   if ((shipped.has(CHECK) || shipped.has(GATE) || shipped.has(GUARD)) && !packageInstalled(target)) {
     out.push(
-      '@xhulz/nina is not installed in this project, so the composed scripts cannot load and every hook fails — ' +
+      `${NOT_INSTALLED}, so the composed scripts cannot load and every hook fails — ` +
         'pnpm add -D -E @xhulz/nina',
     );
   } else {
