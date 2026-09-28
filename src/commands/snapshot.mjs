@@ -22,7 +22,8 @@ const STATE_FILE = '.state.json';
 /**
  * Reads a JSON file, or an empty object when it is missing or unreadable. A state file cut short
  * by an interrupted write used to throw on every later snapshot, and observation stopped for every
- * project on the machine with nothing saying so. An unreadable cursor costs one re-read.
+ * project on the machine with nothing saying so. An unreadable cursor costs one re-read, which keeps what the
+ * store already holds (`snapshotProject`).
  *
  * @param {string} path - The file.
  * @returns {Promise<object>}
@@ -183,14 +184,22 @@ async function snapshotProject(project, { outDir, rebuild, quiet, legacy }) {
   const cursors = rebuild ? {} : (own.cursors ?? legacy[project.slug]?.cursors ?? {});
 
   const scanned = await scanProject(project.dir, { cursors, records: prior });
+  // With its cursors gone — a state file deleted, or cut short — the transcripts are read again from the start
+  // over records the store already holds, and read that way a notification is taken a second time: one
+  // project had 34 verdicts, 639 return times and 79 durations rewritten. What the store held stands, field
+  // by field, and the re-read adds only what it lacked; the cursors it leaves hold from then on.
+  const reread = !rebuild && prior.length > 0 && Object.keys(cursors).length === 0;
+  const held = new Map(prior.map((r) => [r.dispatch_id, r]));
+  const kept = (r) =>
+    reread && held.has(r.dispatch_id) ? { ...r, ...Object.fromEntries(Object.entries(held.get(r.dispatch_id)).filter(([, v]) => v !== null && v !== undefined)) } : r;
   // The release the project pinned when a round was first captured, so a rule is judged only on the rounds
   // that ran under it. A round already on record keeps what it had — a rebuild included, which would
   // otherwise stamp today's pin on weeks of history — and only a new one takes today's.
   const pinned = new Map(stored.map((r) => [r.dispatch_id, r.core ?? null]));
   const pin = pinOf(project.slug);
-  const records = scanned.records.map((r) => {
+  const records = scanned.records.map(kept).map((r) => {
     const core = pinned.has(r.dispatch_id) ? pinned.get(r.dispatch_id) : pin;
-    return { project: project.slug, ...r, ...(core ? { core } : {}) };
+    return { ...r, project: project.slug, ...(core ? { core } : {}) };
   });
   if (records.length === 0) return 0;
 

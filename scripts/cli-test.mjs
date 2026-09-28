@@ -4468,6 +4468,37 @@ const dated = (date, status = 'active') =>
   expect(Boolean(kept) && (await readFile(join(out, kept), 'utf8')).includes('toolu_pruned'), 'snapshot: a rebuild keeps the record it replaces beside it');
 }
 
+// ─── snapshot: cursors lost, the store's history stands ─────────────────────────────────
+{
+  const slug = '-cursors-lost';
+  const transcripts = join(SUITE_HOME, '.claude', 'projects', slug);
+  await mkdir(transcripts, { recursive: true });
+  const lines = [
+    JSON.stringify({ type: 'assistant', uuid: 'c1', timestamp: '2026-09-01T10:00:00.000Z', sessionId: 's1', message: { content: [{ type: 'tool_use', id: 'toolu_c1', name: 'Agent', input: { subagent_type: 'reviewer', description: 'Review the diff' } }] } }),
+    JSON.stringify({ type: 'user', uuid: 'c2', timestamp: '2026-09-01T10:05:00.000Z', message: { content: '<task-notification><tool-use-id>toolu_c1</tool-use-id><status>completed</status><result>VERDICT: APPROVED</result></task-notification>' } }),
+  ];
+  await writeFile(join(transcripts, 's1.jsonl'), `${lines.join('\n')}\n`);
+  const out = await scratch();
+  const snap = () => run(['snapshot', '--project', slug, '--exact', '--out', out]);
+  snap();
+  const storePath = join(out, `${slug}.jsonl`);
+  const [captured] = (await readFile(storePath, 'utf8')).trim().split('\n').map((l) => JSON.parse(l));
+  // What the store holds is the record of what happened; a re-read after the cursors are gone must not redo it.
+  await writeFile(storePath, `${JSON.stringify({ ...captured, duration_s: 999, result_ts: '2026-09-01T10:16:39.000Z' })}\n`);
+  await rm(join(out, `${slug}.state.json`));
+  await writeFile(
+    join(transcripts, 's1.jsonl'),
+    `${lines.join('\n')}\n${JSON.stringify({ type: 'assistant', uuid: 'c3', timestamp: '2026-09-02T10:00:00.000Z', sessionId: 's1', message: { content: [{ type: 'tool_use', id: 'toolu_c2', name: 'Agent', input: { subagent_type: 'qa' } }] } })}\n`,
+  );
+  snap();
+  const after = Object.fromEntries((await readFile(storePath, 'utf8')).trim().split('\n').map((l) => JSON.parse(l)).map((r) => [r.dispatch_id, r]));
+  expect(
+    after.toolu_c1?.duration_s === 999 && after.toolu_c1?.result_ts === '2026-09-01T10:16:39.000Z' && Boolean(after.toolu_c2),
+    `snapshot: with its cursors gone, a re-read keeps what the store held and adds only what is new — got ${JSON.stringify(after)}`,
+  );
+  expect(existsSync(join(out, `${slug}.state.json`)), 'snapshot: and the cursors are written again');
+}
+
 // ─── snapshot: a sandbox reads only its own transcripts ─────────────────────────────────
 {
   // Listing the projects read Claude Code's own directory whatever NINA_TRANSCRIPTS said, so a snapshot meant to
