@@ -4774,12 +4774,15 @@ const dated = (date, status = 'active') =>
     ['mysql --password hunter2x -h db', 'hunter2x'],
     ['deploy --api-key "correct horse battery"', 'battery'],
     ['curl -u admin:sup3rSecretPass123 https://x', 'sup3rSecret'],
+    ['curl -u "admin:hunter the second" https://x', 'second'],
     ['Set-Cookie: session=abcdef123456; Path=/', 'abcdef123456'],
     ['Authorization: ApiKey abcdefghijkl123', 'abcdefghijkl'],
     ['Authorization: rawtoken1234567890', 'rawtoken'],
   ];
   for (const [text, secret] of leaks) expect(!redact(text).includes(secret), `redact: masks ${text.slice(0, 40)} — got ${redact(text)}`);
-  const plain = 'max_tokens: 100000 AUTH_LIB=better-auth bypass=allowed compass: north mkdir -p dir --project /Users/x --max-tokens 100000';
+  const plain =
+    'max_tokens: 100000 AUTH_LIB=better-auth bypass=allowed compass: north mkdir -p dir --project /Users/x --max-tokens 100000 ' +
+    'date -u +%Y-%m-%dT%H:%M:%SZ docker run -u 1000:1000 --tokenizer gpt2 --password-file /run/secrets/db TOKEN_TYPE=bearer';
   expect(redact(plain) === plain, `redact: leaves what only looks like a name — got ${redact(plain)}`);
   const slow = Date.now();
   for (const text of ['a='.repeat(100_000), 'ab:'.repeat(70_000), 'x://'.repeat(50_000), '--token '.repeat(60_000), 'Authorization: '.repeat(30_000)]) redact(text);

@@ -30,7 +30,10 @@ export function clip(text, chars) {
 }
 
 /** Names whose value is a credential when they are assigned one. */
-const SECRET_NAME = /(?:secret|token|passw(?:or)?d|(?:^|[_-])pass$|api[_-]?key|private[_-]?key|access[_-]?key|signing[_-]?key|credential|dsn$)/i;
+const SECRET_NAME = /(?:secret|token(?![a-z])|passw(?:or)?d|(?:^|[_-])pass$|api[_-]?key|private[_-]?key|access[_-]?key|signing[_-]?key|credential|dsn$)/i;
+
+/** Names that say where a secret is, or what kind, rather than holding one: `--password-file`, `TOKEN_TYPE`. */
+const ABOUT_A_SECRET = /[_-](?:file|path|dir|type|count|length|size|limit|url|endpoint)$/i;
 
 /** Token formats that are credentials on sight. */
 const SECRET_TOKEN = new RegExp(
@@ -73,8 +76,14 @@ const QUOTED = /\b([A-Za-z0-9_-]{1,40})(["']?\s{0,3}[:=]\s{0,3})(["'])([^"'\n]{1
 /** A command-line option with its value after a space — `--password hunter2`, `--api-key "a b"`. */
 const FLAG = /(--?[A-Za-z0-9][A-Za-z0-9_-]{0,40})\s{1,3}(?:(["'])([^"'\n]{1,256})\2|([^\s"'`]{3,}))/g;
 
-/** curl's and friends' `-u user:password`. */
-const USER_FLAG = /((?:^|\s)(?:-u|--user)\s{1,3}[^\s:]{1,64}):[^\s]{1,256}/g;
+/**
+ * curl's and friends' `-u user:password`, quoted or not. The user has to look like one — `date -u +%H:%M`
+ * is a format — and a password of digits alone is a group: `docker run -u 1000:1000`.
+ */
+const USER_FLAG = /((?:^|\s)(?:-u|--user)\s{1,3}[A-Za-z0-9_][A-Za-z0-9._@-]{0,63}):([^\s"']{1,256})/g;
+
+/** The same in quotes, where the password may hold spaces. */
+const USER_QUOTED = /((?:^|\s)(?:-u|--user)\s{1,3}(["'])[A-Za-z0-9_][A-Za-z0-9._@-]{0,63}):[^"'\n]{1,256}\2/g;
 
 /** A cookie header's whole value: every cookie in it may be a session. */
 const COOKIE = /\b((?:Set-)?Cookie["']?\s{0,3}:\s{0,3})[^\n"]{1,2000}/gi;
@@ -83,7 +92,7 @@ const COOKIE = /\b((?:Set-)?Cookie["']?\s{0,3}:\s{0,3})[^\n"]{1,2000}/gi;
 const AUTHORIZATION = /\b((?:Proxy-)?Authorization["']?\s{0,3}[:=]\s{0,3}["']?)(?:([A-Za-z][A-Za-z0-9_-]{0,20})\s+)?[^\s"',;]{8,}/gi;
 
 /** Whether a name and the value assigned to it make a credential. A count is not one: `max_tokens: 100000`. */
-const secretPair = (name, value) => SECRET_NAME.test(name) && !/^\d+$/.test(value) && value !== '[redacted]';
+const secretPair = (name, value) => SECRET_NAME.test(name) && !ABOUT_A_SECRET.test(name) && !/^\d+$/.test(value) && value !== '[redacted]';
 
 /**
  * Text with the secrets it obviously carries masked: private keys, the token formats of the common
@@ -108,7 +117,8 @@ export function redact(text) {
   out = out.replace(/\b(Bearer|Basic|Token|Bot)\s+[A-Za-z0-9._~+/=-]{16,}/g, '$1 [redacted]');
   out = out.replace(AUTHORIZATION, (whole, head, scheme) => `${head}${scheme ? `${scheme} ` : ''}[redacted]`);
   out = out.replace(COOKIE, '$1[redacted]');
-  out = out.replace(USER_FLAG, '$1:[redacted]');
+  out = out.replace(USER_QUOTED, (whole, head, quote) => `${head}:[redacted]${quote}`);
+  out = out.replace(USER_FLAG, (whole, head, password) => (/^\d+$/.test(password) || password === '[redacted]' ? whole : `${head}:[redacted]`));
   // The shell is where most of a stage's input is written, and it passes a secret after a space.
   out = out.replace(FLAG, (whole, flag, quote, quoted, bare) =>
     secretPair(flag.replace(/^-+/, ''), quoted ?? bare) ? `${flag} ${quote ?? ''}[redacted]${quote ?? ''}` : whole,
