@@ -720,7 +720,10 @@ export function handle(input, { root, now = new Date(), pkg = PACKAGE }) {
       case 'SubagentStop':
         return onStop(input, project, path, at);
       case 'SubagentStart': {
-        // Not the loop's business, but the one hook every stage passes through as it begins: its lessons.
+        // Not the loop's business, but the one hook every stage passes through as it begins: its lessons. Claude
+        // Code reads `additionalContext` from this event's `hookSpecificOutput` into the subagent's context as it
+        // starts — its hook schema and handler say so in 2.1.283, and the handler in 2.1.158 — though the help text
+        // it prints for a malformed hook output does not list the event.
         const role = input.agent_type;
         const text = role && project.graph.stages.has(role) ? lessonIndex(root, role) : null;
         return text ? { hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: text } } : null;
