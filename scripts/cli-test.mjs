@@ -1889,6 +1889,16 @@ const dated = (date, status = 'active') =>
     const moved = run(['init', '--project', dir, '--force', '--core', newer, '--no-ask'], { loud: true });
     expect(moved.status === 1 && moved.out.includes(`nina upgrade --to ${newer}`) && JSON.parse(await readFile(profilePath, 'utf8')).core === older, `init --force: does not move a pin; upgrade does — got ${moved.out}`);
   }
+
+  // A profile with a trailing comma was read as no profile at all: the pin moved to the newest release and
+  // every vocabulary value went, with no line saying anything was kept.
+  const broken = (await readFile(profilePath, 'utf8')).replace(/\n}\s*$/, ',\n}\n');
+  await writeFile(profilePath, broken);
+  const unread = run(['init', '--project', dir, '--force', '--no-ask'], { loud: true });
+  expect(
+    unread.status === 1 && unread.out.includes('cannot be read') && (await readFile(profilePath, 'utf8')) === broken,
+    `init --force: a profile it cannot parse is refused and left as it was, not replaced — got ${unread.out}`,
+  );
 }
 
 // ─── packaged install: the two things that only exist in a checkout ─────────────────────

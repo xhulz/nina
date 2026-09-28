@@ -273,8 +273,17 @@ export async function init(argv, ctx) {
   let previous = null;
   try {
     previous = JSON.parse(readFileSync(join(harness, 'profile.json'), 'utf8'));
-  } catch {
-    // None, or unreadable: there is nothing to keep.
+  } catch (error) {
+    // None: there is nothing to keep. One that is there but cannot be read still holds the pin and every
+    // value the project declared — read as "none", a trailing comma moved the pin to the newest release and
+    // wrote every vocabulary value away.
+    if (error.code !== 'ENOENT') {
+      console.error(
+        `  ${HARNESS}/profile.json cannot be read (${error.message}). Starting over would write a new one over it and keep ` +
+          'nothing it declares — fix it and run this again, or move it aside to start from nothing.\n',
+      );
+      return 1;
+    }
   }
   if (previous?.core && arg('--core') && arg('--core') !== previous.core) {
     console.error(`  ${target} pins ${previous.core}. A pin moves with \`nina upgrade --to ${arg('--core')}\`, which says what the move costs and rolls it back when it fails.\n`);
