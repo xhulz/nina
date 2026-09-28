@@ -2522,7 +2522,14 @@ const dated = (date, status = 'active') =>
   const stuck = [report('reviewer', 'REJECTED'), fix(), report('reviewer', 'REJECTED'), fix(), report('reviewer', 'REJECTED')];
   expect(next(stuck.slice(0, 3)) === 2, 'gate: a second rejection acted on is round 2');
   expect(next(stuck) === 3, 'gate: and a third is round 3 — past a cap of 2');
-  expect(next([...stuck.slice(0, 4), spoke, report('reviewer', 'REJECTED')]) === 1, 'gate: the owner speaking starts the count over');
+  // The owner speaking used to empty every count, and since the owner speaks every few minutes no loop ever
+  // reached its cap. It gives each open loop one round more instead: the count goes on, and the cap moves.
+  const graced = roundsFor([...stuck.slice(0, 4), spoke, report('reviewer', 'REJECTED')].flat(), 'implementer', loops, forward)[0];
+  expect(graced?.round === 3 && graced.max === 3 && graced.given === 1, `gate: the owner speaking gives the open loop one round more, and counts on — got ${JSON.stringify(graced)}`);
+  const onceMore = roundsFor([...stuck.slice(0, 4), spoke, report('reviewer', 'REJECTED'), fix(), report('reviewer', 'REJECTED')].flat(), 'implementer', loops, forward)[0];
+  expect(onceMore?.round === 4 && onceMore.max === 3, `gate: one reply is one round more, not a new count — got ${JSON.stringify(onceMore)}`);
+  expect(next([spoke, report('reviewer', 'REJECTED'), fix(), report('reviewer', 'REJECTED')]) === 2, 'gate: and a reply before a loop opened gives it nothing');
+  expect(next([...stuck.slice(0, 4), { k: 'reset', why: 'ask' }, report('reviewer', 'REJECTED')]) === 3 && roundsFor([...stuck.slice(0, 4), { k: 'reset', why: 'ask' }, report('reviewer', 'REJECTED')].flat(), 'implementer', loops, forward)[0].max === 2, "gate: a model's own question to the owner, in an older ledger, is not the owner speaking");
   expect(next([report('reviewer', 'REJECTED'), fix(), fix(), report('reviewer', 'REJECTED')]) === 2, 'gate: two dispatches acting on the same verdicts are one round');
   expect(
     next([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'APPROVED'), fix(), report('reviewer', 'REJECTED')]) === 1,
@@ -2567,7 +2574,7 @@ const dated = (date, status = 'active') =>
   expect(next([launched, once, { ...once }, fix(), report('reviewer', 'REJECTED')]) === 2, 'gate: one report seen twice — a stop and its handback — is one verdict');
   expect(next([launched, once, { ...once, verdict: 'APPROVED' }]) === 0, 'gate: an amendment replaces the verdict it amends');
   expect(next([launched, once, fix(), { ...once }, fix(), report('reviewer', 'REJECTED')]) === 2, 'gate: a report seen again after it was acted on is not a new verdict');
-  expect(next([report('reviewer', 'REJECTED'), fix('architect'), report('reviewer', 'REJECTED')]) === 1, 'gate: a round on reviewer → architect is not a round on reviewer → implementer');
+  expect(next([report('reviewer', 'REJECTED'), fix('architect'), report('reviewer', 'REJECTED')]) === 2, 'gate: a round on reviewer → architect is a round of the same loop as one on reviewer → implementer');
   expect(
     next([report('qa', 'FAIL'), fix('reviewer'), report('qa', 'FAIL'), fix(), report('qa', 'FAIL')]) === 2,
     'gate: a dispatch to a stage the loop does not route to leaves its verdicts waiting',
@@ -2598,7 +2605,11 @@ const dated = (date, status = 'active') =>
   expect(next([named('a'), fix(), named('a'), fix(), named('a')]) === 3, 'gate: the same issue a third time is round 3');
   expect(next([named('a', 'b'), fix(), named('b'), fix(), named('b')]) === 3, 'gate: an issue keeps its count while the others around it are fixed');
   expect(next([named('a'), fix(), named('b'), fix(), named('a')]) === 2, 'gate: an issue that comes back counts the round it was in before');
-  expect(next([named('a'), fix(), named('a'), spoke, named('a')]) === 1, 'gate: the owner speaking starts every issue over too');
+  const gracedIssue = roundsFor([named('a'), fix(), named('a'), fix(), spoke, named('a')].flat(), 'implementer', loops, forward)[0];
+  expect(gracedIssue?.round === 3 && gracedIssue.max === 3 && gracedIssue.issue === 'a', `gate: the owner's reply gives an issue's loop its round more too — got ${JSON.stringify(gracedIssue)}`);
+  // One loop, whichever stage the fix goes to: routed to the architect one round and the implementer the next, the
+  // same rejection was counted once on each edge and went round twice its cap before anything asked.
+  expect(next([named('a'), fix('architect'), named('a'), fix(), named('a')]) === 3, 'gate: a loop counts its rounds across the stages its fixes went to');
   expect(next([named('a'), fix(), report('reviewer', 'APPROVED'), named('a'), fix(), named('a')]) === 2, 'gate: a review that passed closes the issues with the loop');
   // A renamed issue restarts its count, so the edge keeps counting beside it: at twice the cap it asks anyway.
   const renamed = roundsFor([named('a'), fix(), named('b'), fix(), named('c'), fix(), named('d'), fix(), named('e')].flat(), 'implementer', loops, forward)[0];
@@ -2662,7 +2673,12 @@ const dated = (date, status = 'active') =>
   await writeFile(join(project, '.claude', 'agents', 'architect.md'), spec('SPEC-READY', 'BLOCKED'));
 
   const session = 's-gate';
-  const hook = (event, fields = {}) => handle({ hook_event_name: event, session_id: session, ...fields }, { root: project });
+  let questions = 0;
+  const hook = (event, fields = {}) => {
+    const answer = handle({ hook_event_name: event, session_id: session, ...fields }, { root: project });
+    if (answer?.hookSpecificOutput?.permissionDecision === 'ask') questions += 1;
+    return answer;
+  };
   let tool = 0;
   // A stage as it really reports: it hands its report back itself, then writes a comment and stops.
   const send = (role, agent) => {
@@ -2703,7 +2719,7 @@ const dated = (date, status = 'active') =>
   const slow = Date.now();
   hook('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: '['.repeat(60_000) } });
   expect(Date.now() - slow < 1000, `gate: a recipient of 60,000 \`[\` is read in linear time — took ${Date.now() - slow}ms`);
-  expect(send('architect', 'a1') === null, 'gate: the cap holds one edge — the design route is still open');
+  expect(send('architect', 'a1')?.hookSpecificOutput?.permissionDecision === 'ask', 'gate: the cap holds the loop whichever stage the fix goes to — the design route asks too');
   expect(hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'Explore' } }) === null, 'gate: an agent that is not a stage is never held');
   expect(
     hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer' }, agent_id: 'nested' }) === null,
@@ -2716,12 +2732,12 @@ const dated = (date, status = 'active') =>
   hook('UserPromptSubmit', { prompt: '<task-notification>\n<task-id>x</task-id>' });
   expect(send('implementer', 'i4')?.hookSpecificOutput?.permissionDecision === 'ask', 'gate: a report being delivered is not the owner speaking — the count stands');
   hook('PostToolUse', { tool_name: 'AskUserQuestion' });
-  expect(send('implementer', 'i5') === null, 'gate: the owner answering a question starts the count over');
+  expect(send('implementer', 'i5')?.hookSpecificOutput?.permissionDecision === 'ask', "gate: the model's own question to the owner is not the owner speaking — the count stands");
   reviewed('r5', 'VERDICT: REJECTED');
   send('implementer', 'i6');
   reviewed('r6', 'VERDICT: REJECTED');
   hook('UserPromptSubmit', { prompt: 'try one more time' });
-  expect(send('implementer', 'i7') === null, 'gate: and so does the owner writing a message');
+  expect(send('implementer', 'i7') === null, 'gate: the owner writing a message gives the open loop one round more');
 
   // The text-first report — the one shape where the stop carries the verdict itself — is read there.
   expect(hook('SubagentStop', { agent_type: 'reviewer', agent_id: 'r8', last_assistant_message: 'VERDICT: APPROVED\nfine', stop_hook_active: false }) === null, 'gate: a stop carrying the report says nothing');
@@ -2775,7 +2791,7 @@ const dated = (date, status = 'active') =>
     // Reported below.
   }
   expect(byHandAnswer?.hookSpecificOutput?.permissionDecision === 'ask', `gate --hook: prints the answer and nothing before it — got ${byHand.stdout.slice(0, 120)}`);
-  expect(readLedger(ledgerPath(project, session)).filter((e) => e.k === 'ask').length === 6, 'gate: every question put to the owner is on the ledger');
+  expect(readLedger(ledgerPath(project, session)).filter((e) => e.k === 'ask').length === questions + 1, `gate: every question put to the owner is on the ledger — ${questions + 1} asked`);
 
   // A pin whose version ships no gate: the composed file may still be on disk, and it does nothing.
   const old = await scratch();

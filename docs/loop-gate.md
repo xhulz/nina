@@ -36,8 +36,8 @@ when, when the owner spoke — written by the hooks that see each fact as it hap
 one thing in it a model wrote: a label of at most 40 characters from the `ISSUES` line every spec puts
 under a verdict that sends work back, never a sentence of the report. A stage's report comes from `PostToolUse` on
 `SubagentHandback`, verbatim, or from `SubagentStop` when the report was the last message; launches from
-`PreToolUse` and `PostToolUse` on `Agent|Task|SendMessage`; the owner from `UserPromptSubmit` and an
-`AskUserQuestion` answer. `PreToolUse` decides.
+`PreToolUse` and `PostToolUse` on `Agent|Task|SendMessage`; the owner from `UserPromptSubmit`. `PreToolUse`
+decides.
 
 **At the cap it asks the owner.** The graph sends a loop that has used its rounds to `human`, so that is
 where the round past the cap goes: the hook answers `permissionDecision: "ask"`, and Claude Code puts the
@@ -69,7 +69,14 @@ source — reached a cap eight times, and seven were different issues on the sam
   that stage ran after the source last reported and the source was not sent out again since, because
   the graph sends the reviewer out beside every gate, and its approval says nothing about the dba's
   rejection;
-- the owner speaking starts every count over; a verdict guessed from prose never counts;
+- the owner speaking gives every loop still open one round more than its cap, and closes nothing. It used
+  to start every count over, and the owner speaks every few minutes: over two days of one project there
+  were sixty of those resets and not one question at a cap. A model asking the owner a question with
+  `AskUserQuestion` is not the owner speaking, and counts for nothing; a verdict guessed from prose never
+  counts;
+- a loop is its source's verdict, whichever stage the fix goes to: a rejection routed to the architect one
+  round and to the implementer the next was counted once on each edge, and went round twice its cap
+  before anything asked. The edge a round goes to still decides its cap;
 - where every report a round acts on named its issues — the `ISSUES` line every spec puts under a verdict
   that sends work back — the round is counted per issue, not per edge. The graph always said a different
   issue on the same edge starts its own count, and the gate could not see issues, so it counted the edge:
@@ -89,12 +96,12 @@ that was never dispatched let a loop run uncounted.
 Two rules exist because the live hooks were probed. `UserPromptSubmit` fires when a subagent's report is
 delivered (`<agent-message …>`, with or without a sentence in front of it) and when a background task
 finishes, not only when a person types — resetting on those would have emptied every count each time a
-report arrived, so only a prompt with no such tag near its start resets. And a stage calls
+report arrived, so only a prompt with no such tag near its start counts as the owner speaking. And a stage calls
 `SubagentHandback` itself and then writes a short comment, so the stop sees the comment: the verdict is
 taken from the handback. A first version also sent back any report whose first line was not its
 `VERDICT` — it would have sent back nearly every real one, and since the handbacks already declare their
-verdicts, it was dropped rather than fixed. A scheduled prompt (`/loop`) carries no such tag, so it
-resets the count like a person would; that is a known limit.
+verdicts, it was dropped rather than fixed. A scheduled prompt (`/loop`) carries no such tag, so it gives
+the open loops a round like a person would; that is a known limit.
 
 It fails open, and only acts where the pinned version ships it: a composed file outlives the version that
 composed it, and wired hooks run whatever is on disk, so the script asks the pin. An error lets the call
