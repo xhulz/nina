@@ -25,6 +25,7 @@ import { asRead } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
 import { CAPTURE_DAYS, applied, closeAnswered, overdue, sentBackTo, slugFor, verified } from '../src/commands/learn.mjs';
+import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
@@ -1724,6 +1725,13 @@ source: the 2026-09-01 review
   expect(/\d+ pill\(s\): \d+ active, 1 retired/.test(after) && !after.includes('is retired but still where'), `pills: and it is still counted, as retired — got ${after}`);
   await plant(dir, 'retired/reviewer/lost.md', recurring('reviewer-lost', 'reviewer', 1));
   expect(run(['pills', '--project', dir], { loud: true }).out.includes('retired/reviewer/lost.md is active but sits in retired/'), 'pills: an active pill in retired/ is said to be lost');
+  // Read as written: saved on Windows it had no frontmatter at all, and a YAML comment after a count made it 1.
+  const crlf = frontmatter('---\r\napplies_to: [qa]\r\noccurrences: 4  # seen again in 5.1\r\n---\r\nbody\r\n');
+  expect(crlf?.applies_to === '[qa]' && crlf.occurrences === '4', `pills: a pill's frontmatter is read with CRLF line ends and a comment after a value — got ${JSON.stringify(crlf)}`);
+  // One seen in the future silenced the capture detector for its stage until that day.
+  await plant(dir, 'reviewer/ahead.md', recurring('reviewer-ahead', 'reviewer', 1).replace(/^---\n/, '---\nlast_seen: 2999-01-01\n'));
+  expect(run(['pills', '--project', dir], { loud: true }).out.includes('reviewer/ahead.md was last seen 2999-01-01, which is in the future'), 'pills: a last_seen in the future is a problem');
+  await rm(join(dir, '.claude', 'pills', 'reviewer', 'ahead.md'));
 }
 
 
