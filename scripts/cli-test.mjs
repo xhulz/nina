@@ -3127,6 +3127,13 @@ const dated = (date, status = 'active') =>
   const orchestrator = through({});
   const stage = through({ agent_id: 'stage-1' });
   expect(orchestrator.status === 0 && orchestrator.stdout === '' && stage.status !== 0, `guard: the orchestrator's shell commands pass without loading the package, a stage's load it — got ${orchestrator.status}/${stage.status}`);
+  // So does every tool call the cost watch's hook: it watches subagents only, and the orchestrator's calls go
+  // through before the package is loaded.
+  await writeFile(join(bare, 'scripts', 'cost-watch.mjs'), await readFile(join(bed, 'scripts', 'cost-watch.mjs'), 'utf8'));
+  const watched = (fields) => spawnSync(process.execPath, [join(bare, 'scripts', 'cost-watch.mjs')], { input: JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: 'Read', ...fields }), encoding: 'utf8' });
+  const unwatched = watched({});
+  const subagent = watched({ agent_id: 'stage-1' });
+  expect(unwatched.status === 0 && unwatched.stdout === '' && subagent.status !== 0, `cost watch: the orchestrator's calls pass without loading the package, a subagent's load it — got ${unwatched.status}/${subagent.status}`);
   expect(Boolean(command) && command.includes('edit-guard.mjs'), `guard: a new project is wired for the guard — got ${JSON.stringify(settings.hooks.PreToolUse)}`);
   const fired = spawnSync('sh', ['-c', command ?? 'false'], {
     input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: join(bed, 'CLAUDE.md') } }),
