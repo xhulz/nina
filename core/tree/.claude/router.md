@@ -108,7 +108,7 @@ stage invokes them through the `Skill` tool. The architect cites which skill inf
 reviewer rejects a spec touching a surface with a mandatory skill that cites none and says nothing of why.
 
 ### Devops owns the deploy
-Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change, quoted in the dispatch.**
+Invoke **devops** after **qa PASS** on any step that changes a deployed surface (API, frontend, schema, deploy config, secrets, platform bindings). It is the stage that executes Hard Rule #14 — the reviewer only checks that the spec *has* a preview-deploy plan. Skip it for steps that touch only tests, docs, or the harness, and while the project has no preview target yet. **Preview and staging it deploys on its own; production needs an explicit go from {{OWNER}} for that specific change, quoted in the dispatch.**
 <!-- nina:slot frontend.2 -->
 
 ### Look at every loop-back for a lesson

@@ -65,7 +65,7 @@ Each stage has: **Input** → what arrives, **Output** → the artifact handed o
 
 ### Devops (deploy)
 
-- **Trigger:** qa PASS on a step that changes a deployed surface. Not for test-only, docs-only or harness-only steps.
+- **Trigger:** qa PASS on a step that changes a deployed surface. Not for test-only, docs-only or harness-only steps, nor while the project has no preview target yet.
 - **Input:** qa PASS + the touched-package list + the architect spec's preview-deploy plan.
 - **Output:** `DEPLOYED` (targets, migrations, the smoke it actually ran, the rollback) or `BLOCKED` (what stopped it, which stage owns the fix).
 - **Tools:** what its spec's `tools:` grants. **No edits to code, tests or config.**
