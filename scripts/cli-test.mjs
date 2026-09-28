@@ -181,10 +181,50 @@ expect(
   await writeFile(join(dir, 'package.json'), '{"name":"asked","private":true}\n');
   for (const flag of ['--help', '-h']) {
     const { status, out } = run(['init', '--project', dir, flag], { loud: true });
-    expect(status === 0 && out.includes('usage: nina <command>'), `help: \`nina init ${flag}\` prints the usage — got ${status}\n${out}`);
+    expect(status === 0 && out.includes('usage: nina init') && out.includes('--surfaces <list>'), `help: \`nina init ${flag}\` prints its usage and options — got ${status}\n${out}`);
   }
   expect(!existsSync(join(dir, '.nina')), 'help: `nina init --help` initialises nothing');
   expect((await readFile(join(dir, 'package.json'), 'utf8')) === '{"name":"asked","private":true}\n', 'help: `nina init --help` leaves package.json as it was');
+  expect(run(['help', 'compose'], { loud: true }).out.includes('usage: nina compose'), 'help: `nina help <command>` prints that command\'s usage');
+}
+
+// ─── arguments: what a command does not take is refused before it runs ──────────────────
+{
+  // An option a command did not take was ignored: `compose --chek` composed over the tree it was meant to
+  // check. A value was taken on trust: `--project --quiet` acted on a directory called `--quiet`, and a
+  // `--project` with nothing after it crashed `check`.
+  const bed = await sound('plain', 'dev');
+  run(['compose', '--project', bed]);
+  const edited = `${await readFile(join(bed, 'CLAUDE.md'), 'utf8')}edited by hand\n`;
+  await writeFile(join(bed, 'CLAUDE.md'), edited);
+  const typo = run(['compose', '--project', bed, '--chek'], { loud: true });
+  expect(
+    typo.status === 2 && typo.out.includes('takes no option --chek') && (await readFile(join(bed, 'CLAUDE.md'), 'utf8')) === edited,
+    `arguments: an option a command does not take is refused, and nothing runs — got ${typo.status}\n${typo.out}`,
+  );
+  const swallowed = run(['check', '--project', '--quiet'], { loud: true });
+  const trailing = run(['check', '--project'], { loud: true });
+  expect(
+    swallowed.status === 2 && swallowed.out.includes('--project needs a value') && trailing.status === 2 && !trailing.out.includes('TypeError'),
+    `arguments: an option that takes a value is given one — got ${swallowed.out}\n${trailing.out}`,
+  );
+  const extra = run(['stats', 'everything'], { loud: true });
+  expect(extra.status === 2 && extra.out.includes('stats takes no argument'), `arguments: an argument a command does not take is refused — got ${extra.out}`);
+
+  // A project may run this compiler over the layers of an older release, whose harness-check calls it with
+  // the options of its day: every one of them is still taken.
+  const calls = new Set();
+  for (const version of await readdir(join(ROOT, 'releases'))) {
+    const script = await readFile(join(ROOT, 'releases', version, 'core', 'tree', 'scripts', 'harness-check.mjs'), 'utf8').catch(() => '');
+    for (const [, list] of script.matchAll(/args: \[([^\]]*)\]/g)) calls.add(list);
+  }
+  const refused = [];
+  for (const list of calls) {
+    const args = [...list.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+    const { out } = run([...args, '--project', join(bed, 'nowhere')], { loud: true });
+    if (/takes no option|needs a value|takes no argument/.test(out)) refused.push(args.join(' '));
+  }
+  expect(calls.size >= 4 && refused.length === 0, `arguments: every call an older release's harness-check makes is still taken — refused: ${refused.join('; ')}`);
 }
 
 // ─── init: a surface the core offers but nobody wrote a question for ────────────────────
@@ -1263,7 +1303,7 @@ async function sound(fixture, core) {
   const bare = run(['learn', '--project', other, '--close'], { loud: true });
   const shared = run(['learn', '--project', other, '--close', 'r-'], { loud: true });
   expect(
-    bare.status === 1 && shared.status === 1 && shared.out.includes('matches 3 requests') &&
+    bare.status === 2 && bare.out.includes('--close needs a value') && shared.status === 1 && shared.out.includes('matches 3 requests') &&
       JSON.stringify(await requestFiles()) === untouched && (await readFile(join(other, '.claude', 'pills', 'qa', 'local.md'), 'utf8')) === localPill,
     `learn --close: with no name, or a prefix more than one request shares, closes nothing — got ${bare.status}/${shared.status}\n${bare.out}\n${shared.out}`,
   );
