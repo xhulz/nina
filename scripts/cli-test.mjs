@@ -4434,6 +4434,38 @@ const dated = (date, status = 'active') =>
   expect(Boolean(kept) && (await readFile(join(out, kept), 'utf8')).includes('toolu_pruned'), 'snapshot: a rebuild keeps the record it replaces beside it');
 }
 
+// ─── snapshot: each round says what it ran under ────────────────────────────────────────
+{
+  // A rule is judged on the rounds that ran under it: without the pin a round was captured under, "0 of 16
+  // loop-backs named their issues" was measured over reports written before the rule existed.
+  const project = await scratch();
+  await mkdir(join(project, '.nina'), { recursive: true });
+  const pinTo = (core) => writeFile(join(project, '.nina', 'profile.json'), JSON.stringify({ core, surfaces: [], vocabulary: {} }));
+  await pinTo('0.30.0');
+  const slug = slugFor(project);
+  const transcripts = join(SUITE_HOME, '.claude', 'projects', slug);
+  await mkdir(transcripts, { recursive: true });
+  const dispatch = (id, at) =>
+    JSON.stringify({ type: 'assistant', uuid: `u-${id}`, timestamp: at, sessionId: 's1', cwd: project, version: '2.1.300', message: { content: [{ type: 'tool_use', id, name: 'Agent', input: { subagent_type: 'reviewer' } }] } });
+  await writeFile(join(transcripts, 's1.jsonl'), `${dispatch('toolu_v1', '2026-09-20T10:00:00.000Z')}\n`);
+  const out = await scratch();
+  const snap = (...extra) => run(['snapshot', '--project', slug, '--exact', '--out', out, ...extra]);
+  const stored = async () => Object.fromEntries((await readFile(join(out, `${slug}.jsonl`), 'utf8')).trim().split('\n').map((l) => JSON.parse(l)).map((r) => [r.dispatch_id, r]));
+  snap();
+  const first = await stored();
+  expect(first.toolu_v1?.core === '0.30.0' && first.toolu_v1?.claude_code === '2.1.300', `snapshot: a round records the pin and the Claude Code it ran under — got ${JSON.stringify(first.toolu_v1)}`);
+  await pinTo('0.35.0');
+  await writeFile(join(transcripts, 's1.jsonl'), `${await readFile(join(transcripts, 's1.jsonl'), 'utf8')}${dispatch('toolu_v2', '2026-09-21T10:00:00.000Z')}\n`);
+  snap();
+  snap('--rebuild');
+  const later = await stored();
+  expect(
+    later.toolu_v1?.core === '0.30.0' && later.toolu_v2?.core === '0.35.0',
+    `snapshot: a round keeps the pin it was captured under, through a new pin and a rebuild — got ${JSON.stringify(later)}`,
+  );
+  expect(((await stat(join(out, `${slug}.jsonl`))).mode & 0o777) === 0o600, 'snapshot: the store is readable by its owner alone');
+}
+
 // ─── eval: what a release's reviewer catches, graded without a model ────────────────────
 {
   const fixture = join(ROOT, 'evals', 'reviewer');

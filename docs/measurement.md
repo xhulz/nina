@@ -34,9 +34,19 @@ identical.
 
 `~/.nina/snapshots/` holds **metadata only** — role, verdict, timestamps, duration, branch,
 which skills were invoked, how many pills the run opened, how many issues a loop-back named, how many
-distinct files the run wrote, and the tokens the run spent by kind with the model that spent them and the effort level it ran at. No report text, no source, no PII, not
-even a pill's path or an issue's id — and no dollars: a price is a fact about a date, so `stats`
-prices the tokens when it reads them, at the list prices in `src/prices.mjs`, and says which date's.
+distinct files the run wrote, the tokens the run spent by kind with the model that spent them and the effort
+level it ran at, the release the project pinned when the round was captured (`core`) and the Claude Code that
+ran it (`claude_code`). No report text, no source, no PII, not even a pill's path or an issue's id — and no
+dollars: a price is a fact about a date, so `stats` prices the tokens when it reads them, at the list prices
+in `src/prices.mjs`, and says which date's.
+
+One field is text a model wrote: `desc`, the three-to-five-word description the orchestrator gives a
+dispatch. It is what names a cycle in `runs` and a loop-back in `learn`, so it is kept — and kept on this
+machine: nothing sends it to Langfuse, and the store is written readable by its owner alone (`0600`).
+
+A round records `core` when it is first captured and keeps it: a rebuild does not stamp today's pin on weeks
+of history. So a rule is judged only on the rounds that ran under it, and rounds captured before the field
+existed are left out of what a rule is judged on rather than read as breaking it.
 Those are API-equivalent figures; a subscription pays nothing per token, and the unit is still the
 right one for comparing one stage with another. Keep it that way.
 

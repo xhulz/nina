@@ -9,9 +9,10 @@
  */
 
 import { copyFile, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { snapshotsDir } from '../paths.mjs';
+import { HARNESS, snapshotsDir } from '../paths.mjs';
+import { decodeProjectDir } from './stats.mjs';
 import { readStoreFile } from '../store.mjs';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { listProjects, scanProject } from '../transcripts.mjs';
 
@@ -42,7 +43,7 @@ async function readJson(path) {
  */
 async function writeAtomicText(path, text) {
   const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tmp, text);
+  await writeFile(tmp, text, { mode: 0o600 });
   await rename(tmp, path);
 }
 
@@ -57,7 +58,8 @@ async function writeAtomic(file, records) {
   // Unique per writer: two snapshots of one project at once used the same temporary name, and
   // could interleave into it before either renamed it into place.
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tmp, `${records.map((r) => JSON.stringify(r)).join('\n')}\n`);
+  // Its owner's alone: it holds each dispatch's description, which the orchestrator wrote.
+  await writeFile(tmp, `${records.map((r) => JSON.stringify(r)).join('\n')}\n`, { mode: 0o600 });
   await rename(tmp, file);
 }
 
@@ -149,6 +151,23 @@ export async function snapshot(argv, ctx) {
 }
 
 /**
+ * The release a project pins now, or null when its directory or profile cannot be found.
+ *
+ * @param {string} slug - Its store name.
+ * @returns {string|null}
+ */
+function pinOf(slug) {
+  const dir = decodeProjectDir(slug);
+  if (!dir) return null;
+  try {
+    const core = JSON.parse(readFileSync(join(dir, HARNESS, 'profile.json'), 'utf8')).core;
+    return typeof core === 'string' ? core : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Snapshots one project, under its lock.
  *
  * @returns {Promise<number>} How many rounds it captured that were not on record.
@@ -158,12 +177,21 @@ async function snapshotProject(project, { outDir, rebuild, quiet, legacy }) {
   // The store is the only copy of history older than the transcripts, and a rebuild re-reads only what is
   // still on disk: the record it replaces is kept beside it first.
   if (rebuild && existsSync(file)) await copyFile(file, `${file}.before-rebuild-${new Date().toISOString().replace(/[:.]/g, '-')}`);
-  const prior = rebuild ? [] : readStoreFile(file, { raw: true });
+  const stored = readStoreFile(file, { raw: true });
+  const prior = rebuild ? [] : stored;
   const own = rebuild ? {} : await readJson(join(outDir, `${project.slug}.state.json`));
   const cursors = rebuild ? {} : (own.cursors ?? legacy[project.slug]?.cursors ?? {});
 
   const scanned = await scanProject(project.dir, { cursors, records: prior });
-  const records = scanned.records.map((r) => ({ project: project.slug, ...r }));
+  // The release the project pinned when a round was first captured, so a rule is judged only on the rounds
+  // that ran under it. A round already on record keeps what it had — a rebuild included, which would
+  // otherwise stamp today's pin on weeks of history — and only a new one takes today's.
+  const pinned = new Map(stored.map((r) => [r.dispatch_id, r.core ?? null]));
+  const pin = pinOf(project.slug);
+  const records = scanned.records.map((r) => {
+    const core = pinned.has(r.dispatch_id) ? pinned.get(r.dispatch_id) : pin;
+    return { project: project.slug, ...r, ...(core ? { core } : {}) };
+  });
   if (records.length === 0) return 0;
 
   const fresh = records.length - prior.length;
