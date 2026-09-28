@@ -22,6 +22,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { asRead } from '../src/store.mjs';
+import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
 import { applied, closeAnswered, overdue, slugFor, verified } from '../src/commands/learn.mjs';
 import { askOrder } from '../src/commands/init.mjs';
@@ -4506,6 +4507,16 @@ const dated = (date, status = 'active') =>
     `snapshot: with its cursors gone, a re-read keeps what the store held and adds only what is new — got ${JSON.stringify(after)}`,
   );
   expect(existsSync(join(out, `${slug}.state.json`)), 'snapshot: and the cursors are written again');
+  // Except where the re-read settled a round from the report its stage handed back and the store had not: the
+  // notification's reading is the one a handback corrects.
+  const noticed = { verdict: 'REJECTED', verdict_source: 'first-line', issues: 1, duration_s: 10, result_ts: 'a' };
+  const handed = { verdict: 'APPROVED', verdict_source: 'handback', issues: 0, duration_s: 20, result_ts: 'b', agent_read: true };
+  const corrected = rereadOver(noticed, handed);
+  const settled = rereadOver({ ...handed, duration_s: 999 }, { ...handed, duration_s: 20 });
+  expect(
+    corrected.verdict === 'APPROVED' && corrected.issues === 0 && corrected.result_ts === 'b' && settled.duration_s === 999,
+    `snapshot: a re-read keeps what the store held, but not over a round it settled from its handback — got ${JSON.stringify({ corrected, settled })}`,
+  );
 }
 
 // ─── snapshot: a sandbox reads only its own transcripts ─────────────────────────────────
