@@ -1917,6 +1917,22 @@ const dated = (date, status = 'active') =>
   expect(!/dba: .*gates anything/.test(out), `stats: a verdict outside the role's own tokens is not read — got ${out}`);
   expect(asRead({ role: 'dba', verdict: 'PASS' }).verdict === 'UNCLEAR' && asRead({ role: 'qa', verdict: 'PASS' }).verdict === 'PASS', 'store: a verdict is read against the vocabulary of the role that gave it');
 
+  // The table's column and the sentence under it read one share, and agents outside the pipeline are not stages.
+  const shares = join(await scratch(), 'snaps');
+  await history(shares, '-shares', [
+    { role: 'reviewer', verdict: 'APPROVED', ts: '2026-01-01' },
+    { role: 'reviewer', verdict: 'APPROVED', ts: '2026-01-02' },
+    { role: 'reviewer', verdict: 'UNCLEAR', ts: '2026-01-03', source: 'none' },
+    { role: 'reviewer', ts: '2026-01-04' },
+    ...Array.from({ length: 5 }, (_, i) => ({ role: 'Explore', verdict: 'UNCLEAR', ts: `2026-01-1${i}`, source: 'none' })),
+  ]);
+  const shared = run(['stats', '--snapshots', shares, '--all'], { loud: true }).out;
+  expect(
+    /reviewer\s+4\s+4\s+0\s+0%\s+\S+\s+50%/.test(shared) && shared.includes('50% of finished rounds have no verdict that can be read') &&
+      !/^\s+Explore\s+\d/m.test(shared) && shared.includes('5 round(s) by agents outside the pipeline (Explore ×5)'),
+    `stats: the unreadable share is one number in the table and under it, and Claude Code's own agents are not stages — got ${shared}`,
+  );
+
   // `--project` means one thing in every report: a directory is that project.
   await history(snapshotsDir(), slugFor(dir), [{ role: 'reviewer', verdict: 'REJECTED', ts: '2026-03-01' }]);
   const byDir = run(['stats', '--project', dir], { loud: true });

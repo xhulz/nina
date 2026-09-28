@@ -678,7 +678,14 @@ export async function stats(argv, ctx) {
   // A dispatch a hook denied never ran, so it is neither a run nor a missing verdict.
   const held = records.filter((r) => r.status === 'denied').length;
   const now = Date.now();
+  // Agents outside the pipeline — Claude Code's own, a project's own — have no verdict to give. Read as
+  // stages they were 100% unreadable and were told to add a verdict token their spec never asked for.
+  const outside = new Map();
   for (const r of records.filter((r) => r.status !== 'denied')) {
+    if (!PIPELINE_ROLES.has(r.role)) {
+      outside.set(r.role, (outside.get(r.role) ?? 0) + 1);
+      continue;
+    }
     if (!byRole.has(r.role)) {
       byRole.set(r.role, { n: 0, runs: new Set(), done: 0, lost: 0, clear: 0, loop: 0, unclear: 0, declared: 0, durations: [] });
     }
@@ -744,9 +751,14 @@ export async function stats(argv, ctx) {
   const lost = rows.reduce((a, [, s]) => a + s.lost, 0);
   const done = rows.reduce((a, [, s]) => a + s.done, 0);
   console.log('');
+  if (outside.size > 0) {
+    const named = [...outside.entries()].sort((a, b) => b[1] - a[1]).map(([role, n]) => `${role} ×${n}`).join(', ');
+    console.log(note(`${[...outside.values()].reduce((a, b) => a + b, 0)} round(s) by agents outside the pipeline (${named}) — not stages, so no verdict is asked of them.`, 'info'));
+  }
   if (unreadable === 0 && lost === 0) console.log(note("every finished round's verdict could be read.", 'ok'));
+  // The same share as the table's column: rounds that finished, or should have, with no verdict read.
   if (unreadable > 0) {
-    console.log(note(`${pct(unreadable, done + lost)} of finished rounds report no machine-readable verdict. Those stages need a verdict token on the report's first line.`, 'warn'));
+    console.log(note(`${pct(unreadable + lost, done + lost)} of finished rounds have no verdict that can be read. Those stages need a verdict token on the report's first line.`, 'warn'));
   }
   if (lost > 0) {
     console.log(
