@@ -1255,6 +1255,19 @@ async function sound(fixture, core) {
   const both = inFake(['requests', '--answer', '2026-01-01-qa__twin', '--in', 'core/tree/.claude/agents/reviewer.md']);
   expect(both.status === 0 && both.out.includes('2 projects filed this same id'), `requests: one id filed by two projects is answered once, out loud — got ${both.status}\n${both.out}`);
 
+  // A bare --close matched every request by an empty prefix and closed whichever sorted first, retiring its
+  // pill; a prefix several requests share is as ambiguous. Neither closes anything.
+  const requestFiles = async () => Promise.all(['r-local.md', 'r-manual.md', 'r-money.md'].map((f) => readFile(join(other, '.nina', 'requests', f), 'utf8')));
+  const untouched = JSON.stringify(await requestFiles());
+  const localPill = await readFile(join(other, '.claude', 'pills', 'qa', 'local.md'), 'utf8');
+  const bare = run(['learn', '--project', other, '--close'], { loud: true });
+  const shared = run(['learn', '--project', other, '--close', 'r-'], { loud: true });
+  expect(
+    bare.status === 1 && shared.status === 1 && shared.out.includes('matches 3 requests') &&
+      JSON.stringify(await requestFiles()) === untouched && (await readFile(join(other, '.claude', 'pills', 'qa', 'local.md'), 'utf8')) === localPill,
+    `learn --close: with no name, or a prefix more than one request shares, closes nothing — got ${bare.status}/${shared.status}\n${bare.out}\n${shared.out}`,
+  );
+
   // Closing by hand stays one command, and it retires the pill with it.
   const closed = run(['learn', '--close', 'r-manual', '--project', other]);
   const after = await readFile(join(other, '.claude', 'pills', 'retired', 'qa', 'local.md'), 'utf8').catch(() => '');

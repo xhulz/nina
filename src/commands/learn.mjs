@@ -305,11 +305,20 @@ async function answerRequest(target, file, answer) {
  */
 async function close(target, which) {
   const dir = join(target, HARNESS, 'requests');
-  const file = (await readdir(dir).catch(() => [])).find((f) => f === which || join(dir, f) === resolve(target, which) || f.startsWith(which));
-  if (!file) {
-    console.error(`  no request matching ${which} under ${HARNESS}/requests/\n`);
+  const files = (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.md'));
+  // The name exactly, else a prefix of one — and exactly one, as `requests --answer` asks. A prefix alone let
+  // an empty name match every file: a bare `--close` closed whichever request sorted first and retired its pill.
+  const exact = files.filter((f) => f === which || join(dir, f) === resolve(target, which));
+  const matches = exact.length > 0 ? exact : files.filter((f) => which && f.startsWith(which));
+  if (matches.length !== 1) {
+    console.error(
+      matches.length === 0
+        ? `  no request matching "${which}" under ${HARNESS}/requests/ — \`nina learn\` lists them\n`
+        : `  "${which}" matches ${matches.length} requests — name one:\n${matches.map((f) => `    ${f}`).join('\n')}\n`,
+    );
     return 1;
   }
+  const [file] = matches;
   const fields = frontmatter(await readFile(join(dir, file), 'utf8')) ?? {};
   const { pill } = await answerRequest(target, file, { status: 'closed', retire: true });
   console.log(`  closed ${HARNESS}/requests/${file}`);
