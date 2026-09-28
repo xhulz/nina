@@ -14,13 +14,13 @@
 import { amber, bar, bold, dim, heading, note, pink, stacked } from '../look.mjs';
 import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { createReadStream, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import { ROLE_TOKENS, isLoopBack, runOf } from '../transcripts.mjs';
+import { ROLE_TOKENS, isLoopBack, runOf, transcriptsOf } from '../transcripts.mjs';
 import { frontmatter, pillFiles } from './pills.mjs';
-import { HARNESS, snapshotsDir } from '../paths.mjs';
+import { HARNESS, slugFor, snapshotsDir } from '../paths.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { layerRootFor } from './compose.mjs';
 import { PRICES_AS_OF, costOf } from '../prices.mjs';
@@ -80,17 +80,64 @@ async function load(dir, opts) {
 }
 
 
+/** Directories already found for an encoded name: `stats` asks for the same project many times over. */
+const decoded = new Map();
+
+/**
+ * The directory a project's sessions ran in, as its own transcripts record it: every line carries the
+ * session's `cwd`. Taken only when it encodes back to the same name and is still there.
+ *
+ * @param {string} encoded - A snapshot's project name, which is also its transcript directory's.
+ * @returns {string|null}
+ */
+function recordedDir(encoded) {
+  const dir = transcriptsOf(encoded);
+  let files = [];
+  try {
+    files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+  } catch {
+    return null;
+  }
+  for (const file of files.slice(0, 5)) {
+    let head = '';
+    try {
+      const fd = openSync(join(dir, file), 'r');
+      try {
+        const buffer = Buffer.alloc(64 * 1024);
+        head = buffer.toString('utf8', 0, readSync(fd, buffer, 0, buffer.length, 0));
+      } finally {
+        closeSync(fd);
+      }
+    } catch {
+      continue;
+    }
+    for (const line of head.split('\n')) {
+      let cwd;
+      try {
+        cwd = JSON.parse(line)?.cwd;
+      } catch {
+        continue;
+      }
+      if (typeof cwd === 'string' && slugFor(cwd) === encoded && existsSync(cwd)) return cwd;
+    }
+  }
+  return null;
+}
+
 /**
  * Turns a snapshot's encoded project name back into a directory.
  *
- * The encoding replaces every separator with a dash, so `Code-IA-harness` could be
- * `Code/IA/harness` or `Code/IA-harness` and the string alone cannot say which. The
- * filesystem can, so the split is resolved against it rather than guessed.
+ * The encoding makes every character that is not a letter or a digit a dash, so the name alone cannot say
+ * what it was. The project's transcripts can: each line records the directory its session ran in. Failing
+ * that, the split is resolved against the file system — which can only rebuild `/` from a dash, so a
+ * project whose path held a `.`, a space or an `_` was never found, and its pills, models and requests went
+ * missing from every report without a word.
  *
  * @param {string} encoded - The `project` field of a snapshot record.
  * @returns {string | null} The directory, or `null` when no split of the name exists.
  */
 export function decodeProjectDir(encoded) {
+  if (decoded.has(encoded)) return decoded.get(encoded);
   const parts = encoded.replace(/^-/, '').split('-');
   const walk = (base, i) => {
     if (i === parts.length) return base;
@@ -102,7 +149,10 @@ export function decodeProjectDir(encoded) {
     }
     return null;
   };
-  return walk('/', 0);
+  const found = recordedDir(encoded) ?? walk('/', 0);
+  // Only what was found: a directory made after a miss is found the next time it is asked for.
+  if (found) decoded.set(encoded, found);
+  return found;
 }
 
 /**

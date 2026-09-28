@@ -1670,6 +1670,21 @@ source: the 2026-09-01 review
     `stats: should resolve an encoded project whose own name contains dashes — got ${decodeProjectDir(dir.replace(/\//g, '-'))}`,
   );
   expect(decodeProjectDir('-no-such-place-anywhere') === null, 'stats: should return null for a path that is gone');
+
+  // A dash in the name stands for any character that is not a letter or a digit, and the file system can only
+  // rebuild a `/` from one: a project under `my.app`, `two words` or `snake_case` was never found, and its pills,
+  // models and requests went missing from every report. Its transcripts record where each session ran.
+  const odd = join(dir, 'my.app', 'two words_here');
+  await mkdir(odd, { recursive: true });
+  const slug = slugFor(odd);
+  const savedRoot = process.env.NINA_TRANSCRIPTS;
+  process.env.NINA_TRANSCRIPTS = await scratch();
+  expect(decodeProjectDir(slug) === null, 'stats: (a path with a dot or a space cannot be split back from its name alone)');
+  await mkdir(join(process.env.NINA_TRANSCRIPTS, slug), { recursive: true });
+  await writeFile(join(process.env.NINA_TRANSCRIPTS, slug, 's.jsonl'), `${JSON.stringify({ type: 'user', cwd: odd, message: { content: 'hi' } })}\n`);
+  expect(decodeProjectDir(slug) === odd, `stats: a project whose path holds a dot, a space or an _ is found from where its sessions ran — got ${decodeProjectDir(slug)}`);
+  if (savedRoot === undefined) delete process.env.NINA_TRANSCRIPTS;
+  else process.env.NINA_TRANSCRIPTS = savedRoot;
 }
 
 /**
