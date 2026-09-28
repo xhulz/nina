@@ -2194,6 +2194,11 @@ const dated = (date, status = 'active') =>
     layerRootFor(installed, '0.0.1').dir === join(installed, 'releases', '0.0.1'),
     'packaging: a pinned release resolves out of the package',
   );
+  // A pin is a name: one that climbs out of releases/ reads layers from anywhere, and the hooks' own copies of this
+  // check allowed `..`.
+  await mkdir(join(installed, 'elsewhere', 'core'), { recursive: true });
+  const climbs = ['../elsewhere', '..', '0.0.1/../../elsewhere', 7].map((core) => layerRootFor(installed, core));
+  expect(climbs.every((r) => /not a release name/.test(r.error ?? '')), `packaging: a pin that is a path is refused — got ${JSON.stringify(climbs)}`);
 
   // Cutting a release freezes the working tree, so it is a repo operation either way.
   const log = console.error;

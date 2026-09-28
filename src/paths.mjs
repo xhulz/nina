@@ -125,6 +125,36 @@ export function readProfile(target) {
 }
 
 /**
+ * Where a project's layers are read from.
+ *
+ * A project pins a frozen release, or tracks the working tree with "dev". A pinned release
+ * that is missing is an error, never a silent fall back to whatever the harness happens to
+ * look like right now: that would compose an unreviewed core into a project that asked for
+ * a reviewed one, and nothing downstream would say so. Every reader asks this one: the commands,
+ * and the hooks that ask whether the pin ships them.
+ *
+ * @param {string} root - The NINA install directory.
+ * @param {string|undefined} core - The profile's `core` field.
+ * @returns {{dir: string}|{error: string}}
+ */
+export function layerRootFor(root, core) {
+  if (!core || core === 'dev') {
+    // `dev` means "track the layers as they are being worked on", which only exists in a
+    // checkout of this repo. An installed package ships frozen releases and nothing else,
+    // so say that rather than composing an empty tree and reporting nothing wrong.
+    if (!existsSync(join(root, 'core'))) {
+      return { error: `profile pins core "dev", which tracks the NINA working tree — ${root} is an installed package and has only releases` };
+    }
+    return { dir: root };
+  }
+  // A name, never a path: `../x` would read layers from outside the releases.
+  if (typeof core !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(core)) return { error: `profile pins core ${JSON.stringify(core)}, which is not a release name` };
+  const dir = join(root, 'releases', core);
+  if (!existsSync(dir)) return { error: `profile pins core ${core}, which is not in ${join(root, 'releases')}` };
+  return { dir };
+}
+
+/**
  * Where `nina upgrade --apply` writes down a move while it is in flight: the versions it moves between, the
  * files it composes for the first time, and — under {@link movedFrom} — every file it can touch, as it was.
  * It is written before the pin moves and removed once the move is verified or rolled back, so one that is
