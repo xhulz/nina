@@ -32,9 +32,10 @@ that could end a loop.
 counting its own rounds. `core/tree/scripts/loop-gate.mjs` is a composed script the project's hooks run,
 and it keeps the count instead: a ledger per session under `~/.nina/gate/`, metadata only — which stage
 reported which verdict token and the ids it gave its issues, which dispatch launched which agent and
-when, when the owner spoke — written by the hooks that see each fact as it happens. An issue id is the
-one thing in it a model wrote: a label of at most 40 characters from the `ISSUES` line every spec puts
-under a verdict that sends work back, never a sentence of the report. A stage's report comes from `PostToolUse` on
+when, when the owner spoke — written by the hooks that see each fact as it happens. Two things in it
+are a model's words, and both are short labels: an issue id, at most 40 characters from the `ISSUES` line every
+spec puts under a verdict that sends work back, never a sentence of the report; and the name an agent was
+launched with, at most 80. A stage's report comes from `PostToolUse` on
 `SubagentHandback`, verbatim, or from `SubagentStop` when the report was the last message; launches from
 `PreToolUse` and `PostToolUse` on `Agent|Task|SendMessage`; the owner from `UserPromptSubmit`. `PreToolUse`
 decides.
