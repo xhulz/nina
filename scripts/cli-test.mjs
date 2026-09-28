@@ -1051,6 +1051,15 @@ async function sound(fixture, core) {
   expect(noEdges.length === 1 && noEdges[0].includes('## Edges'), `graph: a missing Edges section is one problem, not a wall — got ${noEdges.length}`);
   const dup = validateGraph(parseGraph('## Stages\n\n- `qa` — a\n- `qa` — b\n\n## Edges\n\n- `qa` → `done` on `PASS`\n- `qa` → `human` on `FAIL`\n'), new Map([['qa', '`<TOKEN>` is one of `PASS` or `FAIL`']]));
   expect(dup.some((p) => p.includes('more than once')), 'graph: a stage listed twice is reported');
+  // The shape of the whole, which nothing checked: every one of these validated clean.
+  const shaped = (edges, stages = ['a', 'b']) =>
+    validateGraph(parseGraph(`## Stages\n\n${stages.map((x) => `- \`${x}\` — x`).join('\n')}\n\n## Edges\n\n${edges.join('\n')}\n`), new Map(stages.map((x) => [x, ''])));
+  expect(shaped(['- `a` → `b` on `SPEC-READY`', '- `b` → `a` on `DIFF-READY`', '- `b` → `done` on `APPROVED`']).some((p) => p.includes('goes round `a` → `b` → `a`')), 'graph: a cycle on verdicts that pass work on is a loop with no cap');
+  expect(shaped(['- `a` → `done` on `APPROVED`'], ['a', 'b']).some((p) => p.includes('`b` has no edge in or out')), 'graph: a stage no edge touches is reported');
+  expect(shaped(['- `a` → `b` on `SPEC-READY`', '- `b` → `a` on `REJECTED` · max 2']).some((p) => p.includes('no chain of edges from `a` reaches')), 'graph: a stage from which work can never end is reported');
+  expect(shaped(['- `a` → `done` on `APPROVED`', '- `done` → `a` on `APPROVED`'], ['a']).some((p) => p.includes('an edge leaves `done`')), 'graph: an edge out of a terminal is reported');
+  expect(shaped(['- `a` → `done` on `APPROVED`', '- `a` → `b` on `REJECTED` · max 0', '- `b` → `done` on `APPROVED`']).some((p) => p.includes('capped at 0')), 'graph: a cap of 0 is reported');
+  expect(shaped(['- `a` → `b` on `SPEC-READY`', '- `b` → `done` on `APPROVED`', '- `b` → `a` on `REJECTED` · max 2']).length === 0, 'graph: and a well-formed pipeline has none of them');
 
   // capture: an event, not a rate
   expect(overdue(loops('reviewer', 1, 2, 3), [], now).map((o) => o.role).join() === 'reviewer', 'learn: three loop-backs and no lesson is overdue');
