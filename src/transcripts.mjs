@@ -20,8 +20,15 @@ import { homedir } from 'node:os';
 /** Root under which Claude Code stores one directory of transcripts per project. */
 export const PROJECTS_ROOT = join(homedir(), '.claude', 'projects');
 
-/** The transcript directory of a project, by its snapshot name; `NINA_TRANSCRIPTS` moves the root, for tests. */
-export const transcriptsOf = (slug) => join(process.env.NINA_TRANSCRIPTS ?? PROJECTS_ROOT, slug);
+/**
+ * Where the transcripts are read from: Claude Code's own directory, or `NINA_TRANSCRIPTS`, which moves it for
+ * a test. Every reader asks this: listing the projects read Claude Code's own whatever the variable said, so a
+ * snapshot meant to stay in a sandbox captured the machine's real projects into it.
+ */
+const transcriptsRoot = () => process.env.NINA_TRANSCRIPTS ?? PROJECTS_ROOT;
+
+/** The transcript directory of a project, by its snapshot name. */
+export const transcriptsOf = (slug) => join(transcriptsRoot(), slug);
 
 /**
  * The verdict tokens the agent specs mandate on a report's first line, per role.
@@ -888,10 +895,10 @@ export function tokensOf(usage) {
  * @returns {Promise<{slug: string, dir: string, mtime: number}[]>} The projects found.
  */
 export async function listProjects() {
-  const slugs = await readdir(PROJECTS_ROOT).catch(() => []);
+  const slugs = await readdir(transcriptsRoot()).catch(() => []);
   const out = [];
   for (const slug of slugs) {
-    const dir = join(PROJECTS_ROOT, slug);
+    const dir = transcriptsOf(slug);
     const info = await stat(dir).catch(() => null);
     if (info?.isDirectory()) out.push({ slug, dir, mtime: info.mtimeMs });
   }

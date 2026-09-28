@@ -4468,6 +4468,23 @@ const dated = (date, status = 'active') =>
   expect(Boolean(kept) && (await readFile(join(out, kept), 'utf8')).includes('toolu_pruned'), 'snapshot: a rebuild keeps the record it replaces beside it');
 }
 
+// ─── snapshot: a sandbox reads only its own transcripts ─────────────────────────────────
+{
+  // Listing the projects read Claude Code's own directory whatever NINA_TRANSCRIPTS said, so a snapshot meant to
+  // stay in a sandbox captured every real project on the machine into it.
+  const sandbox = await scratch();
+  const slug = '-sandboxed-only';
+  await mkdir(join(sandbox, slug), { recursive: true });
+  await writeFile(
+    join(sandbox, slug, 's1.jsonl'),
+    `${JSON.stringify({ type: 'assistant', uuid: 'u-s', timestamp: '2026-09-20T10:00:00.000Z', sessionId: 's1', message: { content: [{ type: 'tool_use', id: 'toolu_s', name: 'Agent', input: { subagent_type: 'reviewer' } }] } })}\n`,
+  );
+  const out = await scratch();
+  run(['snapshot', '--out', out], { env: { NINA_TRANSCRIPTS: sandbox } });
+  const captured = (await readdir(out)).filter((f) => f.endsWith('.jsonl'));
+  expect(captured.length === 1 && captured[0] === `${slug}.jsonl`, `snapshot: NINA_TRANSCRIPTS decides every transcript read, the list of projects included — got ${captured.join(', ')}`);
+}
+
 // ─── snapshot: each round says what it ran under ────────────────────────────────────────
 {
   // A rule is judged on the rounds that ran under it: without the pin a round was captured under, "0 of 16
