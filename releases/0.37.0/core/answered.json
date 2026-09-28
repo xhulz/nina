@@ -1,0 +1,29 @@
+{
+  "2026-09-22-integration-tester__regenerate-the-premise-index-after-editing-an-integration-doc": {
+    "in": "core/tree/.claude/agents/integration-tester.md"
+  },
+  "2026-09-22-qa__exit-code-is-the-verdict": {
+    "in": "core/tree/.claude/agents/qa.md"
+  },
+  "2026-09-22-shared__test-must-name-the-mutation-that-fails-it": {
+    "in": "core/tree/.claude/agents/reviewer.md"
+  },
+  "2026-09-25-shared__docs-match-final-code": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-09-25-shared__fail-closed-on-every-branch": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-09-25-shared__test-must-fail-under-its-mutation": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-09-25-shared__tsdoc-covers-members": {
+    "in": "core/tree/CLAUDE.md"
+  },
+  "2026-09-26-architect__revision-sweeps-contradicted-text": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-09-26-shared__validate-patterns-against-real-samples": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  }
+}
