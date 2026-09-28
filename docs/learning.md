@@ -100,7 +100,8 @@ model each side ran on, rather than print a number that measures the model:
   twice and came back a third time, and two retired pills went from 3 to 8 and from 5 to 11 with nobody
   told. A pill counted more times than when its now-closed request was filed reopens it: `--check` files a
   request naming where the rule went and in which release, and `nina requests` marks it as a rule that did
-  not hold.
+  not hold. It reopens once the lesson came back as many times as it took to graduate — three: one
+  recurrence may be noise, and `learn` shows it as watched until then.
 - **A stage is handed its lessons.** Every spec told its stage to read its pills, and a stage found them by
   opening every file in its directory and every shared one to see whether it applied — one reviewer read
   one in seven runs of fifteen while twelve applied to it. The loop gate's hook on `SubagentStart` now hands

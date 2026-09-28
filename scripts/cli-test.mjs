@@ -1366,11 +1366,21 @@ async function sound(fixture, core) {
     join(dir, '.nina', 'requests', closed),
     '---\nkind: harness-request\nstatus: closed\nanswered_in: 0.28.14\nrule_in: core/tree/.claude/agents/implementer.md\ndate: 2026-09-05\ncore: 0.28.13\ntarget: core\npill: .claude/pills/reviewer/mutation.md\noccurrences: 3\n---\n',
   );
+  // Back twice: one recurrence may be noise, so it is watched, not reopened — a rule is judged failed on the
+  // evidence that made it, as many occurrences as a lesson takes to graduate.
+  const watched = run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } });
+  const watchedReport = run(['learn', '--project', dir]);
+  expect(
+    (await readdir(join(dir, '.nina', 'requests'))).length === 1 && !watched.out.includes('reopens') &&
+      watchedReport.out.includes('came back 2 time(s) after its rule shipped in 0.28.14 — watched; it reopens at 3'),
+    `learn: a lesson back twice after its rule shipped is watched, not reopened — got ${watched.out}\n${watchedReport.out}`,
+  );
+  await writeFile(join(dir, '.claude', 'pills', 'retired', 'reviewer', 'mutation.md'), '---\napplies_to: [reviewer]\nstatus: retired\ndate: 2026-09-01\nlast_seen: 2026-09-21\noccurrences: 6\n---\n**Rule:** run the mutation.\n');
   const reopened = run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } });
   const filedNow = (await readdir(join(dir, '.nina', 'requests'))).filter((f) => f !== closed);
   const request = filedNow.length === 1 ? await readFile(join(dir, '.nina', 'requests', filedNow[0]), 'utf8') : '';
   expect(
-    reopened.status === 1 && reopened.out.includes('came back 2 time(s) after its rule shipped in 0.28.14') && request.includes(`reopens: ${closed}`) &&
+    reopened.status === 1 && reopened.out.includes('came back 3 time(s) after its rule shipped in 0.28.14') && request.includes(`reopens: ${closed}`) &&
       request.includes('pill: .claude/pills/reviewer/mutation.md') && request.includes('the rule did not hold here'),
     `learn: a lesson that came back after its rule shipped reopens the request, where it was learned — got ${reopened.out}\n${request}`,
   );
