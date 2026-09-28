@@ -13,7 +13,7 @@ later phase, against a second project that can check the rewrite.
 Once a project pins a release, the working core is free to move, and that is when the harness
 can be made generic — the extraction's compromises are recorded in `core/GAPS.md`, closed and
 open. What replaces the byte-exact proof is `fixtures/`: one project per shape worth testing,
-and ten properties that must hold for each, plus one audit of the layers themselves.
+and eleven properties that must hold for each, plus one audit of the layers themselves.
 
 ```bash
 node scripts/compose-test.mjs        # or: pnpm compose:test
@@ -49,6 +49,9 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
    survives. Every dispatch pays for what its spec says, so a file that outgrows its budget is a decision
    made in the commit that raises it, where a reviewer sees the context grow — not an accretion nobody
    chose.
+11. A command that kills processes by pattern keeps to the checkout's own, with `grep -F "$ROOT/"` on
+   the same line. qa used to sweep `vitest|workerd` across the whole machine before and after its run,
+   which took every other project's suite with it, and the owner's `wrangler dev`.
 
 The last check reads the layers rather than a fixture's output. For every core file, a surface's
 technology may be named only if that file is gated on that surface — `Prisma` only under `prisma`,

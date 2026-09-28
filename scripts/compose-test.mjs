@@ -5,7 +5,7 @@
  * While the harness was being extracted, the test was that a composition reproduced a live
  * project byte for byte. That oracle is gone: projects now pin a frozen release, so the
  * working core has no running tree to be checked against. What stands in its place is a
- * fixture project per shape worth testing, and nine properties that must hold for each:
+ * fixture project per shape worth testing, and eleven properties that must hold for each:
  *
  *   1. No `{{PLACEHOLDER}}` survives — the profile's vocabulary covers what the core says.
  *   2. Every unfilled slot belongs to the PROJECT layer. A declared surface that leaves one
@@ -31,6 +31,9 @@
  *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives.
  *      Every dispatch pays for what its spec says, so a file that grows past its budget is a decision to
  *      make in the commit that raises it, not an accretion nobody chose.
+ *  11. A command that kills processes by pattern keeps to the checkout's own (`grep -F "$ROOT/"`).
+ *      qa once swept `vitest|workerd` across the whole machine: every other project's suite, and the
+ *      owner's `wrangler dev`, went with it.
  *
  * Usage: node scripts/compose-test.mjs [--verbose]
  */
@@ -146,6 +149,14 @@ async function runFixture(name) {
       for (const gap of numberingGaps(text)) failures.push(`${rel}: ${gap}`);
     }
 
+    // 11. A command that kills processes by pattern keeps to this checkout's. A pattern alone matches
+    //     every project's test runner on the machine, and the owner's own dev server beside them.
+    for (const [i, line] of text.split('\n').entries()) {
+      if (KILLS.test(line) && !line.includes(OWN_CHECKOUT)) {
+        failures.push(`${rel}:${i + 1}: kills processes by pattern without keeping to this checkout's (${OWN_CHECKOUT})`);
+      }
+    }
+
     // 3. Nothing from an undeclared surface leaks in.
     for (const word of expect.deny ?? []) {
       const line = text.split('\n').findIndex((l) => l.includes(word));
@@ -202,6 +213,12 @@ async function runFixture(name) {
  * fixtures have empty project layers, so this bounds the harness's own share of each file; a project's
  * fragments come on top. Only documents are budgeted: they are what a dispatch reads.
  */
+/** A shell line that kills whatever a pattern matched (property 11). */
+const KILLS = /\b(?:pkill|killall)\b|\bxargs\b[^|]*\bkill\b|\bkill\b[^|]*\$\(\s*(?:pgrep|ps)\b/;
+
+/** The filter that keeps such a line to processes run from under the checkout's root. */
+const OWN_CHECKOUT = 'grep -F "$ROOT/"';
+
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
   '.claude/agents/architect.md': 15000,

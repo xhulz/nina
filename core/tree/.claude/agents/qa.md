@@ -33,9 +33,14 @@ Either:
 `$STRAY` is the pattern that matches this project's test processes — `vitest` at minimum.
 <!-- nina:slot edge-cf.1 -->
 
+A stray is a test process **of this checkout**: its command line runs from under the checkout's root. Every
+command below keeps to those with `grep -F "$ROOT/"`. The same machine runs other projects' suites and the
+owner's own dev servers, and a pattern alone matches them all — killing them is not yours to do.
+
 - Before running, **sanity-check that no stray test process is alive:**
   ```bash
-  ps aux | grep -iE "$STRAY" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+  ROOT=$(git rev-parse --show-toplevel)
+  ps ax -o pid=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep | awk '{print $1}' | xargs -r kill -9 2>/dev/null
   ```
 - Identify which packages were touched in the diff. Read the implementer's report; cross-check via `git status`. Only run vitest for packages whose source OR test files were modified, plus any package that consumes a modified shared file:
 <!-- nina:slot project.3 package-fanout -->
@@ -49,7 +54,7 @@ Either:
 - For each test run, capture: the `EXIT=` line, pass count, fail count, and (when failing) the failing test names with their assertion messages.
 - After the run completes (pass or fail), verify no test workers are lingering:
   ```bash
-  ps aux | grep -iE "$STRAY" | grep -v grep | head -5
+  ps ax -o pid=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep | head -5
   ```
   If anything is alive, kill it before reporting.
 - If any test fails: provide the failure detail to whichever stage can fix it. Usually implementer (the most recent diff broke a test). Sometimes architect (the spec defined the wrong test expectation).
@@ -69,7 +74,7 @@ Vitest is the heaviest tool in the stack — ~2–3 GB per worker even with sing
 
 - **Never** run multiple vitest invocations in parallel.
 - **Always** kill any leftover test processes at start AND end of your dispatch.
-- **Monitor**: if you suspect memory bloat, run `ps aux | grep -iE "$STRAY" | awk '{print $2, $6}'` and check resident memory.
+- **Monitor**: if you suspect memory bloat, run `ps ax -o pid=,rss=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep` and check resident memory (the second column, in KB).
 - If anything in the chain looks wrong (e.g., a previous vitest didn't exit cleanly), **STOP and report to the parent agent** — do not start a new vitest invocation on top of a hanging one.
 
 ## Report format
