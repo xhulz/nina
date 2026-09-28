@@ -243,7 +243,6 @@ function costReport(records) {
   if (total === 0) return;
   const money = (n) => `$${n >= 100 ? n.toFixed(0) : n.toFixed(2)}`;
   // The same convention as the duration column beside it: the upper middle of an even count.
-  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   console.log(
     heading(
       'cost',
@@ -273,7 +272,6 @@ function costReport(records) {
 function contextReport(records) {
   const shaped = records.filter((r) => typeof r.turns === 'number' && r.turns > 0);
   if (shaped.length === 0) return;
-  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   const k = (n) => (typeof n === 'number' ? `${Math.round(n / 1000)}k` : '—');
   const chars = (xs) => (xs.length ? median(xs).toLocaleString('en-US') : '—');
   console.log(heading('context', 'every turn re-reads the whole context: a round costs its turns times its size, and a resumed one starts where it ended; the prompt it was handed is in characters'));
@@ -362,7 +360,6 @@ function modelReport(records) {
   const changed = [...byRole].filter(([, models]) => models.size > 1).sort(([a], [b]) => a.localeCompare(b));
 
   const money = (n) => `$${n.toFixed(2)}`;
-  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   const lines = [];
   for (const [role, models] of changed) {
     const ordered = [...models].sort(([, a], [, b]) => String(a[0].ts).localeCompare(String(b[0].ts)));
@@ -590,11 +587,13 @@ function stepLimitOf(ctx) {
   };
 }
 
+/** The middle of a list of numbers — the upper one of two — or undefined for none. */
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+
 /** Formats a median duration in minutes from a list of seconds. */
 function medianMin(values) {
-  const xs = values.filter((v) => typeof v === 'number' && v >= 0).sort((a, b) => a - b);
-  if (xs.length === 0) return '—';
-  return `${(xs[Math.floor(xs.length / 2)] / 60).toFixed(1)}m`;
+  const xs = values.filter((v) => typeof v === 'number' && v >= 0);
+  return xs.length ? `${(median(xs) / 60).toFixed(1)}m` : '—';
 }
 
 /**
