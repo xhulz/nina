@@ -58,7 +58,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TERMINALS, declaredTokens, parseGraph } from './graph.mjs';
 import { gateDir, slugFor } from './paths.mjs';
-import { declaredIssues, isLoopBack } from './transcripts.mjs';
+import { declaredIssues, isLoopBack, saidToAgent } from './transcripts.mjs';
 
 /** The package this runs from: its releases say whether a pinned version ships the gate at all. */
 const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -525,8 +525,10 @@ function handbackIn(path) {
       continue;
     }
     const content = row?.message?.content;
-    // A new prompt — the resume of a finished agent — starts a new completion; its handback is later.
-    if (row?.type === 'user' && (typeof content === 'string' || (Array.isArray(content) && content.some((b) => b?.type === 'text')))) message = null;
+    // A new prompt — the resume of a finished agent — starts a new completion; its handback is later. What
+    // counts as one is the parser's: a reminder Claude Code slips in after the handback is not, and read as one
+    // it threw away the handback the stop was looking for.
+    if (saidToAgent(row)) message = null;
     if (!Array.isArray(content)) continue;
     for (const block of content) {
       if (block?.type === 'tool_use' && block.name === 'SubagentHandback' && typeof block.input?.message === 'string') message = block.input.message;

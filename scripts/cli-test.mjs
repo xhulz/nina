@@ -2789,6 +2789,20 @@ const dated = (date, status = 'active') =>
     readLedger(ledgerPath(project, session)).filter((e) => e.agent === 'h1' && e.k === 'verdict').length === 1,
     "gate: a resumed agent's old handback is not read as the new completion's report",
   );
+  // A reminder Claude Code writes after the handback is not something said to the agent.
+  const remindedLog = join(project, 'agent-h2.jsonl');
+  await writeFile(
+    remindedLog,
+    [
+      row('user', 'review the diff'),
+      row('assistant', [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\nISSUES: x' } }]),
+      row('user', [{ type: 'text', text: '<system-reminder>\nthe date changed\n</system-reminder>' }]),
+      row('assistant', [{ type: 'text', text: 'Handed back.' }]),
+      '',
+    ].join('\n'),
+  );
+  hook('SubagentStop', { agent_type: 'reviewer', agent_id: 'h2', last_assistant_message: 'Handed back.', stop_hook_active: false, agent_transcript_path: remindedLog });
+  expect(readLedger(ledgerPath(project, session)).some((e) => e.agent === 'h2' && e.verdict === 'REJECTED'), 'gate: a reminder after the handback does not hide it from the stop');
 
   // By hand, through the CLI: a hook's stdout is its answer, so nothing may come before the JSON.
   reviewed('r9', 'VERDICT: REJECTED');
