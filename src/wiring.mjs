@@ -135,7 +135,8 @@ export const HOOKS = [
   { event: 'SubagentStart', script: GATE, timeout: 10, why: 'a stage is not handed its lessons, and opens every shared pill to find them, or none' },
   { event: 'SessionStart', matcher: 'compact', script: GATE, timeout: 10, why: 'after a compaction the orchestrator has lost the graph, the router and its open loops, and nothing gives them back' },
   {
-    event: 'PreToolUse', matcher: 'Edit|Write|MultiEdit|NotebookEdit', script: GUARD, timeout: 10, why: 'a hand edit to a composed file is found only after the turn, as drift, and the next compose overwrites it',
+    event: 'PreToolUse', matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash', script: GUARD, timeout: 10,
+    why: "a hand edit to a composed file is found only after the turn, as drift, and a stage's git stash or checkout takes the work in flight",
     crash: (cannot) => ({ systemMessage: `NINA: the edit guard could not start, so composed files can be edited in place — ${cannot}` }),
   },
   // Every tool, since what it watches is a subagent's every turn; a call outside a subagent returns at once.

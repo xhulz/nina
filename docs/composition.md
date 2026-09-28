@@ -179,6 +179,8 @@ merges it and `upgrade` waits for it. What it still does not reach is a brand-ne
 and a shell edit (`sed -i`, a heredoc) — the first carries no notice to read, the second never passes
 through an edit tool — and an agent that only reports, for whom `retrieval.md` stays guidance.
 
+The same script holds Hard Rule #18 on the shell. A stage told not to edit read `git stash` as a read, stashed the work in flight to compare with the baseline, and its pop failed on a conflict. So a subagent's `git` that would move the checkout it was dispatched into — stash, checkout, switch, reset, restore, clean, commit, merge, rebase, cherry-pick, revert, am, apply, pull or push — is refused, where the pinned core carries the rule. Reading history goes through, and so does git run in another directory (`-C`, or after a `cd`, as into the worktree the rule sends a stage to). The orchestrator commits, and its shell commands are let through by the composed script before the package is even loaded, since every one of them passes the hook.
+
 ```bash
 nina compose --project ../Spliter          # rebuild that project's harness files
 nina compose --project ../Spliter --check  # exit 1 if the output drifted, or a slot is unfilled
