@@ -45,9 +45,11 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 ## Test execution policy (HARD)
 
-You **DO NOT run vitest**. Not `{{TEST_CMD}}`, not `pnpm exec vitest`, not any test command. Vitest is memory-heavy (~2-3 GB per worker even with single-fork enforcement), so test execution is centralized in the **qa** stage — running it across multiple pipeline stages risks crashing the workspace machine.
+You **DO NOT run tests** — not `{{TEST_CMD}}`, not any test command. The suite is memory-heavy (~2-3 GB a worker), so only the **qa** stage runs it: run by several stages at once, it can crash the machine.
 
 The pipeline is: implementer writes code + tests → reviewer audits diff → **qa runs tests once** → deploy.
+
+**A spike is the one exception:** run exactly what its plan says to run and observe — never the product's suite — and report the command and what it printed. Nobody else in its chain runs anything.
 
 You DO:
 - Write the test files specified by the spec.
