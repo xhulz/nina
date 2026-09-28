@@ -314,11 +314,18 @@ export function verified(records, known, { owners = new Map(), targets = null } 
  * @returns {{lesson: object, request: object, recurred: number}[]}
  */
 export function relapsed(known, filed) {
+  // A pill with a request still open is waiting on the harness, whatever the dates say. Of the closed ones, the
+  // newest by date — and on one date the one that counted most, since a reopening is filed after what it reopens;
+  // by the order a directory lists them, a reopening filed the same day read as older, and was filed again.
+  const open = new Set(filed.filter((r) => r.status === 'open').map((r) => r.pill));
   const newest = new Map();
-  for (const r of filed) if (r.pill && (!newest.has(r.pill) || r.date >= newest.get(r.pill).date)) newest.set(r.pill, r);
+  for (const r of filed) {
+    if (!r.pill || r.status !== 'closed' || open.has(r.pill)) continue;
+    const had = newest.get(r.pill);
+    if (!had || r.date > had.date || (r.date === had.date && Number(r.occurrences) > Number(had.occurrences))) newest.set(r.pill, r);
+  }
   const out = [];
   for (const [pill, request] of newest) {
-    if (request.status !== 'closed') continue;
     const shelved = pill.replace(/^\.claude\/pills\//, `.claude/pills/${RETIRED}/`);
     const lesson = known.find((l) => l.rel === pill || l.rel === shelved);
     const then = Number(request.occurrences);
@@ -595,7 +602,9 @@ async function fileRequest(target, profile, layerRoot, lesson, { reopens = null,
   // names — flattening both `/` and `.` to `-` gave them the same one.
   const name = pill.replace(/^\.claude\/pills\//, '').replace(/\.md$/, '').replace(/\//g, '__');
   const dir = join(target, HARNESS, 'requests');
-  const file = existsSync(join(dir, `${date}-${name}.md`)) ? `${date}-${name}-again.md` : `${date}-${name}.md`;
+  // Never over a request already written: the same lesson can be sent more than once on one day.
+  let file = `${date}-${name}.md`;
+  for (let n = 1; existsSync(join(dir, file)); n += 1) file = `${date}-${name}-again${n > 1 ? `-${n}` : ''}.md`;
   await mkdir(dir, { recursive: true });
   const heading = reopens
     ? `**A lesson that graduated into \`${reopens.rule_in || reopens.target}\` in ${reopens.answered_in || 'a release'} came back ${recurred} time(s) since** — ` +
@@ -623,6 +632,7 @@ async function fileRequest(target, profile, layerRoot, lesson, { reopens = null,
       lesson.body,
       '',
     ].join('\n'),
+    { flag: 'wx' },
   );
   return { file, layer: target_.layer, why: target_.why };
 }

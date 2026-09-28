@@ -24,7 +24,7 @@ import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { asRead } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
-import { CAPTURE_DAYS, applied, closeAnswered, overdue, sentBackTo, slugFor, verified } from '../src/commands/learn.mjs';
+import { CAPTURE_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, verified } from '../src/commands/learn.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
@@ -1370,6 +1370,22 @@ async function sound(fixture, core) {
     `learn: a lesson that came back after its rule shipped reopens the request, where it was learned — got ${reopened.out}\n${request}`,
   );
   expect(run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } }).status === 0, 'learn: and once reopened, it is not sent again');
+  // The same day: listed by a directory, a reopening filed that day sorts before what it reopens.
+  const sameDay = relapsed(
+    [{ rel: '.claude/pills/retired/reviewer/m.md', occurrences: 5 }],
+    [
+      { file: '2026-09-05-reviewer__m-again.md', status: 'open', pill: '.claude/pills/reviewer/m.md', date: '2026-09-05', occurrences: '5' },
+      { file: '2026-09-05-reviewer__m.md', status: 'closed', pill: '.claude/pills/reviewer/m.md', date: '2026-09-05', occurrences: '3' },
+    ],
+  );
+  const bothClosed = relapsed(
+    [{ rel: '.claude/pills/retired/reviewer/m.md', occurrences: 5 }],
+    [
+      { file: '2026-09-05-reviewer__m-again.md', status: 'closed', pill: '.claude/pills/reviewer/m.md', date: '2026-09-05', occurrences: '5' },
+      { file: '2026-09-05-reviewer__m.md', status: 'closed', pill: '.claude/pills/reviewer/m.md', date: '2026-09-05', occurrences: '3' },
+    ],
+  );
+  expect(sameDay.length === 0 && bothClosed.length === 0, `learn: a reopening filed the same day is the newest, however a directory lists it — got ${JSON.stringify({ sameDay, bothClosed })}`);
 }
 
 // ─── snapshot: re-reading history never degrades it ─────────────────────────────────────
@@ -2449,6 +2465,9 @@ const dated = (date, status = 'active') =>
     const exited = new Promise((done) => child.on('close', (status, sig) => done({ status, sig })));
     const end = Date.now() + 60_000;
     while (!existsSync(join(dir, '.nina', 'sleeping')) && Date.now() < end) await new Promise((done) => setTimeout(done, 50));
+    // The marker is written just before the sleep starts: a signal sent between the two reached no child, and the
+    // step went on to pass, once in several runs.
+    await new Promise((done) => setTimeout(done, 300));
     if (signal === 'SIGINT') process.kill(-child.pid, 'SIGINT');
     else process.kill(child.pid, signal);
     const { status, sig } = await exited;
