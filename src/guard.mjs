@@ -32,17 +32,73 @@ const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
 /** The tools that change a file, and where each names it. */
 const EDITS = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' };
 
+/** The git subcommands that move the checkout or write its history — Hard Rule #18's. */
+const MOVES = new Set(['stash', 'checkout', 'switch', 'reset', 'restore', 'clean', 'commit', 'merge', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'pull', 'push']);
+
+/** Words that run the next word as the command: `env X=1 git …`, `command git …`. */
+const RUNNERS = new Set(['env', 'command', 'exec', 'time', 'nohup', 'nice']);
+
+/** A `-C` or a `cd` to one of these is still the tree the stage was dispatched into. */
+const HERE = new Set(['.', './']);
+
 /**
- * The git subcommands that move the checkout or write its history — Hard Rule #18's — read as a stage would type
- * them. A stash's `list` and `show` only read.
+ * The git subcommand in a shell command that would move the checkout the command runs in, or null. Read segment
+ * by segment, in order, as the shell runs it: a `cd` exempts only what comes after it — `git stash && cd /tmp`
+ * stashed the tree all the same, and a test of the whole string for a `cd` let it through — and `-C .` is not
+ * another directory. A git command is one whose command word is `git`, not a phrase in a quoted string or a
+ * heredoc's body; its subcommand is the word after its global options, so `merge-base` is not `merge`; and a
+ * stash's `list` or `show`, and an `apply` that only checks, read.
+ *
+ * @param {string} command - A Bash tool call's command.
+ * @returns {string|null}
  */
-const MOVES = /\bgit\s+(?:-c\s+\S+\s+)*(stash(?!\s+(?:list|show)\b)|checkout|switch|reset|restore|clean|commit|merge|rebase|cherry-pick|revert|am|apply|pull|push)\b/;
+export function checkoutMove(command) {
+  let moved = false;
+  let heredoc = null;
+  for (const line of String(command).split('\n')) {
+    if (heredoc !== null) {
+      if (line.trim() === heredoc) heredoc = null;
+      continue;
+    }
+    const opens = /<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/.exec(line)?.[1] ?? null;
+    const bare = line.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, 'Q');
+    for (const part of bare.split(/&&|\|\||;|\|/)) {
+      const words = part.trim().replace(/^[({]\s*/, '').replace(/\s*[)}]+$/, '').split(/\s+/).filter(Boolean);
+      while (words.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]) || RUNNERS.has(words[0]))) words.shift();
+      if (words[0] === 'cd' || words[0] === 'pushd') {
+        moved ||= !HERE.has(words[1] ?? '');
+        continue;
+      }
+      if (words[0] !== 'git') continue;
+      let i = 1;
+      let elsewhere = false;
+      while (words[i]?.startsWith('-')) {
+        if (words[i] === '-C') {
+          elsewhere ||= !HERE.has(words[i + 1] ?? '.');
+          i += 2;
+        } else if (words[i] === '-c') {
+          i += 2;
+        } else {
+          if (/^--(git-dir|work-tree)\b/.test(words[i])) elsewhere = true;
+          i += 1;
+        }
+      }
+      const sub = words[i];
+      if (!MOVES.has(sub) || moved || elsewhere) continue;
+      const rest = words.slice(i + 1);
+      if (sub === 'stash' && ['list', 'show'].includes(rest[0])) continue;
+      if (sub === 'apply' && rest.some((w) => ['--check', '--stat', '--numstat', '--summary'].includes(w)) && !rest.includes('--apply')) continue;
+      return sub;
+    }
+    if (opens !== null) heredoc = opens;
+  }
+  return null;
+}
 
 /**
  * A stage's shell command that would move the checkout it was dispatched into, refused. Only the orchestrator
  * commits, and the work in flight lives in that tree, uncommitted: one reviewer, told not to edit, stashed it to
- * compare with the baseline, and its pop failed on a conflict. Git run elsewhere — `-C` another directory, or
- * after a `cd`, as into the worktree the rule sends a stage to — is not that tree, and goes through.
+ * compare with the baseline, and its pop failed on a conflict.
  *
  * @param {object} input - The hook's stdin, parsed.
  * @param {{layers: string}} pinned - The pinned layers, whose hard rules say whether this one is the project's.
@@ -50,9 +106,7 @@ const MOVES = /\bgit\s+(?:-c\s+\S+\s+)*(stash(?!\s+(?:list|show)\b)|checkout|swi
  */
 function handleShell(input, pinned) {
   if (!input.agent_id) return null;
-  const command = String(input.tool_input?.command ?? '');
-  if (/\bgit\s+-C\s/.test(command) || /(^|[;&|(]\s*)cd\s/.test(command)) return null;
-  const moves = MOVES.exec(command);
+  const moves = checkoutMove(input.tool_input?.command ?? '');
   if (!moves) return null;
   let rules = '';
   try {
@@ -66,7 +120,7 @@ function handleShell(input, pinned) {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
       permissionDecisionReason:
-        `NINA: \`git ${moves[1]}\` would move the checkout the pipeline's work in flight lives in — Hard Rule #18: only the orchestrator ` +
+        `NINA: \`git ${moves}\` would move the checkout the pipeline's work in flight lives in — Hard Rule #18: only the orchestrator ` +
         'commits, and no stage moves the checkout. Read history with git diff, log, show, status or blame, and build or test another ' +
         'revision in a `git worktree` you remove afterwards.',
     },

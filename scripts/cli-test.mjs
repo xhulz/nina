@@ -37,7 +37,7 @@ import { NAME as VOCABULARY_NAME, defaultVocabulary } from '../src/vocabulary.mj
 import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
-import { handleEdit, noticeOf } from '../src/guard.mjs';
+import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
 import { bar, heading, note, stacked, wrapped } from '../src/look.mjs';
@@ -3077,6 +3077,11 @@ const dated = (date, status = 'active') =>
       (await shell('git worktree add ../wt HEAD && cd ../wt && git checkout -b probe')) === null && (await shell('git -C ../wt reset --hard')) === null,
     'guard: it reads history, and moves a worktree of its own',
   );
+  // Read as the shell runs it: a `cd` exempts only what follows it, `-C .` is here, and a phrase in a string or a
+  // heredoc is not a command. The first version tested the whole string, and `git stash && cd /tmp` went through.
+  const refusedAll = ['git stash && cd /tmp', 'git -C . stash', '(git stash)', 'env GIT_TRACE=1 git reset --hard', 'git commit -m "a && b"'].map(checkoutMove);
+  const passedAll = ['git merge-base main HEAD', 'git apply --check fix.diff', 'echo "never run git commit here"', "cat > n.md <<'EOF'\ngit commit -m x\nEOF", 'git -c core.pager=cat log'].map(checkoutMove);
+  expect(refusedAll.every(Boolean) && passedAll.every((m) => m === null), `guard: a stage's git is read segment by segment — got ${JSON.stringify({ refusedAll, passedAll })}`);
   expect((await shell('git commit -m done', {})) === null, 'guard: the orchestrator commits');
   const elsewhere = await scratch();
   await writeFile(join(elsewhere, 'x.md'), '<!-- nina:generated — composed elsewhere -->\n');
