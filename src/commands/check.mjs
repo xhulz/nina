@@ -16,7 +16,7 @@ import { frontmatterFindings, installedSkills, modelFindings, toolFindings } fro
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
-import { REQUIRES, SLOT, defaultedSlots, layerRootFor, stripWhy, walk } from './compose.mjs';
+import { REQUIRES, SLOT, defaultedSlots, layerRootFor, noticeOf, stripWhy, walk } from './compose.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { NEEDS } from '../surfaces.mjs';
 
@@ -350,7 +350,7 @@ export async function check(argv, ctx) {
       // them; they are outside the pipeline graph, not a stage the graph forgot.
       for (const file of (await readdir(agentsDir).catch(() => [])).filter((f) => f.endsWith('.md'))) {
         const text = await readFile(join(agentsDir, file), 'utf8');
-        if (text.includes('nina:generated')) specs.set(file.replace(/\.md$/, ''), text);
+        if (noticeOf(text) !== null) specs.set(file.replace(/\.md$/, ''), text);
       }
       // A core with a graph and no agent specs has no roles to name — an empty set, not a crash that
       // `upgrade` would read as a new failure and roll a move back for.

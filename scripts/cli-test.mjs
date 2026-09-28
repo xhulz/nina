@@ -1851,6 +1851,15 @@ const dated = (date, status = 'active') =>
     'compose: and writes nothing at all, through a link or anywhere else',
   );
   await rm(join(bed, '.claude', 'agents', 'reviewer.md'));
+  // One that only talks about the notice is the project's too. Read as "contains the words", compose took a
+  // CLAUDE.md explaining the harness for one of its own and wrote over it.
+  const talks = '# Our CLAUDE.md\n\nA file that opens with a `nina:generated` comment is composed; this one is ours.\n';
+  await writeFile(join(bed, 'CLAUDE.md'), talks);
+  const spoken = run(['compose', '--project', bed], { loud: true });
+  expect(
+    spoken.status === 1 && spoken.out.includes('CLAUDE.md') && (await readFile(join(bed, 'CLAUDE.md'), 'utf8')) === talks,
+    `compose: a file that only mentions the notice is the project's, and is not composed over — got ${spoken.out}`,
+  );
   await writeFile(join(bed, 'CLAUDE.md'), `${(await readFile(join(bed, '.claude', 'router.md'), 'utf8')).split('\n').slice(0, 3).join('\n')}\nedited by hand\n`);
   expect(run(['compose', '--project', bed]).status === 0, 'compose: a composed file edited by hand still carries its notice, and is composed over as drift');
 

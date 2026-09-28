@@ -20,7 +20,10 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { composedPaths } from './commands/compose.mjs';
+import { NOTICE_HEAD, composedPaths, noticeOf } from './commands/compose.mjs';
+
+// Read here and by the suites from here; the test itself lives beside the compiler that writes the notice.
+export { NOTICE_HEAD, noticeOf };
 import { HARNESS } from './paths.mjs';
 
 /** The package this runs from: its releases say whether a pinned version ships the guard. */
@@ -28,12 +31,6 @@ const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
 
 /** The tools that change a file, and where each names it. */
 const EDITS = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' };
-
-/**
- * How far into a file the notice is looked for: below a frontmatter block, or a shebang. The compose
- * suite holds every composed file's notice inside it.
- */
-export const NOTICE_HEAD = 60;
 
 /** How much of a file is read to find it: the head, not the whole of a large file on every edit. */
 const HEAD_BYTES = 16 * 1024;
@@ -67,35 +64,6 @@ function head(path) {
   } finally {
     closeSync(fd);
   }
-}
-
-/**
- * A composed file's notice, as one sentence without its comment syntax, or null when it has none.
- *
- * @param {string} text - The file.
- * @returns {string|null}
- */
-export function noticeOf(text) {
-  const lines = String(text).split('\n').slice(0, NOTICE_HEAD);
-  const at = lines.findIndex((l) => /^(<!--|\/\/) nina:generated/.test(l));
-  if (at < 0) return null;
-  const block = [];
-  if (lines[at].startsWith('//')) {
-    for (const line of lines.slice(at)) {
-      if (!line.startsWith('//')) break;
-      block.push(line.replace(/^\/\/ ?/, ''));
-    }
-  } else {
-    // The notice's own delimiters, taken off by position: this reads text the compiler wrote, it filters
-    // nothing, and a pattern for it read to a scanner as an HTML sanitizer that misses `--!>`.
-    for (const line of lines.slice(at)) {
-      const open = line.startsWith('<!-- ') ? line.slice('<!-- '.length) : line;
-      const end = open.lastIndexOf('-->');
-      block.push(end >= 0 ? open.slice(0, end) : open);
-      if (end >= 0) break;
-    }
-  }
-  return block.map((l) => l.trim()).join(' ');
 }
 
 /**

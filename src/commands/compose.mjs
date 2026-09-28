@@ -140,6 +140,45 @@ export function generatedNotice(rel, slots, script = false) {
 }
 
 /**
+ * How far into a file the notice is looked for: below a frontmatter block, or a shebang. The compose
+ * suite holds every composed file's notice inside it.
+ */
+export const NOTICE_HEAD = 60;
+
+/**
+ * A composed file's notice, as one sentence without its comment syntax, or null when it has none.
+ *
+ * This is the one test of whether a file was composed. A file that only mentions the notice — a CLAUDE.md
+ * written by hand that explains the harness, say — is not composed: read as "contains the words", compose
+ * took such a file for its own and wrote over it with no copy kept.
+ *
+ * @param {string} text - The file.
+ * @returns {string|null}
+ */
+export function noticeOf(text) {
+  const lines = String(text).split('\n').slice(0, NOTICE_HEAD);
+  const at = lines.findIndex((l) => /^(<!--|\/\/) nina:generated/.test(l));
+  if (at < 0) return null;
+  const block = [];
+  if (lines[at].startsWith('//')) {
+    for (const line of lines.slice(at)) {
+      if (!line.startsWith('//')) break;
+      block.push(line.replace(/^\/\/ ?/, ''));
+    }
+  } else {
+    // The notice's own delimiters, taken off by position: this reads text the compiler wrote, it filters
+    // nothing, and a pattern for it read to a scanner as an HTML sanitizer that misses `--!>`.
+    for (const line of lines.slice(at)) {
+      const open = line.startsWith('<!-- ') ? line.slice('<!-- '.length) : line;
+      const end = open.lastIndexOf('-->');
+      block.push(end >= 0 ? open.slice(0, end) : open);
+      if (end >= 0) break;
+    }
+  }
+  return block.map((l) => l.trim()).join(' ');
+}
+
+/**
  * Puts the notice at the top of a composed file, below its frontmatter where it has any.
  *
  * @param {string} text - The composed text.
@@ -350,7 +389,7 @@ export function projectOwned(target, paths) {
     }
     const stamped = p.endsWith('.md') || SCRIPT.test(p);
     // Read without following links, a link is not a file: it is the project's, whatever it points at.
-    if (!entry.isFile() || (stamped && !readFileSync(join(target, p), 'utf8').includes('nina:generated'))) out.push(p);
+    if (!entry.isFile() || (stamped && noticeOf(readFileSync(join(target, p), 'utf8')) === null)) out.push(p);
   }
   return out.sort();
 }
