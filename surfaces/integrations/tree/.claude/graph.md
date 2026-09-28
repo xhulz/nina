@@ -1,8 +1,8 @@
 <!-- nina:slot integrations.1 -->
-- `integration-tester` — gate: runs the real dependency when an integration boundary is touched
+- `integration-tester` — gate: runs the real dependency when the diff touches what its spec lists as its trigger
 
 <!-- nina:slot integrations.2 -->
-- `implementer` → `integration-tester` on `DIFF-READY` — the diff touches an integration boundary
+- `implementer` → `integration-tester` on `DIFF-READY` — the diff touches what its spec lists
 - `integration-tester` → `qa` on `APPROVED` — once the reviewer, and every other gate the diff went to, approved too
 - `integration-tester` → `architect` on `REJECTED` — a premise is wrong · max 2
 - `architect` → `integration-tester` on `BLOCKED` — a premise of a live service must be observed before the design can settle; the report goes back to the architect · max 2
