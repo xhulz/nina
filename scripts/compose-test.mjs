@@ -229,7 +229,8 @@ const BUDGETS = {
   '.claude/agents/implementer.md': 17500,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
-  '.claude/agents/qa.md': 12500,
+  // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
+  '.claude/agents/qa.md': 13200,
   '.claude/agents/reviewer.md': 20000,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
