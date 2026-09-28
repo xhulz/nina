@@ -390,6 +390,15 @@ export async function pills(argv, ctx) {
     /* without a profile the candidate is still worth naming; only its target is unknown */
   }
 
+  // What this project has already asked the harness for, by pill: a request is how a lesson leaves a project.
+  const requested = new Map();
+  for (const f of (await readdir(join(target, HARNESS, 'requests')).catch(() => [])).filter((f) => f.endsWith('.md'))) {
+    const fields = frontmatter(await readFile(join(target, HARNESS, 'requests', f), 'utf8').catch(() => ''));
+    if (fields?.pill) requested.set(fields.pill, fields);
+  }
+  /** Every stage a pill was ever written for, by its directory or its applies_to, retired ones included. */
+  const taught = new Set();
+
   const changedCache = new Map();
   const candidates = [];
   let resolved = 0;
@@ -399,7 +408,9 @@ export async function pills(argv, ctx) {
     const result = validate(pill, await readFile(pill.path, 'utf8'), roles, today);
     problems.push(...result.problems);
     notes.push(...result.notes);
-    if (result.uncited) uncited += 1;
+    if (pill.dir && pill.dir !== 'shared' && pill.dir !== RETIRED) taught.add(pill.dir);
+    for (const role of list(result.fields?.applies_to)) taught.add(role);
+    if (result.uncited && result.fields?.status !== 'retired') uncited += 1;
     if (result.fields?.status === 'retired') retired += 1;
     else active.push({ ...pill, date: result.fields?.date });
 
@@ -435,23 +446,29 @@ export async function pills(argv, ctx) {
   if (cited > 0) notes.push(`${resolved} of ${cited} citation(s) still resolve`);
 
   // A lesson learned three times is not a correction any more; it is a rule nobody wrote down.
+  // A project cannot write the harness, and a pill retired before the release that carries its rule arrives
+  // leaves the lesson nowhere: it goes as a request, and waits.
   for (const c of candidates) {
-    const target = gates && c.applies.length > 0 ? graduationTarget(c.applies, gates) : null;
+    const home = gates && c.applies.length > 0 ? graduationTarget(c.applies, gates) : null;
+    const asked = requested.get(`.claude/pills/${c.label}`);
     notes.push(
       `${c.label} has recurred ${c.seen} times — that is a rule, not a pill.` +
-        (target ? ` Its home is ${target.layer}, since ${target.why}.` : '') +
-        ' Write it there, then set this pill retired.',
+        (home ? ` Its home is ${home.layer}, since ${home.why}.` : '') +
+        (asked
+          ? ` It went to the harness as a request on ${asked.date} (${asked.status}); the \`nina upgrade\` to the release that answers it retires this pill.`
+          : ' `harness:check` sends it to the harness as a request, or `nina learn --graduate` does now; keep it active until the release that answers it retires it.'),
     );
   }
 
   // One line, not one per pill: what matters is how much of the corpus a staleness check
   // could ever reach, and naming eleven files says that worse than counting them.
   if (uncited > 0) {
-    notes.push(`${uncited} of ${files.length} pill(s) cite no code, so staleness cannot be checked mechanically`);
+    notes.push(`${uncited} of ${active.length} active pill(s) cite no code, so staleness cannot be checked mechanically`);
   }
 
-  const covered = new Set(files.flatMap((p) => (p.dir && p.dir !== 'shared' ? [p.dir] : [])));
-  const uncovered = roles.filter((r) => !covered.has(r));
+  // Read off each pill's applies_to as well as its directory: counted by directory, a project whose lessons were
+  // all shared was told none had ever been written for the stages they named.
+  const uncovered = roles.filter((r) => !taught.has(r));
   if (uncovered.length > 0 && files.length > 0) {
     notes.push(`no pill has ever been written for ${uncovered.join(', ')}`);
   }

@@ -1711,6 +1711,16 @@ source: the 2026-09-01 review
     `pills: a lesson about a surface-gated role belongs in that surface — got ${out.trim()}`,
   );
   expect(out.includes('dba exists only where'), 'pills: one role takes a singular verb');
+  // A project cannot write the harness: the advice is a request, and one already filed is named with its date.
+  expect(out.includes('reviewer/keeps-happening.md') && !out.includes('Write it there') && out.includes('`nina learn --graduate` does now'), `pills: a recurring lesson goes to the harness as a request, not written there by the project — got ${out}`);
+  await mkdir(join(dir, '.nina', 'requests'), { recursive: true });
+  await writeFile(join(dir, '.nina', 'requests', '2026-01-02-reviewer__keeps-happening.md'), '---\nkind: harness-request\nstatus: open\ndate: 2026-01-02\npill: .claude/pills/reviewer/keeps-happening.md\n---\n');
+  expect(run(['pills', '--project', dir], { loud: true }).out.includes('went to the harness as a request on 2026-01-02 (open)'), 'pills: and one already requested says so');
+  // Counted by directory alone, a project whose lessons for a stage were all shared was told it had none.
+  await plant(dir, 'shared/for-qa.md', recurring('shared-for-qa', 'qa, implementer', 1));
+  const coverage = run(['pills', '--project', dir], { loud: true }).out;
+  expect(!/no pill has ever been written for [^\n]*\bqa\b/.test(coverage), `pills: a shared pill's applies_to counts as a lesson written for those stages — got ${coverage}`);
+  await rm(join(dir, '.claude', 'pills', 'shared', 'for-qa.md'));
   expect(!out.includes('learned-twice'), 'pills: twice is not yet a rule');
   expect(!out.includes('already-graduated.md has recurred'), 'pills: a retired pill is history, not a candidate');
   expect(out.includes('reviewer/already-graduated.md is retired but still where agents open it'), 'pills: and one still where its agents read is told to move');
