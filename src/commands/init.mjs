@@ -13,7 +13,7 @@
  */
 
 import { createInterface } from 'node:readline/promises';
-import { HARNESS, readProfile } from '../paths.mjs';
+import { HARNESS, readProfile, surfacesIn } from '../paths.mjs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { applyWiring, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync } from 'node:fs';
@@ -307,7 +307,7 @@ export async function init(argv, ctx) {
   // harness the project is actually going to compose, not whatever the working tree says.
   // In the order the interview asks them, so the TODO, the brief and the hints list them as it did.
   const available = askOrder(
-    (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name),
+    (await surfacesIn(resolved.dir)),
   );
   // Only what the pinned core has: a file can reveal a surface a release added after it.
   matched = matched.filter((d) => available.includes(d.surface));

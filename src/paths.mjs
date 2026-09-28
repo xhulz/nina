@@ -9,6 +9,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -152,6 +153,17 @@ export function layerRootFor(root, core) {
   const dir = join(root, 'releases', core);
   if (!existsSync(dir)) return { error: `profile pins core ${core}, which is not in ${join(root, 'releases')}` };
   return { dir };
+}
+
+/**
+ * The surfaces a layer root offers, by name, in order. Seven commands listed the directory each on its own.
+ *
+ * @param {string} layerRoot - From {@link layerRootFor}.
+ * @returns {Promise<string[]>}
+ */
+export async function surfacesIn(layerRoot) {
+  const entries = await readdir(join(layerRoot, 'surfaces'), { withFileTypes: true }).catch(() => []);
+  return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
 }
 
 /**

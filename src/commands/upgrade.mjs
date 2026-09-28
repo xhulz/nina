@@ -9,9 +9,9 @@
  * writes only when told to. Reconciling the fragments is work, and work does not get done by a flag.
  */
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { describeMove, HARNESS, interruptedMove, movedFrom, moveJournal, readProfile } from '../paths.mjs';
+import { describeMove, HARNESS, interruptedMove, movedFrom, moveJournal, readProfile, surfacesIn } from '../paths.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { REMOVED, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
@@ -289,15 +289,13 @@ export async function upgrade(argv, ctx) {
   }
 
   const surfaces = profile.surfaces ?? [];
-  const available = (await readdir(join(onto.dir, 'surfaces'), { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  const available = (await surfacesIn(onto.dir));
   const gone = surfaces.filter((s) => !available.includes(s));
   const kept = surfaces.filter((s) => available.includes(s));
   // A surface the target release adds that this project's own files show it has. When a stack is split out
   // of a concern — `prisma` out of `db` — its rules go with it, and a project that does not declare it loses
   // them in silence: the rules that were in its specs yesterday are not there after the move.
-  const offeredBefore = (await readdir(join(from.dir, 'surfaces'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+  const offeredBefore = (await surfacesIn(from.dir));
   const offered = detected(await walk(target)).filter(
     (d) => available.includes(d.surface) && !offeredBefore.includes(d.surface) && !surfaces.includes(d.surface) && (!NEEDS[d.surface] || kept.includes(NEEDS[d.surface])),
   );

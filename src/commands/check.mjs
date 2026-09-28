@@ -9,7 +9,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { describeMove, HARNESS, interruptedMove, readProfile } from '../paths.mjs';
+import { describeMove, HARNESS, interruptedMove, readProfile, surfacesIn } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
 import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
@@ -226,9 +226,7 @@ export async function check(argv, ctx) {
   if (stopped) problems.push(`${describeMove(stopped)} \`nina upgrade --abort\` undoes it`);
 
   const surfaces = profile.surfaces ?? [];
-  const available = (await readdir(join(resolved.dir, 'surfaces'), { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  const available = (await surfacesIn(resolved.dir));
   for (const s of surfaces) {
     if (!available.includes(s)) {
       problems.push(`surface "${s}" does not exist in core ${profile.core} — available: ${available.join(', ')}`);

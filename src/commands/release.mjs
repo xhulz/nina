@@ -13,6 +13,7 @@ import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/pro
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { byVersion } from './compose.mjs';
+import { surfacesIn } from '../paths.mjs';
 
 /** A release name: dotted numbers, so the directory sorts and reads like a version. */
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -104,9 +105,7 @@ export async function release(argv, ctx) {
   await mkdir(join(ctx.root, 'releases'), { recursive: true });
   await rename(partial, dest);
 
-  const surfaces = (await readdir(join(dest, 'surfaces'), { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  const surfaces = (await surfacesIn(dest));
   const bumped = await bumpPackage(ctx.root, version);
 
   console.log(`  released ${version} — core + ${surfaces.length} surfaces (${surfaces.join(', ')})`);
