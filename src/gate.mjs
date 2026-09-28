@@ -16,8 +16,7 @@
  *   SubagentStop                      the same, for a stage that wrote its report as its last message
  *   PreToolUse / PostToolUse on Agent, Task, SendMessage
  *                                     a dispatch launched, and the agent it launched
- *   UserPromptSubmit (human text only), an AskUserQuestion answer
- *                                     the owner spoke, and every count starts over
+ *   UserPromptSubmit (human text only) the owner spoke, and every open loop gets one round more
  *   PreToolUse on Agent, Task, SendMessage
  *                                     the decision: let it through, or send the round past the cap to
  *                                     the owner to confirm
@@ -41,7 +40,13 @@
  * belongs to that round; a pass cancels a rejection only if a fix went out between the two — a later
  * review that saw the fix — and closes the loop only if it began after the latest fix with no rejection
  * running beside it; a pass from the stage the source hands its work on to (qa, after the reviewer)
- * closes the source's loops; and the owner speaking empties everything. Guessed verdicts never count.
+ * closes the source's loops; and the owner speaking gives every loop still open one round more than its cap —
+ * it used to empty everything, and since the owner speaks every few minutes no loop ever reached a cap: over
+ * two days of one project, sixty resets and not one question. Guessed verdicts never count.
+ *
+ * A loop is its source's verdict, whichever stage the orchestrator sends the fix to: a rejection routed to
+ * the architect one round and to the implementer the next was counted once on each edge, and went round
+ * twice its cap before anything asked. Each edge's own cap still decides the round that goes to it.
  *
  * It fails open, and it only acts where the project pins a version that ships it. Any error lets the
  * call through and is logged where `nina gate --selftest`, a detector every project runs, reports it: a
@@ -266,7 +271,9 @@ function append(path, entry) {
  *   too, the round's number is its most-repeated issue's instead — one more than the rounds that issue
  *   was in since then — and the edge's own number is kept beside it, against a ceiling of twice the cap.
  *   A late sibling's issues are counted in the round it belongs to;
- * - a pass from the stage the source hands passing work on to closes the source's loops outright.
+ * - a pass from the stage the source hands passing work on to closes the source's loops outright;
+ * - the owner speaking gives each loop still open one round more — its `grace` — and closes nothing. A
+ *   model's own question to the owner (`AskUserQuestion`) is not the owner speaking.
  *
  * @param {object[]} entries - The ledger, oldest first.
  * @param {ReturnType<typeof loopEdges>} loops - The capped loop-back edges.
@@ -307,6 +314,8 @@ export function replay(entries, loops, forward = new Map()) {
    * @type {Map<string, {n: number, agents?: string[], at?: number, blind?: boolean, edge?: number}>}
    */
   const streak = new Map();
+  /** `${source}|${token}` → the rounds the owner has given the loop past its cap, by speaking while it was open. */
+  const grace = new Map();
   /** Where each source's latest round went out: a pass must begin after it to say the fix passed. */
   const lastFix = new Map();
   /** Completions a dispatch already acted on: a late copy of one is not new. */
@@ -315,7 +324,7 @@ export function replay(entries, loops, forward = new Map()) {
   const reportedAt = new Map();
   const made = [];
   const close = (source) => {
-    for (const key of [...streak.keys()]) if (key.startsWith(`${source}|`)) streak.delete(key);
+    for (const map of [streak, grace]) for (const key of [...map.keys()]) if (key.startsWith(`${source}|`)) map.delete(key);
   };
 
   const effect = (to, at) => {
@@ -329,7 +338,7 @@ export function replay(entries, loops, forward = new Map()) {
       const closes = passes.some((p) => p.launch > (lastFix.get(source) ?? -1) && !live.some((v) => v.launch < p.at));
       const routed = live.filter((v) => byToken.get(v.verdict)?.has(to));
       const fresh = routed.filter((v) => {
-        const last = streak.get(`${source}|${to}|${v.verdict}`);
+        const last = streak.get(`${source}|${v.verdict}`);
         return closes || !last || v.launch > last.at;
       });
       // A late sibling belongs to the round it was running in, so its issues do too: each is counted in
@@ -338,7 +347,7 @@ export function replay(entries, loops, forward = new Map()) {
       const adopted = new Map();
       const blinded = new Set();
       for (const v of routed.filter((r) => !fresh.includes(r))) {
-        const key = `${source}|${to}|${v.verdict}`;
+        const key = `${source}|${v.verdict}`;
         const edge = streak.get(key);
         if (!edge) continue;
         if (!(v.issues?.length > 0)) blinded.add(key);
@@ -349,21 +358,22 @@ export function replay(entries, loops, forward = new Map()) {
       }
       if (fresh.length > 0) {
         const token = fresh.at(-1).verdict;
-        const key = `${source}|${to}|${token}`;
-        const max = byToken.get(token).get(to);
+        const key = `${source}|${token}`;
+        const given = grace.get(key) ?? 0;
+        const max = byToken.get(token).get(to) + given;
         const before = closes ? { n: 0, agents: [] } : (streak.get(key) ?? { n: 0, agents: [] });
         const agents = [...new Set([...(before.agents ?? []), ...fresh.map((v) => v.agent)])];
         // Counted by issue only while every round since the loop last closed named its issues: a round
         // that named nothing advanced no issue's count, so from then on only the edge's count is whole.
         const named = !before.blind && !blinded.has(key) && fresh.every((v) => v.issues?.length > 0);
-        const round = { key, source, target: to, token, round: before.n + 1, max, edgeRound: before.n + 1, ceiling: max, blind: !named, agents, at };
+        const round = { key, source, target: to, token, round: before.n + 1, max, edgeRound: before.n + 1, ceiling: max, blind: !named, agents, at, given };
         if (named) {
           const issues = [...new Set(fresh.flatMap((v) => v.issues))].map((id) => ({
             id,
             round: (closes ? 0 : ((adopted.get(`${key}|${id}`) ?? streak.get(`${key}|${id}`))?.n ?? 0)) + 1,
           }));
           const worst = issues.reduce((a, b) => (b.round > a.round ? b : a));
-          Object.assign(round, { round: worst.round, issue: worst.id, issues, ceiling: max * EDGE_CEILING });
+          Object.assign(round, { round: worst.round, issue: worst.id, issues, ceiling: (max - given) * EDGE_CEILING + given });
         }
         rounds.push(round);
       }
@@ -374,9 +384,9 @@ export function replay(entries, loops, forward = new Map()) {
 
   entries.forEach((e, i) => {
     if (e.k === 'reset') {
-      pending.clear();
-      streak.clear();
-      lastFix.clear();
+      // Ledgers written before the model's own questions stopped counting as the owner speaking hold those too.
+      if (e.why === 'ask') return;
+      for (const key of streak.keys()) if (key.split('|').length === 2) grace.set(key, (grace.get(key) ?? 0) + 1);
       return;
     }
     if (e.k === 'verdict' && e.declared && e.agent) {
@@ -566,10 +576,6 @@ function onPost(input, project, path, at) {
   }
   // A dispatch made inside a subagent is not the pipeline's: its stages are dispatched by the orchestrator.
   if (input.agent_id) return null;
-  if (tool === 'AskUserQuestion') {
-    append(path, { k: 'reset', at, why: 'ask' });
-    return null;
-  }
   if (!DISPATCH.has(tool)) return null;
   const response = input.tool_response && typeof input.tool_response === 'object' ? input.tool_response : {};
   let role;
@@ -599,9 +605,10 @@ const excess = (r) => Math.max(r.round - r.max, r.edgeRound - r.ceiling);
 function confirmation(r) {
   const from = r.agents.length > 0 ? ` The rounds so far came from ${r.agents.join(', ')}.` : '';
   const edge = `${r.source} → ${r.target} (${r.token})`;
-  let why = `this would be round ${r.round} on ${edge}, and .claude/graph.md caps that loop at ${r.max}.`;
+  const cap = r.given ? `${r.max - r.given}, and your ${r.given} repl${r.given === 1 ? 'y' : 'ies'} since it opened gave it ${r.given} more` : `${r.max}`;
+  let why = `this would be round ${r.round} on ${edge}, and .claude/graph.md caps that loop at ${cap}.`;
   if (r.issue && r.round > r.max) {
-    why = `this would be round ${r.round} of the issue \`${r.issue}\` on ${edge}, and .claude/graph.md caps that loop at ${r.max}.`;
+    why = `this would be round ${r.round} of the issue \`${r.issue}\` on ${edge}, and .claude/graph.md caps that loop at ${cap}.`;
   } else if (r.issue) {
     why =
       `this would be round ${r.edgeRound} on ${edge} with no approval between them. No issue has passed the cap of ${r.max}, ` +
