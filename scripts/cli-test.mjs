@@ -3090,6 +3090,10 @@ const dated = (date, status = 'active') =>
   await writeFile(ledgerFile, `${[0, 1, 2, 3].map((i) => JSON.stringify({ k: 'verdict', at: `2026-09-25T10:0${i}:30.000Z`, agent: `a${i}`, role: 'reviewer', verdict: 'APPROVED', declared: true })).join('\n')}\n`);
   const live = run(['gate', '--selftest', '--project', bed], { loud: true });
   expect(live.status === 0 && /it recorded the \d+ reports the transcripts show/.test(live.out), `gate: and one that recorded them is not, and says it compared — got ${live.out}`);
+  // Verdicts it recorded before the window the reports are counted in are not ones it recorded in it.
+  await writeFile(ledgerFile, `${[0, 1, 2, 3].map((i) => JSON.stringify({ k: 'verdict', at: `2026-08-20T10:0${i}:30.000Z`, agent: `old${i}`, role: 'reviewer', verdict: 'APPROVED', declared: true })).join('\n')}\n`);
+  const stale = run(['gate', '--selftest', '--project', bed], { loud: true });
+  expect(stale.status === 1 && stale.out.includes('the gate recorded 0'), `gate: a ledger's verdicts from before the window do not stand for the ones in it — got ${stale.out}`);
   await rm(ledgerFile);
   // The session asked about is the last with enough reports to say something, not the last of all.
   const later = JSON.stringify({ ...JSON.parse(reported(1)[0]), dispatch_id: 'toolu_later', session: 'sess-later', ts: '2026-09-25T12:00:00.000Z', result_ts: '2026-09-25T12:00:30.000Z' });
