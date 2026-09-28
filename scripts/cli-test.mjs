@@ -4605,8 +4605,33 @@ const dated = (date, status = 'active') =>
   const leftLocal = await applyWiring(narrowLocal, gateOnly);
   const sharedGate = JSON.parse(await readFile(join(narrowLocal, '.claude', 'settings.json'), 'utf8').catch(() => '{}')).hooks?.PreToolUse ?? [];
   expect(
-    leftLocal.problems.some((p) => p.includes('settings.local.json') && p.includes('widen')) && !sharedGate.some((g) => g.hooks.some((x) => x.command.includes('loop-gate'))),
+    leftLocal.problems.some((p) => p.includes('settings.local.json') && p.includes('run it twice')) && !sharedGate.some((g) => g.hooks.some((x) => x.command.includes('loop-gate'))),
     `wire --apply: a narrower group in the local file is named, not doubled — got ${JSON.stringify(leftLocal)}`,
+  );
+  // Two narrow groups for one script: widening the first alone left the second running beside it, twice on the
+  // tools they then shared — and nothing after that could see it.
+  const split = await scratch();
+  await mkdir(join(split, '.claude'), { recursive: true });
+  const splitSettings = JSON.parse(settingsFile(gateOnly));
+  const gatePre = splitSettings.hooks.PreToolUse.find((g) => g.hooks[0].command.includes('loop-gate'));
+  splitSettings.hooks.PreToolUse.push({ ...gatePre, matcher: 'Task', hooks: gatePre.hooks.map((x) => ({ ...x })) });
+  gatePre.matcher = 'Agent';
+  await writeFile(join(split, '.claude', 'settings.json'), JSON.stringify(splitSettings, null, 2));
+  await applyWiring(split, gateOnly);
+  const joined = JSON.parse(await readFile(join(split, '.claude', 'settings.json'), 'utf8')).hooks.PreToolUse.filter((g) => g.hooks.some((x) => x.command.includes('loop-gate')));
+  expect(
+    joined.length === 1 && ['Agent', 'Task', 'SendMessage'].every((tool) => joined[0].matcher.split('|').includes(tool)),
+    `wire --apply: two groups running the gate become one that reaches every tool it needs — got ${JSON.stringify(joined)}`,
+  );
+  // And two that overlap are said by every reader of the wiring, not only fixed when someone runs wire.
+  const twice = await scratch();
+  await mkdir(join(twice, '.claude'), { recursive: true });
+  const twiceSettings = JSON.parse(settingsFile(gateOnly));
+  twiceSettings.hooks.PreToolUse.push(JSON.parse(JSON.stringify(twiceSettings.hooks.PreToolUse.find((g) => g.hooks[0].command.includes('loop-gate')))));
+  await writeFile(join(twice, '.claude', 'settings.json'), JSON.stringify(twiceSettings, null, 2));
+  expect(
+    (await missingWiring(twice, gateOnly)).some((w) => w.includes('2 PreToolUse groups run') && w.includes('once per group')),
+    'wiring: two groups running a hook on the tools they share are reported',
   );
 
   // An old command, exactly as init or wire wrote it, is updated to say when its script cannot start;

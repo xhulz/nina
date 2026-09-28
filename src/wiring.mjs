@@ -205,13 +205,33 @@ function groupsFor(hooks, event) {
   return Array.isArray(hooks[event]) ? hooks[event] : null;
 }
 
-/** Whether a settings group runs a hook's script, recognised by what the command runs, not its exact text. */
-function runs(g, h) {
-  return Boolean(g) && typeof g === 'object' && Array.isArray(g.hooks) && g.hooks.some((x) => {
-    const cmd = String(x?.command ?? '');
-    return cmd.includes(h.script) && (!h.mode || cmd.includes(h.mode));
-  });
+/** Whether one hook command runs a hook's script, recognised by what it runs, not by its exact text. */
+function runsCommand(x, h) {
+  const cmd = String(x?.command ?? '');
+  return cmd.includes(h.script) && (!h.mode || cmd.includes(h.mode));
 }
+
+/** Whether a settings group runs a hook's script. */
+function runs(g, h) {
+  return Boolean(g) && typeof g === 'object' && Array.isArray(g.hooks) && g.hooks.some((x) => runsCommand(x, h));
+}
+
+/** A matcher that reaches every tool: none, empty, or `*`. */
+const everyTool = (m) => m === undefined || m === null || m === '' || m === '*';
+
+/** A matcher this can read and rewrite: every tool, or a list of exact names. A regular expression is its owner's. */
+const plainMatcher = (m) => everyTool(m) || (typeof m === 'string' && /^[A-Za-z0-9_|]+$/.test(m));
+
+/** Whether two matchers reach a tool in common — unknown for a regular expression, taken as no. */
+function overlaps(a, b) {
+  if (everyTool(a) || everyTool(b)) return true;
+  if (!plainMatcher(a) || !plainMatcher(b)) return false;
+  const names = new Set(a.split('|'));
+  return b.split('|').some((n) => names.has(n));
+}
+
+/** Whether two of these groups run on a tool they share, so the hook runs once per group there. */
+const doubled = (groups) => groups.some((g, i) => groups.slice(i + 1).some((other) => overlaps(g.matcher, other.matcher)));
 
 /**
  * Whether settings already run a hook. Recognised by what the command runs, not by its exact text —
@@ -338,6 +358,13 @@ export async function missingWiring(target, shipped) {
   const { merged, problems } = await projectHooks(target, (event) => wanted.some((h) => h.event === event));
   out.push(...problems);
   for (const h of wanted) {
+    const running = (merged[h.event] ?? []).filter((g) => runs(g, h));
+    if (doubled(running)) {
+      out.push(
+        `${running.length} ${h.event} groups run \`${h.script}${h.mode ? ` ${h.mode}` : ''}\` for tools they share, so it runs once per group there — ` +
+          '`nina wire --apply` makes them one',
+      );
+    }
     if (covered(merged, h)) continue;
     out.push(
       `.claude/settings.json has no ${h.event} hook${h.matcher ? ` for ${h.matcher}` : ''} running \`${h.script}${h.mode ? ` ${h.mode}` : ''}\` — without it ${h.why}`,
@@ -419,23 +446,34 @@ export async function applyWiring(target, shipped, { settings: editSettings = tr
       const added = [];
       const { merged } = await projectHooks(target);
       for (const h of HOOKS.filter((h) => shipped.has(h.script))) {
-        if (covered(merged, h)) continue;
+        const running = (merged[h.event] ?? []).filter((g) => runs(g, h));
+        if (covered(merged, h) && !doubled(running)) continue;
         const named = `${h.event}${h.matcher ? ` (${h.matcher})` : ''} → ${h.script}${h.mode ? ` ${h.mode}` : ''}`;
-        // A group that already runs the script for fewer tools is widened, not joined by a second one: both
-        // would run on the tools they share, and the gate would count each of those events twice.
-        const narrower = (merged[h.event] ?? []).find((g) => runs(g, h));
-        if (narrower) {
-          const own = (hooks[h.event] ?? []).find((g) => runs(g, h));
-          if (narrower.from === '.claude/settings.json' && own && /^[A-Za-z0-9_|]*$/.test(own.matcher ?? '')) {
-            own.matcher = [...new Set([...String(own.matcher ?? '').split('|').filter(Boolean), ...h.matcher.split('|')])].join('|');
-            added.push(`${named} (matcher widened to ${own.matcher})`);
-          } else {
-            problems.push(`${narrower.from} runs ${h.script} for "${narrower.matcher}", which does not reach every one of ${h.matcher} — widen that matcher there; a second group would run it twice`);
-          }
+        if (running.length === 0) {
+          (hooks[h.event] ??= []).push(group(h));
+          added.push(named);
           continue;
         }
-        (hooks[h.event] ??= []).push(group(h));
-        added.push(named);
+        // The groups that already run the script become one that reaches every tool it needs. A second group
+        // beside a narrower one — or two left as they were — runs it on the tools they share once per group, and
+        // the gate counts each of those events twice. A group in the local file, or one matched by a regular
+        // expression, is its owner's to change: said, and not doubled.
+        const foreign = running.find((g) => g.from !== '.claude/settings.json' || !plainMatcher(g.matcher));
+        if (foreign) {
+          problems.push(
+            `${foreign.from} runs ${h.script} for "${foreign.matcher ?? ''}" — make every group that runs it there one, reaching ${h.matcher ?? 'every tool'}; ` +
+              'another group beside it would run it twice',
+          );
+          continue;
+        }
+        const mine = (hooks[h.event] ?? []).filter((g) => runs(g, h));
+        const keep = mine.find((g) => everyTool(g.matcher)) ?? mine[0];
+        if (!everyTool(keep.matcher)) {
+          keep.matcher = [...new Set([...mine.flatMap((g) => g.matcher.split('|')), ...(h.matcher ? h.matcher.split('|') : [])])].join('|');
+        }
+        for (const g of mine) if (g !== keep) g.hooks = g.hooks.filter((x) => !runsCommand(x, h));
+        hooks[h.event] = hooks[h.event].filter((g) => !Array.isArray(g?.hooks) || g.hooks.length > 0);
+        added.push(`${named} (${mine.length > 1 ? `${mine.length} groups made one, ` : ''}reaching ${everyTool(keep.matcher) ? 'every tool' : keep.matcher})`);
       }
       // An old command, exactly as it was written, learns to say when its script cannot start, and how to
       // install NINA as it is installed now.
