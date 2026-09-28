@@ -37,6 +37,8 @@ Reviewer rejects any architect spec that touches the platform runtime or its dep
 - Subagent role specs → `.claude/agents/` (dispatchable via Agent tool)
 <!-- nina:slot project.4 product-docs -->
 
+**Where a memory goes.** How a stage should work → a pill under `.claude/pills/`, which the stage reads and `nina learn` measures. How a dependency behaves → its `.claude/integrations/` doc. A decision about this system → `.claude/architecture.md`. A rule every project needs → a request to the harness (`nina learn --graduate`). Only a preference of the owner's goes in Claude Code's own memory: it is this machine's alone, no stage reads it, and nothing measures it.
+
 **Generated files — edit the layer, not the output.** A file that opens with a
 `<!-- nina:generated -->` comment was composed by `nina compose` from the harness core, the
 surfaces this project declares in `.nina/profile.json`, and this project's own fragments in
