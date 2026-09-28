@@ -2696,6 +2696,13 @@ const dated = (date, status = 'active') =>
   expect(denied(await edit('Edit', 'CLAUDE.md', { cwd: bed })), 'guard: a relative path is read from the session directory');
   await symlink(join(bed, 'CLAUDE.md'), join(bed, 'linked.md'));
   expect(denied(await edit('Edit', join(bed, 'linked.md'))), 'guard: a link to a composed file is the composed file');
+  // On a file system that ignores case, as macOS's does by default, another spelling is the same file.
+  if (existsSync(join(bed, 'claude.md'))) {
+    expect(
+      denied(await edit('Edit', join(bed, 'claude.md'))) && denied(await edit('Write', join(bed, '.CLAUDE', 'agents', 'Reviewer.md'))),
+      'guard: a composed file spelled in another case is still the composed file',
+    );
+  }
   // A fragment started from a copy of the composed file carries its notice — the adoption path says to
   // move a file into the layer — and the layer is still where the change goes.
   await mkdir(join(bed, '.nina', 'project', 'tree'), { recursive: true });

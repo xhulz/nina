@@ -21,10 +21,10 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, realpathSync }
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NOTICE_HEAD, composedPaths, noticeOf } from './commands/compose.mjs';
+import { HARNESS } from './paths.mjs';
 
 // Read here and by the suites from here; the test itself lives beside the compiler that writes the notice.
 export { NOTICE_HEAD, noticeOf };
-import { HARNESS } from './paths.mjs';
 
 /** The package this runs from: its releases say whether a pinned version ships the guard. */
 const PACKAGE = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -89,7 +89,9 @@ export async function handleEdit(input, { root, pkg = PACKAGE }) {
     if (!pinned) return null;
     const target = isAbsolute(path) ? path : resolve(input.cwd ?? root, path);
     if (!existsSync(target)) return null;
-    const rel = relative(realpathSync(root), realpathSync(target)).split(sep).join('/');
+    // The native call returns the name as it is on disk: where case is ignored, `claude.md` is CLAUDE.md, and
+    // read as spelled it reached no composed path and let the edit through.
+    const rel = relative(realpathSync.native(root), realpathSync.native(target)).split(sep).join('/');
     // Outside the project, or in its own layer — where a change to a composed file belongs.
     if (rel.startsWith('..') || isAbsolute(rel) || rel.split('/')[0] === HARNESS) return null;
     const notice = noticeOf(head(target));
