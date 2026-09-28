@@ -4056,6 +4056,12 @@ const dated = (date, status = 'active') =>
   expect(sentWhole.spans.length === 0, `langfuse: a round split from a run that went whole is not sent — got ${JSON.stringify(sentWhole.spans.map((r) => r.dispatch_id))}`);
   const sentSplit = due([whole, later], { spans: { toolu_w: digest(whole) }, scores: {} }, at);
   expect(sentSplit.spans.map((r) => r.dispatch_id).join() === 'toolu_w#2', `langfuse: and is, when its first round went split — got ${JSON.stringify(sentSplit.spans.map((r) => r.dispatch_id))}`);
+  // A round that learns, after it went, what never goes — when it was told, how much it read, its status — has
+  // not changed: over the whole record, about half of one project's runs read as changed after they were sent.
+  expect(
+    digest(whole) === digest({ ...whole, notified_ms: 1234, agent_read_bytes: 99, status: 'completed' }) && digest(whole) !== digest({ ...whole, tokens: { output: 11 } }),
+    'langfuse: what was sent is recognised by what went, not by what the record learned after',
+  );
 }
 
 // ─── models and effort: the release's, not the alias's or the session's ─────────────────
@@ -5053,7 +5059,8 @@ const dated = (date, status = 'active') =>
   calls = [];
   const fourth = await exp([]);
   expect(fourth.code === 0 && spansSent().length === 0 && scoresSent().length === 1 && scoresSent()[0].value === 'REJECTED', `export: a verdict read later is a first score, not a second span — got ${fourth.out}`);
-  expect(fourth.out.includes('2 run(s) changed after they were sent'), `export: a record that changed after it went is said — got ${fourth.out}`);
+  // The verdict read later reached Langfuse as its score; the file count, which went on the span, is what changed.
+  expect(fourth.out.includes('1 run(s) changed after they were sent'), `export: a record whose sent span changed after it went is said — got ${fourth.out}`);
   calls = [];
   const fifth = await exp([]);
   expect(fifth.code === 0 && calls.length === 0 && fifth.out.includes('nothing new'), `export: and nothing goes twice — got ${fifth.out}`);
