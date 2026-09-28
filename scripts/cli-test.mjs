@@ -16,10 +16,10 @@
 
 import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { existsSync, rmSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { asRead } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
@@ -4716,6 +4716,41 @@ const dated = (date, status = 'active') =>
   await writeFile(join(transcripts, 's1.jsonl'), `${await readFile(join(transcripts, 's1.jsonl'), 'utf8')}${dispatch('toolu_l2', '2026-09-20T11:00:00.000Z')}\n`);
   snap();
   expect((await readFile(store, 'utf8')).includes('toolu_l2'), 'snapshot: a lock its process left behind is taken over');
+  // Held by one process at a time, across processes started together — on a free lock and on a dead one's. A lock
+  // created empty and written after was read in between as a dead one's, and one taken over by removing it was
+  // removed again by the next taker: two held it at once in half the races, three in a quarter.
+  const racer = join(await scratch(), 'racer.mjs');
+  await writeFile(
+    racer,
+    `const { takeLock } = await import(${JSON.stringify(pathToFileURL(join(ROOT, 'src', 'lock.mjs')).href)});
+const [path, at] = process.argv.slice(2);
+await new Promise((r) => setTimeout(r, Number(at) - Date.now()));
+const release = await takeLock(path);
+if (!release) process.exit(0);
+const from = Date.now();
+await new Promise((r) => setTimeout(r, 150));
+process.stdout.write(from + ',' + Date.now());
+await release();
+`,
+  );
+  const race = async (stale) => {
+    const path = join(await scratch(), 'p.lock');
+    if (stale) await writeFile(path, '999999999');
+    const at = Date.now() + 700;
+    const held = await Promise.all(
+      Array.from({ length: 8 }, () => new Promise((done) => {
+        const child = spawn(process.execPath, [racer, path, String(at)]);
+        let said = '';
+        child.stdout.on('data', (d) => (said += d));
+        child.on('close', () => done(said));
+      })),
+    );
+    const spans = held.filter(Boolean).map((h) => h.split(',').map(Number)).sort((a, b) => a[0] - b[0]);
+    // Two at once overlap by most of the 150ms each holds; a few ms is the clock, not a race.
+    return spans.some((h, i) => i > 0 && h[0] < spans[i - 1][1] - 20);
+  };
+  const overlapped = await Promise.all([false, false, false, true, true, true].map(race));
+  expect(!overlapped.some(Boolean), `lock: one process holds it at a time, free or taken over — overlapped in ${JSON.stringify(overlapped)}`);
   // A rebuild re-reads only the transcripts still on disk, and the store is the only copy of the rest.
   await writeFile(store, `${(await readFile(store, 'utf8')).trim()}\n${JSON.stringify({ project: slug, dispatch_id: 'toolu_pruned', ts: '2026-08-01T10:00:00.000Z', role: 'qa' })}\n`);
   snap('--rebuild');

@@ -8,13 +8,14 @@
  * the transcripts are hundreds of megabytes and growing.
  */
 
-import { copyFile, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { HARNESS, snapshotsDir } from '../paths.mjs';
 import { decodeProjectDir } from './stats.mjs';
 import { readStoreFile } from '../store.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { listProjects, scanProject } from '../transcripts.mjs';
+import { takeLock } from '../lock.mjs';
 
 /**
  * Reads a JSON file, or an empty object when it is missing or unreadable. A state file cut short
@@ -62,40 +63,6 @@ async function writeAtomic(file, records) {
 }
 
 /**
- * Takes a project's lock, or says it is taken. The records and the cursors are written one after the other,
- * and two snapshots of one project at once — a project's own detector and a global hook, both on every
- * Stop — could leave the cursors of the scan that read further beside the records of the one that read less,
- * and whatever lay between was never captured. One that finds the lock taken skips the project: the next
- * snapshot reads from where this one leaves it. A lock names its process, so one left by a snapshot that
- * died is taken over.
- *
- * @param {string} path - The lock file.
- * @returns {Promise<(() => Promise<void>)|null>} Its release, or null when another snapshot holds it.
- */
-async function lock(path) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const handle = await open(path, 'wx');
-      await handle.writeFile(String(process.pid));
-      await handle.close();
-      return () => rm(path, { force: true });
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      const pid = Number(await readFile(path, 'utf8').catch(() => ''));
-      let alive = false;
-      try {
-        alive = pid > 0 && process.kill(pid, 0);
-      } catch (e) {
-        alive = e.code === 'EPERM';
-      }
-      if (alive) return null;
-      await rm(path, { force: true });
-    }
-  }
-  return null;
-}
-
-/**
  * Runs the snapshot.
  *
  * @param {string[]} argv - Command arguments.
@@ -125,7 +92,10 @@ export async function snapshot(argv, ctx) {
 
   let totalNew = 0;
   for (const project of targets) {
-    const release = await lock(join(outDir, `${project.slug}.lock`));
+    // One at a time per project: the records and the cursors are written one after the other, and two at once could
+    // leave the cursors of the scan that read further beside the records of the one that read less. One that finds
+    // the lock held skips the project, and the next reads from where this one leaves it.
+    const release = await takeLock(join(outDir, `${project.slug}.lock`));
     if (!release) continue;
     try {
       totalNew += await snapshotProject(project, { outDir, rebuild, quiet });
