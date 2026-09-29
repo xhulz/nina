@@ -7,13 +7,13 @@
  * a subscription pays nothing per token — which is still the right unit for comparing one stage with
  * another, or a release with the one before it.
  *
- * Prices per million tokens, from the Claude API reference cached on 2026-06-24. A cache write costs
+ * Prices per million tokens, from the Claude API reference cached on 2026-09-25. A cache write costs
  * 1.25× input for the 5-minute TTL and 2× for the 1-hour one; a read costs 0.1× input, except where a
  * model's own rate is listed.
  */
 
 /** The date the table was read, printed beside every estimate made from it. */
-export const PRICES_AS_OF = '2026-06-24';
+export const PRICES_AS_OF = '2026-09-25';
 
 /** model id → $/MTok. */
 const PRICES = {
@@ -26,6 +26,7 @@ const PRICES = {
   'claude-opus-4-8': { input: 5, output: 25 },
   'claude-opus-4-7': { input: 5, output: 25 },
   'claude-opus-4-6': { input: 5, output: 25 },
+  'claude-sonnet-5-5': { input: 2, output: 10, read: 0.2 },
   'claude-sonnet-5': { input: 2, output: 10 },
   'claude-sonnet-4-6': { input: 3, output: 15 },
   'claude-haiku-4-5': { input: 1, output: 5 },

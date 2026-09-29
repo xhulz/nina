@@ -9,5 +9,5 @@
   "TEST_CMD": "pnpm test",
   "TYPECHECK_CMD": "pnpm typecheck",
   "WORK_EFFORT": "xhigh",
-  "WORK_MODEL": "claude-sonnet-5"
+  "WORK_MODEL": "claude-sonnet-5-5"
 }
