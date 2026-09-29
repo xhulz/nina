@@ -32,7 +32,7 @@ import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGa
 import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
 import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
-import { snapshotsDir } from '../src/paths.mjs';
+import { evalRunsDir, snapshotsDir } from '../src/paths.mjs';
 import { NAME as VOCABULARY_NAME, defaultVocabulary } from '../src/vocabulary.mjs';
 import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
@@ -4920,6 +4920,73 @@ await release();
   else process.env.ANTHROPIC_API_KEY = saved;
   expect(!('ANTHROPIC_API_KEY' in onLogin.env) && onApi.env.ANTHROPIC_API_KEY === 'sk-test', 'eval: an API key reaches the child only under --api');
   expect(onLogin.args.includes('dontAsk') && onLogin.args.includes('--no-session-persistence') && onLogin.args.join(' ').includes('--setting-sources project'), 'eval: the child reads only, loads no user settings, and writes no session');
+  // The answer key is a file on the same disk: defects.json and the sample report in the installed
+  // package, and the reports of earlier runs kept beside the staged project. A bare `Read`, `Grep` or
+  // `Glob` reaches any path, so a reviewer that went looking would be graded on what it read there.
+  const granted = onLogin.args.slice(onLogin.args.indexOf('--allowedTools') + 1);
+  const fileTools = granted.slice(0, granted.findIndex((a) => a.startsWith('--')) >>> 0).filter((t) => /^(Read|Grep|Glob)\b/.test(t));
+  let fence = null;
+  try {
+    fence = JSON.parse(onLogin.args[onLogin.args.indexOf('--settings') + 1]);
+  } catch {
+    // Reported below.
+  }
+  expect(
+    fileTools.join() === 'Read(./**),Grep(./**),Glob(./**)' && onLogin.args.includes('--settings') && fence?.permissions?.blockReadsOutsideWorkingDirectories === true,
+    `eval: the reviewer's file tools stay inside the staged project, away from the answer key — granted ${fileTools.join(', ')}, settings ${JSON.stringify(fence)}`,
+  );
+  // Layer 1, the permission rules. The git the reviewer may run is a way around the fence on the file
+  // tools: `--no-index` compares two paths anywhere on disk, `--output` writes wherever it names, wherever
+  // in the command either stands, and a redirection or quoting reaches the same. A Bash rule matches as a
+  // prefix (`Bash(git diff:*)`), with `*` for any run of characters, or whole; a deny wins. This layer is
+  // best-effort: the client matches a command after normalising it, so `--out\put` passes it, and what
+  // stops that is the sandbox below.
+  const ruleList = (flag) => {
+    const from = onLogin.args.indexOf(flag);
+    if (from === -1) return [];
+    const rest = onLogin.args.slice(from + 1);
+    return rest.slice(0, rest.findIndex((a) => a.startsWith('--')) >>> 0);
+  };
+  const bashRules = (rules) => rules.flatMap((r) => (/^Bash\((.*)\)$/.exec(r) ? [/^Bash\((.*)\)$/.exec(r)[1]] : []));
+  const matches = (rule, command) =>
+    new RegExp(`^${rule.replace(/:\*$/, '*').split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(command);
+  const allow = bashRules([...ruleList('--allowedTools'), ...(fence?.permissions?.allow ?? [])]);
+  const deny = bashRules([...ruleList('--disallowedTools'), ...(fence?.permissions?.deny ?? [])]);
+  const runs = (command) => allow.some((r) => matches(r, command)) && !deny.some((r) => matches(r, command));
+  expect(runs('git diff') && runs('git log -p src/server/config.ts'), `eval: the reviewer can still read the diff and the history — allow ${allow.join(', ')}, deny ${deny.join(', ')}`);
+  const outside = [
+    'git diff --no-index ../defects.json src/server/config.ts',
+    'git diff --stat --no-index ../defects.json src/server/config.ts',
+    'git diff --output=../written.txt',
+    'git log -p --output=../written.txt',
+    'git diff HEAD > ../written.txt',
+    'git show HEAD:src/server/config.ts < ../defects.json',
+    'git diff --out""put=../written.txt',
+    "git diff --no-'index' ../defects.json src/server/config.ts",
+    'git diff --{output,stat}=../written.txt',
+  ].filter(runs);
+  expect(outside.length === 0, `eval: the reviewer cannot read or write outside the staged project through git — it may run: ${outside.join(' | ')}`);
+  // A user or system git config can name a pager, an external diff or a textconv, a program git runs on
+  // every diff that no rule above sees; the reviewer's git reads the staged repository's config alone.
+  expect(
+    onLogin.env.GIT_CONFIG_GLOBAL === '/dev/null' && onLogin.env.GIT_CONFIG_NOSYSTEM === '1',
+    `eval: the reviewer's git reads no user or system config — got GIT_CONFIG_GLOBAL=${onLogin.env.GIT_CONFIG_GLOBAL} GIT_CONFIG_NOSYSTEM=${onLogin.env.GIT_CONFIG_NOSYSTEM}`,
+  );
+  // Layer 2, the boundary: every Bash command runs in the OS sandbox or not at all, and the sandbox denies
+  // the shared temp directories, where earlier runs keep their reports. Writes outside the project rest on it.
+  const sandbox = fence?.sandbox ?? {};
+  const underRoot = (path) => (sandbox.filesystem?.denyRead ?? []).some((root) => path === root || path.startsWith(`${root}/`));
+  expect(
+    sandbox.enabled === true && sandbox.failIfUnavailable === true && sandbox.allowUnsandboxedCommands === false && sandbox.autoAllowBashIfSandboxed === false,
+    `eval: the reviewer's Bash runs in the sandbox or not at all — got ${JSON.stringify(sandbox)}`,
+  );
+  expect(underRoot(tmpdir()) && underRoot(realpathSync(tmpdir())), `eval: the sandbox denies the temp directory where reports are kept (${tmpdir()}) — got ${JSON.stringify(sandbox.filesystem)}`);
+  // Staged in the temp directory, the reviewer would be denied its own project; so a run is staged at home.
+  const data = process.env.NINA_DATA;
+  delete process.env.NINA_DATA;
+  const runsAtHome = evalRunsDir();
+  process.env.NINA_DATA = data;
+  expect(runsAtHome === join(homedir(), '.nina', 'eval'), `eval: a run is staged in the home directory, out of the temp roots the sandbox denies — got ${runsAtHome}`);
 
   // End to end without a model: the fixture stages, composes, and the canned report is graded.
   const { status, out } = run(['eval', '--release', '0.24.0', '--dry-run', '--keep'], { loud: true });
@@ -4927,10 +4994,15 @@ await release();
   const kept = /staged in (\S+);/.exec(out)?.[1];
   const changed = kept ? spawnSync('git', ['status', '--porcelain'], { cwd: kept, encoding: 'utf8' }).stdout.replace(/\n$/, '').split('\n') : [];
   expect(changed.length === 5 && changed.every((l) => l.startsWith(' M src/')), `eval: the reviewer's diff is the change alone, the composed harness ignored — got ${changed.join(' | ')}`);
-  if (kept) await rm(kept, { recursive: true, force: true });
+  expect(Boolean(kept) && dirname(kept).startsWith(`${evalRunsDir()}/`) && existsSync(join(dirname(kept), 'tmp')), `eval: a run is staged in its own directory under ${evalRunsDir()}, with a temp directory beside the project — got ${kept}`);
+  // The whole run goes, but only a run under the eval directory: anywhere else its parent is not the run's.
+  if (kept) await rm(dirname(kept).startsWith(`${evalRunsDir()}/`) ? dirname(kept) : kept, { recursive: true, force: true });
 
   // Nothing an eval run leaves behind: counted before any of them, so a leak anywhere below shows.
-  const leftovers = async () => (await readdir(tmpdir())).filter((f) => /^nina-eval-/.test(f));
+  const leftovers = async () => [
+    ...(await readdir(tmpdir())).filter((f) => /^nina-eval-/.test(f)),
+    ...(await readdir(evalRunsDir()).catch(() => [])).map((f) => join('eval', f)),
+  ];
   const beforeRuns = new Set(await leftovers());
 
   // The real path, with a stand-in for claude on the PATH that logs each call and answers from files:
@@ -4943,7 +5015,7 @@ await release();
       '#!/usr/bin/env node',
       "const fs = require('fs'); const path = require('path'); const dir = process.env.FAKE_DIR;",
       'const args = process.argv.slice(2); const prompt = args[args.indexOf("-p") + 1] ?? "";',
-      "fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ args, key: 'ANTHROPIC_API_KEY' in process.env }) + '\\n');",
+      "fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ args, key: 'ANTHROPIC_API_KEY' in process.env, cwd: process.cwd(), tmp: process.env.TMPDIR }) + '\\n');",
       "const which = !args.includes('--json-schema') ? 'review' : prompt.includes('The change matches the spec.') ? 'control' : 'judge';",
       "process.stdout.write(fs.readFileSync(path.join(dir, which + '.json'), 'utf8'));",
     ].join('\n'),
@@ -4962,6 +5034,10 @@ await release();
   expect(ok.status === 0 && ok.stdout.includes('caught 4/12') && ok.stdout.includes('$0.50 API-equivalent'), `eval: a real run's JSON is graded and its cost shown — got ${ok.stdout}${ok.stderr}`);
   const [reviewCall] = await calls();
   expect(reviewCall && !reviewCall.key && reviewCall.args.includes('--agent'), `eval: the reviewer runs with no per-token key in reach — got ${JSON.stringify(reviewCall)}`);
+  expect(
+    Boolean(reviewCall) && existsSync(evalRunsDir()) && reviewCall.cwd.startsWith(`${realpathSync(evalRunsDir())}/`) && reviewCall.tmp?.split('/').slice(-2).join('/') === `${reviewCall.cwd.split('/').at(-2)}/tmp` && reviewCall.cwd.endsWith('/project'),
+    `eval: the reviewer runs in the staged project, with TMPDIR beside it rather than in the temp roots the sandbox denies — got cwd ${reviewCall?.cwd}, TMPDIR ${reviewCall?.tmp}`,
+  );
   await answer('review', { type: 'result', subtype: 'error_max_turns', is_error: true, result: '' });
   const failed = nina('--release', '0.24.0', '--reports', reportsDir);
   expect(failed.status === 1 && failed.stderr.includes('error_max_turns') && !failed.stdout.includes('caught 0/12'), `eval: a run that did not review is a failure, not a review that caught nothing — got ${failed.stdout}${failed.stderr}`);

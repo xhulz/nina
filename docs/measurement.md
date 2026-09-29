@@ -427,7 +427,22 @@ It runs `claude -p` as the composed reviewer (`--agent reviewer`) in a throwaway
 login Claude Code already has — a subscription, never a per-token bill: every credential that would bill
 per token (or route it through a gateway) is removed from the child's environment unless `--api` asks
 otherwise. The child only reads — a tool allowlist under `--permission-mode dontAsk`, so the reviewer runs
-with the typecheck, lint and `harness:check` its spec mandates denied, the same for every release — loads
+with the typecheck, lint and `harness:check` its spec mandates denied, the same for every release.
+
+It is fenced into the staged project, because the answer key is on the same disk: `evals/reviewer/` in the
+installed package, and the reports of earlier runs in the temp directory. `--settings` carries two layers.
+The first is the permission rules. `Read`, `Grep` and `Glob` are scoped to `./**`, and
+`blockReadsOutsideWorkingDirectories` is set. Any git command carrying `--no-index` (which diffs two paths
+anywhere on disk), `--output` (which writes wherever it names), a redirection, a quote, a backslash, a brace
+or a backtick is denied. This layer is best-effort: the client matches a command after normalising it, so an
+escaped flag such as `--out\put`, or `git show` of an absolute path, passes it. The second layer is the
+boundary. Every Bash command runs in the OS sandbox or not at all (`enabled`, `failIfUnavailable`,
+`allowUnsandboxedCommands: false`, `autoAllowBashIfSandboxed: false`), and the sandbox denies reads of the
+shared temp roots (`sandbox.filesystem.denyRead`). Writes outside the project rest on the sandbox alone. So
+a run is staged under `~/.nina/eval/`, not in the temp directory it denies, with the reviewer's `TMPDIR`
+beside the project. A host without the sandbox cannot run an eval. Its git reads the staged repository's
+config alone (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`), since a machine's config can name a
+program git runs on every diff. It loads
 no user settings, so no global hook snapshots the eval into the owner's statistics, and writes no session.
 It is not hermetic across machines: user-level agents and skills still load. A run that did not review
 (not logged in, out of turns, `claude` missing) is reported as a failure rather than graded as a review
