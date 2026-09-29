@@ -287,7 +287,7 @@ Opus 5.5, with no release in between.
 
 So each spec names a model id and an effort level, from defaults in `core/vocabulary.json`:
 `DEEP_MODEL` (`claude-opus-5-5`) and `DEEP_EFFORT` (`high`) for the stages that judge (the reviewer,
-secops, devops, and the two that write and audit immutable code), and `WORK_MODEL` (`claude-sonnet-5`) and
+secops, devops, and the two that write and audit immutable code), and `WORK_MODEL` (`claude-sonnet-5-5`) and
 `WORK_EFFORT` (`xhigh`) for the stages that carry a spec out. `high` for the first is one level below where
 they ran and one above Opus 5.5's own default, `medium`. `xhigh` for the second is where they always ran,
 and none of them wrote more than it had. The architect runs on `DEEP_MODEL` at its own level,

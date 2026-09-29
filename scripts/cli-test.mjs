@@ -3607,11 +3607,13 @@ const dated = (date, status = 'active') =>
   expect(priceOf('claude-opus-4-8[1m]')?.input === 5, 'cost: a context suffix does not hide the model');
   expect(priceOf('opus') === null && costOf({ output: 1 }, 'opus') === null, 'cost: a model the table does not know is left out, not guessed');
   expect(
-    priceOf('claude-opus-5-6') === null && priceOf('claude-sonnet-5-5') === null && priceOf('claude-haiku-4-5-20251001')?.input === 1,
+    priceOf('claude-opus-5-6') === null && priceOf('claude-sonnet-5-6') === null && priceOf('claude-haiku-4-5-20251001')?.input === 1,
     'cost: a model newer than the table is left out, not priced as the one before it — a dated id is still the model it names',
   );
   expect(Math.abs(costOf({ input: 1e6, output: 1e6, write_5m: 1e6, write_1h: 1e6, read: 1e6 }, 'claude-sonnet-5') - (2 + 10 + 2.5 + 4 + 0.2)) < 1e-9, 'cost: writes at 1.25× and 2× input, reads at 0.1×');
   expect(Math.abs(costOf({ read: 1e6 }, 'claude-fable-5-1') - 0.25) < 1e-9, "cost: a model's own read rate beats the 0.1× rule");
+  // The stages that do the work run on it by default: a model missing here costs every such round as unpriced.
+  expect(Math.abs(costOf({ input: 1e6, output: 1e6, write_5m: 1e6, write_1h: 1e6, read: 1e6 }, 'claude-sonnet-5-5') - (2 + 10 + 2.5 + 4 + 0.2)) < 1e-9, 'cost: Sonnet 5.5 is priced');
 
   // End to end: a dispatch, its launch naming the agent, and the agent's own transcript.
   const dir = await scratch();
@@ -4150,7 +4152,7 @@ const dated = (date, status = 'active') =>
   expect(drawn.status === 0 && out.includes('pipeline · ') && out.includes('core dev') && out.includes('surfaces db, edge-cf, frontend, integrations'), `pipeline: the header names the project, its core and surfaces — got ${out.slice(0, 400)}`);
   expect(/planner ─▶ architect ×n ─▶ implementer ×n ─▶ reviewer ×n ─▶ qa ─┬─▶ /.test(out) && /└─▶ done\s+nothing to deploy/.test(out), `pipeline: the line, its stages that run as several agents, and where its last stage sends work — got ${out}`);
   expect(/×n\s+runs as several agents at once[^\n]*\n\s+architect\s+the sibling specs/.test(out) && /\n\s+implementer\s+work that shares no file/.test(out), `pipeline: what running as several agents means, stage by stage — got ${out}`);
-  expect(/reviewer\s+claude-opus-5-5 · high[^\n]*\n\s+ran\s+2 run\(s\), sent back 1 of 2 \(50%\)/.test(out) && /qa\s+claude-sonnet-5 · xhigh[^\n]*\n\s+ran\s+no run/.test(out), `pipeline: each stage's last thirty days from the measured history — got ${out}`);
+  expect(/reviewer\s+claude-opus-5-5 · high[^\n]*\n\s+ran\s+2 run\(s\), sent back 1 of 2 \(50%\)/.test(out) && /qa\s+claude-sonnet-5-5 · xhigh[^\n]*\n\s+ran\s+no run/.test(out), `pipeline: each stage's last thirty days from the measured history — got ${out}`);
   expect(
     /implementer ─▶ dba ─▶ qa\s+beside the reviewer · the diff touches the schema/.test(out) && /implementer ─▶ integration-tester ─▶ qa\s+beside the reviewer/.test(out),
     `pipeline: the gates the surfaces bring, run beside the reviewer and rejoining at qa — got ${out}`,
@@ -4334,7 +4336,7 @@ const dated = (date, status = 'active') =>
   expect(
     /^model: claude-opus-5-5\neffort: xhigh$/m.test(front(await spec('architect'))) &&
       /^model: claude-opus-5-5\neffort: high$/m.test(front(await spec('reviewer'))) &&
-      /^model: claude-sonnet-5\neffort: xhigh$/m.test(front(await spec('implementer'))),
+      /^model: claude-sonnet-5-5\neffort: xhigh$/m.test(front(await spec('implementer'))),
     'compose: a stage runs on the model and at the effort level its release names, the architect at its own',
   );
   const roles = (await readdir(join(dir, '.claude', 'agents'))).map((f) => f.replace(/\.md$/, ''));
