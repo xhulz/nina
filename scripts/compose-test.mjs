@@ -232,7 +232,8 @@ const BUDGETS = {
   '.claude/agents/architect.md': 15000,
   '.claude/agents/dba.md': 12500,
   '.claude/agents/devops.md': 11500,
-  '.claude/agents/implementer.md': 17500,
+  // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code).
+  '.claude/agents/implementer.md': 17600,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -243,7 +244,7 @@ const BUDGETS = {
   '.claude/agents/solidity-dev.md': 8500,
   '.claude/frontend.md': 3000,
   '.claude/graph.md': 6500,
-  '.claude/patterns.md': 20000,
+  '.claude/patterns.md': 20500,
   '.claude/pills/README.md': 10000,
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,

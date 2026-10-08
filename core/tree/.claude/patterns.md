@@ -77,6 +77,41 @@ next reader, which is how a second implementation gets written next to the first
 
 ---
 
+## Readable code — *Clean Code* as a reference
+
+Robert C. Martin's *Clean Code* is the reference for writing code the next reader understands without
+running it. It is a reference, not a rulebook: when two ways of writing the same thing both meet the
+spec, choose the one the book would choose. Where the book and this document disagree, this document
+wins: the book treats comments as a failure, and here every declaration still carries TSDoc
+(§ *TSDoc*). The reviewer does not reject a diff on this section alone.
+
+- **A name says what the thing is or does.** A function is a verb (`loadProfile`), a boolean reads as a
+  question (`isExpired`, `canRetry`), a collection is plural. No abbreviation a newcomer has to decode,
+  no bare `data`, `info`, `tmp` or `manager`, and one word per concept: not `fetch` in one module and
+  `get` in the next for the same operation.
+- **A function does one thing, at one level of abstraction.** A function that calls three steps does
+  not also parse a string inline. When a block needs a comment to say what it does, it is a function
+  with that comment as its name.
+- **Guard clauses over nesting.** Leave early on the case you cannot handle — with a named failure, not
+  a silent default — so the main path reads at one indentation level.
+- **Few parameters, no flag parameters.** Past three, pass one object with named fields. A boolean that
+  switches what a function does (`render(true)`) is two functions.
+- **No magic values.** A number or string whose meaning is not obvious where it is used gets a named
+  constant.
+- **A side effect shows in the name.** `getX` does not write. A function either answers a question or
+  changes something, not both, where splitting costs nothing.
+- **Extract what is the same rule, not what has the same shape.** Two blocks that look alike but would
+  change for different reasons stay apart.
+
+**Where it stops.** Readability works inside the scope you were given. Extracting a private function or
+naming a constant in a file you are already writing is in scope; a new shared helper, module, class
+hierarchy or interface the spec did not name is a new abstraction, and goes back to the architect. Code
+you read but are not changing is not rewritten to read better. And indirection is not the goal: a
+function, an interface with one implementation or a pattern earns its place by making the caller
+clearer, not by making the function smaller.
+
+---
+
 ## API conventions
 
 ### Layering: Route → Service → Data Objects
