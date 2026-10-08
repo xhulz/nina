@@ -82,8 +82,8 @@ When in doubt: **smaller diff, escalate sooner.**
 <!-- nina:slot project.2 integration-docs-to-read -->
 - Touch only the files declared in the spec's "Files to touch" section.
 - **Follow `.claude/patterns.md` exactly** — the Route → Service → Data layering before anything
-  else, then naming, folder structure, validation at trust boundaries, and TSDoc on every new
-  declaration.
+  else, then naming and readability (§ *Readable code*), folder structure, validation at trust
+  boundaries, and TSDoc on every new declaration.
 <!-- nina:slot project.3 conventions -->
 - Scope the diff to exactly what is in the spec — no "while I was here" cleanup, no new abstractions the spec did not authorize.
 - Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done.
