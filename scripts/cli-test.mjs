@@ -356,6 +356,16 @@ expect(
   expect(status === 1, 'check: a broken profile should exit 1');
   expect(out.includes('invented'), 'check: should name a surface the core does not have');
   expect(out.includes('kind "wishful"'), 'check: should reject an unknown integration kind');
+  // A client library over a platform binding is both kinds; each one in the list is checked.
+  const kindsProfile = JSON.parse(await readFile(join(dir, '.nina', 'profile.json'), 'utf8'));
+  const withKinds = async (kind) => {
+    await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ ...kindsProfile, integrations: [{ ...kindsProfile.integrations[0], kind }] }));
+    return run(['check', '--project', dir]).out;
+  };
+  const both = await withKinds(['installed-library', 'platform-binding']);
+  expect(!both.includes('has kind') && !both.includes('has no "kind"'), `check: an integration of two known kinds is sound — got ${both}`);
+  expect((await withKinds(['installed-library', 'wishful'])).includes('kind "wishful"'), 'check: an unknown kind in a list is refused');
+  expect((await withKinds([])).includes('integration "stripe" has no "kind"'), 'check: an empty list of kinds is no kind');
   expect(out.includes('.claude/integrations/stripe.md'), 'check: should want a doc for a declared integration');
   expect(out.includes('project slot(s) have no fragment'), 'check: should count the unfilled project layer');
 }

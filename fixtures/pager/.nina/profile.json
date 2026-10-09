@@ -13,7 +13,10 @@
     {
       "slug": "better-auth",
       "name": "Better Auth",
-      "kind": "installed-library",
+      "kind": [
+        "installed-library",
+        "platform-binding"
+      ],
       "boundary": "apps/worker/src/auth",
       "skill": null
     }

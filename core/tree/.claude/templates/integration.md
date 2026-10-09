@@ -6,7 +6,7 @@
 > Everything below is evidence. A claim you cannot cite belongs in *Open questions*, not in a
 > premise — a premise that turns out to be a guess is how an integration regression ships.
 
-- **Kind:** `installed-library` · `live-api` · `platform-binding` — pick one; it decides what counts as evidence.
+- **Kind:** `installed-library` · `live-api` · `platform-binding` — each that applies (a client library over a platform binding is both); a premise's kind decides what counts as its evidence.
 - **Boundary:** the one module that speaks to this dependency. Nothing else may.
 - **Skill:** the installed skill covering it, or *none* — do not invent one.
 
