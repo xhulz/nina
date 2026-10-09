@@ -29,8 +29,8 @@ declared on its `VERDICT` line — per issue while every round's reports named t
 per loop from the first that did not until it closes — whichever stage the fix went to; several dispatches
 acting on the same verdicts are one round; and each message from {{OWNER}} gives every open loop one round
 more — your own `AskUserQuestion` does not. A loop closes when a review launched after the latest fix passes
-with no rejection beside it — a resumed one too, and a pass needs no `ISSUES` line — or when the stage it
-hands on to passes, sent out after it. Work run side by side shares one count per stage and verdict: a rejection still open in
+with no rejection beside it — a resumed one too, and a pass needs no `ISSUES` line — or when the next stage,
+sent out after the last review, passes. Work run side by side shares one count per stage and verdict: a rejection still open in
 one task keeps another's pass from closing it. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
 what the graph says — hand them each round's report and ask how to proceed — and do not route around the
 refusal by resuming the fixer or making the fix yourself.

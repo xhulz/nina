@@ -2738,7 +2738,7 @@ const dated = (date, status = 'active') =>
   );
   const stateOf = (entries) => loopState({ loops, forward }, entries.flat()).lines.join('\n');
   expect(
-    stateOf([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'APPROVED')]).includes('- passed after its latest fix: reviewer REJECTED — 1 round(s), capped at 2. Nothing is owed on it; the gate drops its count at the next dispatch to implementer or architect') &&
+    stateOf([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'APPROVED')]).includes('- passed after its latest fix: reviewer REJECTED — 1 round(s), capped at 2. Those rounds are settled, and the gate drops them at the next dispatch to implementer or architect') &&
       stateOf([report('reviewer', 'REJECTED'), fix()]).includes('- open loop: reviewer REJECTED — 1 round(s), capped at 2. It closes when a reviewer launched after the latest fix passes with no rejection beside it, or when qa passes, sent out after the reviewer last reported') &&
       stateOf([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'REJECTED')]).includes('launched after the fix it waits on passes'),
     'gate: each loop says what would close it — the next dispatch, a review of the fix, or the stage it hands on to',
@@ -3029,14 +3029,14 @@ const dated = (date, status = 'active') =>
   later('PostToolUse', { tool_name: 'SubagentHandback', agent_id: 'c1', agent_type: 'reviewer', tool_input: { message: 'VERDICT: APPROVED\nthe fix holds' } });
   const closing = later('SessionStart', { source: 'compact' })?.hookSpecificOutput?.additionalContext ?? '';
   expect(
-    closing.includes('- passed after its latest fix: reviewer REJECTED — 1 round(s), capped at 2, issues a. Nothing is owed on it; the gate drops its count at the next dispatch to implementer or architect') && !closing.includes('open loop'),
+    closing.includes('- passed after its latest fix: reviewer REJECTED — 1 round(s), capped at 2, issues a. Those rounds are settled, and the gate drops them at the next dispatch to implementer or architect') && !closing.includes('open loop'),
     `gate: after a compaction, a loop a resumed reviewer approved after the fix is closing, not open — got ${closing}`,
   );
   await utimes(ledgerPath(project, 's-gate-closing'), new Date(), new Date(Date.now() + 60_000));
   const listed = run(['gate', '--status', '--project', project]);
   const compactedLines = closing.split('\n').filter((l) => l.startsWith('- '));
   expect(
-    listed.status === 0 && listed.out.includes('session s-gate-closing') && compactedLines.every((l) => listed.out.includes(`  ${l}\n`)) && listed.out.includes('gate: no open loop, 1 settled, its count dropped at the next dispatch'),
+    listed.status === 0 && listed.out.includes('session s-gate-closing') && compactedLines.every((l) => listed.out.includes(`  ${l}\n`)) && listed.out.includes('gate: no open loop, 1 settled, dropped at the next dispatch'),
     `gate --status: the latest session's loops, as a compaction hands them over — got ${listed.out}`,
   );
   const picked = run(['gate', '--status', '--session', 's-gate-c', '--project', project]);
@@ -3049,7 +3049,7 @@ const dated = (date, status = 'active') =>
   out('Agent', { subagent_type: 'reviewer' }, { agentId: 'c4' }, 'toolu_c4');
   later('PostToolUse', { tool_name: 'SubagentHandback', agent_id: 'c4', agent_type: 'reviewer', tool_input: { message: 'VERDICT: REJECTED\nISSUES: b' } });
   const pending = run(['gate', '--status', '--session', 's-gate-closing', '--project', project]).out;
-  expect(pending.includes('gate: no open loop, 1 settled, its count dropped at the next dispatch, 1 loop-back(s) waiting on a fix'), `gate --status: a loop-back waiting on a fix is counted — got ${pending}`);
+  expect(pending.includes('gate: no open loop, 1 settled, dropped at the next dispatch, 1 loop-back(s) waiting on a fix'), `gate --status: a loop-back waiting on a fix is counted — got ${pending}`);
   const unused = await scratch();
   await cp(join(project, '.claude'), join(unused, '.claude'), { recursive: true });
   const fresh = run(['gate', '--status', '--project', unused]);
@@ -4555,7 +4555,7 @@ const dated = (date, status = 'active') =>
   // How a loop closes, said where the orchestrator reads it. Three spikes run side by side were handed back after a
   // compaction as one capped loop, and the orchestrator could not tell whether a resumed reviewer's pass had closed it.
   expect(
-    router.includes('a resumed one too, and a pass needs no `ISSUES` line') && router.includes('hands on to passes, sent out after it') && router.includes('Work run side by side shares one count per stage and verdict') &&
+    router.includes('a resumed one too, and a pass needs no `ISSUES` line') && router.includes('or when the next stage,\nsent out after the last review, passes') && router.includes('Work run side by side shares one count per stage and verdict') &&
       router.includes('`nina gate --status` lists them'),
     'flow: the router says what closes a loop, that work side by side shares its count, and where the loops are listed',
   );

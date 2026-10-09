@@ -309,7 +309,7 @@ function loopStatus(target, wanted) {
   for (const line of state.lines) console.log(`  ${line}`);
   const counts = [
     state.open ? `${state.open} open loop(s)` : 'no open loop',
-    state.closing ? `${state.closing} settled, its count dropped at the next dispatch` : '',
+    state.closing ? `${state.closing} settled, dropped at the next dispatch` : '',
     state.waiting ? `${state.waiting} loop-back(s) waiting on a fix` : '',
   ];
   console.log(`gate: ${counts.filter(Boolean).join(', ')}`);
