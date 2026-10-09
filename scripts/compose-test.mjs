@@ -36,6 +36,9 @@
  *  11. A command that kills processes by pattern keeps to the checkout's own (`grep -F "$ROOT/"`).
  *      qa once swept `vitest|workerd` across the whole machine: every other project's suite, and the
  *      owner's `wrangler dev`, went with it.
+ *  12. No `nina:slot` or `nina:requires` marker survives composition. The marker regexes once read only
+ *      letters and hyphens, so `d1` composed every one of its slots as text, no fragment of it reached a
+ *      project, and every other property passed.
  *
  * Usage: node scripts/compose-test.mjs [--verbose]
  */
@@ -108,6 +111,9 @@ async function runFixture(name) {
     if (rel.endsWith('.md') && !(rel in BUDGETS)) failures.push(`${rel}: composed with no size budget — add one to BUDGETS, deliberately`);
     else if (rel in BUDGETS && text.length > BUDGETS[rel]) failures.push(`${rel}: ${text.length} characters, over its budget of ${BUDGETS[rel]}`);
     if (text.includes('nina:why')) failures.push(`${rel}: a nina:why passage survived composition`);
+    // A marker composed as text is one the compiler did not read. A surface named with a digit, `d1`, once
+    // composed every one of its slots that way: no fragment of it reached a project, and every check passed.
+    if (/<!-- nina:(?:slot|requires) /.test(text)) failures.push(`${rel}: a nina:slot or nina:requires marker survived composition`);
     // History left unmarked: a count of one project's own runs, composed into every other project's.
     for (const [said] of text.matchAll(HISTORY)) failures.push(`${rel}: "${said}" is history — mark it nina:why, keep the rule`);
 

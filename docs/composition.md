@@ -56,6 +56,9 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
 11. A command that kills processes by pattern keeps to the checkout's own, with `grep -F "$ROOT/"` on
    the same line. qa used to sweep `vitest|workerd` across the whole machine before and after its run,
    which took every other project's suite with it, and the owner's `wrangler dev`.
+12. No `nina:slot` or `nina:requires` marker survives composition. The marker regexes once read a surface
+   name as letters and hyphens only, so the first surface named with a digit, `d1`, composed every one of
+   its slots as plain text: no fragment of it reached a project, and every other property passed.
 
 The last check reads the layers rather than a fixture's output. For every core file, a surface's
 technology may be named only if that file is gated on that surface — `Prisma` only under `prisma`,

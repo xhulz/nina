@@ -33,7 +33,7 @@ export { layerRootFor };
  * to write it nothing about what belongs there. Matching keys on the id, so a fragment
  * written without the label still fills the slot.
  */
-export const SLOT = /^<!-- nina:slot ([a-z-]+\.\d+)(?:\s+([^>]*?))?\s*-->$/;
+export const SLOT = /^<!-- nina:slot ([a-z][a-z0-9-]*\.\d+)(?:\s+([^>]*?))?\s*-->$/;
 
 /** A passage that tells why a rule exists as history: kept in the layers, dropped from what is composed. */
 const WHY = /<!-- nina:why -->[\s\S]*?<!-- \/nina:why -->/g;
@@ -60,7 +60,7 @@ export function stripWhy(text, { keepLines = false } = {}) {
  * `integration-tester` because there is an external service. Composing them into a
  * project that declares neither would hand it a gate with nothing to gate.
  */
-export const REQUIRES = /^<!-- nina:requires ([a-z-]+) -->\n/;
+export const REQUIRES = /^<!-- nina:requires ([a-z][a-z0-9-]*) -->\n/;
 
 /**
  * The surface a core file is gated on when the project does not declare it — the file is not composed there —
@@ -79,7 +79,7 @@ export function closedGate(text, surfaces) {
  * A slot inside a line — text before it, and the marker last. Filled with its fragment collapsed
  * to one line; dropped, like any slot, when its surface is not declared.
  */
-const INLINE_SLOT = /<!-- nina:slot ([a-z-]+\.\d+)(?:\s+[^>]*?)?\s*-->/g;
+const INLINE_SLOT = /<!-- nina:slot ([a-z][a-z0-9-]*\.\d+)(?:\s+[^>]*?)?\s*-->/g;
 
 /**
  * Matches YAML frontmatter at the very start of a file.
