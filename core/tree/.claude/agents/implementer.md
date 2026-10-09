@@ -59,7 +59,7 @@ You DO:
 
 You do NOT:
 - Run `{{TEST_CMD}}` or `pnpm exec vitest` for any reason.
-- Run `--pool=forks --singleFork` workarounds. The config enforces single-fork; you don't need the flag, and you still don't run vitest.
+- Pass a pool or worker flag as a workaround. The config runs one worker; you don't need the flag, and you still don't run vitest.
 - "Just check that one test" — that one test costs ~2GB and isn't your job. Trust the QA stage.
 
 If you genuinely cannot make progress without verifying a test passes (e.g., you wrote a complex helper and want to confirm), STOP and report to the parent agent asking for permission. Do NOT invoke vitest yourself.

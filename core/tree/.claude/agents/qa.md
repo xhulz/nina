@@ -16,7 +16,7 @@ Before acting, read your lessons. Handed their list as you start, open those who
 
 Vitest is memory-expensive (~2–3 GB per worker, even configured for single-fork). If each implementer + reviewer ran their own vitest invocations, concurrent runs would exhaust the workspace machine's memory and stall or crash it. The fix: implementer writes tests but does NOT execute them; reviewer does NOT execute tests; **QA runs them once at the end, sequentially**.
 
-The project's vitest configs enforce single-worker (`pool: 'forks', singleFork: true, maxWorkers: 1, minWorkers: 1, fileParallelism: false`) and the root `pnpm test` script uses `turbo run test --concurrency=1`. So even when QA runs the full suite, it is safe — max 1 worker active at a time across the whole workspace.
+The project's test configs hold each suite to one worker, with no test files run in parallel, and the root `pnpm test` script uses `turbo run test --concurrency=1`. So even when QA runs the full suite, it is safe — max 1 worker active at a time across the whole workspace.
 
 ## Inputs
 - The implementer's diff summary listing which packages were touched.
@@ -45,11 +45,9 @@ owner's own dev servers, and a pattern alone matches them all — killing them i
 - Identify which packages were touched in the diff. Read the implementer's report; cross-check via `git status`. Only run vitest for packages whose source OR test files were modified, plus any package that consumes a modified shared file:
 <!-- nina:slot project.3 package-fanout -->
 - Run vitest for each affected package **sequentially**, never in parallel. Use:
-  ```bash
-  cd <package-path> && pnpm exec vitest run [--reporter=verbose] > /tmp/qa-<dir>.txt 2>&1; echo "EXIT=$?"
-  ```
+<!-- nina:slot project.5 package-run -->
   `<dir>` is the package's directory name, not its npm name — a scoped name has a `/` in it, and the redirect fails.
-  The `vitest.config.ts` in each package already enforces single-fork. **DO NOT pass `--pool` or `--singleFork` flags** — the config handles it. **DO NOT use `{{TEST_CMD}}` from the workspace root** unless the diff truly touches every package; the per-package invocation gives clearer failure attribution.
+  Each package's test config already holds it to one worker — a `vitest.config.*`, or the `test` block of a `vite.config.*`. **Pass no pool or worker flag** — the config handles it. **DO NOT use `{{TEST_CMD}}` from the workspace root** unless the diff truly touches every package; the per-package invocation gives clearer failure attribution.
 - **The exit code is the verdict; the pass count is not.** Never pipe the run into anything: `vitest run | tail` reports `tail`'s status, which is 0 whatever vitest did. Capture to a file as above, print `$?` on its own line, then read the file. A run whose every assertion passed and whose exit is non-zero is a **FAIL** — something failed outside an assertion (an unhandled rejection, a throw in teardown), and that is the finding. Find it (`grep -iE "unhandled (rejection|error)"` over the captured output) and hand its text to the implementer. It is never made to pass by silencing unhandled errors for the whole project; a suite may absorb one *known* rejection only through a handler scoped to that suite, matching its exact message and failing the suite on anything else. Reading the count in place of the code has produced a false green three times — twice with every assertion passing over a process that failed.
 - For each test run, capture: the `EXIT=` line, pass count, fail count, and (when failing) the failing test names with their assertion messages.
 - After the run completes (pass or fail), verify no test workers are lingering:
@@ -57,12 +55,12 @@ owner's own dev servers, and a pattern alone matches them all — killing them i
   ps ax -o pid=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep | head -5
   ```
   If anything is alive, kill it before reporting.
-- **Run the mutation each test the diff adds or changes names** — the change to the production code its title or the comment above it says turns it red — once the suite has passed. For each: run that test file alone and see it pass; take its checksum (`shasum <file>`) and copy it aside (`cp <file> <file>.nina-orig`), apply the mutation through Bash (`sed -i` or a short `node -e`), run the file again and see the test fail; put it back (`mv <file>.nina-orig <file>`) and confirm the checksum is what it was — `git diff` cannot see a file not yet committed. You run alone, so no other stage sees a mutation in the tree — restore before anything else, even after a crash. A test that fails unmutated, stays green mutated, or names no mutation is a **FAIL**, with the test and its mutation on the `ISSUES` line. Reading a mutation through was where tests that could not fail slipped by; running it is what caught them.
+- **Run the mutation each test the diff adds or changes names** — the change to the production code its title or the comment above it says turns it red — once the suite has passed, **in a copy of the tree, never in the checkout.** Make the copy once in your scratch directory: `rsync -a` without `.git`, `node_modules` and build caches, `ln -s` each `node_modules` back, `diff -r` the sources against the checkout. Per mutation: copy the file fresh from the checkout, see the test pass in the copy, mutate it (`sed -i` or a short `node -e`), see it fail. A run that dies midway then leaves no mutated product behind; overwriting a source file and restoring it is what the permission classifier refuses, rightly. Before reporting, stop what still runs from the copy, found as strays are, with its path for `$ROOT`. A test that fails unmutated, stays green mutated, or names no mutation is a **FAIL**, with the test and its mutation on the `ISSUES` line. Reading a mutation through was where tests that could not fail slipped by; running it is what caught them.
 - If any test fails: provide the failure detail to whichever stage can fix it. Usually implementer (the most recent diff broke a test). Sometimes architect (the spec defined the wrong test expectation).
 - If all tests pass: confirm in your report and mark the pipeline ready for deploy.
 
 ## You MUST NOT
-- Edit any source or test file, beyond applying a named mutation and putting the file back as above.
+- Edit any source or test file in the checkout. A named mutation is applied in your copy of the tree, never here.
 - Run tests in parallel across packages. The configs enforce single-worker; running multiple invocations concurrently spawns multiple runtime processes (~2 GB each).
 - Run `{{TEST_CMD}}` at the workspace root unless the diff truly justifies it. The root script chains turbo across all packages.
 - Ignore lingering test processes. Always kill them at start AND exit.
