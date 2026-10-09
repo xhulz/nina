@@ -262,7 +262,8 @@ const BUDGETS = {
   '.claude/pills/README.md': 10000,
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,
-  '.claude/router.md': 16500,
+  // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs.
+  '.claude/router.md': 17000,
   '.claude/templates/integration.md': 3000,
   'CLAUDE.md': 25000,
 };
