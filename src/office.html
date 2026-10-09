@@ -7,7 +7,7 @@
 <link rel="icon" href="data:,">
 <style>
   :root { color-scheme: dark; }
-  html, body { margin: 0; height: 100%; background: #14111f; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: #1b1d26; overflow: hidden; }
   canvas { display: block; }
 </style>
 </head>
@@ -16,44 +16,56 @@
 <script>
 'use strict';
 /*
- * The NINA office: the project's pipeline as a room seen from above. `nina pipeline --view` serves this page with
- * the room filled in below, and streams the gate ledger's beats at /events. Everything is drawn here, in pixels, on
- * a small canvas scaled up; nothing is fetched from anywhere else.
+ * The NINA office: the project's pipeline as a floor plan seen from above. `nina pipeline --view` serves this page
+ * with the room filled in below, and streams the gate ledger's beats at /events. Every stage has a desk in the room
+ * of its phase — design, build, review and the gates, the test lab, release — off one corridor; the orchestrator
+ * keeps the reception, the owner stands at its counter, and new agents come in from the garden. Everything is drawn
+ * here, in pixels, on a small canvas scaled up; nothing is fetched from anywhere else.
  */
-const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'implementer', 'reviewer', 'qa', 'devops'], many: ['implementer', 'reviewer'], owner: 'you', replay: false };
+const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'implementer', 'reviewer', 'qa', 'dba', 'integration-tester', 'devops', 'secops'], many: ['architect', 'implementer', 'reviewer'], owner: 'you', replay: false };
 
 // ─── palette and sprites ──────────────────────────────────────────────────────────────────────
 const C = {
-  wall: '#3b3355', wallLine: '#342d4c', trim: '#262040', board: '#1d1830', sign: '#ffec27',
-  floorA: '#8a6a4a', floorB: '#7d5f42', deskTop: '#b07a46', desk: '#6b4423', leg: '#3e2614',
-  frame: '#1d2b53', screen: '#29adff', screenOff: '#1b3a5c', code: '#c2f0ff', chair: '#45405a',
-  paper: '#fff1e8', red: '#ff004d', green: '#00e436', ink: '#000000', white: '#ffffff',
-  sky: '#8fd3ff', cloud: '#e8f6ff', windowFrame: '#5a4f7a', plant: '#00b543', leaf: '#008751', pot: '#ab5236',
-  door: '#5a3a22', doorDark: '#3e2614', knob: '#ffec27', clock: '#fff1e8', hand: '#1d1830',
+  ink: '#262331', white: '#ffffff', paper: '#fff8e8', red: '#e43b44', green: '#3ec74d',
+  floor: '#dfe3e8', floorLine: '#ccd2d9', floorLight: '#e9ecf0', hall: '#d4d9df', hallLine: '#c3c9d0',
+  wallTop: '#f7f6f2', wallFace: '#efe4c3', wallFaceDark: '#e2d5ae', band: '#4e7356', bandDark: '#3b5a43', rail: '#9a7247', base: '#3a4a3f',
+  wood: '#d9a066', woodMid: '#b97f45', woodDark: '#7a4f2c', counter: '#e8b878',
+  chair: '#3c6bd0', chairDark: '#274a96', seatRed: '#c4473b', seatRedDark: '#8e2f27',
+  frame: '#2c2f3c', screen: '#59c1ff', screenOff: '#3a4d66', code: '#d8f3ff', key: '#9aa3ad',
+  leaf: '#3e8948', leafDark: '#265c42', leafLight: '#63c74d', leafShine: '#9de64e', pot: '#c76b3c', potDark: '#8e4a2a', potWhite: '#e9e9ee',
+  grass: '#69b33a', grassDark: '#4f9030', grassLight: '#8fd14f', trunk: '#6b4a2b', path: '#cfc6b2', pathDark: '#b4aa93', flower: '#f6757a', flowerY: '#ffd34d',
+  glass: '#9fdcff', glassShine: '#d8f2ff', metal: '#a3acb7', metalDark: '#6c7480', rack: '#3a3f4b', ledG: '#3ef06a', ledR: '#ff5d5d',
+  board: '#fdfdfb', boardEdge: '#9aa3ad', book1: '#e43b44', book2: '#3c6bd0', book3: '#feae34', book4: '#3ec74d', sign: '#22202b', signText: '#ffd34d',
+  rug: '#c9d6e8', rugEdge: '#9fb3cf',
 };
-const SHIRTS = ['#ff77a8', '#29adff', '#00e436', '#ffa300', '#83769c', '#ff6c24', '#00b5a5', '#c2c3c7', '#a8e72e', '#ffccaa', '#7e2553', '#008751'];
-const SKINS = ['#ffccaa', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'];
-const HAIRS = ['#3a2a1a', '#e6a33a', '#1d1830', '#ab5236', '#c2c3c7', '#7e2553', '#5f574f'];
-const CONFETTI = ['#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#ff77a8'];
+const SHIRTS = ['#e86a92', '#3c8bd9', '#3ec74d', '#feae34', '#8b6fd6', '#f2763a', '#1fb5a5', '#b0b8c4', '#a3d63a', '#f3a6c4', '#a2445e', '#2a8f56'];
+const SKINS = ['#ffd6b3', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'];
+const HAIRS = ['#3a2a1a', '#e6a33a', '#24212e', '#a5532c', '#c2c3c7', '#7e2553', '#5f574f', '#d96b2b'];
+const CONFETTI = ['#e43b44', '#feae34', '#ffd34d', '#3ec74d', '#3c8bd9', '#e86a92'];
 
+// People are ten pixels wide and fourteen tall, outlined. `o` outline, `h` hair, `s` skin, `e` eyes, `t` shirt,
+// `p` trousers, `k` shoes.
 const SPRITE = {
-  stand: ['.hhhh.', 'hhhhhh', 'hseseh', '.ssss.', '.tttt.', 'tttttt', 's.tt.s', '.p..p.', '.p..p.'],
-  walkA: ['.hhhh.', 'hhhhhh', 'hseseh', '.ssss.', '.tttt.', 'tttttt', 's.tt.s', '.p..p.', 'pp..p.'],
-  walkB: ['.hhhh.', 'hhhhhh', 'hseseh', '.ssss.', '.tttt.', 'tttttt', 's.tt.s', '.p..p.', '.p..pp'],
-  cheer: ['s.hh.s', 'shhhhs', 'tseset', '.ssss.', '.tttt.', '.tttt.', '.tttt.', '.p..p.', 'p....p'],
-  sitA: ['.hhhh.', 'hhhhhh', 'hhhhhh', 'stttts', 'tttttt', 'tttttt'],
-  sitB: ['.hhhh.', 'hhhhhh', 'hhhhhh', '.tttt.', 'stttts', 'tttttt'],
+  front: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohssssssho', 'ossessesso', '.osssssso.', '..otttto..', '.otttttto.', 'otttttttto', 'osttttttso', '.otttttto.', '.oppppppo.', '.opp..ppo.', '.okk..kko.'],
+  frontA: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohssssssho', 'ossessesso', '.osssssso.', '..otttto..', '.otttttto.', 'otttttttto', 'osttttttso', '.otttttto.', '.oppppppo.', '.opp..ppo.', '.okk...oo.'],
+  frontB: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohssssssho', 'ossessesso', '.osssssso.', '..otttto..', '.otttttto.', 'otttttttto', 'osttttttso', '.otttttto.', '.oppppppo.', '.opp..ppo.', '..oo..kko.'],
+  back: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '..otttto..', '.otttttto.', 'otttttttto', 'osttttttso', '.otttttto.', '.oppppppo.', '.opp..ppo.', '.okk..kko.'],
+  backA: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '..otttto..', '.otttttto.', 'otttttttto', 'osttttttso', '.otttttto.', '.oppppppo.', '.opp..ppo.', '.okk...oo.'],
+  backB: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '..otttto..', '.otttttto.', 'otttttttto', 'osttttttso', '.otttttto.', '.oppppppo.', '.opp..ppo.', '..oo..kko.'],
+  cheer: ['os......so', 'oshhhhhhso', 'ohhhhhhhho', 'ohssssssho', 'ossessesso', '.osssssso.', '..otttto..', '.otttttto.', '.otttttto.', '.otttttto.', '.otttttto.', '.oppppppo.', '.opp..ppo.', 'okko..okko'],
+  sitA: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '.sotttto..', 'sotttttto.', 'otttttttto', 'otttttttto', '.otttttto.'],
+  sitB: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '..ottttos.', '.ottttttos', 'otttttttto', 'otttttttto', '.otttttto.'],
 };
 const BUBBLE = {
-  ask: ['.wwwww.', 'wwkkkww', 'wwwwkww', 'wwwkkww', 'wwwwwww', 'wwwkwww', '.wwwww.', '..w....'],
-  alarm: ['.wwwww.', 'wwwrwww', 'wwwrwww', 'wwwrwww', 'wwwwwww', 'wwwrwww', '.wwwww.', '..w....'],
-  pass: ['.wwwww.', 'wwwwwgw', 'wwwwgww', 'wgwgwww', 'wwgwwww', 'wwwwwww', '.wwwww.', '..w....'],
-  back: ['.wwwww.', 'wrwwwrw', 'wwrwrww', 'wwwrwww', 'wwrwrww', 'wrwwwrw', '.wwwww.', '..w....'],
-  mail: ['wwwwwww', 'wkwwwkw', 'wwkwkww', 'wwwkwww', 'wwwwwww', '.......', '.......', '.......'],
-  talk: ['.wwwww.', 'wwwwwww', 'wkwkwkw', 'wwwwwww', '.wwwww.', '.w.....', '.......', '.......'],
-  phone: ['.rrrrr.', 'rr...rr', 'r.rrr.r', '..rrr..', '.rrrrr.', '.rrrrr.', '.......', '.......'],
+  ask: ['.ooooooo.', 'owwwwwwwo', 'owwkkkwwo', 'owwwwkwwo', 'owwwkkwwo', 'owwwkwwwo', 'owwwwwwwo', 'owwwkwwwo', '.oowwwoo.', '...owo...', '....o....'],
+  alarm: ['.ooooooo.', 'owwwwwwwo', 'owwwrwwwo', 'owwwrwwwo', 'owwwrwwwo', 'owwwrwwwo', 'owwwwwwwo', 'owwwrwwwo', '.oowwwoo.', '...owo...', '....o....'],
+  pass: ['.ooooooo.', 'owwwwwwwo', 'owwwwwgwo', 'owwwwggwo', 'owgwggwwo', 'owggwwwwo', 'owwgwwwwo', 'owwwwwwwo', '.oowwwoo.', '...owo...', '....o....'],
+  back: ['.ooooooo.', 'owwwwwwwo', 'owrwwwrwo', 'owwrwrwwo', 'owwwrwwwo', 'owwrwrwwo', 'owrwwwrwo', 'owwwwwwwo', '.oowwwoo.', '...owo...', '....o....'],
+  mail: ['ooooooooo', 'okwwwwwko', 'owkwwwkwo', 'owwkwkwwo', 'owwwkwwwo', 'owwwwwwwo', 'ooooooooo', '.........', '.........', '.........', '.........'],
+  talk: ['.ooooooo.', 'owwwwwwwo', 'owwwwwwwo', 'owkwkwkwo', 'owwwwwwwo', '.ooowwwoo', '...owoo..', '...oo....', '.........', '.........', '.........'],
+  phone: ['..ooooo..', '.orrrrro.', 'orrooorro', 'oro...oro', '..orrro..', '.orrrrro.', '.orwrwro.', '.orrrrro.', '..ooooo..', '.........', '.........'],
 };
-const BUBBLE_COLORS = { w: C.white, k: C.ink, r: C.red, g: C.green };
+const BUBBLE_COLORS = { o: C.ink, w: C.white, k: C.ink, r: C.red, g: C.green };
 const GLYPH = {
   N: ['x..x', 'xx.x', 'x.xx', 'x..x', 'x..x'],
   I: ['xxx', '.x.', '.x.', '.x.', 'xxx'],
@@ -67,11 +79,12 @@ function hash(text) {
   return h >>> 0;
 }
 
-function paint(ctx, rows, x, y, colors) {
+function paint(ctx, rows, x, y, colors, flip = false) {
   rows.forEach((row, dy) => {
     for (let dx = 0; dx < row.length; dx += 1) {
-      const color = colors[row[dx]];
-      if (row[dx] !== '.' && color) {
+      const ch = row[flip ? row.length - 1 - dx : dx];
+      const color = colors[ch];
+      if (ch !== '.' && color) {
         ctx.fillStyle = color;
         ctx.fillRect(Math.round(x) + dx, Math.round(y) + dy, 1, 1);
       }
@@ -82,123 +95,306 @@ const rect = (ctx, x, y, w, h, color) => {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 };
-
-// ─── the room's layout ────────────────────────────────────────────────────────────────────────
-const LW = 320;
-const CELL_W = 50;
-const ROW_H = 56;
-const WALL_H = 28;
-const COLS = Math.max(1, Math.min(6, ROOM.stages.length));
-const ROWS = Math.max(1, Math.ceil(ROOM.stages.length / COLS));
-const X0 = Math.floor((LW - COLS * CELL_W) / 2);
-const rowTop = (r) => WALL_H + 6 + r * ROW_H;
-const laneOf = (r) => rowTop(r) + 44;
-const LAST_LANE = laneOf(ROWS - 1);
-const LH = LAST_LANE + 52;
-
-const desks = new Map();
-ROOM.stages.forEach((role, i) => {
-  const col = i % COLS;
-  const row = Math.floor(i / COLS);
-  const cx = X0 + col * CELL_W;
-  const ry = rowTop(row);
-  const lane = laneOf(row);
-  const spot = (x, y, kind) => ({ x, y, laneY: lane, col, kind, who: null });
-  desks.set(role, {
-    role, cx, ry, col, row, shirt: SHIRTS[i % SHIRTS.length],
-    slots: [spot(cx + 25, ry + 34, 'seat'), spot(cx + 11, ry + 34, 'stand'), spot(cx + 39, ry + 34, 'stand')],
-    drop: { x: cx + 3, y: ry + 28, laneY: lane, col },
-    folder: null,
-  });
-});
-const BOSS_HOME = { x: LW / 2, y: LAST_LANE + 12, laneY: LAST_LANE, col: null, kind: 'boss' };
-const DOOR = { x: 10, y: LAST_LANE + 16, laneY: LAST_LANE, col: 0 };
-const OWNER_HOME = { x: 26, y: LAST_LANE + 16, laneY: LAST_LANE, col: 0 };
-
-/** The x of the gap between desks nearest to `x`, where someone can walk from one row's lane to another's. */
-function gapNear(x) {
-  const k = Math.max(0, Math.min(COLS, Math.round((x - X0) / CELL_W)));
-  return Math.max(X0 + 2, Math.min(X0 + COLS * CELL_W - 3, X0 + k * CELL_W + 2));
+/** A filled box with a one-pixel outline, the way every piece of furniture here is drawn. */
+function box(ctx, x, y, w, h, fill, line = C.ink) {
+  rect(ctx, x, y, w, h, line);
+  rect(ctx, x + 1, y + 1, w - 2, h - 2, fill);
+}
+function disc(ctx, cx, cy, r, color) {
+  for (let y = -r; y <= r; y += 1) for (let x = -r; x <= r; x += 1) if (x * x + y * y <= r * r + r * 0.6) rect(ctx, cx + x, cy + y, 1, 1, color);
 }
 
-/** The way from where someone stands to a spot: down to their lane, across, along another lane if need be, and up. */
-function route(from, to) {
-  const pts = [{ x: from.x, y: from.laneY }];
-  if (from.laneY !== to.laneY) {
-    const gx = gapNear(to.x);
-    pts.push({ x: gx, y: from.laneY }, { x: gx, y: to.laneY });
+// ─── the floor plan ───────────────────────────────────────────────────────────────────────────
+const LW = 480;
+const CORRIDOR_X = 224;
+const CORRIDOR_W = 32;
+const HALL_X = CORRIDOR_X + CORRIDOR_W / 2;
+const FACE = 24;
+const DESK_STEP = 52;
+const DESK_ROW = 46;
+const GARDEN = 52;
+
+/** The rooms, by phase, in the order the work moves through them. A stage not named here works in build. */
+const PHASES = [
+  { key: 'design', name: 'design', side: 'left', roles: ['planner', 'architect'] },
+  { key: 'build', name: 'build', side: 'left', roles: ['implementer', 'solidity-dev'] },
+  { key: 'review', name: 'review & gates', side: 'right', roles: ['reviewer', 'dba', 'integration-tester', 'solidity-auditor'] },
+  { key: 'lab', name: 'test lab', side: 'right', roles: ['qa'] },
+  { key: 'release', name: 'release', side: 'right', roles: ['devops', 'secops'] },
+];
+
+const rooms = new Map(PHASES.map((ph) => [ph.key, { ...ph, stages: [] }]));
+ROOM.stages.forEach((role, i) => {
+  const phase = PHASES.find((ph) => ph.roles.includes(role))?.key ?? 'build';
+  rooms.get(phase).stages.push({ role, index: i, seats: ROOM.many.includes(role) ? 2 : 1 });
+});
+const lobby = { key: 'lobby', name: 'reception', side: 'left', stages: [] };
+const columns = {
+  left: [rooms.get('design'), rooms.get('build'), lobby],
+  right: [rooms.get('review'), rooms.get('lab'), rooms.get('release')],
+};
+for (const room of [...rooms.values(), lobby]) {
+  const desks = room.stages.reduce((n, st) => n + st.seats, 0);
+  room.deskCount = desks;
+  room.rows = Math.max(1, Math.ceil(desks / 4));
+  room.h = room === lobby ? 116 : FACE + 8 + room.rows * DESK_ROW + 26;
+}
+for (const [side, list] of Object.entries(columns)) {
+  let y = 0;
+  for (const room of list) {
+    room.x = side === 'left' ? 0 : CORRIDOR_X + CORRIDOR_W;
+    room.w = side === 'left' ? CORRIDOR_X : LW - room.x;
+    room.y = y;
+    y += room.h;
   }
-  pts.push({ x: to.x, y: to.laneY }, { x: to.x, y: to.y });
+}
+// The shorter column's last room takes up the difference, so both reach the garden wall together.
+const FLOOR_H = Math.max(...Object.values(columns).map((list) => list.at(-1).y + list.at(-1).h));
+for (const list of Object.values(columns)) list.at(-1).h = FLOOR_H - list.at(-1).y;
+const LH = FLOOR_H + GARDEN;
+for (const room of [...rooms.values(), lobby]) {
+  room.laneY = room.y + room.h - 14;
+  room.doorX = room.side === 'left' ? room.x + room.w : room.x;
+}
+
+/** Each stage's desks and the places to stand by them; and the stage of a role. */
+const stages = new Map();
+for (const room of rooms.values()) {
+  let n = 0;
+  for (const st of room.stages) {
+    const stage = { role: st.role, room, shirt: SHIRTS[st.index % SHIRTS.length], desks: [], slots: [], folder: null };
+    for (let k = 0; k < st.seats; k += 1, n += 1) {
+      const dx = room.x + 12 + (n % 4) * DESK_STEP;
+      const dy = room.y + FACE + 6 + Math.floor(n / 4) * DESK_ROW;
+      const aisle = dx + 44;
+      const seatY = dy + 34;
+      const exit = [{ x: aisle, y: seatY }, { x: aisle, y: room.laneY }];
+      stage.desks.push({ dx, dy });
+      stage.slots.push({ x: dx + 18, y: seatY, room, exit, kind: 'seat', who: null, desk: stage.desks.at(-1) });
+    }
+    const first = stage.desks[0];
+    stage.drop = { x: first.dx + 44, y: first.dy + 30, room, exit: [{ x: first.dx + 44, y: room.laneY }] };
+    stage.spare = { x: first.dx + 44, y: first.dy + 40, room, exit: [{ x: first.dx + 44, y: room.laneY }], kind: 'stand' };
+    stages.set(st.role, stage);
+  }
+}
+const COUNTER = { x: lobby.x + 14, y: lobby.y + FACE + 22, w: 104 };
+const BOSS_HOME = { x: COUNTER.x + 52, y: COUNTER.y + 2, room: lobby, exit: [{ x: COUNTER.x + COUNTER.w + 10, y: COUNTER.y + 2 }, { x: COUNTER.x + COUNTER.w + 10, y: lobby.laneY }], kind: 'boss' };
+const OWNER_HOME = { x: COUNTER.x + 30, y: COUNTER.y + 30, room: lobby, exit: [{ x: COUNTER.x + 30, y: lobby.laneY }], kind: 'stand' };
+const ENTRANCE = { x: lobby.x + 150, y: FLOOR_H - 2, room: lobby, exit: [{ x: lobby.x + 150, y: lobby.laneY }], kind: 'stand' };
+
+/** The way from where someone stands to a spot: out to their room's lane, along the corridor when it is another room. */
+function route(from, to) {
+  const out = from.exit ?? [{ x: from.x, y: from.room.laneY }];
+  const into = [...(to.exit ?? [{ x: to.x, y: to.room.laneY }])].reverse();
+  const pts = [...out];
+  if (from.room !== to.room) {
+    pts.push({ x: from.room.doorX, y: from.room.laneY }, { x: HALL_X, y: from.room.laneY }, { x: HALL_X, y: to.room.laneY }, { x: to.room.doorX, y: to.room.laneY });
+  }
+  pts.push(...into, { x: to.x, y: to.y });
   return pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
 }
 
-// ─── the background, drawn once ───────────────────────────────────────────────────────────────
+// ─── the building, drawn once ─────────────────────────────────────────────────────────────────
+function tiles(g, x, y, w, h, fill, line) {
+  rect(g, x, y, w, h, fill);
+  for (let gx = Math.ceil(x / 16) * 16; gx < x + w; gx += 16) rect(g, gx, y, 1, h, line);
+  for (let gy = Math.ceil(y / 16) * 16; gy < y + h; gy += 16) rect(g, x, gy, w, 1, line);
+}
+function plant(g, x, y, big) {
+  if (big) {
+    box(g, x + 2, y + 12, 10, 8, C.pot);
+    rect(g, x + 3, y + 13, 8, 1, '#e08a58');
+    disc(g, x + 7, y + 7, 6, C.leafDark);
+    disc(g, x + 6, y + 6, 5, C.leaf);
+    disc(g, x + 5, y + 4, 2, C.leafLight);
+    rect(g, x + 4, y + 3, 1, 1, C.leafShine);
+    rect(g, x + 9, y + 7, 1, 1, C.leafShine);
+  } else {
+    box(g, x + 1, y + 6, 7, 6, C.potWhite);
+    disc(g, x + 4, y + 4, 3, C.leaf);
+    rect(g, x + 3, y + 2, 1, 1, C.leafShine);
+  }
+}
+function tree(g, x, y) {
+  rect(g, x + 7, y + 16, 4, 8, C.trunk);
+  rect(g, x + 2, y + 23, 14, 2, 'rgba(0,0,0,0.18)');
+  disc(g, x + 9, y + 10, 9, C.leafDark);
+  disc(g, x + 8, y + 9, 8, C.leaf);
+  disc(g, x + 6, y + 6, 4, C.leafLight);
+  for (const [a, b] of [[4, 5], [10, 4], [7, 11], [12, 9]]) rect(g, x + a, y + b, 1, 1, C.leafShine);
+}
+function deskAt(g, dx, dy) {
+  box(g, dx + 11, dy, 14, 10, C.frame);
+  rect(g, dx + 16, dy + 10, 4, 1, C.frame);
+  box(g, dx, dy + 9, 36, 10, C.wood);
+  rect(g, dx + 1, dy + 10, 34, 1, '#ebc08e');
+  box(g, dx, dy + 18, 36, 7, C.woodMid);
+  rect(g, dx + 1, dy + 24, 34, 1, C.woodDark);
+  rect(g, dx + 13, dy + 13, 10, 2, C.key);
+  rect(g, dx + 29, dy + 12, 3, 3, C.white);
+  box(g, dx + 13, dy + 27, 10, 8, C.chair);
+  rect(g, dx + 14, dy + 28, 8, 2, '#5b8be3');
+}
+function windowAt(g, x, y, w) {
+  box(g, x, y, w, 14, C.wallTop);
+  rect(g, x + 2, y + 2, w - 4, 10, C.glass);
+  rect(g, x + Math.floor(w / 2), y + 2, 1, 10, C.wallTop);
+  rect(g, x + 3, y + 3, 3, 1, C.glassShine);
+  rect(g, x + Math.floor(w / 2) + 2, y + 3, 3, 1, C.glassShine);
+}
+function shelf(g, x, y) {
+  box(g, x, y, 22, 26, C.woodMid);
+  for (let r = 0; r < 3; r += 1) {
+    rect(g, x + 1, y + 8 + r * 8, 20, 1, C.woodDark);
+    [C.book1, C.book2, C.book3, C.book4, C.book2].forEach((c, i) => rect(g, x + 2 + i * 4, y + 2 + r * 8, 3, 6, c));
+  }
+}
+function wallItem(g, room, kind, x) {
+  const y = room.y + 3;
+  if (kind === 'window') windowAt(g, x, y, 30);
+  else if (kind === 'board') {
+    box(g, x, y, 34, 15, C.board, C.boardEdge);
+    rect(g, x + 4, y + 4, 12, 1, C.book2);
+    rect(g, x + 4, y + 7, 18, 1, C.book1);
+    rect(g, x + 20, y + 4, 8, 6, C.book3);
+  } else if (kind === 'clock') {
+    disc(g, x + 5, y + 7, 5, C.ink);
+    disc(g, x + 5, y + 7, 4, C.board);
+  } else if (kind === 'poster') {
+    box(g, x, y + 1, 12, 15, '#7fc8f8');
+    rect(g, x + 3, y + 5, 6, 6, C.white);
+  }
+}
+function sign(g, x, y, w) {
+  box(g, x, y, w, 9, C.sign, C.ink);
+}
+/** How wide a room's name plate is, so what hangs beside it starts after it. */
+const signWidth = (room) => Math.max(40, room.name.length * 4 + 8);
+/** Where a room's clock, board or poster hangs: towards the far end of its wall. */
+const wallSpot = (room) => room.x + room.w - 70;
+
 const background = document.createElement('canvas');
 background.width = LW;
 background.height = LH;
 {
   const g = background.getContext('2d');
-  rect(g, 0, 0, LW, WALL_H, C.wall);
-  for (let y = 4; y < WALL_H; y += 6) rect(g, 0, y, LW, 1, C.wallLine);
-  rect(g, 0, WALL_H, LW, 2, C.trim);
-  for (let y = WALL_H + 2; y < LH; y += 1) for (let x = 0; x < LW; x += 1) {
-    g.fillStyle = (Math.floor(x / 8) + Math.floor((y - WALL_H - 2) / 8)) % 2 ? C.floorA : C.floorB;
-    g.fillRect(x, y, 1, 1);
+  // The garden, and the path to the door.
+  rect(g, 0, FLOOR_H, LW, GARDEN, C.grass);
+  for (let i = 0; i < 260; i += 1) {
+    const hx = hash(`tuft${i}`);
+    rect(g, hx % LW, FLOOR_H + 4 + ((hx >> 9) % (GARDEN - 6)), 1, 2, i % 3 ? C.grassDark : C.grassLight);
   }
-  // The sign, its letters twice their glyph size.
-  const sign = 'NINA';
-  const signW = [...sign].reduce((w, ch) => w + GLYPH[ch][0].length * 2 + 2, -2);
-  const sx = Math.floor((LW - signW) / 2);
-  rect(g, sx - 4, 5, signW + 8, 16, C.board);
-  let x = sx;
-  for (const ch of sign) {
-    GLYPH[ch].forEach((row, dy) => [...row].forEach((px, dx) => px === 'x' && rect(g, x + dx * 2, 8 + dy * 2, 2, 2, C.sign)));
-    x += GLYPH[ch][0].length * 2 + 2;
+  rect(g, ENTRANCE.x - 10, FLOOR_H, 20, GARDEN, C.path);
+  for (let y = FLOOR_H + 4; y < LH; y += 8) rect(g, ENTRANCE.x - 10, y, 20, 1, C.pathDark);
+  for (const tx of [6, 60, 112, 200, 268, 330, 392, 446]) if (Math.abs(tx + 9 - ENTRANCE.x) > 24) tree(g, tx, FLOOR_H + 14);
+  for (const fx of [34, 92, 236, 300, 362, 424]) if (Math.abs(fx - ENTRANCE.x) > 20) {
+    rect(g, fx, FLOOR_H + 6, 2, 2, C.flower);
+    rect(g, fx + 5, FLOOR_H + 9, 2, 2, C.flowerY);
   }
-  // A window, and a plant.
-  const wx = LW - 80;
-  rect(g, wx, 5, 34, 17, C.windowFrame);
-  rect(g, wx + 2, 7, 14, 13, C.sky);
-  rect(g, wx + 18, 7, 14, 13, C.sky);
-  rect(g, wx + 5, 10, 6, 2, C.cloud);
-  rect(g, wx + 22, 14, 7, 2, C.cloud);
-  rect(g, LW - 18, LAST_LANE + 10, 7, 6, C.pot);
-  paint(g, ['.l.l.l', 'llplpl', '.lppl.', '..pp..'], LW - 18, LAST_LANE + 6, { l: C.leaf, p: C.plant });
-  // The door the owner stands by.
-  rect(g, DOOR.x - 6, LAST_LANE + 2, 12, 22, C.doorDark);
-  rect(g, DOOR.x - 5, LAST_LANE + 3, 10, 21, C.door);
-  rect(g, DOOR.x + 2, LAST_LANE + 13, 1, 2, C.knob);
-  // Every desk, and the orchestrator's.
-  for (const d of desks.values()) {
-    rect(g, d.cx + 19, d.ry + 1, 12, 9, C.frame);
-    rect(g, d.cx + 24, d.ry + 10, 2, 1, C.frame);
-    rect(g, d.cx + 5, d.ry + 11, 40, 4, C.deskTop);
-    rect(g, d.cx + 5, d.ry + 15, 40, 6, C.desk);
-    rect(g, d.cx + 6, d.ry + 21, 2, 2, C.leg);
-    rect(g, d.cx + 42, d.ry + 21, 2, 2, C.leg);
-    rect(g, d.cx + 21, d.ry + 31, 8, 4, C.chair);
+  // The corridor, its floor running the building's height.
+  tiles(g, CORRIDOR_X, 0, CORRIDOR_W, FLOOR_H, C.hall, C.hallLine);
+  rect(g, CORRIDOR_X, 0, CORRIDOR_W, FACE, C.wallFace);
+  rect(g, CORRIDOR_X, FACE - 10, CORRIDOR_W, 8, C.band);
+  rect(g, CORRIDOR_X, FACE - 2, CORRIDOR_W, 2, C.base);
+  box(g, CORRIDOR_X + 9, 4, 14, 9, '#3ec74d');
+  rect(g, CORRIDOR_X + 11, 7, 10, 3, C.white);
+  plant(g, CORRIDOR_X + 9, FACE + 2, true);
+  plant(g, CORRIDOR_X + 9, FLOOR_H - 26, true);
+  // Each room: its floor, the wall it faces, its furniture.
+  for (const room of [...rooms.values(), lobby]) {
+    tiles(g, room.x, room.y, room.w, room.h, C.floor, C.floorLine);
+    rect(g, room.x, room.y, room.w, FACE, C.wallFace);
+    rect(g, room.x, room.y + FACE - 11, room.w, 1, C.rail);
+    rect(g, room.x, room.y + FACE - 10, room.w, 8, C.band);
+    rect(g, room.x, room.y + FACE - 10, room.w, 1, C.bandDark);
+    rect(g, room.x, room.y + FACE - 2, room.w, 2, C.base);
+    if (room !== lobby) sign(g, room.x + 8, room.y + 4, signWidth(room));
   }
+  for (const room of rooms.values()) {
+    const far = room.side === 'left' ? room.x + 6 : room.x + room.w - 22;
+    wallItem(g, room, 'window', room.x + 8 + signWidth(room) + 16);
+    wallItem(g, room, room.key === 'design' ? 'board' : room.key === 'lab' ? 'poster' : 'clock', wallSpot(room));
+    for (const st of room.stages) for (const d of stages.get(st.role).desks) deskAt(g, d.dx, d.dy);
+    if (room.stages.length === 0) {
+      // A room with no stage of its own is somewhere to sit.
+      rect(g, room.x + 40, room.y + FACE + 14, room.w - 80, 28, C.rug);
+      box(g, room.x + 70, room.y + FACE + 20, room.w - 140, 14, C.wood);
+      for (let i = 0; i < 4; i += 1) box(g, room.x + 58 + i * 30, room.y + FACE + 8, 10, 9, C.seatRed);
+    }
+    plant(g, far, room.laneY - 18, true);
+    if (room.key === 'design') shelf(g, room.x + room.w - 30, room.y + FACE + 2);
+    if (room.key === 'lab') {
+      box(g, room.x + room.w - 24, room.y + FACE + 2, 16, 30, C.rack);
+      for (let i = 0; i < 6; i += 1) rect(g, room.x + room.w - 21, room.y + FACE + 5 + i * 4, 2, 1, i % 3 ? C.ledG : C.ledR);
+    }
+  }
+  // The reception: the counter's back, the waiting chairs, a vending machine, plants; the sign on its wall.
+  {
+    const signW = [...'NINA'].reduce((w, ch) => w + GLYPH[ch][0].length * 2 + 2, -2);
+    const sx = COUNTER.x + COUNTER.w / 2 - signW / 2;
+    box(g, sx - 5, lobby.y + 2, signW + 10, 16, C.sign);
+    let x = sx;
+    for (const ch of 'NINA') {
+      GLYPH[ch].forEach((row, dy) => [...row].forEach((px, dx) => px === 'x' && rect(g, x + dx * 2, lobby.y + 5 + dy * 2, 2, 2, C.signText)));
+      x += GLYPH[ch][0].length * 2 + 2;
+    }
+    windowAt(g, lobby.x + 132, lobby.y + 3, 30);
+    for (let i = 0; i < 3; i += 1) {
+      box(g, lobby.x + 140 + i * 14, lobby.y + FACE + 2, 11, 10, i === 1 ? C.chair : C.seatRed);
+      rect(g, lobby.x + 141 + i * 14, lobby.y + FACE + 3, 9, 2, i === 1 ? '#5b8be3' : '#df6a5e');
+    }
+    box(g, lobby.x + 186, lobby.y + FACE - 6, 18, 28, C.metal);
+    rect(g, lobby.x + 189, lobby.y + FACE - 3, 12, 14, C.glass);
+    for (let i = 0; i < 3; i += 1) rect(g, lobby.x + 190 + i * 4, lobby.y + FACE - 1, 2, 2, [C.red, C.flowerY, C.green][i]);
+    rect(g, lobby.x + 140, lobby.y + FACE + 22, 40, 16, C.rug);
+    box(g, lobby.x + 150, lobby.y + FACE + 26, 20, 8, C.wood);
+    plant(g, COUNTER.x - 12, COUNTER.y - 4, false);
+    plant(g, lobby.x + 208, lobby.laneY - 20, true);
+    rect(g, ENTRANCE.x - 12, FLOOR_H - 8, 24, 6, C.rugEdge);
+  }
+  // The walls themselves: their white tops, outlined, with doors onto the corridor and out to the garden.
+  const wallV = (x, y0, y1) => {
+    rect(g, x - 2, y0, 4, y1 - y0, C.ink);
+    rect(g, x - 1, y0, 2, y1 - y0, C.wallTop);
+  };
+  const wallH = (x0, x1, y) => {
+    rect(g, x0, y - 2, x1 - x0, 4, C.ink);
+    rect(g, x0, y - 1, x1 - x0, 2, C.wallTop);
+  };
+  for (const room of [...rooms.values(), lobby]) {
+    wallH(room.x, room.x + room.w, room.y + 1);
+    const outer = room.side === 'left' ? room.x + 1 : room.x + room.w - 1;
+    wallV(outer, room.y, room.y + room.h);
+    const doorTop = room.laneY - 12;
+    const doorBottom = room.laneY + 8;
+    wallV(room.doorX, room.y, doorTop);
+    wallV(room.doorX, doorBottom, room.y + room.h);
+    rect(g, room.doorX - 2, doorTop - 2, 4, 2, C.rail);
+  }
+  wallH(0, ENTRANCE.x - 12, FLOOR_H - 1);
+  wallH(ENTRANCE.x + 12, LW, FLOOR_H - 1);
 }
 
 // ─── the people ───────────────────────────────────────────────────────────────────────────────
-const SPEED = 70;
+const SPEED = 75;
 const people = new Map();
 let placeholders = 0;
 
 function person(key, role, look) {
   const h = hash(look ?? key);
   return {
-    key, agent: null, role, x: DOOR.x, y: DOOR.y, laneY: DOOR.laneY, slot: null, queue: [], current: null, path: [],
-    pose: 'stand', typing: false, bubble: null, carrying: null, cheerUntil: 0, leaving: false, born: performance.now(),
-    colors: { h: HAIRS[h % HAIRS.length], s: SKINS[(h >> 3) % SKINS.length], e: C.ink, t: desks.get(role)?.shirt ?? SHIRTS[h % SHIRTS.length], p: '#2b2b3b' },
+    key, agent: null, role, x: ENTRANCE.x, y: ENTRANCE.y, at: ENTRANCE, slot: null, queue: [], current: null, path: [],
+    pose: 'stand', facing: 'down', typing: false, bubble: null, carrying: null, cheerUntil: 0, leaving: false, born: performance.now(),
+    colors: { o: C.ink, h: HAIRS[h % HAIRS.length], s: SKINS[(h >> 3) % SKINS.length], e: C.ink, t: stages.get(role)?.shirt ?? SHIRTS[h % SHIRTS.length], p: '#3a3f58', k: '#22202b' },
   };
 }
 const boss = person('orchestrator', null, 'orchestrator-boss');
-Object.assign(boss, { x: BOSS_HOME.x, y: BOSS_HOME.y, laneY: BOSS_HOME.laneY, pose: 'boss', home: BOSS_HOME });
-boss.colors.t = '#1d2b53';
+Object.assign(boss, { x: BOSS_HOME.x, y: BOSS_HOME.y, at: BOSS_HOME, pose: 'boss', home: BOSS_HOME });
+boss.colors.t = '#2f4a8a';
 const owner = person('owner', null, ROOM.owner);
-Object.assign(owner, { x: OWNER_HOME.x, y: OWNER_HOME.y, laneY: OWNER_HOME.laneY, home: OWNER_HOME });
-owner.colors.t = '#ffec27';
+Object.assign(owner, { x: OWNER_HOME.x, y: OWNER_HOME.y, at: OWNER_HOME, facing: 'up', home: OWNER_HOME });
+owner.colors.t = '#ffd34d';
 
 const walk = (p, to, then) => p.queue.push({ kind: 'walk', to, then });
 const wait = (p, ms) => p.queue.push({ kind: 'wait', ms });
@@ -212,20 +408,20 @@ function hush(p, kinds) {
   if (p.bubble && (!kinds || kinds.includes(p.bubble.kind))) p.bubble = null;
 }
 
-/** A free place at a desk for someone, sending the longest-idle person there away when it is full. */
-function seatAt(desk, p) {
-  const mine = desk.slots.find((s) => s.who === p);
+/** A free desk of a stage for someone, sending its longest-idle occupant away when every desk is taken. */
+function seatAt(stage, p) {
+  const mine = stage.slots.find((sl) => sl.who === p);
   if (mine) return mine;
-  let slot = desk.slots.find((s) => !s.who);
+  let slot = stage.slots.find((sl) => !sl.who);
   if (!slot) {
-    const idle = desk.slots.filter((s) => s.who && !s.who.typing && !s.who.current && s.who.queue.length === 0).sort((a, b) => a.who.born - b.who.born)[0];
+    const idle = stage.slots.filter((sl) => sl.who && !sl.who.typing && !sl.who.current && sl.who.queue.length === 0).sort((a, b) => a.who.born - b.who.born)[0];
     if (idle) {
       leave(idle.who);
       slot = idle;
     }
   }
   if (!slot) {
-    const extra = { x: desk.cx + 25 + 7 * (desk.slots.length - 1), y: desk.ry + 42, laneY: desk.slots[0].laneY, col: desk.col, kind: 'stand', who: p, extra: true };
+    const extra = { ...stage.spare, who: p, extra: true };
     if (p.slot && p.slot.who === p) p.slot.who = null;
     p.slot = extra;
     return extra;
@@ -241,14 +437,14 @@ function leave(p) {
   p.slot = null;
   p.typing = false;
   p.leaving = true;
-  walk(p, DOOR, () => p.leaving && people.delete(p.key));
+  walk(p, ENTRANCE, () => p.leaving && people.delete(p.key));
 }
 
 function place(p, spot) {
   p.x = spot.x;
   p.y = spot.y;
-  p.laneY = spot.laneY;
-  p.pose = spot.kind === 'seat' ? 'sit' : 'stand';
+  p.at = spot;
+  p.pose = spot.kind === 'seat' ? 'sit' : spot.kind === 'boss' ? 'boss' : 'stand';
 }
 
 /** Who reported or works as this agent: known by id, or the person at its desk still waiting for theirs. */
@@ -282,9 +478,9 @@ function settleCap() {
 }
 
 function onBeat(b) {
-  const desk = b.role ? desks.get(b.role) : null;
+  const stage = b.role ? stages.get(b.role) : null;
   if (b.type === 'work') {
-    if (!desk) return;
+    if (!stage) return;
     let p = b.agent ? people.get(b.agent) ?? null : null;
     if (b.message && p) {
       if (!b.instant) say(p, 'mail', 1800);
@@ -300,25 +496,25 @@ function onBeat(b) {
     // The dispatch the gate asked about went out: the phone stops.
     if (capRole === b.role) settleCap();
     p.leaving = false;
-    const slot = seatAt(desk, p);
+    const slot = seatAt(stage, p);
     if (b.instant) {
       place(p, slot);
       p.typing = true;
       return;
     }
     note(b.at, `${b.from ? `${b.from.role} → ` : ''}${b.role}${b.resumed ? ' (resumed)' : ''}`);
-    // Whoever reported last carries the folder over — red when it comes back — or the orchestrator does.
+    // Whoever handed the work on carries the folder over — red when it comes back — or the orchestrator does.
     const from = b.from?.agent ? people.get(b.from.agent) : null;
     const carrier = from && from !== p && !from.leaving ? from : boss;
     const folder = b.from?.back ? C.red : C.paper;
     act(carrier, () => (carrier.carrying = folder));
-    walk(carrier, desk.drop, () => {
+    walk(carrier, stage.drop, () => {
       carrier.carrying = null;
-      desk.folder = { color: folder, until: performance.now() + 8000 };
+      stage.folder = { color: folder, until: performance.now() + 8000 };
     });
     wait(carrier, 300);
     const home = homeOf(carrier);
-    if (home) walk(carrier, home, () => carrier.slot?.kind === 'seat' && (carrier.pose = 'sit'));
+    if (home) walk(carrier, home, () => place(carrier, home));
     else leave(carrier);
     if (p.x !== slot.x || p.y !== slot.y) walk(p, slot);
     act(p, () => {
@@ -329,11 +525,11 @@ function onBeat(b) {
   }
   if (b.type === 'verdict') {
     let p = find(b.agent, b.role);
-    if (!p && desk) {
+    if (!p && stage) {
       p = person(b.agent, b.role, b.agent);
       p.agent = b.agent;
       people.set(b.agent, p);
-      place(p, seatAt(desk, p));
+      place(p, seatAt(stage, p));
     }
     if (!p) return;
     const finish = () => {
@@ -356,7 +552,7 @@ function onBeat(b) {
     note(b.at, `${b.role} ${b.verdict} — done`);
     banner = { text: `${b.role} ${b.verdict}`, until: performance.now() + 3500 };
     const now = performance.now();
-    confetti = Array.from({ length: 90 }, (_, i) => ({ x: Math.random() * LW, y: -Math.random() * 40, vx: (Math.random() - 0.5) * 30, vy: 20 + Math.random() * 40, color: CONFETTI[i % CONFETTI.length], until: now + 4000 }));
+    confetti = Array.from({ length: 140 }, (_, i) => ({ x: Math.random() * LW, y: -Math.random() * 60, vx: (Math.random() - 0.5) * 30, vy: 25 + Math.random() * 45, color: CONFETTI[i % CONFETTI.length], until: now + 4500 }));
     for (const p of [...people.values(), boss, owner]) p.cheerUntil = now + 3000;
     return;
   }
@@ -403,9 +599,9 @@ function onBeat(b) {
 
 function reset() {
   people.clear();
-  for (const d of desks.values()) {
-    d.folder = null;
-    for (const s of d.slots) s.who = null;
+  for (const stage of stages.values()) {
+    stage.folder = null;
+    for (const sl of stage.slots) sl.who = null;
   }
   for (const p of [boss, owner]) {
     p.queue = [];
@@ -413,8 +609,8 @@ function reset() {
     p.bubble = null;
     p.carrying = null;
     place(p, p.home);
-    p.pose = p === boss ? 'boss' : 'stand';
   }
+  owner.facing = 'up';
   lines.length = 0;
   confetti = [];
   banner = null;
@@ -442,7 +638,7 @@ function step(p, dt) {
   if (!p.current && p.queue.length > 0) {
     p.current = p.queue.shift();
     if (p.current.kind === 'walk') {
-      p.path = route(p, p.current.to);
+      p.path = route(p.at ?? ENTRANCE, p.current.to);
       p.pose = 'walk';
       p.typing = false;
     } else if (p.current.kind === 'wait') p.current.left = p.current.ms;
@@ -459,6 +655,8 @@ function step(p, dt) {
       const dx = t.x - p.x;
       const dy = t.y - p.y;
       const d = Math.hypot(dx, dy);
+      if (Math.abs(dy) > Math.abs(dx)) p.facing = dy < 0 ? 'up' : 'down';
+      else if (dx !== 0) p.facing = dx < 0 ? 'left' : 'right';
       if (d <= budget) {
         p.x = t.x;
         p.y = t.y;
@@ -471,8 +669,9 @@ function step(p, dt) {
       }
     }
     if (p.path.length === 0) {
-      p.laneY = c.to.laneY;
-      p.pose = p === boss && c.to === BOSS_HOME ? 'boss' : 'stand';
+      p.at = c.to;
+      p.pose = c.to.kind === 'boss' ? 'boss' : 'stand';
+      p.facing = p === owner ? 'up' : 'down';
       p.current = null;
       c.then?.();
     }
@@ -500,7 +699,7 @@ function resize() {
   screen.height = Math.floor(window.innerHeight * dpr);
   screen.style.width = `${window.innerWidth}px`;
   screen.style.height = `${window.innerHeight}px`;
-  const fit = Math.min(screen.width / LW, (screen.height - 4 * dpr) / LH);
+  const fit = Math.min(screen.width / LW, screen.height / LH);
   scale = fit >= 2 ? Math.floor(fit) : fit;
   ox = Math.floor((screen.width - LW * scale) / 2);
   oy = Math.floor((screen.height - LH * scale) / 2);
@@ -509,63 +708,76 @@ window.addEventListener('resize', resize);
 resize();
 
 function drawPerson(p, now) {
-  const cheering = p.cheerUntil > now && p.pose !== 'sit' && p.pose !== 'boss';
-  const hop = p.cheerUntil > now ? Math.round(Math.abs(Math.sin(now / 120)) * 2) : 0;
+  const hop = p.cheerUntil > now ? Math.round(Math.abs(Math.sin(now / 110)) * 3) : 0;
   if (p.pose === 'sit') {
-    const rows = p.typing && Math.floor(now / 180) % 2 ? SPRITE.sitB : SPRITE.sitA;
-    paint(w, rows, p.x - 3, p.y - 8 - hop, p.colors);
-  } else if (p.pose === 'boss') {
-    paint(w, SPRITE.stand.slice(0, 6), p.x - 3, p.y - 9 - hop, p.colors);
-  } else {
-    const rows = cheering ? SPRITE.cheer : p.pose === 'walk' ? (Math.floor(now / 140) % 2 ? SPRITE.walkA : SPRITE.walkB) : SPRITE.stand;
-    rect(w, p.x - 3, p.y, 6, 1, 'rgba(0,0,0,0.25)');
-    paint(w, rows, p.x - 3, p.y - 9 - hop, p.colors);
-    if (p.carrying) rect(w, p.x + 3, p.y - 4 - hop, 3, 3, p.carrying);
+    const rows = p.typing && Math.floor(now / 170) % 2 ? SPRITE.sitB : SPRITE.sitA;
+    paint(w, rows, p.x - 5, p.y - 14 - hop, p.colors);
+    return;
   }
+  if (p.pose === 'boss') {
+    paint(w, SPRITE.front.slice(0, 10), p.x - 5, p.y - 14 - hop, p.colors);
+    return;
+  }
+  const stepping = p.pose === 'walk' && Math.floor(now / 150) % 2;
+  const up = p.facing === 'up';
+  let rows = up ? SPRITE.back : SPRITE.front;
+  if (p.pose === 'walk') rows = up ? (stepping ? SPRITE.backA : SPRITE.backB) : stepping ? SPRITE.frontA : SPRITE.frontB;
+  if (p.cheerUntil > now) rows = SPRITE.cheer;
+  rect(w, p.x - 4, p.y, 8, 1, 'rgba(0,0,0,0.22)');
+  paint(w, rows, p.x - 5, p.y - 14 - hop, p.colors, p.facing === 'left');
+  if (p.carrying) box(w, p.x + 3, p.y - 8 - hop, 5, 4, p.carrying);
 }
 
 function drawBubble(p) {
   if (!p.bubble) return;
-  // Seated, beside the head: above it, the bubble would sit on the desk's nameplate.
-  if (p.pose === 'sit') paint(w, BUBBLE[p.bubble.kind], p.x + 4, p.y - 12, BUBBLE_COLORS);
-  else paint(w, BUBBLE[p.bubble.kind], p.x - 3, p.y - 18, BUBBLE_COLORS);
+  // Seated, beside the head: above it, the bubble would cover the desk's nameplate.
+  if (p.pose === 'sit') paint(w, BUBBLE[p.bubble.kind], p.x + 5, p.y - 24, BUBBLE_COLORS);
+  else paint(w, BUBBLE[p.bubble.kind], p.x - 4, p.y - 27, BUBBLE_COLORS);
 }
 
 function drawWorld(now) {
   w.drawImage(background, 0, 0);
-  // The clock on the wall says the time it is here.
+  for (const stage of stages.values()) {
+    stage.slots.forEach((sl, i) => {
+      const d = stage.desks[i];
+      const busy = sl.who?.typing;
+      rect(w, d.dx + 12, d.dy + 1, 12, 7, busy ? C.screen : C.screenOff);
+      if (busy) for (let k = 0; k < 3; k += 1) rect(w, d.dx + 13, d.dy + 2 + k * 2, 3 + ((Math.floor(now / 200) + k * 3) % 8), 1, C.code);
+    });
+    if (stage.folder && stage.folder.until > now) box(w, stage.desks[0].dx + 2, stage.desks[0].dy + 11, 7, 5, stage.folder.color);
+  }
+  // The clock in each room says the time it is here.
   const t = new Date();
-  const cx = LW - 26;
-  const cy = 13;
-  rect(w, cx - 5, cy - 5, 11, 11, C.clock);
-  for (let a = 0; a < 24; a += 1) rect(w, cx + Math.round(Math.cos((a / 24) * Math.PI * 2) * 6), cy + Math.round(Math.sin((a / 24) * Math.PI * 2) * 6), 1, 1, C.trim);
-  for (const [len, turn] of [[4, (t.getHours() % 12) / 12 + t.getMinutes() / 720], [5, t.getMinutes() / 60]]) {
-    for (let i = 0; i <= len; i += 1) rect(w, cx + Math.round(Math.sin(turn * Math.PI * 2) * i), cy - Math.round(Math.cos(turn * Math.PI * 2) * i), 1, 1, C.hand);
+  for (const room of rooms.values()) {
+    if (room.key === 'design' || room.key === 'lab') continue;
+    const cx = wallSpot(room) + 5;
+    const cy = room.y + 10;
+    for (const [len, turn] of [[2, (t.getHours() % 12) / 12 + t.getMinutes() / 720], [3, t.getMinutes() / 60]]) {
+      for (let i = 0; i <= len; i += 1) rect(w, cx + Math.round(Math.sin(turn * Math.PI * 2) * i), cy - Math.round(Math.cos(turn * Math.PI * 2) * i), 1, 1, C.ink);
+    }
   }
-  for (const d of desks.values()) {
-    const busy = d.slots.some((sl) => sl.who?.typing);
-    rect(w, d.cx + 20, d.ry + 2, 10, 6, busy ? C.screen : C.screenOff);
-    if (busy) for (let i = 0; i < 3; i += 1) rect(w, d.cx + 21, d.ry + 3 + i * 2, 3 + ((Math.floor(now / 200) + i * 3) % 6), 1, C.code);
-    if (d.folder && d.folder.until > now) rect(w, d.cx + 8, d.ry + 11, 5, 3, d.folder.color);
-  }
-  // The orchestrator sits behind the desk that faces the room; everyone else is drawn by how far down they stand.
+  // The orchestrator stands behind the counter, which is drawn over them; everyone else by how far down they stand.
   if (boss.pose === 'boss') drawPerson(boss, now);
-  rect(w, BOSS_HOME.x - 20, BOSS_HOME.y - 4, 40, 4, C.deskTop);
-  rect(w, BOSS_HOME.x - 20, BOSS_HOME.y, 40, 6, C.desk);
-  rect(w, BOSS_HOME.x + 8, BOSS_HOME.y - 9, 10, 6, C.frame);
+  box(w, COUNTER.x, COUNTER.y - 6, COUNTER.w, 8, C.counter);
+  box(w, COUNTER.x, COUNTER.y + 1, COUNTER.w, 10, C.woodMid);
+  rect(w, COUNTER.x + 1, COUNTER.y + 10, COUNTER.w - 2, 1, C.woodDark);
+  box(w, COUNTER.x + 20, COUNTER.y - 14, 14, 9, C.frame);
+  rect(w, COUNTER.x + 21, COUNTER.y - 13, 12, 6, boss.pose === 'boss' ? C.screen : C.screenOff);
+  box(w, COUNTER.x + 70, COUNTER.y - 12, 12, 7, C.frame);
   const crowd = [...people.values(), owner, ...(boss.pose === 'boss' ? [] : [boss])].sort((a, b) => a.y - b.y);
   for (const p of crowd) drawPerson(p, now);
   for (const p of [...crowd, ...(boss.pose === 'boss' ? [boss] : [])]) drawBubble(p);
   confetti = confetti.filter((c) => c.until > now && c.y < LH);
-  for (const c of confetti) rect(w, c.x, c.y, 1, 1, c.color);
+  for (const c of confetti) rect(w, c.x, c.y, 2, 1, c.color);
 }
 
-function text(str, x, y, size, color, align = 'left', max = Infinity) {
+function text(str, x, y, size, color, align = 'left', max = Infinity, weight = '') {
   let px = size;
-  s.font = `${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+  const font = () => `${weight}${weight ? ' ' : ''}${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+  s.font = font();
   while (px > 6 * dpr && s.measureText(str).width > max) {
     px -= 1;
-    s.font = `${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+    s.font = font();
   }
   s.textAlign = align;
   s.textBaseline = 'middle';
@@ -575,37 +787,50 @@ function text(str, x, y, size, color, align = 'left', max = Infinity) {
 
 function drawScreen(now) {
   s.imageSmoothingEnabled = false;
-  s.fillStyle = '#14111f';
+  s.fillStyle = '#1b1d26';
   s.fillRect(0, 0, screen.width, screen.height);
   s.drawImage(world, ox, oy, LW * scale, LH * scale);
   const at = (x, y) => [ox + x * scale, oy + y * scale];
-  const small = Math.max(9 * dpr, Math.round(scale * 3.4));
-  for (const d of desks.values()) {
-    const [x, y] = at(d.cx + 25, d.ry + 18);
-    text(d.role, x, y, small, '#fff1e8', 'center', 38 * scale);
+  const small = Math.max(8 * dpr, Math.round(scale * 3.1));
+  for (const room of rooms.values()) {
+    const [x, y] = at(room.x + 12, room.y + 8.5);
+    text(room.name, x, y, small, C.signText, 'left', (signWidth(room) - 8) * scale);
+  }
+  for (const stage of stages.values()) {
+    for (const d of stage.desks) {
+      const [x, y] = at(d.dx + 18, d.dy + 21.5);
+      text(stage.role, x, y, small, '#fff8e8', 'center', 34 * scale);
+    }
   }
   {
-    const [x, y] = at(BOSS_HOME.x, BOSS_HOME.y + 3);
-    text('orchestrator', x, y, small, '#fff1e8', 'center', 38 * scale);
-    const [ownerX, ownerY] = at(OWNER_HOME.x + 5, OWNER_HOME.y + 5);
-    text(ROOM.owner, ownerX, ownerY, small, '#ffec27', 'left', 60 * scale);
+    const [x, y] = at(COUNTER.x + COUNTER.w / 2, COUNTER.y + 6);
+    text('orchestrator', x, y, small, '#fff8e8', 'center', (COUNTER.w - 8) * scale);
+    const [ownerX, ownerY] = at(OWNER_HOME.x + 8, OWNER_HOME.y - 4);
+    text(ROOM.owner, ownerX, ownerY, small, '#ffd34d', 'left', 70 * scale, 'bold');
   }
-  const [hx, hy] = at(4, 3);
-  text(`NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}`, hx, hy + small / 2, small, '#c2c3c7', 'left', LW * scale * 0.42);
+  {
+    const label = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}`;
+    const [hx, hy] = at(4, LH - GARDEN + 2);
+    s.font = `${small}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+    const width = Math.min(s.measureText(label).width + 10 * dpr, LW * scale * 0.7);
+    s.fillStyle = 'rgba(27,29,38,0.78)';
+    s.fillRect(hx, hy, width, small * 1.5);
+    text(label, hx + 5 * dpr, hy + small * 0.78, small, '#e6e8ee', 'left', width - 10 * dpr);
+  }
   if (lines.length > 0) {
-    const lineH = small * 1.25;
+    const lineH = small * 1.3;
     const [lx, ly] = at(0, LH);
     const top = ly - lines.length * lineH - lineH * 0.4;
-    s.fillStyle = 'rgba(20,17,31,0.72)';
+    s.fillStyle = 'rgba(27,29,38,0.78)';
     s.fillRect(lx, top, LW * scale, ly - top);
-    lines.forEach((l, i) => text(l, lx + 8 * dpr, top + lineH * (i + 0.8), small, '#fff1e8', 'left', LW * scale - 16 * dpr));
+    lines.forEach((l, i) => text(l, lx + 8 * dpr, top + lineH * (i + 0.8), small, '#fff8e8', 'left', LW * scale - 16 * dpr));
   }
   if (banner && banner.until > now) {
-    const [bx, by] = at(LW / 2, LH / 2 - 10);
-    const big = Math.round(scale * 9);
-    s.fillStyle = 'rgba(20,17,31,0.6)';
+    const [bx, by] = at(LW / 2, FLOOR_H / 2);
+    const big = Math.round(scale * 10);
+    s.fillStyle = 'rgba(27,29,38,0.68)';
     s.fillRect(bx - LW * scale * 0.3, by - big, LW * scale * 0.6, big * 2);
-    text(`✓ ${banner.text}`, bx, by, big, '#00e436', 'center', LW * scale * 0.56);
+    text(`✓ ${banner.text}`, bx, by, big, '#3ec74d', 'center', LW * scale * 0.56, 'bold');
   }
 }
 
