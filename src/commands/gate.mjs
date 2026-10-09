@@ -291,9 +291,14 @@ function loopStatus(target, wanted) {
     .filter((f) => f.endsWith('.jsonl') && f !== 'errors.jsonl')
     .map((f) => ({ session: f.slice(0, -'.jsonl'.length), written: statSync(join(dir, f)).mtime }))
     .sort((a, b) => b.written - a.written);
+  if (ledgers.length === 0 && !wanted) {
+    console.log(`  the gate has no ledger here yet: no session has dispatched a stage since it was wired (${dir})`);
+    console.log('gate: no open loop');
+    return 0;
+  }
   const matching = wanted ? ledgers.filter((l) => l.session.startsWith(wanted)) : ledgers.slice(0, 1);
   if (matching.length !== 1) {
-    const why = ledgers.length === 0 ? 'the gate has no ledger here yet' : matching.length === 0 ? `no session starts with "${wanted}"` : `${matching.length} sessions start with "${wanted}" — give more of the id`;
+    const why = matching.length === 0 ? `no session starts with "${wanted}"` : `${matching.length} sessions start with "${wanted}" — give more of the id`;
     console.error(`  ${why} (${dir})\n`);
     return 2;
   }
@@ -302,8 +307,12 @@ function loopStatus(target, wanted) {
   const others = ledgers.length > 1 ? `; ${ledgers.length - 1} other session(s) kept here, --session <id> for one` : '';
   console.log(`  session ${session}, its ledger last written ${written.toISOString().slice(0, 16).replace('T', ' ')} UTC${others}`);
   for (const line of state.lines) console.log(`  ${line}`);
-  const closing = state.closing ? ` — ${state.closing} close(s) at the next dispatch` : '';
-  console.log(`gate: ${state.open ? `${state.open} open loop(s)` : 'no open loop'}${closing}`);
+  const counts = [
+    state.open ? `${state.open} open loop(s)` : 'no open loop',
+    state.closing ? `${state.closing} settled, its count dropped at the next dispatch` : '',
+    state.waiting ? `${state.waiting} loop-back(s) waiting on a fix` : '',
+  ];
+  console.log(`gate: ${counts.filter(Boolean).join(', ')}`);
   return 0;
 }
 
@@ -316,6 +325,10 @@ export async function gate(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   if (argv.includes('--hook')) return runGate({ root: target });
   if (argv.includes('--status')) return loopStatus(target, argv.includes('--session') ? argv[argv.indexOf('--session') + 1] : undefined);
+  if (argv.includes('--session')) {
+    console.error('  --session names the session --status reads, and means nothing without it\n');
+    return 2;
+  }
 
   const { profile, error } = readProfile(target);
   if (error) {

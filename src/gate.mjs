@@ -697,7 +697,7 @@ const either = (stages) => (stages.length < 2 ? stages.join('') : `${stages.slic
  * @param {object} project - `loadProject`'s.
  * @param {object[]} entries - The session's ledger, oldest first.
  * @returns {{lines: string[], open: number, closing: number, waiting: number}} The lines; the loops open, the
- *   loops a pass already closes at the next dispatch, and the loop-backs waiting on a fix.
+ *   loops a pass already settled, whose count the next dispatch drops, and the loop-backs waiting on a fix.
  */
 export function loopState(project, entries) {
   const { open, waiting } = replay(entries, project.loops, project.forward);
@@ -709,9 +709,9 @@ export function loopState(project, entries) {
     const fix = waiting.some((w) => w.source === l.source) ? 'the fix it waits on' : 'the latest fix';
     lines.push(
       l.closing
-        ? `- passed after its latest fix: ${count}. It closes at the next dispatch to ${either(l.targets)}`
+        ? `- passed after its latest fix: ${count}. Nothing is owed on it; the gate drops its count at the next dispatch to ${either(l.targets)}`
         : `- open loop: ${count}. It closes when a ${l.source} launched after ${fix} passes with no rejection beside it` +
-            (l.onward.length ? `, or when ${either(l.onward)} passes` : ''),
+            (l.onward.length ? `, or when ${either(l.onward)} passes, sent out after the ${l.source} last reported` : ''),
     );
   }
   for (const w of waiting) lines.push(`- waiting on a fix: ${w.source} ${w.verdict}${w.issues.length ? `, issues ${w.issues.join(', ')}` : ''}`);
