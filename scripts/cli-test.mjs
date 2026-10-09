@@ -4547,6 +4547,11 @@ const dated = (date, status = 'active') =>
   await writeFile(join(both, 'prisma', 'schema.prisma'), 'datasource db {}\n');
   run(['init', '--project', both, '--core', 'dev', '--no-ask']);
   expect(JSON.parse(await readFile(join(both, '.nina', 'profile.json'), 'utf8')).surfaces.join() === 'db,prisma', 'surfaces: a Prisma schema reveals the database and the stack that reaches it');
+  const drizzled = await scratch();
+  await writeFile(join(drizzled, 'drizzle.config.ts'), 'export default {};\n');
+  run(['init', '--project', drizzled, '--core', 'dev', '--no-ask']);
+  const drizzledSurfaces = JSON.parse(await readFile(join(drizzled, '.nina', 'profile.json'), 'utf8')).surfaces.join();
+  expect(drizzledSurfaces === 'db,drizzle', `surfaces: a drizzle-kit config reveals the database and the stack that reaches it — got ${drizzledSurfaces}`);
   const none = await scratch();
   const interviewed = run(['init', '--project', none, '--core', 'dev', '--ask'], { input: `x\n\n${'n\n'.repeat(12)}` }).out;
   expect(!interviewed.includes('Does it reach that data through Prisma?') && interviewed.includes('Does it own persistent data of its own?'), 'surfaces: a project that owns no data is not asked how it reaches it');

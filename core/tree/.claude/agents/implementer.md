@@ -92,6 +92,7 @@ When in doubt: **smaller diff, escalate sooner.**
 - If the spec is too large to implement without losing fidelity (you find yourself losing track of the spec's invariants while coding), **STOP and escalate to the planner** for further decomposition. Better to pause than to ship a 700-line diff that the reviewer cannot audit cleanly.
 - **Write at most {{STEP_FILES}} files in one run.** If this dispatch asks for more (a spec with no steps, or several of its steps at once), return `BLOCKED` to the architect before writing any, with the count: the spec needs steps. A run re-reads its own growing context on every turn, so past that size its cost per file multiplies. When the spec has steps, write only the step you were dispatched for, reading the spec and that step's file.
 <!-- nina:slot db.2 -->
+<!-- nina:slot drizzle.1 -->
 <!-- nina:slot integrations.1 -->
 <!-- nina:slot edge-cf.5 -->
 - **Delete what the spec's Obsolescence list names.** Removing authorized-dead code is IN scope and expected — leaving it behind is a defect, not caution. Deleting anything the spec did NOT list is still out of scope: escalate instead.

@@ -306,6 +306,7 @@ const SURFACE_TERMS = {
   db: ['dba', 'DBA'],
   // A stack, where `db` is the concern: a project with a database is not thereby a Prisma project.
   prisma: ['Prisma', 'prisma', 'Accelerate', 'cacheStrategy', '@prisma'],
+  drizzle: ['Drizzle', 'drizzle-kit', 'drizzle-orm', 'DrizzleQueryError'],
   'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Pages', 'Worker', 'Workers', 'Wrangler'],
   integrations: ['integration-tester', 'INTEGRATION-TESTER'],
   frontend: ['Playwright', 'playwright'],

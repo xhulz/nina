@@ -23,6 +23,7 @@ not cover is wasted context.
 <!-- nina:slot project.4 skills -->
 
 <!-- nina:slot prisma.2 -->
+<!-- nina:slot drizzle.1 -->
 
 Cite in your report which skills you consulted, or state that no trigger matched.
 
@@ -51,6 +52,7 @@ Either:
 
 <!-- nina:slot db.6 -->
 <!-- nina:slot prisma.3 -->
+<!-- nina:slot drizzle.2 -->
 <!-- nina:slot db.8 -->
 <!-- nina:slot db.9 -->
 <!-- nina:slot db.10 -->
@@ -69,6 +71,7 @@ Either:
 - Edit code — read-only + Bash only.
 <!-- nina:slot db.14 -->
 <!-- nina:slot prisma.6 -->
+<!-- nina:slot drizzle.3 -->
 <!-- nina:slot db.15 -->
 <!-- nina:slot db.16 -->
 <!-- nina:slot money.4 -->
