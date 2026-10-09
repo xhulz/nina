@@ -29,7 +29,9 @@ waits, is a note rather than a problem:
 The first new project designed for days before it had code, and every message of its owner's came with the
 same five problems, three of them decisions its architecture marked Open: a check that always fails is one
 nobody reads. A deferral with no reason counts for nothing, one that names nothing the check asks for is
-said to be stale, and `upgrade` does not ask for a deferred name. A deferred name composes as
+said to be stale, and `upgrade` does not ask for a deferred name. `compose --check` reads the same
+deferrals, through the same `deferredWhy`: it once read none, and a new project's root
+`harness:compose:check` failed on six slots it had deferred while `check` was clean. A deferred name composes as
 `[AUTH_LIB: not decided yet]`, so a stage that meets it asks rather than reading a raw placeholder as a
 slip to work around.
 

@@ -17,7 +17,7 @@
  */
 
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { HARNESS, layerRootFor, readProfile } from '../paths.mjs';
+import { HARNESS, deferredWhy, layerRootFor, readProfile } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -553,8 +553,8 @@ export async function composeProject(target, ctx, options = {}) {
     }
     // A name the project deferred, with its reason, reads as not decided: a stage that meets it asks
     // instead of guessing, and the raw placeholder it would otherwise read looks like an editing slip.
-    for (const [name, why] of Object.entries(profile.deferred ?? {})) {
-      if (typeof why === 'string' && why.trim() && NAME.test(name)) text = text.split(`{{${name}}}`).join(`[${name}: not decided yet]`);
+    for (const name of Object.keys(profile.deferred ?? {})) {
+      if (deferredWhy(profile, name) && NAME.test(name)) text = text.split(`{{${name}}}`).join(`[${name}: not decided yet]`);
     }
     // What is still a placeholder is owed: no default answers it, and the project has not declared it, or has
     // declared it null. Left raw, it reached a stage as `{{TENANT_KEY}}` — once inside a shell block it was told to
@@ -611,8 +611,12 @@ export async function compose(argv, ctx) {
   // A surface's own slot left empty is a bug in the harness, not the project's to fill, so drift mode
   // still reports it; only the project's slots are left to the declaration detector.
   const reported = driftOnly ? result.unfilled.filter((slot) => !/ project\.\d+$/.test(slot)) : result.unfilled;
-  const owed = reported.filter((slot) => !expected.has(slot));
+  // A project slot the profile defers, with its reason, is a decision not made yet, here as in `check`.
+  const { profile } = readProfile(target);
+  const deferred = reported.filter((slot) => !expected.has(slot) && deferredWhy(profile, slot));
+  const owed = reported.filter((slot) => !expected.has(slot) && !deferred.includes(slot));
   const awaited = reported.filter((slot) => expected.has(slot));
+  if (deferred.length > 0) console.log(`  ${deferred.length} slot(s) deferred in ${HARNESS}/profile.json — \`nina check\` says why each waits`);
   if (owed.length > 0) {
     console.log(`  ${owed.length} slot(s) have no fragment in a declared layer:`);
     for (const slot of owed.slice(0, 12)) console.log(`    ${slot}`);

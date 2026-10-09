@@ -9,7 +9,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises';
-import { describeMove, HARNESS, interruptedMove, readProfile, surfacesIn } from '../paths.mjs';
+import { deferredWhy, describeMove, HARNESS, interruptedMove, readProfile, surfacesIn } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
 import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
@@ -243,7 +243,7 @@ export async function check(argv, ctx) {
   const deferredUsed = new Set();
   let deferrable = false;
   const owe = (key, problem) => {
-    const why = typeof deferred[key] === 'string' ? deferred[key].trim() : '';
+    const why = deferredWhy(profile, key);
     if (why) {
       deferredUsed.add(key);
       notes.push(`deferred: ${key} — ${why}`);
@@ -298,7 +298,7 @@ export async function check(argv, ctx) {
   // one only to tailor it.
   const defaulted = await defaultedSlots(resolved.dir);
   const open = [...slots].filter((s) => !filled.has(s) && !defaulted.has(s));
-  const missing = open.filter((s) => !expected.has(s) && !(typeof deferred[s] === 'string' && deferred[s].trim()));
+  const missing = open.filter((s) => !expected.has(s) && !deferredWhy(profile, s));
   for (const s of open.filter((s) => !expected.has(s) && !missing.includes(s))) owe(s, `project slot ${s} has no fragment`);
   const awaited = open.filter((s) => expected.has(s));
   const orphan = [...filled].filter((s) => !slots.has(s));

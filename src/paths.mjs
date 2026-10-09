@@ -126,6 +126,21 @@ export function readProfile(target) {
 }
 
 /**
+ * Why a profile defers a name — a vocabulary name, a document, or a project slot as `<path> <slot id>` — or
+ * `''` when it does not. A deferral with no reason counts for nothing: `check` says so, and every other reader
+ * treats the name as owed. `compose --check` once read the profile's deferrals not at all, and failed on six
+ * slots a new project had deferred while `check` was clean.
+ *
+ * @param {object | undefined} profile - The parsed profile.
+ * @param {string} key - The deferred name.
+ * @returns {string} The reason, trimmed; empty when the name is not deferred.
+ */
+export function deferredWhy(profile, key) {
+  const why = profile?.deferred?.[key];
+  return typeof why === 'string' ? why.trim() : '';
+}
+
+/**
  * Where a project's layers are read from.
  *
  * A project pins a frozen release, or tracks the working tree with "dev". A pinned release
