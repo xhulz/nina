@@ -6,7 +6,7 @@
    - no redefinition of a table that holds data;
    - foreign keys `RESTRICT` or `NO ACTION`, so a redefinition that would destroy rows fails instead. A `CASCADE`, `SET NULL` or `SET DEFAULT` the architecture keeps is named there with its reason, and every migration that redefines a table it reaches is tested on rows it would cascade to;
    - `ADD COLUMN` nullable, or NOT NULL with a constant default — with no default, or a non-constant one such as `unixepoch()` or `CURRENT_TIMESTAMP`, it applied to an empty table and failed on one with rows under the emulator — and an added `REFERENCES` column nullable with no default, which SQLite requires while foreign keys are on;
-   - a redefinition's `INSERT … SELECT` naming only columns the old table has: SQLite reads an unknown double-quoted name as a string literal and fills every row with it;
+   - a redefinition's `INSERT … SELECT` naming only columns the old table has: the emulator read an unknown double-quoted name as a string literal and filled every row with it;
    - the migration applied, in a test, to the previous schema holding rows, and a drift test comparing the applied schema (`PRAGMA table_info`, `foreign_key_list`, `index_list`) with the one the code declares.
 
 <!-- nina:slot d1.3 -->
