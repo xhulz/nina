@@ -21,8 +21,20 @@ export const DETECTABLE = [
   { surface: 'blockchain', why: 'a Foundry or Hardhat config', test: (f) => f.some((p) => /(^|\/)(foundry\.toml|hardhat\.config\.[cm]?[jt]s)$/.test(p)) },
 ];
 
-/** A stack surface, and the concern it is a stack of: declared without it, its rules have nowhere to land. */
-export const NEEDS = { prisma: 'db' };
+/**
+ * A stack surface, and every surface it is a stack of: declared without one of them, its rules have nowhere
+ * to land. Most stacks need one concern; an engine that only runs on one platform needs the platform too.
+ */
+export const NEEDS = { prisma: ['db'] };
+
+/**
+ * What a stack needs that a profile does not declare — empty for a surface that is not a stack.
+ *
+ * @param {string} surface - The surface asked about.
+ * @param {string[]} declared - The surfaces declared, or answered yes so far.
+ * @returns {string[]}
+ */
+export const missingNeeds = (surface, declared) => (NEEDS[surface] ?? []).filter((need) => !declared.includes(need));
 
 /**
  * The surfaces a project's files reveal, with the evidence for each.

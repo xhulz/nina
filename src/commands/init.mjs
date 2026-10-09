@@ -21,7 +21,7 @@ import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, closedGate, composedPaths, composeProject, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
-import { DETECTABLE, NEEDS } from '../surfaces.mjs';
+import { DETECTABLE, missingNeeds } from '../surfaces.mjs';
 import { bold, dim, green, pink } from '../look.mjs';
 
 /**
@@ -223,7 +223,7 @@ async function interview(available, matched, impacts) {
     for (const [n, s] of order.entries()) {
       // A stack is asked about only where its concern was answered yes: asked whether data it does not
       // own goes through Prisma, a project has nothing true to answer.
-      if (NEEDS[s] && !surfaces.includes(NEEDS[s])) continue;
+      if (missingNeeds(s, surfaces).length > 0) continue;
       const i = impacts[s];
       const reason = matched.find((d) => d.surface === s)?.why;
       // What a yes brings, in what a person would recognise: roles, rules, agents. The count of
