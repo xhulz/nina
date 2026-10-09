@@ -237,8 +237,9 @@ const BUDGETS = {
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
-  // Raised again when the mutation moved to a copy of the tree: the classifier refuses overwrite-and-restore.
-  '.claude/agents/qa.md': 13400,
+  // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
+  // overwrite-and-restore.
+  '.claude/agents/qa.md': 13600,
   '.claude/agents/reviewer.md': 20000,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
