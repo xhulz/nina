@@ -106,12 +106,19 @@ the open loops a round like a person would; that is a known limit.
 
 Two more hooks go through the same script, because every stage and every session passes it. On
 `SubagentStart` it hands the stage its lessons (`docs/learning.md`). On `SessionStart` after a compaction it
-hands the orchestrator what the ledger kept of the session: each open loop with its rounds, its cap, the
-rounds the owner's replies gave it and its issues; each loop-back still waiting on a fix; the latest
-dispatches; the branch and the last commit; and the instruction to read `.claude/graph.md` and
-`.claude/router.md` again. Both are read once, at a session's start, and a compaction drops them with every
-report — the router had told the orchestrator to write each round's number into its dispatch so that it
-could see it after one, and after one it sees only a summary.
+hands the orchestrator what the ledger kept of the session: each loop still counted, with its rounds, its
+cap, the rounds the owner's replies gave it, its issues and what would close it; each loop-back still waiting
+on a fix; the latest dispatches; the branch and the last commit; and the instruction to read
+`.claude/graph.md` and `.claude/router.md` again. Both are read once, at a session's start, and a compaction
+drops them with every report — the router had told the orchestrator to write each round's number into its
+dispatch so that it could see it after one, and after one it sees only a summary.
+
+A review that saw the fix and passed closes its loop at the next dispatch the loop could act on, not when it
+reports, so a loop in that gap is still counted — and it is said to be closing, with the dispatch that will
+close it. Listed as open, three loops approved the evening before a compaction came back the next morning as
+"2 round(s), capped at 2", with issues from three spikes, and the orchestrator went looking for why. `nina gate
+--status` prints the same lines at any time, for the session whose ledger was written last or the one
+`--session` names by the start of its id: one function writes both.
 
 It fails open, and only acts where the pinned version ships it: a composed file outlives the version that
 composed it, and wired hooks run whatever is on disk, so the script asks the pin. An error lets the call
@@ -127,5 +134,8 @@ every loop through. So the reports of the last session with at least three — e
 declares a verdict, as the snapshot read it from the transcripts — are set against the verdicts that
 session's ledger holds, and fewer than half recorded is a finding. Only what came after the check first ran
 in the project is asked about, since what came before was never the gate's to see. What it cannot see is stated
-rather than hidden: a fix the orchestrator makes itself without a subagent, and "the same issue" beyond
-what the verdicts show — so `router.md` still asks the model to keep its own count.
+rather than hidden: a fix the orchestrator makes itself without a subagent, "the same issue" beyond
+what the verdicts show — so `router.md` still asks the model to keep its own count — and which piece of work a
+dispatch is for. Work run side by side, such as three spikes, shares one count per stage and verdict: one's
+rounds add to another's, and a rejection still open in one keeps a pass in another from closing the loop.
+Telling them apart would mean reading the task off a prompt the model wrote, so `router.md` says it instead.
