@@ -11,7 +11,8 @@
 **Read `.claude/code-map.md`** when the change touches new query patterns — it lists which services consume which models, so you can spot N+1 risk and consumer-side cache implications without re-grepping. (Before there is code, fall back to `.claude/architecture.md` § *Database* for the planned schema and its cache policies.)
 
 <!-- nina:slot db.6 -->
-- **The schema validates, and you read the migration's SQL** — offline, from files, with the project's own schema tooling. A check that seems to need a database URL is one you report as impossible, not one you run.
+- **The schema validates, and you read the migration's SQL** — offline, from files, with the project's own schema tooling. A check that seems to need a live database is one you report as impossible, not one you run.
+- **An empty diff from a schema change is a failure, not "nothing changed".** A diff tool short of what it needs — a datasource, a config — has printed nothing and exited 0, and so has its `--exit-code`. Before you trust an empty result, make the same command print a change you know is there.
 
 <!-- nina:slot db.8 -->
 - **Migration safety on large tables:**
@@ -32,7 +33,7 @@
 - **N+1 patterns.** If the code fetches a list then queries per item, reject with "fetch the related rows with the list, or batch."
 
 <!-- nina:slot db.13 -->
-- **Secrets.** The database's connection string comes from `{{SECRETS_LOCAL}}` locally and `{{SECRETS_PROD}}` in production — never a committed `.env`, never a literal in code.
+- **Secrets.** Whatever credential reaches the database — a connection string, an API token — comes from `{{SECRETS_LOCAL}}` locally and `{{SECRETS_PROD}}` in production — never a committed `.env`, never a literal in code. A database reached through a platform binding has no connection string to check.
 
 <!-- nina:slot db.14 -->
 - **Run anything that can write to a real database.** You are a read-only gate: against a live database you run read-only queries and nothing else. If a check seems to require writing, it does not — report the limitation to the orchestrator instead.
