@@ -232,8 +232,9 @@ const BUDGETS = {
   '.claude/agents/architect.md': 15000,
   '.claude/agents/dba.md': 12500,
   '.claude/agents/devops.md': 11500,
-  // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code).
-  '.claude/agents/implementer.md': 17600,
+  // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
+  // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran.
+  '.claude/agents/implementer.md': 17800,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
