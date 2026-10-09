@@ -168,7 +168,8 @@ export function historyOf(records, since) {
 /**
  * Runs the command.
  *
- * @param {string[]} argv - `[--project <dir>] [--for <number or words>] [--since <YYYY-MM-DD>]`.
+ * @param {string[]} argv - `[--project <dir>] [--for <number or words>] [--since <YYYY-MM-DD>]`, or `--view [--session <id>]
+ *   [--replay] [--port <n>] [--open]` for the office.
  * @returns {Promise<number>} Process exit code.
  */
 export async function pipeline(argv) {
@@ -178,6 +179,21 @@ export async function pipeline(argv) {
   if (!existsSync(graphPath)) {
     console.error(`  no .claude/graph.md in ${dir} — this draws a composed pipeline: \`nina compose\` writes one`);
     return 1;
+  }
+  // The office: the same graph as a room, its agents at their desks, live or replayed (src/office.mjs).
+  const viewOnly = ['--session', '--replay', '--port', '--open'].filter((flag) => argv.includes(flag));
+  if (viewOnly.length > 0 && !argv.includes('--view')) {
+    console.error(`  ${viewOnly.join(', ')} ${viewOnly.length > 1 ? 'belong' : 'belongs'} to the office, and mean${viewOnly.length > 1 ? '' : 's'} nothing without --view`);
+    return 2;
+  }
+  if (argv.includes('--view')) {
+    const { viewOffice } = await import('../office.mjs');
+    const port = arg('--port');
+    if (port !== null && !(/^\d+$/.test(port) && Number(port) <= 65535)) {
+      console.error(`  --port takes a port number, 0 to 65535, and was given ${port}`);
+      return 2;
+    }
+    return viewOffice({ target: dir, wanted: arg('--session') || undefined, replay: argv.includes('--replay'), port: port === null ? undefined : Number(port), open: argv.includes('--open') });
   }
   const graphText = readFileSync(graphPath, 'utf8');
   const graph = parseGraph(graphText);

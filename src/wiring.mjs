@@ -127,7 +127,7 @@ const HOOKS = [
   },
   { event: 'UserPromptSubmit', script: GATE, timeout: 10, why: "the owner's reply never gives an open loop its round more" },
   {
-    event: 'PreToolUse', matcher: 'Agent|Task|SendMessage', script: GATE, timeout: 10, why: 'the caps in .claude/graph.md stay instructions nothing holds',
+    event: 'PreToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion', script: GATE, timeout: 10, why: 'the caps in .claude/graph.md stay instructions nothing holds, and the office never sees a question asked',
     crash: (cannot) => ({ systemMessage: `NINA: the loop gate could not start, so the caps in .claude/graph.md are not held — ${cannot}` }),
   },
   { event: 'PostToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion|SubagentHandback', script: GATE, timeout: 10, why: 'the gate never learns which rounds went out, or that the owner answered' },

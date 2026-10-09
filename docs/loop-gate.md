@@ -38,7 +38,9 @@ spec puts under a verdict that sends work back, never a sentence of the report; 
 launched with, at most 80. A stage's report comes from `PostToolUse` on
 `SubagentHandback`, verbatim, or from `SubagentStop` when the report was the last message; launches from
 `PreToolUse` and `PostToolUse` on `Agent|Task|SendMessage`; the owner from `UserPromptSubmit`. `PreToolUse`
-decides.
+decides. Both hooks also match `AskUserQuestion`, and the ledger keeps when the orchestrator asked the owner and
+when the answer came, nothing of either: no count reads them, and the office (`nina pipeline --view`) draws the
+question over the orchestrator's head while it waits.
 
 **At the cap it asks the owner.** The graph sends a loop that has used its rounds to `human`, so that is
 where the round past the cap goes: the hook answers `permissionDecision: "ask"`, and Claude Code puts the

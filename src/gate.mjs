@@ -18,6 +18,8 @@
  *   PreToolUse / PostToolUse on Agent, Task, SendMessage
  *                                     a dispatch launched, and the agent it launched
  *   UserPromptSubmit (human text only) the owner spoke, and every open loop gets one round more
+ *   PreToolUse / PostToolUse on AskUserQuestion
+ *                                     the orchestrator asked the owner, and was answered: when, for the office
  *   PreToolUse on Agent, Task, SendMessage
  *                                     the decision: let it through, or send the round past the cap to
  *                                     the owner to confirm
@@ -606,6 +608,10 @@ function onPost(input, project, path, at) {
   }
   // A dispatch made inside a subagent is not the pipeline's: its stages are dispatched by the orchestrator.
   if (input.agent_id) return null;
+  if (tool === 'AskUserQuestion') {
+    append(path, { k: 'answered', at });
+    return null;
+  }
   if (!DISPATCH.has(tool)) return null;
   const response = input.tool_response && typeof input.tool_response === 'object' ? input.tool_response : {};
   let role;
@@ -659,6 +665,12 @@ function confirmation(r) {
 
 /** A dispatch is about to go out: note when, and send the round past its edge's cap to the owner to confirm. */
 function onPre(input, project, path, at) {
+  // The orchestrator asking the owner, as it asks: when it was, and nothing it said. Nothing counts it; the office
+  // (`nina pipeline --view`) draws the question over its head until the answer, which `onPost` records.
+  if (!input.agent_id && input.tool_name === 'AskUserQuestion') {
+    append(path, { k: 'question', at });
+    return null;
+  }
   if (input.agent_id || !DISPATCH.has(input.tool_name)) return null;
   const entries = readLedger(path);
   const role = input.tool_name === 'SendMessage' ? recipient(entries, project, input.tool_input?.to).role : input.tool_input?.subagent_type;
@@ -684,6 +696,28 @@ function onPre(input, project, path, at) {
     id: input.tool_use_id ?? null,
   });
   return confirmation(worst);
+}
+
+/**
+ * A project's session ledgers, the newest first, and the one asked for: the latest, or the one whose id starts
+ * with `wanted`. `nina gate --status` and the office (`nina pipeline --view`) pick a session through this, so
+ * the two never show different ones.
+ *
+ * @param {string} root - The project directory.
+ * @param {string} [wanted] - The start of a session id; absent, the session whose ledger was written last.
+ * @returns {{dir: string, ledgers: {session: string, written: Date, path: string}[], picked: {session: string, written: Date, path: string}|null, why: string|null}}
+ *   `why` says why nothing was picked, and is null when there is simply no ledger yet.
+ */
+export function sessionLedgers(root, wanted) {
+  const dir = projectGateDir(root);
+  const ledgers = (existsSync(dir) ? readdirSync(dir) : [])
+    .filter((f) => f.endsWith('.jsonl') && f !== 'errors.jsonl')
+    .map((f) => ({ session: f.slice(0, -'.jsonl'.length), written: statSync(join(dir, f)).mtime, path: join(dir, f) }))
+    .sort((a, b) => b.written - a.written);
+  const matching = wanted ? ledgers.filter((l) => l.session.startsWith(wanted)) : ledgers.slice(0, 1);
+  if (matching.length === 1) return { dir, ledgers, picked: matching[0], why: null };
+  const why = !wanted ? null : matching.length === 0 ? `no session starts with "${wanted}"` : `${matching.length} sessions start with "${wanted}" — give more of the id`;
+  return { dir, ledgers, picked: null, why };
 }
 
 /** Stages as a sentence lists them: `qa`, `implementer or architect`, `a, b or c`. */

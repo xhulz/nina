@@ -104,3 +104,33 @@ to it. Last, the task shapes of `CLAUDE.md`'s chain table, numbered, each with t
 the add-ons any chain may take (a row whose dispatch runs no chain of its own, such as
 `+ dba before reviewer`), and only what goes back among its stages. Words that match more than one shape
 list the ones they match.
+
+## Watching it work: `nina pipeline --view`
+
+```bash
+nina pipeline --view --project ../thing             # live: the newest session, as the gate records it
+nina pipeline --view --replay --session 85d7        # one session played from its first dispatch
+```
+
+The same graph as an office seen from above, in pixels: a desk for each stage, the orchestrator at the desk that
+faces the room, the owner by the door, and each agent the loop gate saw launched sitting at its stage's desk. It
+reads the gate's ledger and nothing else, so it shows what the ledger holds — who worked, what they answered, the
+ids of the issues they named — and never a word anyone wrote. A dispatch is someone sitting down to work, the
+folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
+in red to its fixer) and by the orchestrator otherwise. A verdict is a check or a cross over their head; a verdict
+the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
+asking at a cap, the owner's phone ringing. A pass is a party when nothing since the last dispatch was sent back,
+something since then could route to `done`, nobody is still at work and no dispatch follows within twenty seconds
+— at once when the pass routes only to a terminal. The quiet is there because qa's pass may still go on to devops,
+and the orchestrator commits before it dispatches; without the rest, a reviewer approving beside a dba that was
+about to reject threw a party.
+
+It is a page served on the loopback address for as long as the command runs, on port 6462 (NINA on a phone's
+keypad) or any free one, and VS Code shows it beside the conversation in its Simple Browser. A Claude Code mod was
+the first idea and was probed before a line of this was written: in the editor's chat panel Claude Code runs a
+mod's hooks, but its session reports no surface to draw on and no drawing is ever asked for — a mod draws in the
+terminal and the desktop app only. The session is picked as `gate --status` picks it, through the same function.
+Live, a client is handed what came before it connected at once, to set the room by, and then each beat as the gate
+writes it; a replay plays one session from its first dispatch with its gaps shortened, the owner's messages passing
+quickly. The orchestrator's question reaches the ledger only because the gate's `PreToolUse` hook also matches
+`AskUserQuestion` — the moment it was asked and the moment it was answered, nothing it said.

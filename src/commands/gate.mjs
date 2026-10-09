@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readProfile, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
-import { LEDGER_TAIL, ledgerPath, loadProject, loopState, projectGateDir, readLedger, runGate } from '../gate.mjs';
+import { LEDGER_TAIL, ledgerPath, loadProject, loopState, projectGateDir, readLedger, runGate, sessionLedgers } from '../gate.mjs';
 import { projectRecords } from '../store.mjs';
 import { layerRootFor } from './compose.mjs';
 import { handsToModel } from '../detectors.mjs';
@@ -286,24 +286,18 @@ function loopStatus(target, wanted) {
     console.error('  .claude/graph.md is not composed, so the gate has no loops to hold — run `nina compose`\n');
     return 2;
   }
-  const dir = projectGateDir(target);
-  const ledgers = (existsSync(dir) ? readdirSync(dir) : [])
-    .filter((f) => f.endsWith('.jsonl') && f !== 'errors.jsonl')
-    .map((f) => ({ session: f.slice(0, -'.jsonl'.length), written: statSync(join(dir, f)).mtime }))
-    .sort((a, b) => b.written - a.written);
+  const { dir, ledgers, picked, why } = sessionLedgers(target, wanted);
   if (ledgers.length === 0 && !wanted) {
     console.log(`  the gate has no ledger here yet: no session has dispatched a stage since it was wired (${dir})`);
     console.log('gate: no open loop');
     return 0;
   }
-  const matching = wanted ? ledgers.filter((l) => l.session.startsWith(wanted)) : ledgers.slice(0, 1);
-  if (matching.length !== 1) {
-    const why = matching.length === 0 ? `no session starts with "${wanted}"` : `${matching.length} sessions start with "${wanted}" — give more of the id`;
+  if (!picked) {
     console.error(`  ${why} (${dir})\n`);
     return 2;
   }
-  const { session, written } = matching[0];
-  const state = loopState(project, readLedger(join(dir, `${session}.jsonl`)));
+  const { session, written, path } = picked;
+  const state = loopState(project, readLedger(path));
   const others = ledgers.length > 1 ? `; ${ledgers.length - 1} other session(s) kept here, --session <id> for one` : '';
   console.log(`  session ${session}, its ledger last written ${written.toISOString().slice(0, 16).replace('T', ' ')} UTC${others}`);
   for (const line of state.lines) console.log(`  ${line}`);

@@ -100,7 +100,7 @@ must not break.
 |---|---|
 | a layer, `compose`, the notice, `nina:why`, the size budgets, the edit guard, the tools a spec may use | [`docs/composition.md`](docs/composition.md) |
 | `init`, `wire`, the hooks a project needs, the vocabulary and its defaults, how a project installs NINA | [`docs/installing.md`](docs/installing.md) |
-| `check`, `where`, `pipeline`, `status`, deferred decisions | [`docs/checking.md`](docs/checking.md) |
+| `check`, `where`, `pipeline` and its office, `status`, deferred decisions | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
 | `snapshot`, `stats`, `runs`, cost, the cost watch, models, proportion, `eval`, `export`, `langfuse` | [`docs/measurement.md`](docs/measurement.md) |
@@ -119,6 +119,7 @@ nina compose --project ../thing [--check]     # rebuild a project's harness file
 nina check --project ../thing                 # is what the project declared about itself true?
 nina where <path> --project ../thing          # does this path belong to the harness, and which layer?
 nina pipeline --project ../thing              # the agent chain drawn: gates, loop-backs, models, skills
+nina pipeline --view --project ../thing       # the office: each agent at its stage's desk, live or --replay, for VS Code's Simple Browser
 nina wire --project ../thing [--apply]        # merge the hooks and npm scripts its version needs
 nina upgrade --project ../thing --to <v> [--apply]   # what a move costs, then the whole move
 nina gate --selftest --project ../thing       # would the loop gate still hold a loop past its cap?
@@ -155,6 +156,7 @@ src/agentrun.mjs      one stage's own run, read from its transcript for --conten
 src/banner.mjs        the startup banner
 src/look.mjs          how a report looks on a terminal: colour, section marks, bars, wrapping; plain when piped
 src/surfaces.mjs      which surfaces a repository's files reveal, and which concern a stack surface needs
+src/office.mjs        pipeline --view: the gate's ledger as beats, served with src/office.html, the pixel office that draws them
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to
 fixtures/             projects that exist to be composed and checked

@@ -19,6 +19,9 @@ the same mistake, NINA turns the lesson into a rule in the next release.
   743 runs, and a loop counter whose cap fired 8 times when only one of those was a real repeat.
 - A lesson the pipeline learns three times becomes a request to the harness. The answer ships as a rule in a
   release, and the upgrade that installs it closes the request.
+- `nina pipeline --view` draws the pipeline as a pixel office: each agent at its stage's desk, walking the work
+  over to the next one, a question mark over whoever asked, a party when a task passes. It follows the session live,
+  or replays one, in a page VS Code shows beside the conversation.
 
 ## Why
 
@@ -380,6 +383,7 @@ node scripts/harness-check.mjs    # this repo's own detectors
 | [`src/commands/`](src/commands) | one file per command |
 | [`src/graph.mjs`](src/graph.mjs) | parses and validates a composed pipeline graph |
 | [`src/gate.mjs`](src/gate.mjs) | the loop gate: the ledger, what counts as a round, one answer per hook event |
+| [`src/office.mjs`](src/office.mjs), [`src/office.html`](src/office.html) | `pipeline --view`: the ledger as beats, and the pixel office that draws them |
 | [`src/wiring.mjs`](src/wiring.mjs) | the hooks and npm scripts a project needs, read by `init`, `wire`, `check` and `upgrade` |
 | [`src/transcripts.mjs`](src/transcripts.mjs) | the transcript parser |
 | [`src/detectors.mjs`](src/detectors.mjs) | runs a project's detectors from its hooks |

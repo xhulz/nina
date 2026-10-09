@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NINA office</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #14111f; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+'use strict';
+/*
+ * The NINA office: the project's pipeline as a room seen from above. `nina pipeline --view` serves this page with
+ * the room filled in below, and streams the gate ledger's beats at /events. Everything is drawn here, in pixels, on
+ * a small canvas scaled up; nothing is fetched from anywhere else.
+ */
+const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'implementer', 'reviewer', 'qa', 'devops'], many: ['implementer', 'reviewer'], owner: 'you', replay: false };
+
+// ─── palette and sprites ──────────────────────────────────────────────────────────────────────
+const C = {
+  wall: '#3b3355', wallLine: '#342d4c', trim: '#262040', board: '#1d1830', sign: '#ffec27',
+  floorA: '#8a6a4a', floorB: '#7d5f42', deskTop: '#b07a46', desk: '#6b4423', leg: '#3e2614',
+  frame: '#1d2b53', screen: '#29adff', screenOff: '#1b3a5c', code: '#c2f0ff', chair: '#45405a',
+  paper: '#fff1e8', red: '#ff004d', green: '#00e436', ink: '#000000', white: '#ffffff',
+  sky: '#8fd3ff', cloud: '#e8f6ff', windowFrame: '#5a4f7a', plant: '#00b543', leaf: '#008751', pot: '#ab5236',
+  door: '#5a3a22', doorDark: '#3e2614', knob: '#ffec27', clock: '#fff1e8', hand: '#1d1830',
+};
+const SHIRTS = ['#ff77a8', '#29adff', '#00e436', '#ffa300', '#83769c', '#ff6c24', '#00b5a5', '#c2c3c7', '#a8e72e', '#ffccaa', '#7e2553', '#008751'];
+const SKINS = ['#ffccaa', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'];
+const HAIRS = ['#3a2a1a', '#e6a33a', '#1d1830', '#ab5236', '#c2c3c7', '#7e2553', '#5f574f'];
+const CONFETTI = ['#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#ff77a8'];
+
+const SPRITE = {
+  stand: ['.hhhh.', 'hhhhhh', 'hseseh', '.ssss.', '.tttt.', 'tttttt', 's.tt.s', '.p..p.', '.p..p.'],
+  walkA: ['.hhhh.', 'hhhhhh', 'hseseh', '.ssss.', '.tttt.', 'tttttt', 's.tt.s', '.p..p.', 'pp..p.'],
+  walkB: ['.hhhh.', 'hhhhhh', 'hseseh', '.ssss.', '.tttt.', 'tttttt', 's.tt.s', '.p..p.', '.p..pp'],
+  cheer: ['s.hh.s', 'shhhhs', 'tseset', '.ssss.', '.tttt.', '.tttt.', '.tttt.', '.p..p.', 'p....p'],
+  sitA: ['.hhhh.', 'hhhhhh', 'hhhhhh', 'stttts', 'tttttt', 'tttttt'],
+  sitB: ['.hhhh.', 'hhhhhh', 'hhhhhh', '.tttt.', 'stttts', 'tttttt'],
+};
+const BUBBLE = {
+  ask: ['.wwwww.', 'wwkkkww', 'wwwwkww', 'wwwkkww', 'wwwwwww', 'wwwkwww', '.wwwww.', '..w....'],
+  alarm: ['.wwwww.', 'wwwrwww', 'wwwrwww', 'wwwrwww', 'wwwwwww', 'wwwrwww', '.wwwww.', '..w....'],
+  pass: ['.wwwww.', 'wwwwwgw', 'wwwwgww', 'wgwgwww', 'wwgwwww', 'wwwwwww', '.wwwww.', '..w....'],
+  back: ['.wwwww.', 'wrwwwrw', 'wwrwrww', 'wwwrwww', 'wwrwrww', 'wrwwwrw', '.wwwww.', '..w....'],
+  mail: ['wwwwwww', 'wkwwwkw', 'wwkwkww', 'wwwkwww', 'wwwwwww', '.......', '.......', '.......'],
+  talk: ['.wwwww.', 'wwwwwww', 'wkwkwkw', 'wwwwwww', '.wwwww.', '.w.....', '.......', '.......'],
+  phone: ['.rrrrr.', 'rr...rr', 'r.rrr.r', '..rrr..', '.rrrrr.', '.rrrrr.', '.......', '.......'],
+};
+const BUBBLE_COLORS = { w: C.white, k: C.ink, r: C.red, g: C.green };
+const GLYPH = {
+  N: ['x..x', 'xx.x', 'x.xx', 'x..x', 'x..x'],
+  I: ['xxx', '.x.', '.x.', '.x.', 'xxx'],
+  A: ['.xx.', 'x..x', 'xxxx', 'x..x', 'x..x'],
+};
+
+/** A small stable number from a string, for an agent's looks. */
+function hash(text) {
+  let h = 2166136261;
+  for (const ch of String(text)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+function paint(ctx, rows, x, y, colors) {
+  rows.forEach((row, dy) => {
+    for (let dx = 0; dx < row.length; dx += 1) {
+      const color = colors[row[dx]];
+      if (row[dx] !== '.' && color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.round(x) + dx, Math.round(y) + dy, 1, 1);
+      }
+    }
+  });
+}
+const rect = (ctx, x, y, w, h, color) => {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), w, h);
+};
+
+// ─── the room's layout ────────────────────────────────────────────────────────────────────────
+const LW = 320;
+const CELL_W = 50;
+const ROW_H = 56;
+const WALL_H = 28;
+const COLS = Math.max(1, Math.min(6, ROOM.stages.length));
+const ROWS = Math.max(1, Math.ceil(ROOM.stages.length / COLS));
+const X0 = Math.floor((LW - COLS * CELL_W) / 2);
+const rowTop = (r) => WALL_H + 6 + r * ROW_H;
+const laneOf = (r) => rowTop(r) + 44;
+const LAST_LANE = laneOf(ROWS - 1);
+const LH = LAST_LANE + 52;
+
+const desks = new Map();
+ROOM.stages.forEach((role, i) => {
+  const col = i % COLS;
+  const row = Math.floor(i / COLS);
+  const cx = X0 + col * CELL_W;
+  const ry = rowTop(row);
+  const lane = laneOf(row);
+  const spot = (x, y, kind) => ({ x, y, laneY: lane, col, kind, who: null });
+  desks.set(role, {
+    role, cx, ry, col, row, shirt: SHIRTS[i % SHIRTS.length],
+    slots: [spot(cx + 25, ry + 34, 'seat'), spot(cx + 11, ry + 34, 'stand'), spot(cx + 39, ry + 34, 'stand')],
+    drop: { x: cx + 3, y: ry + 28, laneY: lane, col },
+    folder: null,
+  });
+});
+const BOSS_HOME = { x: LW / 2, y: LAST_LANE + 12, laneY: LAST_LANE, col: null, kind: 'boss' };
+const DOOR = { x: 10, y: LAST_LANE + 16, laneY: LAST_LANE, col: 0 };
+const OWNER_HOME = { x: 26, y: LAST_LANE + 16, laneY: LAST_LANE, col: 0 };
+
+/** The x of the gap between desks nearest to `x`, where someone can walk from one row's lane to another's. */
+function gapNear(x) {
+  const k = Math.max(0, Math.min(COLS, Math.round((x - X0) / CELL_W)));
+  return Math.max(X0 + 2, Math.min(X0 + COLS * CELL_W - 3, X0 + k * CELL_W + 2));
+}
+
+/** The way from where someone stands to a spot: down to their lane, across, along another lane if need be, and up. */
+function route(from, to) {
+  const pts = [{ x: from.x, y: from.laneY }];
+  if (from.laneY !== to.laneY) {
+    const gx = gapNear(to.x);
+    pts.push({ x: gx, y: from.laneY }, { x: gx, y: to.laneY });
+  }
+  pts.push({ x: to.x, y: to.laneY }, { x: to.x, y: to.y });
+  return pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
+}
+
+// ─── the background, drawn once ───────────────────────────────────────────────────────────────
+const background = document.createElement('canvas');
+background.width = LW;
+background.height = LH;
+{
+  const g = background.getContext('2d');
+  rect(g, 0, 0, LW, WALL_H, C.wall);
+  for (let y = 4; y < WALL_H; y += 6) rect(g, 0, y, LW, 1, C.wallLine);
+  rect(g, 0, WALL_H, LW, 2, C.trim);
+  for (let y = WALL_H + 2; y < LH; y += 1) for (let x = 0; x < LW; x += 1) {
+    g.fillStyle = (Math.floor(x / 8) + Math.floor((y - WALL_H - 2) / 8)) % 2 ? C.floorA : C.floorB;
+    g.fillRect(x, y, 1, 1);
+  }
+  // The sign, its letters twice their glyph size.
+  const sign = 'NINA';
+  const signW = [...sign].reduce((w, ch) => w + GLYPH[ch][0].length * 2 + 2, -2);
+  const sx = Math.floor((LW - signW) / 2);
+  rect(g, sx - 4, 5, signW + 8, 16, C.board);
+  let x = sx;
+  for (const ch of sign) {
+    GLYPH[ch].forEach((row, dy) => [...row].forEach((px, dx) => px === 'x' && rect(g, x + dx * 2, 8 + dy * 2, 2, 2, C.sign)));
+    x += GLYPH[ch][0].length * 2 + 2;
+  }
+  // A window, and a plant.
+  const wx = LW - 80;
+  rect(g, wx, 5, 34, 17, C.windowFrame);
+  rect(g, wx + 2, 7, 14, 13, C.sky);
+  rect(g, wx + 18, 7, 14, 13, C.sky);
+  rect(g, wx + 5, 10, 6, 2, C.cloud);
+  rect(g, wx + 22, 14, 7, 2, C.cloud);
+  rect(g, LW - 18, LAST_LANE + 10, 7, 6, C.pot);
+  paint(g, ['.l.l.l', 'llplpl', '.lppl.', '..pp..'], LW - 18, LAST_LANE + 6, { l: C.leaf, p: C.plant });
+  // The door the owner stands by.
+  rect(g, DOOR.x - 6, LAST_LANE + 2, 12, 22, C.doorDark);
+  rect(g, DOOR.x - 5, LAST_LANE + 3, 10, 21, C.door);
+  rect(g, DOOR.x + 2, LAST_LANE + 13, 1, 2, C.knob);
+  // Every desk, and the orchestrator's.
+  for (const d of desks.values()) {
+    rect(g, d.cx + 19, d.ry + 1, 12, 9, C.frame);
+    rect(g, d.cx + 24, d.ry + 10, 2, 1, C.frame);
+    rect(g, d.cx + 5, d.ry + 11, 40, 4, C.deskTop);
+    rect(g, d.cx + 5, d.ry + 15, 40, 6, C.desk);
+    rect(g, d.cx + 6, d.ry + 21, 2, 2, C.leg);
+    rect(g, d.cx + 42, d.ry + 21, 2, 2, C.leg);
+    rect(g, d.cx + 21, d.ry + 31, 8, 4, C.chair);
+  }
+}
+
+// ─── the people ───────────────────────────────────────────────────────────────────────────────
+const SPEED = 70;
+const people = new Map();
+let placeholders = 0;
+
+function person(key, role, look) {
+  const h = hash(look ?? key);
+  return {
+    key, agent: null, role, x: DOOR.x, y: DOOR.y, laneY: DOOR.laneY, slot: null, queue: [], current: null, path: [],
+    pose: 'stand', typing: false, bubble: null, carrying: null, cheerUntil: 0, leaving: false, born: performance.now(),
+    colors: { h: HAIRS[h % HAIRS.length], s: SKINS[(h >> 3) % SKINS.length], e: C.ink, t: desks.get(role)?.shirt ?? SHIRTS[h % SHIRTS.length], p: '#2b2b3b' },
+  };
+}
+const boss = person('orchestrator', null, 'orchestrator-boss');
+Object.assign(boss, { x: BOSS_HOME.x, y: BOSS_HOME.y, laneY: BOSS_HOME.laneY, pose: 'boss', home: BOSS_HOME });
+boss.colors.t = '#1d2b53';
+const owner = person('owner', null, ROOM.owner);
+Object.assign(owner, { x: OWNER_HOME.x, y: OWNER_HOME.y, laneY: OWNER_HOME.laneY, home: OWNER_HOME });
+owner.colors.t = '#ffec27';
+
+const walk = (p, to, then) => p.queue.push({ kind: 'walk', to, then });
+const wait = (p, ms) => p.queue.push({ kind: 'wait', ms });
+const act = (p, fn) => p.queue.push({ kind: 'do', fn });
+const homeOf = (p) => (p === boss ? BOSS_HOME : p === owner ? OWNER_HOME : p.slot);
+
+function say(p, kind, ms) {
+  p.bubble = { kind, until: ms ? performance.now() + ms : Infinity };
+}
+function hush(p, kinds) {
+  if (p.bubble && (!kinds || kinds.includes(p.bubble.kind))) p.bubble = null;
+}
+
+/** A free place at a desk for someone, sending the longest-idle person there away when it is full. */
+function seatAt(desk, p) {
+  const mine = desk.slots.find((s) => s.who === p);
+  if (mine) return mine;
+  let slot = desk.slots.find((s) => !s.who);
+  if (!slot) {
+    const idle = desk.slots.filter((s) => s.who && !s.who.typing && !s.who.current && s.who.queue.length === 0).sort((a, b) => a.who.born - b.who.born)[0];
+    if (idle) {
+      leave(idle.who);
+      slot = idle;
+    }
+  }
+  if (!slot) return { x: desk.cx + 25 + 7 * (desk.slots.length - 1), y: desk.ry + 42, laneY: desk.slots[0].laneY, col: desk.col, kind: 'stand', who: null, extra: true };
+  if (p.slot && p.slot.who === p) p.slot.who = null;
+  slot.who = p;
+  p.slot = slot;
+  return slot;
+}
+
+function leave(p) {
+  if (p.slot && p.slot.who === p) p.slot.who = null;
+  p.slot = null;
+  p.typing = false;
+  p.leaving = true;
+  walk(p, DOOR, () => p.leaving && people.delete(p.key));
+}
+
+function place(p, spot) {
+  p.x = spot.x;
+  p.y = spot.y;
+  p.laneY = spot.laneY;
+  p.pose = spot.kind === 'seat' ? 'sit' : 'stand';
+}
+
+/** Who reported or works as this agent: known by id, or the person at its desk still waiting for theirs. */
+function find(agent, role) {
+  if (agent && people.has(agent)) return people.get(agent);
+  const waiting = [...people.values()].filter((p) => p.role === role && !p.agent && !p.leaving).sort((a, b) => a.born - b.born)[0];
+  if (waiting && agent) {
+    people.delete(waiting.key);
+    waiting.key = agent;
+    waiting.agent = agent;
+    people.set(agent, waiting);
+  }
+  return waiting ?? null;
+}
+
+// ─── what each beat does ──────────────────────────────────────────────────────────────────────
+const lines = [];
+function note(at, text) {
+  const t = new Date(at);
+  lines.push(`${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}  ${text}`);
+  while (lines.length > 4) lines.shift();
+}
+let confetti = [];
+let banner = null;
+
+function onBeat(b) {
+  const desk = b.role ? desks.get(b.role) : null;
+  if (b.type === 'work') {
+    if (!desk) return;
+    let p = b.agent ? people.get(b.agent) ?? null : null;
+    if (b.message && p) {
+      if (!b.instant) say(p, 'mail', 1800);
+      return;
+    }
+    if (!p) {
+      const key = b.agent ?? `waiting-${(placeholders += 1)}`;
+      p = person(key, b.role, b.agent ?? key);
+      p.agent = b.agent;
+      people.set(key, p);
+    }
+    p.leaving = false;
+    const slot = seatAt(desk, p);
+    if (b.instant) {
+      place(p, slot);
+      p.typing = true;
+      return;
+    }
+    note(b.at, `${b.from ? `${b.from.role} → ` : ''}${b.role}${b.resumed ? ' (resumed)' : ''}`);
+    // Whoever reported last carries the folder over — red when it comes back — or the orchestrator does.
+    const from = b.from?.agent ? people.get(b.from.agent) : null;
+    const carrier = from && from !== p && !from.leaving ? from : boss;
+    const folder = b.from?.back ? C.red : C.paper;
+    act(carrier, () => (carrier.carrying = folder));
+    walk(carrier, desk.drop, () => {
+      carrier.carrying = null;
+      desk.folder = { color: folder, until: performance.now() + 8000 };
+    });
+    wait(carrier, 300);
+    const home = homeOf(carrier);
+    if (home) walk(carrier, home, () => carrier.slot?.kind === 'seat' && (carrier.pose = 'sit'));
+    else leave(carrier);
+    if (p.x !== slot.x || p.y !== slot.y) walk(p, slot);
+    act(p, () => {
+      place(p, slot);
+      p.typing = true;
+    });
+    return;
+  }
+  if (b.type === 'verdict') {
+    let p = find(b.agent, b.role);
+    if (!p && desk) {
+      p = person(b.agent, b.role, b.agent);
+      p.agent = b.agent;
+      people.set(b.agent, p);
+      place(p, seatAt(desk, p));
+    }
+    if (!p) return;
+    const finish = () => {
+      p.typing = false;
+      if (b.asks) say(p, 'ask');
+      else if (!b.instant) say(p, b.back ? 'back' : 'pass', 3000);
+    };
+    if (b.instant) finish();
+    else act(p, finish);
+    if (!b.instant) note(b.at, `${b.role} ${b.verdict}${b.issues.length ? ` · ${b.issues.slice(0, 3).join(', ')}${b.issues.length > 3 ? '…' : ''}` : ''}${b.asks ? ' — asks you' : ''}`);
+    return;
+  }
+  if (b.type === 'party') {
+    if (b.instant) return;
+    note(b.at, `${b.role} ${b.verdict} — done`);
+    banner = { text: `${b.role} ${b.verdict}`, until: performance.now() + 3500 };
+    const now = performance.now();
+    confetti = Array.from({ length: 90 }, (_, i) => ({ x: Math.random() * LW, y: -Math.random() * 40, vx: (Math.random() - 0.5) * 30, vy: 20 + Math.random() * 40, color: CONFETTI[i % CONFETTI.length], until: now + 4000 }));
+    for (const p of [...people.values(), boss, owner]) p.cheerUntil = now + 3000;
+    return;
+  }
+  if (b.type === 'question') {
+    say(boss, 'ask');
+    if (!b.instant) note(b.at, `orchestrator asks ${ROOM.owner}`);
+    return;
+  }
+  if (b.type === 'answered') {
+    hush(boss, ['ask']);
+    if (!b.instant) {
+      say(owner, 'talk', 1500);
+      note(b.at, `${ROOM.owner} answered`);
+    }
+    return;
+  }
+  if (b.type === 'cap') {
+    say(boss, 'alarm');
+    say(owner, 'phone');
+    if (!b.instant) note(b.at, `gate: ${b.source} → ${b.role} would go past its cap — asking ${ROOM.owner}`);
+    return;
+  }
+  if (b.type === 'owner') {
+    for (const p of people.values()) hush(p, ['ask']);
+    hush(boss);
+    hush(owner);
+    if (!b.instant) {
+      say(owner, 'talk', 2000);
+      note(b.at, `${ROOM.owner} spoke`);
+    }
+  }
+}
+
+function reset() {
+  people.clear();
+  for (const d of desks.values()) {
+    d.folder = null;
+    for (const s of d.slots) s.who = null;
+  }
+  for (const p of [boss, owner]) {
+    p.queue = [];
+    p.current = null;
+    p.bubble = null;
+    p.carrying = null;
+    place(p, p.home);
+    p.pose = p === boss ? 'boss' : 'stand';
+  }
+  lines.length = 0;
+  confetti = [];
+  banner = null;
+}
+
+// ─── the stream ───────────────────────────────────────────────────────────────────────────────
+let status = 'connecting…';
+let session = null;
+const events = new EventSource('events');
+events.addEventListener('hello', (m) => {
+  const hello = JSON.parse(m.data);
+  reset();
+  session = hello.session;
+  status = hello.session ? (hello.replay ? 'replay' : 'live') : 'waiting for the first dispatch';
+});
+events.addEventListener('beat', (m) => onBeat(JSON.parse(m.data)));
+events.addEventListener('end', () => (status = 'replay finished — reload to watch it again'));
+events.onerror = () => {
+  if (!status.startsWith('replay finished')) status = 'reconnecting…';
+};
+
+// ─── each frame ───────────────────────────────────────────────────────────────────────────────
+function step(p, dt) {
+  if (!p.current && p.queue.length > 0) {
+    p.current = p.queue.shift();
+    if (p.current.kind === 'walk') {
+      p.path = route(p, p.current.to);
+      p.pose = 'walk';
+      p.typing = false;
+    } else if (p.current.kind === 'wait') p.current.left = p.current.ms;
+    else {
+      p.current.fn();
+      p.current = null;
+    }
+  }
+  const c = p.current;
+  if (c?.kind === 'walk') {
+    let budget = SPEED * dt;
+    while (budget > 0 && p.path.length > 0) {
+      const t = p.path[0];
+      const dx = t.x - p.x;
+      const dy = t.y - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d <= budget) {
+        p.x = t.x;
+        p.y = t.y;
+        budget -= d;
+        p.path.shift();
+      } else {
+        p.x += (dx / d) * budget;
+        p.y += (dy / d) * budget;
+        budget = 0;
+      }
+    }
+    if (p.path.length === 0) {
+      p.laneY = c.to.laneY;
+      p.pose = p === boss && c.to === BOSS_HOME ? 'boss' : 'stand';
+      p.current = null;
+      c.then?.();
+    }
+  } else if (c?.kind === 'wait') {
+    c.left -= dt * 1000;
+    if (c.left <= 0) p.current = null;
+  }
+  if (p.bubble && p.bubble.until < performance.now()) p.bubble = null;
+}
+
+const world = document.createElement('canvas');
+world.width = LW;
+world.height = LH;
+const w = world.getContext('2d');
+const screen = document.getElementById('screen');
+const s = screen.getContext('2d');
+let scale = 1;
+let ox = 0;
+let oy = 0;
+let dpr = 1;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  screen.width = Math.floor(window.innerWidth * dpr);
+  screen.height = Math.floor(window.innerHeight * dpr);
+  screen.style.width = `${window.innerWidth}px`;
+  screen.style.height = `${window.innerHeight}px`;
+  const fit = Math.min(screen.width / LW, (screen.height - 4 * dpr) / LH);
+  scale = fit >= 2 ? Math.floor(fit) : fit;
+  ox = Math.floor((screen.width - LW * scale) / 2);
+  oy = Math.floor((screen.height - LH * scale) / 2);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function drawPerson(p, now) {
+  const cheering = p.cheerUntil > now && p.pose !== 'sit' && p.pose !== 'boss';
+  const hop = p.cheerUntil > now ? Math.round(Math.abs(Math.sin(now / 120)) * 2) : 0;
+  if (p.pose === 'sit') {
+    const rows = p.typing && Math.floor(now / 180) % 2 ? SPRITE.sitB : SPRITE.sitA;
+    paint(w, rows, p.x - 3, p.y - 8 - hop, p.colors);
+  } else if (p.pose === 'boss') {
+    paint(w, SPRITE.stand.slice(0, 6), p.x - 3, p.y - 9 - hop, p.colors);
+  } else {
+    const rows = cheering ? SPRITE.cheer : p.pose === 'walk' ? (Math.floor(now / 140) % 2 ? SPRITE.walkA : SPRITE.walkB) : SPRITE.stand;
+    rect(w, p.x - 3, p.y, 6, 1, 'rgba(0,0,0,0.25)');
+    paint(w, rows, p.x - 3, p.y - 9 - hop, p.colors);
+    if (p.carrying) rect(w, p.x + 3, p.y - 4 - hop, 3, 3, p.carrying);
+  }
+}
+
+function drawBubble(p) {
+  if (!p.bubble) return;
+  // Seated, beside the head: above it, the bubble would sit on the desk's nameplate.
+  if (p.pose === 'sit') paint(w, BUBBLE[p.bubble.kind], p.x + 4, p.y - 12, BUBBLE_COLORS);
+  else paint(w, BUBBLE[p.bubble.kind], p.x - 3, p.y - 18, BUBBLE_COLORS);
+}
+
+function drawWorld(now) {
+  w.drawImage(background, 0, 0);
+  // The clock on the wall says the time it is here.
+  const t = new Date();
+  const cx = LW - 26;
+  const cy = 13;
+  rect(w, cx - 5, cy - 5, 11, 11, C.clock);
+  for (let a = 0; a < 24; a += 1) rect(w, cx + Math.round(Math.cos((a / 24) * Math.PI * 2) * 6), cy + Math.round(Math.sin((a / 24) * Math.PI * 2) * 6), 1, 1, C.trim);
+  for (const [len, turn] of [[4, (t.getHours() % 12) / 12 + t.getMinutes() / 720], [5, t.getMinutes() / 60]]) {
+    for (let i = 0; i <= len; i += 1) rect(w, cx + Math.round(Math.sin(turn * Math.PI * 2) * i), cy - Math.round(Math.cos(turn * Math.PI * 2) * i), 1, 1, C.hand);
+  }
+  for (const d of desks.values()) {
+    const busy = d.slots.some((sl) => sl.who?.typing);
+    rect(w, d.cx + 20, d.ry + 2, 10, 6, busy ? C.screen : C.screenOff);
+    if (busy) for (let i = 0; i < 3; i += 1) rect(w, d.cx + 21, d.ry + 3 + i * 2, 3 + ((Math.floor(now / 200) + i * 3) % 6), 1, C.code);
+    if (d.folder && d.folder.until > now) rect(w, d.cx + 8, d.ry + 11, 5, 3, d.folder.color);
+  }
+  // The orchestrator sits behind the desk that faces the room; everyone else is drawn by how far down they stand.
+  if (boss.pose === 'boss') drawPerson(boss, now);
+  rect(w, BOSS_HOME.x - 20, BOSS_HOME.y - 4, 40, 4, C.deskTop);
+  rect(w, BOSS_HOME.x - 20, BOSS_HOME.y, 40, 6, C.desk);
+  rect(w, BOSS_HOME.x + 8, BOSS_HOME.y - 9, 10, 6, C.frame);
+  const crowd = [...people.values(), owner, ...(boss.pose === 'boss' ? [] : [boss])].sort((a, b) => a.y - b.y);
+  for (const p of crowd) drawPerson(p, now);
+  for (const p of [...crowd, ...(boss.pose === 'boss' ? [boss] : [])]) drawBubble(p);
+  confetti = confetti.filter((c) => c.until > now && c.y < LH);
+  for (const c of confetti) rect(w, c.x, c.y, 1, 1, c.color);
+}
+
+function text(str, x, y, size, color, align = 'left', max = Infinity) {
+  let px = size;
+  s.font = `${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+  while (px > 6 * dpr && s.measureText(str).width > max) {
+    px -= 1;
+    s.font = `${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+  }
+  s.textAlign = align;
+  s.textBaseline = 'middle';
+  s.fillStyle = color;
+  s.fillText(str, x, y);
+}
+
+function drawScreen(now) {
+  s.imageSmoothingEnabled = false;
+  s.fillStyle = '#14111f';
+  s.fillRect(0, 0, screen.width, screen.height);
+  s.drawImage(world, ox, oy, LW * scale, LH * scale);
+  const at = (x, y) => [ox + x * scale, oy + y * scale];
+  const small = Math.max(9 * dpr, Math.round(scale * 3.4));
+  for (const d of desks.values()) {
+    const [x, y] = at(d.cx + 25, d.ry + 18);
+    text(d.role, x, y, small, '#fff1e8', 'center', 38 * scale);
+  }
+  {
+    const [x, y] = at(BOSS_HOME.x, BOSS_HOME.y + 3);
+    text('orchestrator', x, y, small, '#fff1e8', 'center', 38 * scale);
+    const [ownerX, ownerY] = at(OWNER_HOME.x + 5, OWNER_HOME.y + 5);
+    text(ROOM.owner, ownerX, ownerY, small, '#ffec27', 'left', 60 * scale);
+  }
+  const [hx, hy] = at(4, 3);
+  text(`NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}`, hx, hy + small / 2, small, '#c2c3c7', 'left', LW * scale * 0.42);
+  if (lines.length > 0) {
+    const lineH = small * 1.25;
+    const [lx, ly] = at(0, LH);
+    const top = ly - lines.length * lineH - lineH * 0.4;
+    s.fillStyle = 'rgba(20,17,31,0.72)';
+    s.fillRect(lx, top, LW * scale, ly - top);
+    lines.forEach((l, i) => text(l, lx + 8 * dpr, top + lineH * (i + 0.8), small, '#fff1e8', 'left', LW * scale - 16 * dpr));
+  }
+  if (banner && banner.until > now) {
+    const [bx, by] = at(LW / 2, LH / 2 - 10);
+    const big = Math.round(scale * 9);
+    s.fillStyle = 'rgba(20,17,31,0.6)';
+    s.fillRect(bx - LW * scale * 0.3, by - big, LW * scale * 0.6, big * 2);
+    text(`✓ ${banner.text}`, bx, by, big, '#00e436', 'center', LW * scale * 0.56);
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  for (const p of [...people.values(), boss, owner]) step(p, dt);
+  for (const c of confetti) {
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.vy += 30 * dt;
+  }
+  drawWorld(now);
+  drawScreen(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

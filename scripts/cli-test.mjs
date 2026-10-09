@@ -14,7 +14,7 @@
  * Usage: node scripts/cli-test.mjs
  */
 
-import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { existsSync, rmSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -38,6 +38,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
+import { PARTY_QUIET_MS, officeBeats, serveOffice } from '../src/office.mjs';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
 import { bar, heading, note, stacked, wrapped } from '../src/look.mjs';
@@ -2406,7 +2407,7 @@ const dated = (date, status = 'active') =>
   expect(
     loose.out.includes('package.json has no "harness:check" script') &&
       loose.out.includes('no UserPromptSubmit hook running `scripts/harness-check.mjs --context`') &&
-      (!gated || loose.out.includes('no PreToolUse hook for Agent|Task|SendMessage running `scripts/loop-gate.mjs`')),
+      (!gated || loose.out.includes('no PreToolUse hook for Agent|Task|SendMessage|AskUserQuestion running `scripts/loop-gate.mjs`')),
     `check: an unwired harness is reported, script by name and hook by hook — got ${loose.out}`,
   );
   const renamed = await make({ 'whatever-i-call-it': 'node scripts/harness-check.mjs' });
@@ -3061,6 +3062,17 @@ const dated = (date, status = 'active') =>
     fresh.status === 0 && fresh.out.includes('the gate has no ledger here yet') && alone.status === 2 && alone.out.includes('means nothing without it'),
     `gate --status: a project no session has dispatched in yet is not an error, and --session without --status is refused — got ${fresh.out}${alone.out}`,
   );
+  // The orchestrator's question to the owner, as it is asked and as it is answered: when, and nothing else — the office
+  // draws it over the orchestrator's head. A subagent asks nothing of the owner, and no count moves.
+  const asking = (event, fields = {}) => handle({ hook_event_name: event, session_id: 's-gate-question', ...fields }, { root: project });
+  const asked2 = asking('PreToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'which way?' }] }, tool_use_id: 'toolu_q1' });
+  asking('PostToolUse', { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: 'which way?' }] }, tool_use_id: 'toolu_q1', tool_response: { answers: { 'which way?': 'left' } } });
+  asking('PreToolUse', { tool_name: 'AskUserQuestion', agent_id: 'sub-1', agent_type: 'reviewer', tool_input: {} });
+  const questionLedger = readLedger(ledgerPath(project, 's-gate-question'));
+  expect(
+    asked2 === null && questionLedger.map((e) => e.k).join() === 'question,answered' && !JSON.stringify(questionLedger).includes('which way') && !JSON.stringify(questionLedger).includes('left'),
+    `gate: the orchestrator's question and its answer are on the ledger as two moments, nothing it said — got ${JSON.stringify(questionLedger)}`,
+  );
 
   // A pin whose version ships no gate: the composed file may still be on disk, and it does nothing.
   const old = await scratch();
@@ -3542,10 +3554,11 @@ const dated = (date, status = 'active') =>
   };
   expect((await withMatcher('Bash')).length === 1, 'wiring: a gate hook matching the wrong tool is not wired');
   expect((await withMatcher('Agent')).length === 1, 'wiring: one matching Agent alone lets a resumed fixer through');
-  expect((await withMatcher('SendMessage|Task|Agent')).length === 0, 'wiring: the tools may come in any order');
+  expect((await withMatcher('AskUserQuestion|SendMessage|Task|Agent')).length === 0, 'wiring: the tools may come in any order');
+  expect((await withMatcher('Agent|Task|SendMessage')).length === 1, "wiring: a gate hook from before the office misses the orchestrator's questions, and is not wired");
   expect((await withMatcher('*')).length === 0, 'wiring: a matcher of * reaches every tool');
   expect((await withMatcher('Agent | Task | SendMessage')).length === 1, 'wiring: spaces make it a regular expression that reaches none of them');
-  expect((await withMatcher('(Agent|Task|SendMessage)')).length === 0 && (await withMatcher('.*')).length === 0, 'wiring: a regular expression that reaches them is wired');
+  expect((await withMatcher('(Agent|Task|SendMessage|AskUserQuestion)')).length === 0 && (await withMatcher('.*')).length === 0, 'wiring: a regular expression that reaches them is wired');
   expect(matcherReaches('Agent|Task', 'Agent') && !matcherReaches('Agent|Task', 'AgentX') && matcherReaches(undefined, 'Agent'), 'wiring: exact names are exact');
 
   for (const hooks of ['x', null, [], { PreToolUse: {} }]) {
@@ -5779,6 +5792,176 @@ await release();
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
+}
+
+// ─── the office: the ledger as people at desks ───────────────────────────────────────────────────
+{
+  const graphText = [
+    '## Stages',
+    '',
+    '- `architect` — a',
+    '- `implementer` — i',
+    '- `reviewer` — r',
+    '- `dba` — d',
+    '- `qa` — q',
+    '',
+    '## Edges',
+    '',
+    '- `architect` → `implementer` on `SPEC-READY`',
+    '- `architect` → `human` on `BLOCKED` — a missing decision',
+    '- `implementer` → `reviewer` on `DIFF-READY`',
+    '- `dba` → `qa` on `APPROVED`',
+    '- `dba` → `implementer` on `REJECTED` — a query is wrong · max 2',
+    '- `reviewer` → `qa` on `APPROVED`',
+    '- `reviewer` → `done` on `APPROVED` — a spike',
+    '- `reviewer` → `implementer` on `REJECTED` — a bug · max 2',
+    '- `qa` → `done` on `PASS`',
+    '- `qa` → `implementer` on `FAIL` — a test fails · max 2',
+    '',
+  ].join('\n');
+  const graph = parseGraph(graphText);
+  const t0 = Date.parse('2026-10-09T10:00:00.000Z');
+  const at = (s) => new Date(t0 + s * 1000).toISOString();
+  let n = 0;
+  // A stage as the gate records it: launched (`pre`, then `dispatch`), and its verdict.
+  const ran = (s, role, verdict, extra = {}) => {
+    const id = `toolu_o${(n += 1)}`;
+    const agent = `${role}-${n}`;
+    return [
+      { k: 'pre', at: at(s), role, id },
+      { k: 'dispatch', at: at(s), role, agent, via: 'Agent', id },
+      ...(verdict ? [{ k: 'verdict', at: at(s + 5), agent, role, verdict, declared: true, ...extra }] : []),
+    ];
+  };
+  const beatsOf = (entries, now = Number.POSITIVE_INFINITY) => officeBeats(entries.flat(), graph, now);
+
+  // A foreground run: its `dispatch` is written when it finished, after its verdict. Work starts where `pre` stands.
+  const foreground = [{ k: 'pre', at: at(0), role: 'architect', id: 'toolu_fg' }, { k: 'verdict', at: at(9), agent: 'arch-fg', role: 'architect', verdict: 'SPEC-READY', declared: true }, { k: 'dispatch', at: at(10), role: 'architect', agent: 'arch-fg', via: 'Agent', id: 'toolu_fg' }];
+  const fg = beatsOf(foreground);
+  expect(
+    fg.filter((b) => b.type === 'work').length === 1 && fg[0].type === 'work' && fg[0].at === t0 && fg[0].agent === 'arch-fg',
+    `office: a foreground run starts work where its pre stands, once, with the agent its dispatch names — got ${JSON.stringify(fg)}`,
+  );
+  const inFlight = beatsOf([{ k: 'pre', at: at(0), role: 'architect', id: 'toolu_x' }]);
+  expect(inFlight.length === 1 && inFlight[0].agent === null, 'office: a run still going has no agent yet, and the page binds its verdict to it');
+
+  // The folder goes along the graph's edges: a spec to its implementer, a diff to its reviewer, a rejection back.
+  const flow = [ran(0, 'architect', 'SPEC-READY'), ran(10, 'implementer', 'DIFF-READY'), ran(20, 'reviewer', 'REJECTED', { issues: ['a'] }), ran(30, 'implementer', 'DIFF-READY'), ran(40, 'implementer')];
+  const works = beatsOf(flow).filter((b) => b.type === 'work');
+  expect(
+    works[0].from === null && works[1].from?.role === 'architect' && works[2].from?.role === 'implementer' && works[3].from?.role === 'reviewer' && works[3].from.back === true && works[4].from === null,
+    `office: the one who handed work on carries it along an edge, a rejection carried back, and the orchestrator carries the rest — got ${JSON.stringify(works.map((w) => w.from))}`,
+  );
+  const rejected = beatsOf(flow).find((b) => b.type === 'verdict' && b.verdict === 'REJECTED');
+  expect(rejected?.back && rejected.issues.join() === 'a' && !rejected.asks, 'office: a rejection is a cross, with the ids it named');
+  expect(beatsOf([ran(0, 'architect', 'BLOCKED')]).find((b) => b.type === 'verdict')?.asks === true, 'office: a verdict the graph sends to the owner is a question over the one who asked');
+
+  // The party: a pass that ends the work, with nothing sent back since the last dispatch and nobody still at work.
+  const parties = (entries, now) => beatsOf(entries, now).filter((b) => b.type === 'party');
+  expect(parties([ran(0, 'qa', 'PASS')]).length === 1 && parties([ran(0, 'qa', 'PASS')])[0].at === t0 + 5000, 'office: a pass that routes only to done is a party at once');
+  expect(parties([ran(0, 'reviewer', 'APPROVED'), ran(12, 'qa')]).length === 0, 'office: a pass followed by a dispatch within the quiet is no party — the work goes on');
+  const spike = [ran(0, 'reviewer', 'APPROVED')];
+  expect(
+    parties(spike, t0 + 5000 + PARTY_QUIET_MS - 1).length === 0 && parties(spike, t0 + 5000 + PARTY_QUIET_MS)[0]?.at === t0 + 5000 + PARTY_QUIET_MS,
+    'office: a pass that could go on is a party once the quiet has passed with no dispatch',
+  );
+  const beside = [{ k: 'pre', at: at(0), role: 'reviewer', id: 'r1' }, { k: 'dispatch', at: at(0), role: 'reviewer', agent: 'rv', via: 'Agent', id: 'r1' }, { k: 'pre', at: at(0), role: 'dba', id: 'd1' }, { k: 'dispatch', at: at(0), role: 'dba', agent: 'db', via: 'Agent', id: 'd1' }, { k: 'verdict', at: at(5), agent: 'rv', role: 'reviewer', verdict: 'APPROVED', declared: true }];
+  expect(parties(beside).length === 0, 'office: no party while a stage that went out beside it is still at work');
+  expect(parties([...beside, { k: 'verdict', at: at(8), agent: 'db', role: 'dba', verdict: 'REJECTED', declared: true }]).length === 0, 'office: and none when one beside it sent the work back');
+  expect(parties([...beside, { k: 'verdict', at: at(8), agent: 'db', role: 'dba', verdict: 'APPROVED', declared: true }]).length === 1, 'office: when the last of them passes, the pass that could end the work makes it a party');
+
+  // The orchestrator's question, the owner's answer, the gate's call at a cap, the owner speaking.
+  const talk = beatsOf([{ k: 'question', at: at(0) }, { k: 'answered', at: at(3) }, { k: 'ask', at: at(4), role: 'implementer', source: 'reviewer', token: 'REJECTED', round: 3, max: 2 }, { k: 'reset', at: at(5), why: 'prompt' }, { k: 'reset', at: at(6), why: 'ask' }]);
+  expect(talk.map((b) => b.type).join() === 'question,answered,cap,owner', `office: a question, its answer, the gate's call and the owner — and an old ledger's model question is not the owner — got ${talk.map((b) => b.type)}`);
+
+  // Served: the page, then the beats so far at once, then each new one as the gate writes it.
+  const project = await scratch();
+  await mkdir(join(project, '.claude'), { recursive: true });
+  await mkdir(join(project, '.nina'), { recursive: true });
+  await writeFile(join(project, '.claude', 'graph.md'), graphText);
+  await writeFile(join(project, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: { OWNER: 'Ana' } }));
+  const ledger = ledgerPath(project, 'office-session-1');
+  await mkdir(dirname(ledger), { recursive: true });
+  await writeFile(ledger, `${flow.flat().map((e) => JSON.stringify(e)).join('\n')}\n`);
+  /** Reads a server-sent stream until `until` says so, calling `during` after each event. */
+  const stream = async (url, until, during = () => {}, ms = 6000) => {
+    const events = [];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (!until(events)) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        for (let cut = buffer.indexOf('\n\n'); cut >= 0; cut = buffer.indexOf('\n\n')) {
+          const chunk = buffer.slice(0, cut);
+          buffer = buffer.slice(cut + 2);
+          const event = /^event: (.*)$/m.exec(chunk)?.[1];
+          if (event) {
+            events.push({ event, data: JSON.parse(/^data: (.*)$/m.exec(chunk)?.[1] ?? 'null') });
+            await during(events);
+          }
+        }
+      }
+    } catch {
+      // Aborted at the deadline: what arrived is what is judged.
+    } finally {
+      clearTimeout(timer);
+      controller.abort();
+    }
+    return events;
+  };
+  const office = await serveOffice({ target: project, port: 0 });
+  try {
+    const page = await (await fetch(`${office.url}/`)).text();
+    expect(page.includes('<title>NINA office</title>') && page.includes('"owner":"Ana"') && page.includes('"stages":["architect","implementer","reviewer"') && !page.includes('/*NINA_ROOM*/null'), 'office: the page is served with the room filled in, stages in the order the line takes them');
+    let appended = false;
+    const live = await stream(
+      `${office.url}/events`,
+      (events) => events.some((e) => e.event === 'beat' && !e.data.instant),
+      async (events) => {
+        if (!appended && events.filter((e) => e.event === 'beat').length >= works.length) {
+          appended = true;
+          await appendFile(ledger, `${JSON.stringify({ k: 'verdict', at: at(45), agent: 'implementer-5', role: 'implementer', verdict: 'DIFF-READY', declared: true })}\n`);
+        }
+      },
+    );
+    const restored = live.filter((e) => e.event === 'beat' && e.data.instant);
+    const fresh = live.find((e) => e.event === 'beat' && !e.data.instant);
+    expect(
+      live[0]?.event === 'hello' && live[0].data.session === 'office-session-1' && restored.length === beatsOf(flow).length && fresh?.data.type === 'verdict' && fresh.data.agent === 'implementer-5',
+      `office: a client gets the session, what came before at once, then each new beat as the gate writes it — got ${JSON.stringify(live.map((e) => [e.event, e.data?.type, e.data?.instant]))}`,
+    );
+    expect((await fetch(`${office.url}/nothing`)).status === 404, 'office: nothing else is served');
+  } finally {
+    await office.close();
+  }
+  const replayed = await serveOffice({ target: project, port: 0, replay: true });
+  try {
+    const played = await stream(`${replayed.url}/events`, (events) => events.filter((e) => e.event === 'beat').length >= 2);
+    expect(played[0]?.data.replay === true && played.filter((e) => e.event === 'beat').every((e) => !e.data.instant), 'office: a replay plays the session from its first dispatch, each beat in its turn');
+  } finally {
+    await replayed.close();
+  }
+  const missing = run(['pipeline', '--view', '--session', 'nope', '--project', project]);
+  const empty = await scratch();
+  await mkdir(join(empty, '.claude'), { recursive: true });
+  await writeFile(join(empty, '.claude', 'graph.md'), graphText);
+  const nothing = run(['pipeline', '--view', '--replay', '--project', empty]);
+  expect(
+    missing.status === 2 && missing.out.includes('no session starts with "nope"') && nothing.status === 2 && nothing.out.includes('no session to replay'),
+    `office: a session that is not there, or nothing to replay, is said and nothing is served — got ${missing.out}${nothing.out}`,
+  );
+  const badPort = run(['pipeline', '--view', '--port', 'abc', '--project', project]);
+  const withoutView = run(['pipeline', '--replay', '--project', project]);
+  expect(
+    badPort.status === 2 && badPort.out.includes('--port takes a port number') && withoutView.status === 2 && withoutView.out.includes('means nothing without --view'),
+    `office: a port that is no port is refused, and the office's flags without --view are too — got ${badPort.out}${withoutView.out}`,
+  );
 }
 
 for (const f of failures) console.log(`  ✗ ${f}`);
