@@ -52,6 +52,7 @@ Either:
 ## You MUST check (every time)
 
 <!-- nina:slot db.6 -->
+<!-- nina:slot db.19 -->
 <!-- nina:slot prisma.3 -->
 <!-- nina:slot drizzle.2 -->
 <!-- nina:slot db.8 -->

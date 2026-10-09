@@ -8,4 +8,4 @@
 | `cloudflare:wrangler` | anything you run through the wrangler CLI |
 
 <!-- nina:slot edge-cf.4 -->
-- Any new Cloudflare binding read/write: R2, KV, Queues, Durable Objects — drive the binding via Miniflare and observe real I/O
+- Any new Cloudflare binding read/write: R2, KV, Queues, Durable Objects — drive the binding via Miniflare and observe real I/O. Miniflare fetches `workers.cloudflare.com/cf.json` as it starts unless `CLOUDFLARE_CF_FETCH_ENABLED=false`: set it where a run promises no network beyond a named host

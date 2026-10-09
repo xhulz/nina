@@ -141,6 +141,7 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 - Custom errors: `class AppError extends Error { code: string; status: number }`. Each route maps known classes to HTTP codes.
 <!-- nina:slot money.6 -->
 <!-- nina:slot db.5 -->
+<!-- nina:slot db.7 -->
 <!-- nina:slot prisma.3 -->
 <!-- nina:slot drizzle.1 -->
 <!-- nina:slot d1.1 -->

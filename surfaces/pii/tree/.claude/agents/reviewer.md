@@ -1,5 +1,5 @@
 <!-- nina:slot pii.1 -->
-- Check for privacy regressions: **no sensitive value in a log, an error message, a URL or a test fixture**, per the categories in `.claude/architecture.md` § *Privacy*; document bytes only in the object store, never plaintext in the database; no leaked secret.
+- Check for privacy regressions: **no sensitive value in a log, an error message — a library's own included — a URL or a test fixture**, per the categories in `.claude/architecture.md` § *Privacy*; document bytes only in the object store, never plaintext in the database; no leaked secret.
 
 <!-- nina:slot pii.2 -->
 - **privacy** — the privacy check above, in full: no sensitive value in a log, an error message, a
