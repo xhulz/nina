@@ -4685,6 +4685,26 @@ const dated = (date, status = 'active') =>
   await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, [name]: null }, deferred: { [name]: '  ' } }));
   const reasonless = run(['check', '--project', dir], { loud: true });
   expect(reasonless.status === 1 && reasonless.out.includes(`"${name}" is deferred with no reason`), `deferred: a deferral with no reason does not count — got ${reasonless.out}`);
+
+  // compose --check reads the same deferrals: a new project's root `harness:compose:check` failed on the six
+  // slots it had deferred, while `check` was clean.
+  const holed = await sound('plain', 'dev');
+  const holedProfile = join(holed, '.nina', 'profile.json');
+  await rm(join(holed, '.nina', 'project', 'tree', 'CLAUDE.md'));
+  run(['compose', '--project', holed]);
+  const holes = run(['compose', '--check', '--project', holed], { loud: true });
+  const open = [...holes.out.matchAll(/^ {4}(CLAUDE\.md project\.\d+)$/gm)].map((m) => m[1]);
+  expect(holes.status === 1 && open.length > 0, `deferred: compose --check names a project slot with no fragment — got ${holes.out}`);
+  const holedBase = JSON.parse(await readFile(holedProfile, 'utf8'));
+  await writeFile(holedProfile, JSON.stringify({ ...holedBase, deferred: Object.fromEntries(open.map((s) => [s, 'no code yet'])) }));
+  const held = run(['compose', '--check', '--project', holed], { loud: true });
+  expect(
+    held.status === 0 && held.out.includes(`${open.length} slot(s) deferred`) && held.out.includes('compose: current'),
+    `deferred: compose --check takes a slot deferred with its reason as waiting, not as a hole — got ${held.out}`,
+  );
+  await writeFile(holedProfile, JSON.stringify({ ...holedBase, deferred: Object.fromEntries(open.map((s) => [s, ' '])) }));
+  const bare = run(['compose', '--check', '--project', holed], { loud: true });
+  expect(bare.status === 1 && bare.out.includes(`${open.length} slot(s) have no fragment`), `deferred: compose --check counts a reasonless deferral for nothing — got ${bare.out}`);
 }
 
 // ─── status: one screen for one project ─────────────────────────────────────────────────
