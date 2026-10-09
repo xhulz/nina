@@ -51,6 +51,7 @@ import { REQUIRES, SLOT, composeProject, defaultsTree, stripWhy } from '../src/c
 import { NOTICE_HEAD } from '../src/guard.mjs';
 import { ANSWERED, answers } from '../src/commands/learn.mjs';
 import { PLACEHOLDER } from '../src/vocabulary.mjs';
+import { NEEDS } from '../src/surfaces.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const verbose = process.argv.includes('--verbose');
@@ -388,7 +389,8 @@ async function surfaceLeaks() {
         });
       }
       for (const [surface, terms] of Object.entries(SURFACE_TERMS)) {
-        if (owner === surface) continue;
+        // A stack composes only beside the surfaces it needs, so it may name theirs.
+        if (owner === surface || (NEEDS[owner] ?? []).includes(surface)) continue;
         for (const term of terms) {
           lines.forEach((line, i) => {
             if (names(line, term)) {

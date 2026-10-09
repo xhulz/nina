@@ -18,7 +18,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { SLOT, closedGate, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
-import { NEEDS } from '../surfaces.mjs';
+import { missingNeeds } from '../surfaces.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
 const INTEGRATION_FIELDS = {
@@ -232,7 +232,8 @@ export async function check(argv, ctx) {
   }
   for (const s of new Set(surfaces)) {
     if (surfaces.filter((x) => x === s).length > 1) notes.push(`surface "${s}" is declared more than once`);
-    if (NEEDS[s] && !surfaces.includes(NEEDS[s])) problems.push(`surface "${s}" is a stack of "${NEEDS[s]}", which this profile does not declare — its rules have nowhere to land`);
+    const missing = missingNeeds(s, surfaces);
+    if (missing.length > 0) problems.push(`surface "${s}" is a stack of "${missing.join('" and "')}", which this profile does not declare — its rules have nowhere to land`);
   }
 
   // What the project has chosen to decide later, and why: a vocabulary name, a document or a project slot,

@@ -15,7 +15,7 @@ import { describeMove, HARNESS, interruptedMove, movedFrom, moveJournal, readPro
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { REMOVED, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
-import { NEEDS, detected } from '../surfaces.mjs';
+import { detected, missingNeeds } from '../surfaces.mjs';
 import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
 import { EXPECT_ENV } from '../expected.mjs';
 import { closeAnswered } from './learn.mjs';
@@ -297,7 +297,7 @@ export async function upgrade(argv, ctx) {
   // them in silence: the rules that were in its specs yesterday are not there after the move.
   const offeredBefore = (await surfacesIn(from.dir));
   const offered = detected(await walk(target)).filter(
-    (d) => available.includes(d.surface) && !offeredBefore.includes(d.surface) && !surfaces.includes(d.surface) && (!NEEDS[d.surface] || kept.includes(NEEDS[d.surface])),
+    (d) => available.includes(d.surface) && !offeredBefore.includes(d.surface) && !surfaces.includes(d.surface) && missingNeeds(d.surface, kept).length === 0,
   );
 
   const [vocabBefore, vocabAfter] = [
