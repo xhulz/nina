@@ -709,7 +709,7 @@ export function loopState(project, entries) {
     const fix = waiting.some((w) => w.source === l.source) ? 'the fix it waits on' : 'the latest fix';
     lines.push(
       l.closing
-        ? `- passed after its latest fix: ${count}. Nothing is owed on it; the gate drops its count at the next dispatch to ${either(l.targets)}`
+        ? `- passed after its latest fix: ${count}. Those rounds are settled, and the gate drops them at the next dispatch to ${either(l.targets)}`
         : `- open loop: ${count}. It closes when a ${l.source} launched after ${fix} passes with no rejection beside it` +
             (l.onward.length ? `, or when ${either(l.onward)} passes, sent out after the ${l.source} last reported` : ''),
     );
