@@ -106,7 +106,16 @@ const COMMANDS = {
   pipeline: {
     run: pipeline,
     help: "draw the project's agent chain: the line, its gates, what goes back, each stage's model and skills",
-    options: { ...PROJECT, '--for <shape>': 'the chain for one task shape, by number or words', '--since <date>': 'history from this day on, YYYY-MM-DD' },
+    options: {
+      ...PROJECT,
+      '--for <shape>': 'the chain for one task shape, by number or words',
+      '--since <date>': 'history from this day on, YYYY-MM-DD',
+      '--view': 'the office: the agents at their desks, in a page served on this machine — VS Code shows it in its Simple Browser',
+      '--session <id>': 'with --view: the session whose id starts so, rather than the newest',
+      '--replay': 'with --view: play a session from its start',
+      '--port <n>': 'with --view: the port to ask for first (6462)',
+      '--open': 'with --view: open it in the system browser too',
+    },
   },
   pills: { run: pills, help: 'validate the corrections the pipeline wrote about itself', options: { ...PROJECT, '--tidy': 'move retired pills to .claude/pills/retired/' } },
   learn: {
