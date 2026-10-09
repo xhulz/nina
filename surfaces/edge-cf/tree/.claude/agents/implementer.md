@@ -8,7 +8,7 @@
 | `cloudflare:cloudflare` | a queue consumer, or R2 / KV access |
 
 <!-- nina:slot edge-cf.4 -->
-| `cloudflare:wrangler` | a change to `wrangler.toml` |
+| `cloudflare:wrangler` | a change to the wrangler config |
 
 <!-- nina:slot edge-cf.5 -->
-- Respect Workers conventions: secrets in `{{SECRETS_LOCAL}}` for local dev (never commit), `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`.
+- Respect Workers conventions: secrets in `{{SECRETS_LOCAL}}` for local dev (never commit), `nodejs_compat` in the wrangler config's `compatibility_flags`.
