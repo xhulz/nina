@@ -49,3 +49,6 @@
 
 <!-- nina:slot db.18 -->
 **Final report format:** ≤300 words if approved. Sections: Schema validation result, Migration SQL preview (verbatim if non-trivial), Index analysis, Tenant-scope check, Cache verdict, Privacy check, Final verdict. If rejected, list each issue with required action — no length cap.
+
+<!-- nina:slot db.19 -->
+- **The tracked schema is the reviewed one, not a generator's output.** A diff that rewrites it whole, or drops a delta its header lists, is a generator writing where it must not (`.claude/patterns.md`): reject it.
