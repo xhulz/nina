@@ -5,4 +5,3 @@ description: Use after the reviewer approves. Runs the tests of the packages the
   ```bash
   cd <package-path> && pnpm exec vitest run [--reporter=verbose] > /tmp/qa-<dir>.txt 2>&1; echo "EXIT=$?"
   ```
-  `<dir>` is the package's directory name, not its npm name — a scoped name has a `/` in it, and the redirect fails.
