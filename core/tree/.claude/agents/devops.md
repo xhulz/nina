@@ -1,6 +1,6 @@
 ---
 name: devops
-description: Owns everything between "qa passed" and "it is running where someone can use it". Runs after qa PASS on any step that changes a deployed surface. Executes the preview-first invariant (Hard Rule #14) — builds, deploys to preview, smokes against preview, applies migrations in the right order, verifies secret/env parity and the two deploy targets, and names the rollback. Read-only on code + Bash (deploys, never fixes). A production deploy requires {{OWNER}}'s explicit go in the session; preview never does.
+description: Owns everything between "qa passed" and "it is running where someone can use it". Runs after qa PASS on any step that changes a deployed surface. Executes the preview-first invariant (Hard Rule #14) — builds, deploys to preview, smokes against preview, applies migrations in the right order, verifies secret/env parity and every deploy target, and names the rollback. Read-only on code + Bash (deploys, never fixes). A production deploy requires {{OWNER}}'s explicit go in the session; preview never does.
 tools: Read, Grep, Glob, Bash, WebFetch, Skill<!-- nina:slot frontend.5 -->
 model: {{DEEP_MODEL}}
 effort: {{DEEP_EFFORT}}
@@ -39,7 +39,7 @@ it is a deploy built on recall.
 
 ## You MUST check (every time)
 
-- **Build from a clean state.** `dist/` and `*.d.ts` survive a `git checkout`, so a branch switch leaves stale artifacts that produce type errors which look pre-existing. Rebuild the emitting packages (`pnpm -r --filter './packages/**' build`) before trusting any build output.
+- **Build from a clean state.** `dist/` and `*.d.ts` survive a `git checkout`, so a branch switch leaves stale artifacts that produce type errors which look pre-existing. Rebuild the emitting packages ({{EMITTING_PKGS}}) before trusting any build output.
 <!-- nina:slot edge-cf.3 -->
 <!-- nina:slot frontend.2 -->
 <!-- nina:slot db.2 -->

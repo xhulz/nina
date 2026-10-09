@@ -24,4 +24,4 @@ The `cloudflare@cloudflare` plugin is installed at user scope and exposes skills
 The plugin's other skills — `cloudflare:agents-sdk`, `cloudflare:sandbox-sdk`, `cloudflare:cloudflare-email-service` — apply only where {{PROJECT}} adopts what they cover: an agent runtime, untrusted code execution, sending mail.
 
 <!-- nina:slot edge-cf.8 -->
-10. **Secrets in `{{SECRETS_LOCAL}}` for local dev, `{{SECRETS_PROD}}` for production.** Never `.env` committed. `compatibility_flags = ["nodejs_compat"]` is required in `wrangler.toml` for any database client that runs at the edge.
+10. **Secrets in `{{SECRETS_LOCAL}}` for local dev, `{{SECRETS_PROD}}` for production.** Never `.env` committed. `nodejs_compat` is required in the `compatibility_flags` of the wrangler config (`wrangler.jsonc` or `wrangler.toml`) for any database client that runs at the edge.

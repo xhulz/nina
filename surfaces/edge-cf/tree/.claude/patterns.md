@@ -8,7 +8,7 @@
 - **Local dev:** `{{SECRETS_LOCAL}}` (gitignored).
 
 <!-- nina:slot edge-cf.2 -->
-- `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml` is required for a database client that runs at the edge.
+- `nodejs_compat` in the wrangler config's `compatibility_flags` is required for a database client that runs at the edge.
 
 <!-- nina:slot edge-cf.3 -->
 - **Miniflare** for Worker integration tests.
