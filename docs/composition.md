@@ -120,6 +120,12 @@ one composes exactly as before. A slot with a default is not owed: `check`, `upg
 it out of what is still to fill, the TODO lists it as something to tailor, and `where` marks it `◐`. A
 release from before there were any defaults has no such directory and composes as it always did.
 
+A default is also how a line becomes the project's to replace. A project can only add to the core's text,
+so when qa's per-package test command became wrong for a project whose worker tests need another package
+built first, its fragment could only add a second command under the first, and the composed qa read both.
+The command is now `qa.md project.5`, with the release's `cd <package> && pnpm exec vitest run` as its
+default: every project composes it as before, and one that runs its tests another way writes its own.
+
 The suite audits the defaults twice. Each must fill a project slot the core file at its path really has,
 never a surface's slot, which would fill it in a project that never declared the surface. And each is read
 by the leak audit as core text under that file's gate, so the default for `dba.md` may name the database and

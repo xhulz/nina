@@ -57,8 +57,9 @@ These mechanisms connect the layers:
   The first six passages marked saved 0.4% of the largest composition — the narrative was mostly already
   gone — and the size budget beside it is what keeps it from coming back.
 - **`core/defaults/tree/**`** holds the release's own text for a project slot the file cannot do without:
-  an agent's `description:`, which Claude Code needs to load the agent at all. The project's fragment still
-  wins; until it writes one, the default composes, and the slot is not counted as owed.
+  an agent's `description:`, which Claude Code needs to load the agent at all, and a line a project may need
+  to replace rather than add to, like qa's per-package test command. The project's fragment still wins;
+  until it writes one, the default composes, and the slot is not counted as owed.
 - **`{{VOCABULARY}}`** placeholders are filled from the profile, which is how the core
   states a rule without naming one project's provider, packages or models.
 
