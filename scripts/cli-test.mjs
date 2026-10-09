@@ -4577,6 +4577,12 @@ const dated = (date, status = 'active') =>
     offEdge.includes('Does it run on Cloudflare Workers or Pages?') && !offEdge.includes('Does it keep that data in Cloudflare D1?') && onEdge.includes('Does it keep that data in Cloudflare D1?'),
     'surfaces: a stack of two needs is asked about only once both are a yes',
   );
+  // Numbered by what is asked: a no to the database once read 1/10 then 4/10, under a header promising ten.
+  const counted = (out) => {
+    const numbers = [...out.matchAll(/(\d+)\/(\d+) {2}\S+/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    return numbers.length > 0 && numbers.every(([n], i) => n === i + 1) && numbers.at(-1)[0] === numbers.at(-1)[1];
+  };
+  expect(counted(interviewed) && counted(offEdge) && counted(onEdge), 'init: questions are numbered by what is asked, without gaps, and the last is n/n');
 
   // Moving onto a release that splits a stack out of a concern: a project whose files show the stack is
   // told, and the move waits for it to be declared, rather than dropping its rules in silence.

@@ -218,14 +218,20 @@ async function interview(available, matched, impacts) {
     const scope = lines.join(' ');
 
     const order = available;
-    console.log(`\n  ${strong('Surfaces')} — ${order.length} yes-or-no questions, one per surface.`);
+    console.log(`\n  ${strong('Surfaces')} — up to ${order.length} yes-or-no questions, one per surface; a stack comes only after a yes to what it needs.`);
     console.log('  A surface is a part of the harness only some projects need: its rules, its checks, sometimes a');
     console.log('  whole role. Answer for what the project does today; one can be added later in .nina/profile.json.\n');
     const surfaces = [];
+    let asked = 0;
     for (const [n, s] of order.entries()) {
       // A stack is asked about only where its concern was answered yes: asked whether data it does not
       // own goes through Prisma, a project has nothing true to answer.
       if (missingNeeds(s, surfaces).length > 0) continue;
+      // Counted by what is asked, not by place in the list: numbered by place, a no to the database read
+      // 1/10 then 4/10, and the header promised ten questions to someone asked seven. The total is what is
+      // asked so far plus what can still be, so a no shrinks it and the last question is always n/n.
+      asked += 1;
+      const total = asked + order.slice(n + 1).filter((t) => missingNeeds(t, [...surfaces, ...order.slice(n)]).length === 0).length;
       const i = impacts[s];
       const reason = matched.find((d) => d.surface === s)?.why;
       // What a yes brings, in what a person would recognise: roles, rules, agents. The count of
@@ -235,7 +241,7 @@ async function interview(available, matched, impacts) {
         ...(i.rules ? [`${i.rules} hard rule${i.rules > 1 ? 's' : ''}`] : []),
         ...(i.agents.length ? [`changes to ${i.agents.length} agent${i.agents.length > 1 ? 's' : ''}`] : []),
       ];
-      console.log(`  ${faint(`${n + 1}/${order.length}`)}  ${strong(s)}`);
+      console.log(`  ${faint(`${asked}/${total}`)}  ${strong(s)}`);
       console.log(`       ${questionFor(s)}`);
       console.log(faint(`       if yes: ${brings.length ? brings.join(' · ') : `guidance in ${i.fragments} places`}`));
       if (reason) console.log(found(`       already here: ${reason}`));
