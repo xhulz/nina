@@ -1147,7 +1147,10 @@ async function sound(fixture, core) {
   // the stage's own verdicts — an implementer lesson by the implementer's BLOCKED rate — pooled the stages a
   // lesson named, and compared all of history either side.
   const graphLoops = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2]])]])]]);
-  const reviewed = (role, verdict, d, extra = {}) => ({ role, verdict, ts: ago(d), session: 's-v', ...extra });
+  // Anchored at midday, or now while it is morning: a rejection a tenth of a day after its diff, counted from now,
+  // fell on the lesson's own day after 21:36 UTC, and the suite failed every night for two and a half hours.
+  const midday = Math.min(now.getTime(), Date.parse(`${today}T12:00:00.000Z`));
+  const reviewed = (role, verdict, d, extra = {}) => ({ role, verdict, ts: new Date(midday - d * 86_400_000).toISOString(), session: 's-v', ...extra });
   const trial = [
     ...[15, 14, 13, 12, 11].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1)]),
     ...[5, 4, 3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'APPROVED', d - 0.1)]),
