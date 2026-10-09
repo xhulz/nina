@@ -37,5 +37,8 @@
   },
   "2026-09-28-shared__test-must-fail-under-its-mutation": {
     "in": "core/tree/.claude/agents/qa.md"
+  },
+  "2026-10-08-implementer__spike-result-claims-only-what-ran": {
+    "in": "core/tree/.claude/agents/implementer.md"
   }
 }
