@@ -280,11 +280,13 @@ function append(path, entry) {
  * @param {object[]} entries - The ledger, oldest first.
  * @param {ReturnType<typeof loopEdges>} loops - The capped loop-back edges.
  * @param {Map<string, Set<string>>} [forward] - Stage → the sources that hand passing work on to it.
- * @returns {{effect: (to: string) => {rounds: object[]}, rounds: object[]}}
+ * @returns {{effect: (to: string) => {rounds: object[]}, rounds: object[], open: object[], waiting: object[]}}
  *   A round is `{source, target, token, round, max, edgeRound, ceiling, agents}`, plus `issue` (the id
  *   that decides it) and `issues` (every id with its count) when it was counted by issue.
  *   `effect` says what a dispatch to a stage would make now, without making it; `rounds` is every round
- *   the recorded dispatches made.
+ *   the recorded dispatches made; `open` each loop still counted, with whether a pass already closes it
+ *   (`closing`), the stages a dispatch to which would (`targets`) and the stages whose pass would (`onward`);
+ *   `waiting` each loop-back no fix has acted on yet.
  */
 export function replay(entries, loops, forward = new Map()) {
   // When each dispatch went out. A foreground dispatch's `dispatch` entry is written after the agent
@@ -329,15 +331,23 @@ export function replay(entries, loops, forward = new Map()) {
     for (const map of [streak, grace]) for (const key of [...map.keys()]) if (key.startsWith(`${source}|`)) map.delete(key);
   };
 
+  /**
+   * A source's waiting verdicts, settled: the rejections no later review of a fix cancelled, and whether a pass
+   * closes its loops — one that began after the latest fix, with no rejection running beside it.
+   */
+  const settle = (source, batch) => {
+    const passes = batch.filter((v) => !isLoopBack(v.verdict));
+    const live = batch.filter((v) => isLoopBack(v.verdict) && !passes.some((p) => p.launch > v.at && fixBetween(source, v.at, p.launch)));
+    return { live, closes: passes.some((p) => p.launch > (lastFix.get(source) ?? -1) && !live.some((v) => v.launch < p.at)) };
+  };
+
   const effect = (to, at) => {
     const rounds = [];
     const outcome = [];
     for (const [source, batch] of pending) {
       const byToken = loops.get(source);
       if (!byToken || batch.length === 0 || !targetsOf(source).has(to)) continue;
-      const passes = batch.filter((v) => !isLoopBack(v.verdict));
-      const live = batch.filter((v) => isLoopBack(v.verdict) && !passes.some((p) => p.launch > v.at && fixBetween(source, v.at, p.launch)));
-      const closes = passes.some((p) => p.launch > (lastFix.get(source) ?? -1) && !live.some((v) => v.launch < p.at));
+      const { live, closes } = settle(source, batch);
       const routed = live.filter((v) => byToken.get(v.verdict)?.has(to));
       const fresh = routed.filter((v) => {
         const last = streak.get(`${source}|${v.verdict}`);
@@ -434,13 +444,18 @@ export function replay(entries, loops, forward = new Map()) {
   });
   // What is open when the replay ends: each loop with its rounds, the rounds the owner's replies gave it and the
   // issues it counted by, and each loop-back no fix has acted on yet — what a compaction takes from the orchestrator.
+  // A loop whose source passed after the latest fix is closed by the next dispatch it could act on, and until then
+  // is still in the count; it says so, and what would close each of the others. Listed as open, three loops
+  // approved the evening before a compaction were handed back as capped, and the orchestrator went looking for why.
   const open = [...streak.entries()]
     .filter(([key]) => key.split('|').length === 2)
     .map(([key, s]) => {
       const [source, token] = key.split('|');
       const cap = Math.max(0, ...(loops.get(source)?.get(token)?.values() ?? []));
       const issues = [...streak.keys()].filter((k) => k.startsWith(`${key}|`)).map((k) => k.slice(key.length + 1));
-      return { source, token, rounds: s.n, cap, given: grace.get(key) ?? 0, issues };
+      const closing = settle(source, pending.get(source) ?? []).closes;
+      const onward = [...forward].filter(([, sources]) => sources.has(source)).map(([stage]) => stage);
+      return { source, token, rounds: s.n, cap, given: grace.get(key) ?? 0, issues, closing, targets: [...targetsOf(source)], onward };
     });
   const waiting = [...pending.entries()].flatMap(([source, batch]) => batch.filter((v) => isLoopBack(v.verdict)).map((v) => ({ source, verdict: v.verdict, issues: v.issues ?? [] })));
   return { effect: (to) => effect(to, entries.length), rounds: made, open, waiting };
@@ -671,6 +686,42 @@ function onPre(input, project, path, at) {
   return confirmation(worst);
 }
 
+/** Stages as a sentence lists them: `qa`, `implementer or architect`, `a, b or c`. */
+const either = (stages) => (stages.length < 2 ? stages.join('') : `${stages.slice(0, -1).join(', ')} or ${stages.at(-1)}`);
+
+/**
+ * What a session's ledger says of its loops, a line each: every loop still counted, and what would close it;
+ * the loop-backs no fix has acted on yet; and the latest dispatches. It is what a compaction hands the
+ * orchestrator and what `nina gate --status` prints, so the two cannot disagree.
+ *
+ * @param {object} project - `loadProject`'s.
+ * @param {object[]} entries - The session's ledger, oldest first.
+ * @returns {{lines: string[], open: number, closing: number, waiting: number}} The lines; the loops open, the
+ *   loops a pass already closes at the next dispatch, and the loop-backs waiting on a fix.
+ */
+export function loopState(project, entries) {
+  const { open, waiting } = replay(entries, project.loops, project.forward);
+  const lines = [];
+  for (const l of open) {
+    const count =
+      `${l.source} ${l.token} — ${l.rounds} round(s), capped at ${l.cap}${l.given ? ` and ${l.given} more from the owner's replies` : ''}` +
+      (l.issues.length ? `, issues ${l.issues.join(', ')}` : '');
+    const fix = waiting.some((w) => w.source === l.source) ? 'the fix it waits on' : 'the latest fix';
+    lines.push(
+      l.closing
+        ? `- passed after its latest fix: ${count}. It closes at the next dispatch to ${either(l.targets)}`
+        : `- open loop: ${count}. It closes when a ${l.source} launched after ${fix} passes with no rejection beside it` +
+            (l.onward.length ? `, or when ${either(l.onward)} passes` : ''),
+    );
+  }
+  for (const w of waiting) lines.push(`- waiting on a fix: ${w.source} ${w.verdict}${w.issues.length ? `, issues ${w.issues.join(', ')}` : ''}`);
+  if (open.length === 0 && waiting.length === 0) lines.push('- no loop is open');
+  const dispatched = entries.filter((e) => e.k === 'dispatch' && e.role).slice(-4);
+  if (dispatched.length) lines.push(`- the latest dispatches: ${dispatched.map((e) => e.role).join(', ')}, the newest at ${String(dispatched.at(-1).at ?? '').slice(11, 16)} UTC`);
+  const closing = open.filter((l) => l.closing).length;
+  return { lines, open: open.length - closing, closing, waiting: waiting.length };
+}
+
 /**
  * What the gate hands the orchestrator after its conversation was compacted: the loops still open and the
  * loop-backs waiting on a fix, the latest dispatches, where the checkout stands, and the two documents to read
@@ -684,19 +735,7 @@ function onPre(input, project, path, at) {
  * @returns {object}
  */
 function afterCompaction(project, path, root) {
-  const entries = readLedger(path);
-  const { open, waiting } = replay(entries, project.loops, project.forward);
-  const lines = ['The conversation was compacted. What the NINA loop gate kept of this session:'];
-  for (const l of open) {
-    lines.push(
-      `- open loop: ${l.source} ${l.token} — ${l.rounds} round(s), capped at ${l.cap}${l.given ? ` and ${l.given} more from the owner's replies` : ''}` +
-        (l.issues.length ? `, issues ${l.issues.join(', ')}` : ''),
-    );
-  }
-  for (const w of waiting) lines.push(`- waiting on a fix: ${w.source} ${w.verdict}${w.issues.length ? `, issues ${w.issues.join(', ')}` : ''}`);
-  if (open.length === 0 && waiting.length === 0) lines.push('- no loop is open');
-  const dispatched = entries.filter((e) => e.k === 'dispatch' && e.role).slice(-4);
-  if (dispatched.length) lines.push(`- the latest dispatches: ${dispatched.map((e) => e.role).join(', ')}, the newest at ${String(dispatched.at(-1).at ?? '').slice(11, 16)} UTC`);
+  const lines = ['The conversation was compacted. What the NINA loop gate kept of this session:', ...loopState(project, readLedger(path)).lines];
   const git = (...args) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', timeout: 2000 }).stdout?.trim() ?? '';
   const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
   const last = git('log', '-1', '--format=%h %s');

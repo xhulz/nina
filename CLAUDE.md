@@ -122,6 +122,7 @@ nina pipeline --project ../thing              # the agent chain drawn: gates, lo
 nina wire --project ../thing [--apply]        # merge the hooks and npm scripts its version needs
 nina upgrade --project ../thing --to <v> [--apply]   # what a move costs, then the whole move
 nina gate --selftest --project ../thing       # would the loop gate still hold a loop past its cap?
+nina gate --status --project ../thing         # the loops the latest session holds open, and what would close each
 nina pills --project ../thing                 # is the pipeline's own corpus of corrections sound?
 nina learn --project ../thing [--deep]        # is the pipeline learning? --deep reads why it sent work back
 nina requests                                 # the lessons projects have graduated to the harness

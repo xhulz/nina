@@ -2,6 +2,7 @@
  * `nina gate` — the loop gate's own check, and a way to run it by hand.
  *
  *   nina gate --selftest   is the gate wired, has it failed, would it still hold a loop past its cap?
+ *   nina gate --status     the loops a session holds open, and what would close each
  *   nina gate --hook       handle one hook event from stdin, the way the composed script does
  *
  * The gate lets every call through when anything goes wrong, which is right for a hook and makes a
@@ -20,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readProfile, slugFor } from '../paths.mjs';
 import { GATE, hookCommand, missingWiring, shippedScripts } from '../wiring.mjs';
-import { LEDGER_TAIL, ledgerPath, loadProject, projectGateDir, readLedger, runGate } from '../gate.mjs';
+import { LEDGER_TAIL, ledgerPath, loadProject, loopState, projectGateDir, readLedger, runGate } from '../gate.mjs';
 import { projectRecords } from '../store.mjs';
 import { layerRootFor } from './compose.mjs';
 import { handsToModel } from '../detectors.mjs';
@@ -271,13 +272,50 @@ function dryRun(target) {
 }
 
 /**
- * @param {string[]} argv - `[--selftest | --hook] [--project <dir>]`.
+ * What the gate holds of one session: its loops, what would close each, and the loop-backs waiting on a fix —
+ * the same lines a compaction hands the orchestrator, at any time. The session is the one whose ledger was
+ * written last, which is the running one while it dispatches, or the one `--session` names by the start of its id.
+ *
+ * @param {string} target - The project directory.
+ * @param {string|undefined} wanted - The start of a session id, or nothing for the latest.
+ * @returns {number} Process exit code.
+ */
+function loopStatus(target, wanted) {
+  const project = loadProject(target);
+  if (!project) {
+    console.error('  .claude/graph.md is not composed, so the gate has no loops to hold — run `nina compose`\n');
+    return 2;
+  }
+  const dir = projectGateDir(target);
+  const ledgers = (existsSync(dir) ? readdirSync(dir) : [])
+    .filter((f) => f.endsWith('.jsonl') && f !== 'errors.jsonl')
+    .map((f) => ({ session: f.slice(0, -'.jsonl'.length), written: statSync(join(dir, f)).mtime }))
+    .sort((a, b) => b.written - a.written);
+  const matching = wanted ? ledgers.filter((l) => l.session.startsWith(wanted)) : ledgers.slice(0, 1);
+  if (matching.length !== 1) {
+    const why = ledgers.length === 0 ? 'the gate has no ledger here yet' : matching.length === 0 ? `no session starts with "${wanted}"` : `${matching.length} sessions start with "${wanted}" — give more of the id`;
+    console.error(`  ${why} (${dir})\n`);
+    return 2;
+  }
+  const { session, written } = matching[0];
+  const state = loopState(project, readLedger(join(dir, `${session}.jsonl`)));
+  const others = ledgers.length > 1 ? `; ${ledgers.length - 1} other session(s) kept here, --session <id> for one` : '';
+  console.log(`  session ${session}, its ledger last written ${written.toISOString().slice(0, 16).replace('T', ' ')} UTC${others}`);
+  for (const line of state.lines) console.log(`  ${line}`);
+  const closing = state.closing ? ` — ${state.closing} close(s) at the next dispatch` : '';
+  console.log(`gate: ${state.open ? `${state.open} open loop(s)` : 'no open loop'}${closing}`);
+  return 0;
+}
+
+/**
+ * @param {string[]} argv - `[--selftest | --status [--session <id>] | --hook] [--project <dir>]`.
  * @param {{root: string}} ctx - CLI context; `root` is the NINA install directory.
  * @returns {Promise<number>} Process exit code.
  */
 export async function gate(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   if (argv.includes('--hook')) return runGate({ root: target });
+  if (argv.includes('--status')) return loopStatus(target, argv.includes('--session') ? argv[argv.indexOf('--session') + 1] : undefined);
 
   const { profile, error } = readProfile(target);
   if (error) {

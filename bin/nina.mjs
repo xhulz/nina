@@ -142,8 +142,14 @@ const COMMANDS = {
   },
   gate: {
     run: gate,
-    help: 'the loop gate: is it wired, and would it still hold a loop past its cap?',
-    options: { ...PROJECT, '--selftest': 'hold a synthetic loop past its cap, and compare the ledger with the history', '--hook': 'answer one hook event on stdin' },
+    help: 'the loop gate: is it wired, would it still hold a loop past its cap, and which loops does it hold?',
+    options: {
+      ...PROJECT,
+      '--selftest': 'hold a synthetic loop past its cap, and compare the ledger with the history',
+      '--status': 'the loops the latest session holds open, and what would close each',
+      '--session <id>': 'with --status: the session whose id starts so',
+      '--hook': 'answer one hook event on stdin',
+    },
   },
   upgrade: {
     run: upgrade,

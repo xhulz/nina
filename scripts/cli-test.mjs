@@ -28,7 +28,7 @@ import { CAPTURE_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, sl
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
-import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
+import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, loopState, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
 import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
 import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
@@ -2716,6 +2716,21 @@ const dated = (date, status = 'active') =>
     'gate: a sibling resumed with no fix sent in between releases nothing either',
   );
   expect(replay(stuck.slice(0, 4).flat(), loops, forward).rounds.map((r) => r.round).join() === '1,2', 'gate: the replay lists the rounds the dispatches made');
+  // A pass that saw the fix closes the loop at the next dispatch it could act on, and until then the loop is still
+  // counted. A compaction in that gap handed three approved loops back as open and capped; each says it is closing.
+  const fixedThenPassed = replay([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'APPROVED')].flat(), loops, forward).open;
+  const fixOut = replay([report('reviewer', 'REJECTED'), fix()].flat(), loops, forward).open;
+  expect(
+    fixedThenPassed.length === 1 && fixedThenPassed[0].closing && fixOut.length === 1 && !fixOut[0].closing,
+    `gate: a loop whose review of the fix passed is closing, and one whose fix is still out is not — got ${JSON.stringify([fixedThenPassed, fixOut])}`,
+  );
+  const stateOf = (entries) => loopState({ loops, forward }, entries.flat()).lines.join('\n');
+  expect(
+    stateOf([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'APPROVED')]).includes('- passed after its latest fix: reviewer REJECTED — 1 round(s), capped at 2. It closes at the next dispatch to implementer or architect') &&
+      stateOf([report('reviewer', 'REJECTED'), fix()]).includes('- open loop: reviewer REJECTED — 1 round(s), capped at 2. It closes when a reviewer launched after the latest fix passes with no rejection beside it, or when qa passes') &&
+      stateOf([report('reviewer', 'REJECTED'), fix(), report('reviewer', 'REJECTED')]).includes('launched after the fix it waits on passes'),
+    'gate: each loop says what would close it — the next dispatch, a review of the fix, or the stage it hands on to',
+  );
 
   // Counted per issue where every report names its issues. The graph always said a different issue on
   // the same edge starts its own count; counting the edge, the gate asked about a review that found a new
@@ -2987,6 +3002,37 @@ const dated = (date, status = 'active') =>
     `gate: after a compaction it hands back the open loops and the documents to read again — got ${JSON.stringify(compacted)}`,
   );
   expect(hook('SessionStart', { source: 'startup' }) === null, 'gate: and says nothing at the start of a session');
+
+  // A loop whose fix a resumed reviewer approved, compacted before the next dispatch: it is closing, not open and
+  // capped, and `gate --status` prints what the compaction hands over.
+  const later = (event, fields = {}) => handle({ hook_event_name: event, session_id: 's-gate-closing', ...fields }, { root: project });
+  const out = (tool, input, response, id) => {
+    later('PreToolUse', { tool_name: tool, tool_input: input, tool_use_id: id });
+    later('PostToolUse', { tool_name: tool, tool_input: input, tool_use_id: id, tool_response: response });
+  };
+  out('Agent', { subagent_type: 'reviewer' }, { agentId: 'c1' }, 'toolu_c1');
+  later('PostToolUse', { tool_name: 'SubagentHandback', agent_id: 'c1', agent_type: 'reviewer', tool_input: { message: 'VERDICT: REJECTED\nISSUES: a' } });
+  out('Agent', { subagent_type: 'implementer' }, { agentId: 'c2' }, 'toolu_c2');
+  out('SendMessage', { to: 'c1' }, { resumedAgentId: 'c1' }, 'toolu_c3');
+  later('PostToolUse', { tool_name: 'SubagentHandback', agent_id: 'c1', agent_type: 'reviewer', tool_input: { message: 'VERDICT: APPROVED\nthe fix holds' } });
+  const closing = later('SessionStart', { source: 'compact' })?.hookSpecificOutput?.additionalContext ?? '';
+  expect(
+    closing.includes('- passed after its latest fix: reviewer REJECTED — 1 round(s), capped at 2, issues a. It closes at the next dispatch to implementer or architect') && !closing.includes('open loop'),
+    `gate: after a compaction, a loop a resumed reviewer approved after the fix is closing, not open — got ${closing}`,
+  );
+  await utimes(ledgerPath(project, 's-gate-closing'), new Date(), new Date(Date.now() + 60_000));
+  const listed = run(['gate', '--status', '--project', project]);
+  const compactedLines = closing.split('\n').filter((l) => l.startsWith('- '));
+  expect(
+    listed.status === 0 && listed.out.includes('session s-gate-closing') && compactedLines.every((l) => listed.out.includes(`  ${l}\n`)) && listed.out.includes('gate: no open loop — 1 close(s) at the next dispatch'),
+    `gate --status: the latest session's loops, as a compaction hands them over — got ${listed.out}`,
+  );
+  const picked = run(['gate', '--status', '--session', 's-gate-c', '--project', project]);
+  const ambiguous = run(['gate', '--status', '--session', 's-gate', '--project', project]);
+  expect(
+    picked.out.includes('session s-gate-closing') && ambiguous.status === 2 && /\d+ sessions start with "s-gate" — give more of the id/.test(ambiguous.out),
+    `gate --status: --session picks a session by the start of its id, and refuses one that names two — got ${picked.out}${ambiguous.out}`,
+  );
 
   // A pin whose version ships no gate: the composed file may still be on disk, and it does nothing.
   const old = await scratch();
