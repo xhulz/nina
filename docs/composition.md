@@ -95,8 +95,8 @@ Prisma skills, the offline `validate` and `migrate diff`, the commands that dest
 Accelerate's `cacheStrategy`, stated as applying where reads go through it; `drizzle` holds the same
 for Drizzle. An engine is a stack too when it differs in ways that lose data: `d1` holds what D1 does
 that a database surface cannot assume — no interactive transaction, a 100-parameter limit, table
-redefinitions that fire foreign-key actions — and needs `edge-cf` as well as `db`, since D1 runs nowhere
-else. `src/surfaces.mjs` says which surfaces a stack needs — `check` refuses `prisma` without `db` and `d1`
+redefinitions that fire foreign-key actions — and needs `edge-cf` as well as `db`, since its binding is reached from a
+Worker. `src/surfaces.mjs` says which surfaces a stack needs — `check` refuses `prisma` without `db` and `d1`
 without either, and `init` asks about a stack only once each of them is a yes — and which surfaces a
 repository's files reveal. A stack may name the technologies of the surfaces it needs, since it composes
 only beside them; the leak audit lets it. Where two stacks meet — Drizzle on D1 — neither may name the
