@@ -6,7 +6,7 @@
 ## Visual acceptance — required in any spec touching `{{APP_DIR}}/**`
 
 A frontend spec that describes only structure produces a diff that only structure can verify, and
-structure is exactly what jsdom checks while being blind to the result. So state, as a short
+structure is exactly what a test renderer checks while blind to the result. So state, as a short
 checklist, what must be TRUE ON THE SCREEN at **1440** and at **375**:
 
 - what is visible, and what must not be
