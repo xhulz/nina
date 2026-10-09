@@ -23,6 +23,7 @@ not cover is wasted context.
 <!-- nina:slot edge-cf.3 -->
 <!-- nina:slot edge-cf.4 -->
 <!-- nina:slot prisma.1 -->
+<!-- nina:slot d1.1 -->
 <!-- nina:slot frontend.1 -->
 <!-- nina:slot project.4 skills -->
 

@@ -143,6 +143,7 @@ Every request (and queue/webhook invocation) traverses three layers in order. **
 <!-- nina:slot db.5 -->
 <!-- nina:slot prisma.3 -->
 <!-- nina:slot drizzle.1 -->
+<!-- nina:slot d1.1 -->
 <!-- nina:slot integrations.3 -->
 <!-- nina:slot project.2 integration-error-types -->
 

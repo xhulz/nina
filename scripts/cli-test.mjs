@@ -4540,6 +4540,10 @@ const dated = (date, status = 'active') =>
   const profile = JSON.parse(await readFile(profilePath, 'utf8'));
   await writeFile(profilePath, JSON.stringify({ ...profile, surfaces: profile.surfaces.filter((s) => s !== 'db') }));
   expect(run(['check', '--project', stranded], { loud: true }).out.includes('surface "prisma" is a stack of "db", which this profile does not declare'), 'surfaces: check refuses a stack declared without its concern');
+  // A stack of two needs both: D1 is a database, and it lives on the Cloudflare edge.
+  await writeFile(profilePath, JSON.stringify({ ...profile, surfaces: [...profile.surfaces.filter((s) => s !== 'edge-cf'), 'd1'] }));
+  const halfD1 = run(['check', '--project', stranded], { loud: true }).out;
+  expect(halfD1.includes('surface "d1" is a stack of "edge-cf", which this profile does not declare'), `surfaces: check refuses a stack missing one of the two surfaces it needs — got ${halfD1}`);
 
   // The interview asks about the stack only once the concern is a yes, and a Prisma schema reveals both.
   const both = await scratch();
@@ -4555,6 +4559,14 @@ const dated = (date, status = 'active') =>
   const none = await scratch();
   const interviewed = run(['init', '--project', none, '--core', 'dev', '--ask'], { input: `x\n\n${'n\n'.repeat(12)}` }).out;
   expect(!interviewed.includes('Does it reach that data through Prisma?') && interviewed.includes('Does it own persistent data of its own?'), 'surfaces: a project that owns no data is not asked how it reaches it');
+  // D1 is asked about only once both the database and the Cloudflare edge are a yes. In order: db, prisma,
+  // drizzle, frontend, integrations, pii, money, edge-cf, then d1.
+  const offEdge = run(['init', '--project', await scratch(), '--core', 'dev', '--ask'], { input: `x\n\ny\n${'n\n'.repeat(12)}` }).out;
+  const onEdge = run(['init', '--project', await scratch(), '--core', 'dev', '--ask'], { input: `x\n\ny\n${'n\n'.repeat(6)}y\n${'n\n'.repeat(12)}` }).out;
+  expect(
+    offEdge.includes('Does it run on Cloudflare Workers or Pages?') && !offEdge.includes('Does it keep that data in Cloudflare D1?') && onEdge.includes('Does it keep that data in Cloudflare D1?'),
+    'surfaces: a stack of two needs is asked about only once both are a yes',
+  );
 
   // Moving onto a release that splits a stack out of a concern: a project whose files show the stack is
   // told, and the move waits for it to be declared, rather than dropping its rules in silence.

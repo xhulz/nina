@@ -41,6 +41,7 @@ const QUESTIONS = {
   integrations: 'Does it depend on anything whose behavior it does not define?',
   frontend: 'Does it render a screen a person looks at?',
   'edge-cf': 'Does it run on Cloudflare Workers or Pages?',
+  d1: 'Does it keep that data in Cloudflare D1?',
   // Not "does it use blockchain" — that is a technology, and a technology is not a reason to
   // gate anything. What this surface costs is immutability: code that ships cannot be edited.
   blockchain: 'Does it deploy code that cannot be changed once it is live?',
@@ -60,7 +61,7 @@ function questionFor(surface) {
  * The order the interview asks in: the surfaces most projects have first, the rare ones last. Asked
  * alphabetically, the first question a web app met was whether it deploys immutable code.
  */
-const ASK_ORDER = ['db', 'prisma', 'drizzle', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'blockchain'];
+const ASK_ORDER = ['db', 'prisma', 'drizzle', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'd1', 'blockchain'];
 
 /**
  * The surfaces a core offers, in the order the interview asks them; one it does not know goes last.

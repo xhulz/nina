@@ -20,6 +20,7 @@ Mandatory triggers:
 <!-- nina:slot edge-cf.6 -->
 <!-- nina:slot prisma.1 -->
 <!-- nina:slot prisma.2 -->
+<!-- nina:slot d1.1 -->
 
 **Each agent spec now carries its own binding table** (`.claude/agents/<role>.md` § *Skills you MUST consult*), because a rule that lives only here is not in front of a stage when it acts.<!-- nina:why --> It was invoked 2 times in 743 subagent runs.<!-- /nina:why --> `qa` and `planner` have no skill bound — none of the installed skills covers running tests or decomposition, and an invented binding is worse than none.
 <!-- nina:slot edge-cf.7 -->

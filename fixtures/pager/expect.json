@@ -1,0 +1,22 @@
+{
+  "describe": "A project whose database is D1, reached through Drizzle, served with its SPA from one Worker. Exists to prove the drizzle and d1 stacks compose beside db and edge-cf, and that nothing of the Prisma stack reaches a project that does not declare it.",
+  "deny": [
+    "Prisma",
+    "prisma",
+    "Accelerate",
+    "cacheStrategy",
+    "Spliter",
+    "money",
+    "payout",
+    "escrow",
+    "Solidity"
+  ],
+  "absent": [
+    ".claude/agents/solidity-dev.md",
+    ".claude/agents/solidity-auditor.md"
+  ],
+  "present": [
+    ".claude/agents/dba.md",
+    ".claude/agents/integration-tester.md"
+  ]
+}

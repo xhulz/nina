@@ -234,15 +234,17 @@ const BUDGETS = {
   '.claude/agents/dba.md': 12500,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
-  // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran.
-  '.claude/agents/implementer.md': 17800,
+  // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
+  // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle.
+  '.claude/agents/implementer.md': 18000,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
   // overwrite-and-restore.
   '.claude/agents/qa.md': 13600,
-  '.claude/agents/reviewer.md': 20000,
+  // Raised for the same profile, which composes every reviewer slot but money's and blockchain's.
+  '.claude/agents/reviewer.md': 20100,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
@@ -307,6 +309,7 @@ const SURFACE_TERMS = {
   // A stack, where `db` is the concern: a project with a database is not thereby a Prisma project.
   prisma: ['Prisma', 'prisma', 'Accelerate', 'cacheStrategy', '@prisma'],
   drizzle: ['Drizzle', 'drizzle-kit', 'drizzle-orm', 'DrizzleQueryError'],
+  d1: ['D1'],
   'edge-cf': ['wrangler', 'Cloudflare', 'Miniflare', 'workerd', 'Durable Object', 'Pages', 'Worker', 'Workers', 'Wrangler'],
   integrations: ['integration-tester', 'INTEGRATION-TESTER'],
   frontend: ['Playwright', 'playwright'],
