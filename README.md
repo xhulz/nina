@@ -84,7 +84,7 @@ mention a route the graph has.
 | Layer | Holds |
 |---|---|
 | core | what's true for every project |
-| surface | what's true for projects that have it: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`, and the `prisma` stack on top of `db` |
+| surface | what's true for projects that have it: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`, and the stacks `prisma` and `drizzle` on top of `db` and `d1` on top of `db` and `edge-cf` |
 | project | what's true for one project only, kept in that project's repo |
 
 Each layer mirrors the project's file tree, and `nina compose` merges them:
