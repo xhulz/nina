@@ -21,7 +21,7 @@ This is the closest thing the harness has to RAG for development. Treat it as au
 **Rule:** Before grepping the repo to find which files participate in a domain, load `.claude/code-map.md`. Two layers:
 
 - **`.claude/code-map.md`** — hand-curated. Purpose, invariants, the critical paths, what to reuse. **Read this one.**
-- **`.claude/code-map.generated.md`** — the exhaustive mechanical inventory (every module, its exports, its test) plus the dead-export and untested-module reports, produced by the project's generator. Go here when you need the full list.
+- **`.claude/code-map.generated.md`** — the exhaustive mechanical inventory (every module, its exports, its test) plus the dead-export and untested-module reports, built by a script of the project's own: the harness ships none. Go here when you need the full list. A project with no such script yet defers this file in its profile, and `.claude/code-map.md` is then the whole map — every instruction that points here falls back to it.
 
 Where the project checks the curated map against the tree, its `harness:check` runs that check every turn. **A "does this helper already exist?" question is answered here, not by writing a second one.**
 
