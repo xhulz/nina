@@ -250,7 +250,9 @@ const BUDGETS = {
   '.claude/agents/solidity-dev.md': 8500,
   '.claude/frontend.md': 3000,
   '.claude/graph.md': 6500,
-  '.claude/patterns.md': 20500,
+  // Raised for a D1 project's findings that hold for every project: a schema generator never writes the
+  // tracked schema, and an integration may be of more than one kind.
+  '.claude/patterns.md': 20700,
   '.claude/pills/README.md': 10000,
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,

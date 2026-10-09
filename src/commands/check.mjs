@@ -282,8 +282,12 @@ export async function check(argv, ctx) {
     for (const [field, why] of Object.entries(INTEGRATION_FIELDS)) {
       if (!entry?.[field]) problems.push(`${label} has no "${field}" — it ${why}`);
     }
-    if (entry?.kind && !KINDS.includes(entry.kind)) {
-      problems.push(`${label} has kind "${entry.kind}" — expected one of ${KINDS.join(', ')}`);
+    // A client library over a platform binding is both kinds: its own behavior is cited from its installed
+    // source, the binding's from the emulator, and one kind left half its premises with no form of evidence.
+    const kinds = [entry?.kind].flat().filter((kind) => kind !== undefined && kind !== null && kind !== '');
+    if (Array.isArray(entry?.kind) && kinds.length === 0) problems.push(`${label} has no "kind" — it ${INTEGRATION_FIELDS.kind}`);
+    for (const kind of kinds) {
+      if (!KINDS.includes(kind)) problems.push(`${label} has kind "${kind}" — expected one of ${KINDS.join(', ')}, or a list of them`);
     }
     if (entry?.slug && !existsSync(join(target, '.claude', 'integrations', `${entry.slug}.md`))) {
       owe(`.claude/integrations/${entry.slug}.md`, `${label} has no doc at .claude/integrations/${entry.slug}.md — a premise has nowhere to live`);

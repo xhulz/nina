@@ -10,7 +10,7 @@
 
 ## Integrations (enforced by integration-tester + reviewer)
 
-An **integration** is a dependency whose behavior this project does not define. Each one is declared in `.nina/profile.json` with a `kind`, and the kind decides what counts as evidence:
+An **integration** is a dependency whose behavior this project does not define. Each one is declared in `.nina/profile.json` with a `kind`, or a list of them, and a premise's kind decides what counts as evidence for it:
 
 | kind | what it is | a premise is settled by |
 |---|---|---|
