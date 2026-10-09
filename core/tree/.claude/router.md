@@ -178,7 +178,7 @@ milestone by, and what `qa` checks a "pre-existing" failure against.
 ### Keep these serial
 
 - **`qa`.** Vitest is ~2–3 GB per worker; concurrent invocations take the machine down. One run, at
-  the end of each pass. This is not negotiable and is not a speed problem — the suites are seconds, except any
+  the end of each pass. This is not negotiable and is not a speed problem — the suites are seconds, except those
   `CLAUDE.md` names as slow.
 - **The merge**, always.
 - **A loop-back.** When a stage rejects, fix and re-run that stage; do not fan out around a failure.
