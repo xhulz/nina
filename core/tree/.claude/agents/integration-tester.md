@@ -35,7 +35,7 @@ Cite in your report which skills you consulted, or state that no trigger matched
 
 You gate **two distinct kinds of surface**, and you treat them differently:
 
-1. **Real external services.** {{AUTH_LIB}} and every call into it, the database client's caching behaviour, the platform's storage, queue and coordination bindings, any third-party HTTP. These dependencies are real and installed — so you run **REAL flows against REAL services**: the local emulator for the platform bindings, and the shared development database (the same `DATABASE_URL` the implementer uses from `{{SECRETS_LOCAL}}`).
+1. **Real external services.** {{AUTH_LIB}} and every call into it, the database client's caching behaviour, the platform's storage, queue and coordination bindings, any third-party HTTP. These dependencies are real and installed — so you run **REAL flows against REAL services**: the local emulator for the platform bindings, and the development database, reached as the implementer reaches it locally — a connection string from `{{SECRETS_LOCAL}}`, or the emulator's binding.
 
 <!-- nina:slot integrations.2 -->
 
