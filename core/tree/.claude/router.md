@@ -25,11 +25,13 @@ The stages, and the edges between them, are in `.claude/graph.md` — the one pl
 
 Where the project wires the **loop gate** (`scripts/loop-gate.mjs`, run by hooks — `nina wire` puts them
 in place), the cap is held for you. It counts a round when a dispatch acts on a loop-back a stage
-declared on its `VERDICT` line — per issue, while every report the loop's rounds act on named its issues
-on the `ISSUES` line, and per loop from the first round one did not until it closes — whichever stage the fix
-went to; several dispatches acting on the same verdicts are one round; a review that saw the fix and passed
-closes the loop, while a sibling that approved alongside a rejection releases nothing; and each message from
-{{OWNER}} gives every open loop one round more — your own `AskUserQuestion` does not. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
+declared on its `VERDICT` line — per issue while every round's reports named theirs on the `ISSUES` line,
+per loop from the first that did not until it closes — whichever stage the fix went to; several dispatches
+acting on the same verdicts are one round; and each message from {{OWNER}} gives every open loop one round
+more — your own `AskUserQuestion` does not. A loop closes when a review launched after the latest fix passes
+with no rejection beside it — a resumed one too, and a pass needs no `ISSUES` line — or when the stage it
+hands on to passes. Work run side by side shares one count per stage and verdict: a rejection still open in
+one task keeps another's pass from closing it. The dispatch past the cap goes to {{OWNER}} to confirm. If they refuse it, do
 what the graph says — hand them each round's report and ask how to proceed — and do not route around the
 refusal by resuming the fixer or making the fix yourself.
 
@@ -38,7 +40,7 @@ still goes to {{OWNER}} once it has gone round more than twice its cap with no a
 not see a fix you make without a subagent — so keep your own count as well, gate or no gate. When you
 dispatch a second round on an edge, say "round 2 of max 2 on <edge>" in the dispatch itself, so the
 count is in the transcript for whoever reads it next. After a compaction the gate hands you its open loops
-and the documents to read again.
+and the documents to read again; `nina gate --status` lists them, and what closes each, at any time.
 
 ### Milestone gate
 
@@ -80,7 +82,9 @@ A spike is an experiment: it answers a question about a service, a library or th
 designed on it, and its code is evidence, kept in a directory of its own outside the product's packages.
 The architect writes a spike plan, one page, not a spec: the question, what to run and observe, the
 answer that settles it, and when to stop. The reviewer checks that it measures what it says it measures.
-No qa, devops or secops. Its plan is corrected at most twice; past that, or when its answer raises a new
+No qa, devops or secops. A plan in steps runs them as a spec's (§ *A spec's steps are passes of their own*):
+a step that builds on another goes out once every review of that one approved, whatever the plan says. Its plan is
+corrected at most twice, counting a correction you make in place; past that, or when its answer raises a new
 question, stop and ask {{OWNER}}: a new question is a new spike, and a spike revised past its question is
 the product being designed without a spec.
 

@@ -4515,9 +4515,24 @@ const dated = (date, status = 'active') =>
   const spike = chainsByShape(claude).find((row) => row.shape.startsWith('Spike'));
   expect(spike?.chain === 'architect (spike plan) → implementer → reviewer', `flow: a spike takes the architect's plan, the implementer and the reviewer — got ${JSON.stringify(spike)}`);
   expect(
-    router.includes('### A spike answers one question') && router.includes('Its plan is corrected at most twice') && architect.includes('a one-page **spike plan** instead') &&
+    router.includes('### A spike answers one question') && router.includes('Its plan is\ncorrected at most twice') && architect.includes('a one-page **spike plan** instead') &&
       reviewer.includes('- **A spike** (`.claude/router.md` § *A spike answers one question*) is reviewed for one thing') && graph.edges.some((e) => e.from === 'reviewer' && e.to === 'done' && e.when.startsWith('a spike')),
     'flow: a spike is planned on a page, reviewed for whether it measures what it says, ends at the review, and is corrected at most twice',
+  );
+  // A spike plan in two steps said to review both together, and the orchestrator reviewed the first before the
+  // second was built on it, as a spec's steps are; its second correction was its own, and nothing said whether it
+  // counted.
+  expect(
+    router.includes("A plan in steps runs them as a spec's (§ *A spec's steps are passes of their own*)") && router.includes('whatever the plan says') &&
+      router.includes('counting a correction you make in place'),
+    "flow: a spike plan's steps each pass their review before one builds on them, and the orchestrator's own correction counts",
+  );
+  // How a loop closes, said where the orchestrator reads it. Three spikes run side by side were handed back after a
+  // compaction as one capped loop, and the orchestrator could not tell whether a resumed reviewer's pass had closed it.
+  expect(
+    router.includes('a resumed one too, and a pass needs no `ISSUES` line') && router.includes('Work run side by side shares one count per stage and verdict') &&
+      router.includes('`nina gate --status` lists them'),
+    'flow: the router says what closes a loop, that work side by side shares its count, and where the loops are listed',
   );
 
   // A premise of a live service is observed before the design that needs it. The architect had to cite a
