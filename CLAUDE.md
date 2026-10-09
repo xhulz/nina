@@ -25,8 +25,8 @@ Each layer mirrors the project tree, so `core/tree/CLAUDE.md` composes to
 `<project>/CLAUDE.md` and `core/tree/.claude/agents/reviewer.md` to
 `<project>/.claude/agents/reviewer.md`.
 
-Surfaces today: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`, and `prisma`,
-a stack on top of `db`. A surface is a concern — what the interview asks about — and never one project's
+Surfaces today: `db`, `money`, `integrations`, `frontend`, `pii`, `edge-cf`, `blockchain`, and three stacks:
+`prisma` and `drizzle` on top of `db`, and `d1` on top of `db` and `edge-cf`. A surface is a concern — what the interview asks about — and never one project's
 choice of framework, client or key: those go in its own layer or vocabulary (`docs/composition.md`). A
 project declares the ones it has in `.nina/profile.json`, along with a `vocabulary` — its own
 names for the things the core talks about generically.
