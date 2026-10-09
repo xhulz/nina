@@ -297,6 +297,16 @@ export async function check(argv, ctx) {
       notes.push(`${label} names boundary "${entry.boundary}", which does not exist yet`);
     }
   }
+  // The other direction: a doc no integration declares is retired, waits for its boundary, or lost its
+  // declaration, and nothing told a reader which. Said as a note, and as a deferral once the profile says why.
+  const declaredSlugs = new Set(integrations.map((entry) => entry?.slug));
+  const docs = await readdir(join(target, '.claude', 'integrations')).catch(() => []);
+  for (const doc of docs.filter((name) => name.endsWith('.md') && !declaredSlugs.has(name.slice(0, -'.md'.length))).sort()) {
+    const key = `.claude/integrations/${doc}`;
+    const why = deferredWhy(profile, key);
+    if (why) deferredUsed.add(key);
+    notes.push(why ? `deferred: ${key} — ${why}` : `${key} documents no declared integration — declare it, or say under "deferred" why not: retired, or waiting for its boundary`);
+  }
 
   const slots = await projectSlots(resolved.dir, surfaces);
   const filled = await filledSlots(target);

@@ -35,6 +35,13 @@ deferrals, through the same `deferredWhy`: it once read none, and a new project'
 `[AUTH_LIB: not decided yet]`, so a stage that meets it asks rather than reading a raw placeholder as a
 slip to work around.
 
+An integration is checked both ways. A declared one must have its doc at `.claude/integrations/<slug>.md`, and
+a doc there that no integration declares is a note: a project kept one for the library it replaced, as the
+record of why, and one for a boundary a later plan creates, and from the profile nobody could tell either from
+a declaration that was forgotten. The same `"deferred"` says which, with its reason —
+`".claude/integrations/prisma-d1.md": "retired: Prisma was replaced by Drizzle"` — rather than a second list
+for the same decision.
+
 `where` answers the question that comes before all of them: **an agent has something to write — does
 it go here at all?** The composed tree carries no provenance, because `nina:slot` and `nina:requires`
 are consumed at composition, so a line in a project's `.claude/agents/qa.md` cannot say whether it came

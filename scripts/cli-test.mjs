@@ -368,6 +368,18 @@ expect(
   expect((await withKinds([])).includes('integration "stripe" has no "kind"'), 'check: an empty list of kinds is no kind');
   expect(out.includes('.claude/integrations/stripe.md'), 'check: should want a doc for a declared integration');
   expect(out.includes('project slot(s) have no fragment'), 'check: should count the unfilled project layer');
+  // And the other direction: a doc no integration declares. A project kept one for an integration it replaced and
+  // one for a boundary still to be built, and nothing told a reader either from a forgotten declaration.
+  await mkdir(join(dir, '.claude', 'integrations'), { recursive: true });
+  for (const doc of ['stripe', 'old-pay', 'queue']) await writeFile(join(dir, '.claude', 'integrations', `${doc}.md`), `# ${doc}\n`);
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ ...kindsProfile, deferred: { '.claude/integrations/queue.md': 'pending: its boundary comes with plan 4.1' } }));
+  const undeclared = run(['check', '--project', dir]).out;
+  expect(
+    undeclared.includes('.claude/integrations/old-pay.md documents no declared integration — declare it, or say under "deferred" why not') &&
+      undeclared.includes('deferred: .claude/integrations/queue.md — pending: its boundary comes with plan 4.1') &&
+      !undeclared.includes('".claude/integrations/queue.md" is deferred') && !undeclared.includes('stripe.md documents no'),
+    `check: an integration doc nothing declares is noted, and one deferred with a reason says it — got ${undeclared}`,
+  );
 }
 
 // ─── upgrade: refuses while the project would lose text it wrote ────────────────────────
