@@ -12,10 +12,14 @@
  * `init`, `check` and `upgrade` all read this, so a surface's evidence and its prerequisite are stated once.
  */
 
+/** A drizzle-kit config, which a Drizzle project usually has and nothing else names so. */
+const DRIZZLE_CONFIG = /(^|\/)drizzle\.config\.[cm]?[jt]s$/;
+
 /** Surfaces a repository reveals by its files. The rest are claims about the domain. */
 export const DETECTABLE = [
-  { surface: 'db', why: 'a Prisma schema', test: (f) => f.some((p) => p.endsWith('schema.prisma')) },
+  { surface: 'db', why: 'a Prisma schema or a drizzle-kit config', test: (f) => f.some((p) => p.endsWith('schema.prisma') || DRIZZLE_CONFIG.test(p)) },
   { surface: 'prisma', why: 'a Prisma schema', test: (f) => f.some((p) => p.endsWith('schema.prisma')) },
+  { surface: 'drizzle', why: 'a drizzle-kit config', test: (f) => f.some((p) => DRIZZLE_CONFIG.test(p)) },
   { surface: 'edge-cf', why: 'a wrangler config', test: (f) => f.some((p) => /(^|\/)wrangler\.(toml|jsonc?)$/.test(p)) },
   { surface: 'frontend', why: 'a Vite config', test: (f) => f.some((p) => /(^|\/)vite\.config\.[cm]?[jt]s$/.test(p)) },
   { surface: 'blockchain', why: 'a Foundry or Hardhat config', test: (f) => f.some((p) => /(^|\/)(foundry\.toml|hardhat\.config\.[cm]?[jt]s)$/.test(p)) },
@@ -25,7 +29,7 @@ export const DETECTABLE = [
  * A stack surface, and every surface it is a stack of: declared without one of them, its rules have nowhere
  * to land. Most stacks need one concern; an engine that only runs on one platform needs the platform too.
  */
-export const NEEDS = { prisma: ['db'] };
+export const NEEDS = { prisma: ['db'], drizzle: ['db'] };
 
 /**
  * What a stack needs that a profile does not declare — empty for a surface that is not a stack.

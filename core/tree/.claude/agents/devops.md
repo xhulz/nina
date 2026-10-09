@@ -44,6 +44,7 @@ it is a deploy built on recall.
 <!-- nina:slot frontend.2 -->
 <!-- nina:slot db.2 -->
 <!-- nina:slot prisma.2 -->
+<!-- nina:slot drizzle.1 -->
 <!-- nina:slot edge-cf.4 -->
 - **Smoke against preview, never prod first.** Exercise the actual changed path — an endpoint, a page render, a webhook — against the preview URL or staging route. A deploy that returns 200 on `/health` is not a smoke test.
 - **Name the rollback before deploying.** The previous deployment of each target to roll back to, and whether the migration is reversible. If a change is not rollable back, say so *before* deploying, not after.
@@ -63,6 +64,7 @@ it is a deploy built on recall.
 - Deploy to production without an explicit go for *this* change.
 <!-- nina:slot prisma.3 -->
 <!-- nina:slot prisma.4 -->
+<!-- nina:slot drizzle.2 -->
 - Edit code, tests, or config to make a deploy pass. If the deploy fails because the code is wrong, that is a loop-back to implementer or architect — say which, and why.
 - Run vitest in any form (qa owns test execution).
 - Smoke in production first and call it verification.

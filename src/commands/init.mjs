@@ -35,6 +35,7 @@ const QUESTIONS = {
   'external-api': 'Does it depend on anything whose behavior it does not define?',
   db: 'Does it own persistent data of its own?',
   prisma: 'Does it reach that data through Prisma?',
+  drizzle: 'Does it reach that data through Drizzle?',
   money: 'Does it conserve and distribute an amount — money in equals money out plus retained?',
   pii: 'Does it hold data about people that would harm someone specific if it leaked?',
   integrations: 'Does it depend on anything whose behavior it does not define?',
@@ -59,7 +60,7 @@ function questionFor(surface) {
  * The order the interview asks in: the surfaces most projects have first, the rare ones last. Asked
  * alphabetically, the first question a web app met was whether it deploys immutable code.
  */
-const ASK_ORDER = ['db', 'prisma', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'blockchain'];
+const ASK_ORDER = ['db', 'prisma', 'drizzle', 'frontend', 'integrations', 'pii', 'money', 'edge-cf', 'blockchain'];
 
 /**
  * The surfaces a core offers, in the order the interview asks them; one it does not know goes last.
