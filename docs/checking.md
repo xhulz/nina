@@ -112,8 +112,10 @@ nina pipeline --view --project ../thing             # live: the newest session, 
 nina pipeline --view --replay --session 85d7        # one session played from its first dispatch
 ```
 
-The same graph as an office seen from above, in pixels: a desk for each stage, the orchestrator at the desk that
-faces the room, the owner by the door, and each agent the loop gate saw launched sitting at its stage's desk. It
+The same graph as an office seen from above, in pixels: a floor plan with a room for each phase — design, build,
+review and the gates, the test lab, release — off one corridor, a desk for each stage in its room (two for a stage
+that runs as several agents), the orchestrator behind the reception counter, the owner at it, a garden outside the
+door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger and nothing else, so it shows what the ledger holds — who worked, what they answered, the
 ids of the issues they named — and never a word anyone wrote. A dispatch is someone sitting down to work, the
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
