@@ -237,7 +237,7 @@ expect(
 // ─── init: a surface the core offers but nobody wrote a question for ────────────────────
 {
   const source = await readFile(join(ROOT, 'src', 'commands', 'init.mjs'), 'utf8');
-  const asked = new Set([...source.matchAll(/^\s*'?([a-z-]+)'?:\s*'Does it/gm)].map((m) => m[1]));
+  const asked = new Set([...source.matchAll(/^\s*'?([a-z][a-z0-9-]*)'?:\s*'Does it/gm)].map((m) => m[1]));
   // The newest core must have a real question for every surface it offers. Older ones only
   // have to not break: a release is immutable, so a surface it names may since have been
   // renamed, and the interview falls back to a plain question rather than an empty one.

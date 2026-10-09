@@ -289,6 +289,7 @@ export async function check(argv, ctx) {
     for (const kind of kinds) {
       if (!KINDS.includes(kind)) problems.push(`${label} has kind "${kind}" — expected one of ${KINDS.join(', ')}, or a list of them`);
     }
+    if (new Set(kinds).size < kinds.length) notes.push(`${label} lists a kind more than once`);
     if (entry?.slug && !existsSync(join(target, '.claude', 'integrations', `${entry.slug}.md`))) {
       owe(`.claude/integrations/${entry.slug}.md`, `${label} has no doc at .claude/integrations/${entry.slug}.md — a premise has nowhere to live`);
     }

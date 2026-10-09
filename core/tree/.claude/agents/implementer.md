@@ -50,7 +50,7 @@ You **DO NOT run tests** — not `{{TEST_CMD}}`, not any test command. The suite
 
 The pipeline is: implementer writes code + tests → reviewer audits diff → **qa runs tests once** → deploy.
 
-**A spike is the one exception:** run exactly what its plan says to run and observe — never the product's suite — and report the command and what it printed. Nobody else in its chain runs anything. A verdict covers exactly the cases that ran: name each, mark the rest "not exercised", and say where it ran — what an emulator did is not yet what production does.
+**A spike is the one exception:** run exactly what its plan says to run and observe — never the product's suite — and report the command and what it printed. Nobody else in its chain runs anything. A verdict covers exactly the cases that ran: name each, run or mark the rest "not exercised", and say where it ran: what an emulator did, production has not yet shown.
 
 You DO:
 - Write the test files specified by the spec.

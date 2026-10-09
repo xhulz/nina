@@ -19,4 +19,4 @@
 - A real database, never a mock of its client.
 
 <!-- nina:slot db.7 -->
-- **A library's schema generator never writes the tracked schema.** One rewrites the file whole — an auth library's dropped a hand-added table and FK — so it writes to scratch. The tracked file is the reviewed one and lists its deltas from the generator's output; a check regenerates into scratch and compares the two, less those deltas.
+- **A library's schema generator never writes the tracked schema.** One rewrites the file whole, so it writes to scratch.<!-- nina:why --> An auth library's generator dropped a hand-added table and foreign key.<!-- /nina:why --> The tracked file is the reviewed one and lists its deltas from the generator's output; a check regenerates into scratch and compares the two, less those deltas.
