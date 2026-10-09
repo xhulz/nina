@@ -1,0 +1,37 @@
+{
+  "core": "dev",
+  "surfaces": [
+    "db",
+    "drizzle",
+    "frontend",
+    "integrations",
+    "pii",
+    "edge-cf",
+    "d1"
+  ],
+  "integrations": [
+    {
+      "slug": "better-auth",
+      "name": "Better Auth",
+      "kind": "installed-library",
+      "boundary": "apps/worker/src/auth",
+      "skill": null
+    }
+  ],
+  "vocabulary": {
+    "PROJECT": "Pager",
+    "OWNER": "the maintainer",
+    "DB_PKG": "packages/db",
+    "DB_PKG_NAME": "@pager/db",
+    "PKG_SCOPE": "@pager",
+    "API_DIR": "apps/worker",
+    "APP_DIR": "apps/web",
+    "AUTH_LIB": "Better Auth",
+    "SECRETS_LOCAL": ".dev.vars",
+    "SECRETS_PROD": "wrangler secret put",
+    "EMITTING_PKGS": "none: every package exports its TS source",
+    "VISUAL_SERVE": "pnpm serve",
+    "TENANT_KEY": "orgId",
+    "PRIVACY_REGIME": "GDPR as the design baseline"
+  }
+}

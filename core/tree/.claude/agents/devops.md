@@ -45,6 +45,7 @@ it is a deploy built on recall.
 <!-- nina:slot db.2 -->
 <!-- nina:slot prisma.2 -->
 <!-- nina:slot drizzle.1 -->
+<!-- nina:slot d1.1 -->
 <!-- nina:slot edge-cf.4 -->
 - **Smoke against preview, never prod first.** Exercise the actual changed path — an endpoint, a page render, a webhook — against the preview URL or staging route. A deploy that returns 200 on `/health` is not a smoke test.
 - **Name the rollback before deploying.** The previous deployment of each target to roll back to, and whether the migration is reversible. If a change is not rollable back, say so *before* deploying, not after.

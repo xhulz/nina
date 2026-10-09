@@ -20,6 +20,7 @@ not cover is wasted context.
 | Skill | Invoke when… |
 |---|---|
 <!-- nina:slot prisma.1 -->
+<!-- nina:slot d1.1 -->
 <!-- nina:slot project.4 skills -->
 
 <!-- nina:slot prisma.2 -->
@@ -54,12 +55,14 @@ Either:
 <!-- nina:slot prisma.3 -->
 <!-- nina:slot drizzle.2 -->
 <!-- nina:slot db.8 -->
+<!-- nina:slot d1.2 -->
 <!-- nina:slot db.9 -->
 <!-- nina:slot db.10 -->
 <!-- nina:slot db.11 -->
 <!-- nina:slot prisma.4 -->
 <!-- nina:slot money.1 -->
 <!-- nina:slot db.12 -->
+<!-- nina:slot d1.3 -->
 <!-- nina:slot money.2 -->
 <!-- nina:slot money.3 -->
 <!-- nina:slot pii.1 -->

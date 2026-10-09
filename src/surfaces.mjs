@@ -29,7 +29,7 @@ export const DETECTABLE = [
  * A stack surface, and every surface it is a stack of: declared without one of them, its rules have nowhere
  * to land. Most stacks need one concern; an engine that only runs on one platform needs the platform too.
  */
-export const NEEDS = { prisma: ['db'], drizzle: ['db'] };
+export const NEEDS = { prisma: ['db'], drizzle: ['db'], d1: ['db', 'edge-cf'] };
 
 /**
  * What a stack needs that a profile does not declare — empty for a surface that is not a stack.
