@@ -114,8 +114,8 @@ drops them with every report — the router had told the orchestrator to write e
 dispatch so that it could see it after one, and after one it sees only a summary.
 
 A review that saw the fix and passed closes its loop at the next dispatch the loop could act on, not when it
-reports, so a loop in that gap is still counted — and it is said to be closing, with the dispatch that will
-close it. Listed as open, three loops approved the evening before a compaction came back the next morning as
+reports, so a loop in that gap is still counted — and it is said to be settled, with nothing owed on it, and
+which dispatch will drop its count; when the work is done, none ever comes, and none needs to. Listed as open, three loops approved the evening before a compaction came back the next morning as
 "2 round(s), capped at 2", with issues from three spikes, and the orchestrator went looking for why. `nina gate
 --status` prints the same lines at any time, for the session whose ledger was written last or the one
 `--session` names by the start of its id: one function writes both.

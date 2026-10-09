@@ -229,7 +229,8 @@ async function interview(available, matched, impacts) {
       if (missingNeeds(s, surfaces).length > 0) continue;
       // Counted by what is asked, not by place in the list: numbered by place, a no to the database read
       // 1/10 then 4/10, and the header promised ten questions to someone asked seven. The total is what is
-      // asked so far plus what can still be, so a no shrinks it and the last question is always n/n.
+      // asked so far plus what can still be, so a no shrinks it; the last question is n/n while the order
+      // ends with a surface that needs nothing, as it does.
       asked += 1;
       const total = asked + order.slice(n + 1).filter((t) => missingNeeds(t, [...surfaces, ...order.slice(n)]).length === 0).length;
       const i = impacts[s];
