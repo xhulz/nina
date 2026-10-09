@@ -142,8 +142,8 @@ run them one after another and buy nothing.
 Two implementers write at once only on work that shares no file and builds on nothing the other writes:
 the planner's `PARALLEL-SAFE`, a step's `Builds on` and the binding file lists say which. Where decides how:
 
-- **In different packages, each checked on its own** (typecheck, lint and build scoped to it, as
-  `{{API_DIR}}` and `{{APP_DIR}}` are): side by side in this checkout.
+- **In different packages, each checked on its own** (typecheck, lint and build scoped to it, and none of
+  them building the other package first): side by side in this checkout.
 - **In one package, or where a check spans packages:** each with **`isolation: "worktree"`**. A worktree
   holds only what is committed — every closed pass is (§ *Commits*) — and lacks what git does not track,
   such as dependencies or a virtual environment, until its implementer sets it up.
@@ -178,8 +178,8 @@ milestone by, and what `qa` checks a "pre-existing" failure against.
 ### Keep these serial
 
 - **`qa`.** Vitest is ~2–3 GB per worker; concurrent invocations take the machine down. One run, at
-  the end of each pass. This is not negotiable and is not a speed problem — the suites are seconds, except the
-  `{{API_DIR}}` integration suite, which is slow for its own reasons (real DB).
+  the end of each pass. This is not negotiable and is not a speed problem — the suites are seconds, except any
+  `CLAUDE.md` names as slow.
 - **The merge**, always.
 - **A loop-back.** When a stage rejects, fix and re-run that stage; do not fan out around a failure.
 
