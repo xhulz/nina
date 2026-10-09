@@ -224,7 +224,12 @@ function seatAt(desk, p) {
       slot = idle;
     }
   }
-  if (!slot) return { x: desk.cx + 25 + 7 * (desk.slots.length - 1), y: desk.ry + 42, laneY: desk.slots[0].laneY, col: desk.col, kind: 'stand', who: null, extra: true };
+  if (!slot) {
+    const extra = { x: desk.cx + 25 + 7 * (desk.slots.length - 1), y: desk.ry + 42, laneY: desk.slots[0].laneY, col: desk.col, kind: 'stand', who: p, extra: true };
+    if (p.slot && p.slot.who === p) p.slot.who = null;
+    p.slot = extra;
+    return extra;
+  }
   if (p.slot && p.slot.who === p) p.slot.who = null;
   slot.who = p;
   p.slot = slot;
@@ -268,6 +273,13 @@ function note(at, text) {
 }
 let confetti = [];
 let banner = null;
+/** The stage a dispatch past its cap was for, while the gate's call waits on the owner. */
+let capRole = null;
+function settleCap() {
+  capRole = null;
+  hush(boss, ['alarm']);
+  hush(owner, ['phone']);
+}
 
 function onBeat(b) {
   const desk = b.role ? desks.get(b.role) : null;
@@ -284,6 +296,9 @@ function onBeat(b) {
       p.agent = b.agent;
       people.set(key, p);
     }
+    p.work = b.id;
+    // The dispatch the gate asked about went out: the phone stops.
+    if (capRole === b.role) settleCap();
     p.leaving = false;
     const slot = seatAt(desk, p);
     if (b.instant) {
@@ -325,6 +340,11 @@ function onBeat(b) {
       p.typing = false;
       if (b.asks) say(p, 'ask');
       else if (!b.instant) say(p, b.back ? 'back' : 'pass', 3000);
+      // Someone standing beside a full desk goes once their report is in.
+      if (p.slot?.extra) {
+        wait(p, b.instant ? 0 : 2500);
+        act(p, () => leave(p));
+      }
     };
     if (b.instant) finish();
     else act(p, finish);
@@ -354,13 +374,24 @@ function onBeat(b) {
     return;
   }
   if (b.type === 'cap') {
+    capRole = b.role;
     say(boss, 'alarm');
     say(owner, 'phone');
     if (!b.instant) note(b.at, `gate: ${b.source} → ${b.role} would go past its cap — asking ${ROOM.owner}`);
     return;
   }
+  if (b.type === 'refused' || b.type === 'stale') {
+    // A dispatch the owner refused never ran; a run that never reported has stopped. Either way, whoever sat down
+    // for it gets up — and a refusal answers the gate's call.
+    const p = [...people.values()].find((x) => x.work === b.work);
+    if (p && (!p.agent || b.type === 'stale')) leave(p);
+    if (b.type === 'refused' && capRole === b.role) settleCap();
+    if (!b.instant) note(b.at, b.type === 'refused' ? `${b.role}: not sent — ${ROOM.owner} said no` : `${b.role} stopped without a report`);
+    return;
+  }
   if (b.type === 'owner') {
     for (const p of people.values()) hush(p, ['ask']);
+    capRole = null;
     hush(boss);
     hush(owner);
     if (!b.instant) {
@@ -387,6 +418,7 @@ function reset() {
   lines.length = 0;
   confetti = [];
   banner = null;
+  capRole = null;
 }
 
 // ─── the stream ───────────────────────────────────────────────────────────────────────────────

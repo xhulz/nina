@@ -364,6 +364,14 @@ export async function upgrade(argv, ctx) {
   const scriptsBefore = await shippedScripts(from.dir, surfaces);
   const newScripts = new Set([...(await shippedScripts(onto.dir, kept))].filter((s) => !scriptsBefore.has(s)));
   const unwired = newScripts.size > 0 ? await missingWiring(target, newScripts) : [];
+  // A script already run whose hooks this NINA needs more of — a matcher that grew — holds what it held, so it does
+  // not stop the move; it is said, with what fixes it.
+  const stillRun = new Set([...(await shippedScripts(onto.dir, kept))].filter((s) => scriptsBefore.has(s)));
+  const widened = stillRun.size > 0 ? (await missingWiring(target, stillRun)).filter((w) => w.includes('`nina wire --apply` widens it')) : [];
+  if (widened.length > 0) {
+    for (const w of widened) console.log(`  · ${w}`);
+    console.log('');
+  }
   if (unwired.length > 0) {
     console.log(`  ✗ ${unwired.length} hook(s) or script(s) that ${to}'s new ${[...newScripts].join(', ')} need(s) are not wired:`);
     for (const w of unwired) console.log(`      ${w}`);

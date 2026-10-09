@@ -42,6 +42,23 @@ export const OFFICE_PORT = 6462;
  */
 export const PARTY_QUIET_MS = 20_000;
 
+/** How far back, when a live client moves to a session already running, beats still play rather than set the room. */
+const SWITCH_GRACE_MS = 10_000;
+
+/**
+ * How long a run may go without reporting before the office stops counting it as at work: the longest of 227 runs
+ * measured across three projects took 108 minutes, and the 99th percentile 73. A run that stopped without a verdict
+ * kept every later party away for the rest of its session.
+ */
+export const STALE_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * A dispatch the gate asked about that wrote no `dispatch` entry is taken as refused once the orchestrator launched
+ * something else this long after it. A foreground run still going holds the orchestrator, so nothing else goes out;
+ * dispatches sent together go out within the same moment.
+ */
+const REFUSED_AFTER_MS = 5000;
+
 /** How often a live office looks at the ledger. The gate appends to it as each fact happens. */
 const POLL_MS = 700;
 
@@ -64,41 +81,75 @@ const REPLAY_MIN_GAP_MS = 500;
  * @param {number} [now] - The time a waiting party is judged against; `Infinity` for a session that has ended.
  * @returns {object[]} Beats, each `{id, at, type, ...}`; the id is stable as the ledger grows.
  */
-export function officeBeats(entries, graph, now = Date.now()) {
+export function officeBeats(ledger, graph, now = Date.now()) {
+  const entries = ledger.filter((e) => Number.isFinite(Date.parse(e?.at)));
+  const time = (e) => Date.parse(e.at);
   const dispatches = new Map();
   for (const e of entries) if (e.k === 'dispatch' && e.id && !dispatches.has(e.id)) dispatches.set(e.id, e);
   const announced = new Set(entries.filter((e) => e.k === 'pre' && e.id).map((e) => e.id));
+  const asked = new Set(entries.filter((e) => e.k === 'ask' && e.id).map((e) => e.id));
   const startsWork = (e) => Boolean(e.role) && (e.k === 'pre' || (e.k === 'dispatch' && !(e.id && announced.has(e.id))));
-  const launchOf = (e) => (e.k === 'pre' ? dispatches.get(e.id) : e);
-  const time = (e) => Date.parse(e.at);
-  const routesOf = (role, token) => graph.edges.filter((edge) => edge.from === role && edge.token === token);
+  // What launched a start: its `dispatch` entry, or — until that is written — what its `pre` says of a message.
+  const launchOf = (e) => (e.k === 'pre' ? (dispatches.get(e.id) ?? (e.via ? { via: e.via, agent: e.agent ?? null } : undefined)) : e);
+  const verdicts = entries.filter((e) => e.k === 'verdict' && e.declared && e.agent && e.role);
 
-  // Who was at work when: each start, and each verdict that ends one. A message to an agent still running adds
-  // to its run, and a start whose agent is not known yet — a foreground run still going — ends with nothing.
-  const works = entries.filter((e) => startsWork(e) && !(launchOf(e)?.via === 'SendMessage' && !launchOf(e).resumed)).map((e) => ({ at: time(e), agent: launchOf(e)?.agent ?? null }));
-  const verdicts = entries.filter((e) => e.k === 'verdict' && e.declared && e.agent).map((e) => ({ at: time(e), agent: e.agent }));
-  const busyAt = (moment) => works.some((w) => w.at <= moment && !(w.agent && verdicts.some((v) => v.agent === w.agent && v.at >= w.at && v.at <= moment)));
+  // Each start, and how it ends: by a verdict from its agent, or from its stage while its agent is not known yet —
+  // the page binds them the same way; refused, when the gate asked, no dispatch was written, and the orchestrator
+  // went on to something else; or stale, a run that never reported within `STALE_MS`.
+  const starts = [];
+  entries.forEach((e, i) => {
+    if (!startsWork(e)) return;
+    const launched = launchOf(e);
+    const at = time(e);
+    const ranBefore = (agent) => {
+      const last = starts.findLast((s) => s.agent === agent && !s.message);
+      return last && !verdicts.some((v) => v.agent === agent && time(v) >= last.at && time(v) <= at);
+    };
+    // A message to an agent still running adds to its run; known for certain from the dispatch, before that from
+    // whether the agent it names had reported since it last started.
+    const message = launched?.via === 'SendMessage' && (launched.resumed === undefined ? Boolean(launched.agent) && Boolean(ranBefore(launched.agent)) : !launched.resumed);
+    const after = e.k === 'pre' && e.id && asked.has(e.id) && !dispatches.has(e.id) ? entries.slice(i + 1).find((x) => x.k === 'pre' && time(x) > at + REFUSED_AFTER_MS) : null;
+    starts.push({ i, at, role: e.role, agent: launched?.agent ?? null, message, refusedAt: after ? time(after) : null });
+  });
+  const endOf = (s) => {
+    const v = verdicts.find((x) => time(x) >= s.at && (s.agent ? x.agent === s.agent : x.role === s.role));
+    return v ? time(v) : null;
+  };
+  for (const s of starts) s.end = s.message ? s.at : endOf(s);
+  const busyAt = (moment) =>
+    starts.some((s) => !s.message && s.at <= moment && moment - s.at < STALE_MS && !(s.refusedAt !== null && s.refusedAt <= moment) && !(s.end !== null && s.end <= moment));
 
   const beats = [];
+  const seen = new Map();
+  /** An id stable as the ledger grows: the tool_use id where there is one, else what the entry says and its count. */
+  const idOf = (e) => {
+    if (e.id) return `${e.k}:${e.id}`;
+    const key = `${e.k}:${e.at}:${e.agent ?? e.role ?? ''}`;
+    const nth = (seen.get(key) ?? 0) + 1;
+    seen.set(key, nth);
+    return `${key}:${nth}`;
+  };
   let reported = null;
   let batch = [];
   entries.forEach((e, i) => {
     const at = time(e);
-    if (!Number.isFinite(at)) return;
-    const id = `${e.k}:${e.id ?? `${e.at}:${e.agent ?? e.role ?? i}`}`;
+    const id = idOf(e);
     if (startsWork(e)) {
+      const start = starts.find((s) => s.i === i);
       const launched = launchOf(e);
-      const via = launched?.via;
-      const message = via === 'SendMessage' && !launched.resumed;
-      if (!message) batch = [];
+      if (!start.message) batch = [];
       // The folder comes from whoever reported last only along an edge of the graph — a diff to its reviewer, a
       // rejection back to its fixer; work the orchestrator hands out on its own plan, it carries itself.
       const handed = reported && graph.edges.some((edge) => edge.from === reported.role && edge.token === reported.verdict && edge.to === e.role);
-      beats.push({ id, at, type: 'work', role: e.role, agent: launched?.agent ?? null, resumed: via === 'SendMessage' && Boolean(launched.resumed), message, from: handed ? reported : null });
+      beats.push({ id, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
+      if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work: id });
+      else if (!start.message && (start.end === null || start.end - start.at >= STALE_MS) && now >= start.at + STALE_MS) {
+        beats.push({ id: `stale:${id}`, at: start.at + STALE_MS, type: 'stale', role: e.role, agent: start.agent, work: id });
+      }
       return;
     }
     if (e.k === 'verdict' && e.declared && e.role && e.agent) {
-      const routes = routesOf(e.role, e.verdict);
+      const routes = graph.edges.filter((edge) => edge.from === e.role && edge.token === e.verdict);
       const back = isLoopBack(e.verdict);
       beats.push({ id, at, type: 'verdict', role: e.role, agent: e.agent, verdict: e.verdict, back, asks: routes.some((r) => r.to === 'human'), issues: e.issues ?? [] });
       reported = { role: e.role, agent: e.agent, verdict: e.verdict, back };
@@ -109,7 +160,7 @@ export function officeBeats(entries, graph, now = Date.now()) {
       const final = routes.length > 0 && routes.every((r) => TERMINALS.has(r.to));
       const moment = final ? at : at + PARTY_QUIET_MS;
       const later = entries.slice(i + 1);
-      const next = later.find(startsWork);
+      const next = later.find((x) => startsWork(x) && !starts.find((s) => s.i === entries.indexOf(x))?.message);
       if (next && time(next) < moment) return;
       // A verdict of the same batch that comes before the moment decides instead: a dba beside the reviewer still
       // has its say, and the batch has one party, not one per pass.
@@ -125,7 +176,7 @@ export function officeBeats(entries, graph, now = Date.now()) {
     // A reset written for the model's own question, by ledgers older than the `question` entry, is not the owner.
     else if (e.k === 'reset' && e.why !== 'ask') beats.push({ id, at, type: 'owner' });
   });
-  // Stable: beats of one moment keep the ledger's order. A party that waited on the quiet sorts where it fell.
+  // Stable: beats of one moment keep the ledger's order. A beat that waited — a party, a refusal — sorts where it fell.
   return beats.sort((a, b) => a.at - b.at);
 }
 
@@ -158,14 +209,17 @@ const send = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stri
 export async function serveOffice({ target, wanted, replay = false, port = OFFICE_PORT }) {
   const room = officeRoom(target);
   const graph = parseGraph(readFileSync(join(target, '.claude', 'graph.md'), 'utf8'));
-  const page = readFileSync(PAGE, 'utf8').replace('/*NINA_ROOM*/null', JSON.stringify({ ...room, replay }).replace(/</g, '\\u003c'));
+  // A function, so a `$&` or `$'` in a project's name or its owner's is text and not a replacement pattern.
+  const roomJson = JSON.stringify({ ...room, replay }).replace(/</g, '\\u003c');
+  const page = readFileSync(PAGE, 'utf8').replace('/*NINA_ROOM*/null', () => roomJson);
   const clients = new Set();
   const timers = new Set();
 
   /** The session to show, and its entries; read again only when its ledger changed. */
   let cached = { path: null, size: -1, mtime: 0, entries: [] };
   const current = () => {
-    const { picked } = sessionLedgers(target, wanted);
+    // A session named by the start of its id stays the one picked when a later session's id starts the same way.
+    const picked = sessionLedgers(target, wanted).picked ?? (wanted && cached.path ? { session: cached.session, path: cached.path } : null);
     if (!picked) return { session: null, entries: [] };
     let stat;
     try {
@@ -174,15 +228,17 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
       return { session: null, entries: [] };
     }
     if (cached.path !== picked.path || cached.size !== stat.size || cached.mtime !== stat.mtimeMs) {
-      cached = { path: picked.path, size: stat.size, mtime: stat.mtimeMs, entries: readLedger(picked.path) };
+      cached = { session: picked.session, path: picked.path, size: stat.size, mtime: stat.mtimeMs, entries: readLedger(picked.path) };
     }
     return { session: picked.session, entries: cached.entries };
   };
 
   // A client is handed what came before it connected at once, to set the room by; a session that starts while it
-  // watches, it sees happen.
+  // watches, it sees happen. Moving to a session that was already running — two sessions in one project take turns
+  // being the newest — what it did before the move sets the room too, rather than playing out again.
   const greet = (client, state) => {
     client.restoring = client.session === undefined;
+    client.since = client.restoring ? Number.NEGATIVE_INFINITY : Date.now() - SWITCH_GRACE_MS;
     client.session = state.session;
     client.sent = new Set();
     send(client.res, 'hello', { session: state.session, replay });
@@ -196,7 +252,7 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
       for (const beat of officeBeats(state.entries, graph, Date.now())) {
         if (client.sent.has(beat.id)) continue;
         client.sent.add(beat.id);
-        send(client.res, 'beat', { ...beat, instant: client.restoring });
+        send(client.res, 'beat', { ...beat, instant: client.restoring || beat.at < client.since });
       }
       client.restoring = false;
     }
@@ -233,6 +289,14 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
   };
 
   const server = createServer((req, res) => {
+    // Only this machine's own names for itself: a page elsewhere that rebinds its domain to the loopback address
+    // reaches the port, and is refused here.
+    const port = server.address()?.port;
+    if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(String(req.headers.host ?? ''))) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('not from here\n');
+      return;
+    }
     const path = new URL(req.url ?? '/', 'http://localhost').pathname;
     if (path === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
