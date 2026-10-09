@@ -380,6 +380,13 @@ export async function missingWiring(target, shipped) {
       );
     }
     if (covered(merged, h)) continue;
+    // Running, but not for every tool it now needs: a hook from before the matcher grew still holds what it held.
+    const need = h.matcher ? h.matcher.split('|') : [];
+    const unmatched = need.filter((tool) => !running.some((g) => matcherReaches(g.matcher, tool)));
+    if (running.length > 0 && unmatched.length > 0 && unmatched.length < need.length) {
+      out.push(`the ${h.event} hook running \`${h.script}${h.mode ? ` ${h.mode}` : ''}\` does not match ${unmatched.join(', ')} — \`nina wire --apply\` widens it to ${h.matcher}`);
+      continue;
+    }
     out.push(
       `.claude/settings.json has no ${h.event} hook${h.matcher ? ` for ${h.matcher}` : ''} running \`${h.script}${h.mode ? ` ${h.mode}` : ''}\` — without it ${h.why}`,
     );

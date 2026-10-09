@@ -40,7 +40,9 @@ launched with, at most 80. A stage's report comes from `PostToolUse` on
 `PreToolUse` and `PostToolUse` on `Agent|Task|SendMessage`; the owner from `UserPromptSubmit`. `PreToolUse`
 decides. Both hooks also match `AskUserQuestion`, and the ledger keeps when the orchestrator asked the owner and
 when the answer came, nothing of either: no count reads them, and the office (`nina pipeline --view`) draws the
-question over the orchestrator's head while it waits.
+question over the orchestrator's head while it waits. A message's `pre` entry says it is one, and names its agent
+when the ledger launched that agent, so the office can tell a message to a running agent from a resume before the
+`dispatch` entry is written.
 
 **At the cap it asks the owner.** The graph sends a loop that has used its rounds to `human`, so that is
 where the round past the cap goes: the hook answers `permissionDecision: "ask"`, and Claude Code puts the

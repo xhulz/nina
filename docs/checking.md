@@ -119,7 +119,9 @@ ids of the issues they named — and never a word anyone wrote. A dispatch is so
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
 in red to its fixer) and by the orchestrator otherwise. A verdict is a check or a cross over their head; a verdict
 the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
-asking at a cap, the owner's phone ringing. A pass is a party when nothing since the last dispatch was sent back,
+asking at a cap, the owner's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
+down for a dispatch the owner refused, or for a run that never reported within three hours (the longest of 227
+measured took 108 minutes), gets up and leaves; neither keeps the work from ending. A pass is a party when nothing since the last dispatch was sent back,
 something since then could route to `done`, nobody is still at work and no dispatch follows within twenty seconds
 — at once when the pass routes only to a terminal. The quiet is there because qa's pass may still go on to devops,
 and the orchestrator commits before it dispatches; without the rest, a reviewer approving beside a dba that was
@@ -132,5 +134,9 @@ mod's hooks, but its session reports no surface to draw on and no drawing is eve
 terminal and the desktop app only. The session is picked as `gate --status` picks it, through the same function.
 Live, a client is handed what came before it connected at once, to set the room by, and then each beat as the gate
 writes it; a replay plays one session from its first dispatch with its gaps shortened, the owner's messages passing
-quickly. The orchestrator's question reaches the ledger only because the gate's `PreToolUse` hook also matches
-`AskUserQuestion` — the moment it was asked and the moment it was answered, nothing it said.
+quickly; moving to a session that was already running, what it did before the move sets the room rather than
+playing out again. The orchestrator's question reaches the ledger only because the gate's `PreToolUse` hook also
+matches `AskUserQuestion` — the moment it was asked and the moment it was answered, nothing it said. A project wired
+before that has the hook narrower than it needs: `check` names the tool it does not match, `upgrade` says so without
+stopping the move, and `nina wire --apply` widens it in place. The page answers only to this machine's own names
+for itself, so a page elsewhere that rebinds its domain to the loopback address is refused.

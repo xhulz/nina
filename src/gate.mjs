@@ -673,11 +673,15 @@ function onPre(input, project, path, at) {
   }
   if (input.agent_id || !DISPATCH.has(input.tool_name)) return null;
   const entries = readLedger(path);
-  const role = input.tool_name === 'SendMessage' ? recipient(entries, project, input.tool_input?.to).role : input.tool_input?.subagent_type;
+  const to = input.tool_name === 'SendMessage' ? recipient(entries, project, input.tool_input?.to) : null;
+  const role = to ? to.role : input.tool_input?.subagent_type;
   if (!role || !project.graph.stages.has(role)) return null;
   // When it went out, whatever the owner decides: joined to its `dispatch` entry by the tool_use id,
-  // it is the moment the fixer was sent — which is what a later review has to begin after.
-  append(path, { k: 'pre', at, role, id: input.tool_use_id ?? null });
+  // it is the moment the fixer was sent — which is what a later review has to begin after. A message says so, and
+  // names its agent when the ledger already knows it — never a name the model wrote that nothing launched — so the
+  // office can tell a message to a running agent from a resume before the `dispatch` entry is written.
+  const known = to?.agent && entries.some((e) => e.k === 'dispatch' && e.agent === to.agent);
+  append(path, { k: 'pre', at, role, id: input.tool_use_id ?? null, ...(to ? { via: 'SendMessage', ...(known ? { agent: to.agent } : {}) } : {}) });
   const over = roundsFor(entries, role, project.loops, project.forward)
     .filter((r) => excess(r) > 0)
     .sort((a, b) => excess(b) - excess(a));
@@ -712,7 +716,14 @@ export function sessionLedgers(root, wanted) {
   const dir = projectGateDir(root);
   const ledgers = (existsSync(dir) ? readdirSync(dir) : [])
     .filter((f) => f.endsWith('.jsonl') && f !== 'errors.jsonl')
-    .map((f) => ({ session: f.slice(0, -'.jsonl'.length), written: statSync(join(dir, f)).mtime, path: join(dir, f) }))
+    .flatMap((f) => {
+      // Pruned between the listing and here, by another session: gone, and not a failure.
+      try {
+        return [{ session: f.slice(0, -'.jsonl'.length), written: statSync(join(dir, f)).mtime, path: join(dir, f) }];
+      } catch {
+        return [];
+      }
+    })
     .sort((a, b) => b.written - a.written);
   const matching = wanted ? ledgers.filter((l) => l.session.startsWith(wanted)) : ledgers.slice(0, 1);
   if (matching.length === 1) return { dir, ledgers, picked: matching[0], why: null };

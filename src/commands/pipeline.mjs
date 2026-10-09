@@ -187,6 +187,11 @@ export async function pipeline(argv) {
     return 2;
   }
   if (argv.includes('--view')) {
+    const drawingOnly = ['--for', '--since'].filter((flag) => argv.includes(flag));
+    if (drawingOnly.length > 0) {
+      console.error(`  ${drawingOnly.join(', ')} ${drawingOnly.length > 1 ? 'are' : 'is'} for the drawing, not the office`);
+      return 2;
+    }
     const { viewOffice } = await import('../office.mjs');
     const port = arg('--port');
     if (port !== null && !(/^\d+$/.test(port) && Number(port) <= 65535)) {
