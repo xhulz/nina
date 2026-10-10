@@ -4548,6 +4548,11 @@ const dated = (date, status = 'active') =>
       reviewer.includes("answers to the spec's premise on that program's whole input path") && !architect.includes('four rounds running'),
     "compose: a filter that mirrors another program's parse is premised on its whole input path, and the reviewer holds it to that",
   );
+  expect(
+    architect.includes('**Specify a filter by what it refuses.**') && architect.includes('every input the tool reads') && architect.includes('validated in its constructor or type') &&
+      reviewer.includes('**A filter needs a row for each adversarial input**') && !architect.includes('passed every credential besides'),
+    'compose: a filter is specified by the inputs it refuses, with allowlists at trust boundaries, and the reviewer holds it to that',
+  );
 }
 
 // ─── the flow: what each stage is told about the ones beside it ────────────────────────
