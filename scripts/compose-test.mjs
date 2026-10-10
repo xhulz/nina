@@ -236,21 +236,25 @@ const HISTORY = /\b\d+ (?:times|invocations|runs|rounds) (?:in|out of) \d+\b[^.]
 
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
-  '.claude/agents/architect.md': 15000,
+  // Raised for a lesson a project learned three times: a filter that mirrors another program's parse is premised
+  // on that program's whole input path, not the one stage it copies.
+  '.claude/agents/architect.md': 16100,
   '.claude/agents/dba.md': 12500,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
-  // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle.
-  '.claude/agents/implementer.md': 18000,
+  // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle — and again
+  // when the implementer began running each test's named mutation itself, in a mirror, before handing off.
+  '.claude/agents/implementer.md': 18700,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
   // overwrite-and-restore.
   '.claude/agents/qa.md': 13600,
-  // Raised for the same profile, which composes every reviewer slot but money's and blockchain's.
-  '.claude/agents/reviewer.md': 20100,
+  // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
+  // two rules above — the mutations the implementer ran, a mirrored parse's whole input path.
+  '.claude/agents/reviewer.md': 20450,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,

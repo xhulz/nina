@@ -4517,7 +4517,7 @@ const dated = (date, status = 'active') =>
   const reviewer = await spec('reviewer');
   const claude = await readFile(join(dir, 'CLAUDE.md'), 'utf8');
   expect(
-    implementer.includes("Walk the mutation through the fixture's own values") && implementer.includes('**Fail closed on every branch.**') &&
+    implementer.includes('the fixture the mutation cannot move') && implementer.includes('**Fail closed on every branch.**') &&
       implementer.includes('**A pattern that validates an external identifier**') && implementer.includes('re-read every claim about code you changed') &&
       !implementer.includes('graduated from the first new project'),
     'compose: the implementer walks each mutation through its fixture, fails closed, tests patterns on real samples and re-reads its claims',
@@ -4532,6 +4532,20 @@ const dated = (date, status = 'active') =>
     architect.includes('A correction is done when the whole spec agrees with it') && router.includes('searching it and its steps for what you contradict') &&
       claude.includes('members are declarations'),
     'compose: a correction sweeps the whole spec, by the architect or the orchestrator, and Hard Rule #9 covers members',
+  );
+  // Two lessons the third project graduated: the implementer runs each mutation it names before handing off — named,
+  // walked and run by qa, the lesson still came back — and a filter that mirrors another program's parse is premised
+  // on that program's whole input path. The reviewer holds both; the history behind them is not composed.
+  expect(
+    implementer.includes('**So run it first, before `DIFF-READY`:**') && implementer.includes('goes red row by row') && implementer.includes('**Mutations run:**') &&
+      implementer.includes("Run each test's named mutation on a scratch copy in plain `node`") && reviewer.includes("the implementer's **Mutations run** does not show red") &&
+      !implementer.includes('The fourth time this lesson came back'),
+    'compose: the implementer runs each mutation it names on a copy before handing off and lists them, and the reviewer starts from the list',
+  );
+  expect(
+    architect.includes("**is premised on that program's whole input path:**") && architect.includes("never a deny-pattern's miss") &&
+      reviewer.includes("answers to the spec's premise on that program's whole input path") && !architect.includes('four rounds running'),
+    "compose: a filter that mirrors another program's parse is premised on its whole input path, and the reviewer holds it to that",
   );
 }
 
