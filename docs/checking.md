@@ -51,7 +51,9 @@ turn. A transitive copy still in use is reached, a renamed one is not — the wa
 by the same peer, used only from inside the first — and a spike's own store answers only for its own paths. Only the integration docs are read, the
 premises that outlast a task; a spec's citations are the integration-tester's to refuse when it runs. Only store
 paths, too: a path through a package's link, or one written from some package's directory, cannot be told stale
-from here, and a template, an elision and a URL are not citations. A premise now cites the package's own link
+from here, and a template, an elision, a URL and a mention that names no `<name>@<version>` directory (`resend@*`
+does not exist) are not citations; the store's own hoisting `node_modules` is judged by the file alone. On the
+first two projects it ran in, every path it named was a version or a hash the install had moved past. A premise now cites the package's own link
 (`<package dir>/node_modules/<lib>/<file>:<line>`, the version beside it), which a peer change does not rename.
 
 `where` answers the question that comes before all of them: **an agent has something to write — does

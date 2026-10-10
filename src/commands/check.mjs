@@ -268,7 +268,8 @@ function liveStoreDirs(target) {
  * (the root and packages two levels down); a store nothing reaches is judged by the file alone. A path through a
  * package's own link, or one written from some package's directory, cannot be told stale from here. A line number
  * after a path is not part of it; an elision (`...`, `…`), a template and a URL are not citations. Each occurrence of
- * the store is read outwards, and the next is looked for past it, so the text is read once.
+ * the store is read outwards, and the next is looked for past it, so the text is read once. A directory that is not
+ * `<name>@<version>` is a mention of the store, not a citation, except its hoisting `node_modules`.
  *
  * @param {string} text
  * @param {string} target - The project directory.
@@ -286,9 +287,13 @@ export function unresolvedCitations(text, target, reached = new Map()) {
     while (end < text.length && PATH_CHAR.test(text[end])) end += 1;
     const path = text.slice(start, end).replace(/[/.]+$/, '');
     const url = text[start - 1] === ':' && path.startsWith('//');
-    const elided = text[start - 1] === '…' || text[end] === '…' || path.split('/').includes('...');
+    const elided = text[start - 1] === '…' || text[end] === '…' || path.includes('...');
     const template = text[end] === '<';
-    if (!url && !elided && !template && !path.endsWith('.pnpm')) cited.add(path);
+    // A store directory is `<name>@<version>`, or the store's own `node_modules`, where it hoists; anything else
+    // (`resend@*`, a name cut short) mentions the store, and cites nothing in it.
+    const dir = path.slice(path.indexOf(STORE) + STORE.length).split('/')[0];
+    const named = dir === 'node_modules' || /^(?:@[^+@]+\+)?[^@]+@\d/.test(dir);
+    if (!url && !elided && !template && named) cited.add(path);
     at = text.indexOf(STORE, end);
   }
   if (cited.size === 0) return [];
@@ -302,6 +307,8 @@ export function unresolvedCitations(text, target, reached = new Map()) {
     const prefix = path.startsWith('/') ? '' : path.slice(0, from).replace(/^(?:\.\.?\/)+/, '');
     const named = join(target, prefix, 'node_modules', '.pnpm');
     if (!existsSync(join(named, dir, ...rest))) return true;
+    // The store's hoisting directory is no package of its own: there, only whether the file is.
+    if (dir === 'node_modules') return false;
     let store;
     try {
       store = realpathSync(named);
