@@ -149,7 +149,7 @@ wires the loop gate it is what rounds are counted by. A report without it counts
 which makes the stage invisible to both.
 
 ## Handoff
-Diff + summary → **reviewer**. **Cap your final message at ~250 words**, the three lists aside, unless flagging a complex deviation. The first line of your summary must state whether the database, or any integration boundary, was touched (so the reviewer knows which gates to run). Include in the summary (one short bullet each):
+Diff + summary → **reviewer**. **Cap your final message at ~250 words**, the Claims, Mutations run and Early exits lists aside, unless flagging a complex deviation. The first line of your summary must state whether the database, or any integration boundary, was touched (so the reviewer knows which gates to run). Include in the summary (one short bullet each):
 - Files created/modified with line counts (terse).
 - Test files written (count + names).
 - Typecheck, lint, and build status (PASS/FAIL).
