@@ -254,7 +254,7 @@ const BUDGETS = {
   '.claude/agents/qa.md': 13600,
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
   // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path.
-  '.claude/agents/reviewer.md': 20650,
+  '.claude/agents/reviewer.md': 20750,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
