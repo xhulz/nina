@@ -58,7 +58,7 @@ You run **after** the implementer, **beside** the reviewer and any other gate th
 
 <!-- nina:slot project.3 integration-docs-to-read -->
 <!-- nina:slot integrations.6 -->
-- The architect's spec. Specifically: the **Integration premises** section the architect was required to include. Each premise carries the evidence its kind requires — a `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` citation, a contract-test case, an observed response, or a `P<n>` reference into `.claude/integrations/<slug>.md` that itself carries one.
+- The architect's spec. Specifically: the **Integration premises** section the architect was required to include. Each premise carries the evidence its kind requires — a `<package dir>/node_modules/<lib>/<file>:<line>` citation with its version, a contract-test case, an observed response, or a `P<n>` reference into `.claude/integrations/<slug>.md` that itself carries one.
 - The implementer's diff and test file additions.
 
 If the architect's spec has NO **Integration premises** section but the diff touches a gated boundary → halt and reject upstream. The architect must amend the spec with cited premises before you can validate them.
@@ -96,7 +96,7 @@ A structured report:
 <!-- nina:slot project.4 test-suite-command -->
 - **Read `.claude/integrations/<lib>.md` premises one by one** and design a probe that exercises each. Write probes to `{{API_DIR}}/test/integration/<feature>.integration.test.ts` (or the relevant package's integration folder). If a probe falsifies a premise, the test fails and you reject. Name in each probe's title the premise it would falsify — that is the mutation that turns it red, and the reviewer checks it.
 - **Drive the flow end-to-end where possible.** Sign up → assert the session shape → assert the row it wrote. Enqueue → assert the consumer ran → assert the side effect landed. Do not stop at the first happy-path call: the failure you are looking for is usually in the second step.
-- **Reject any cited `node_modules:<line>` premise that fails at runtime.** Every premise verified gets the citation that proves it (`file:line` + command output). Premises listed in the spec without citations: reject upstream.
+- **Reject any cited `node_modules:<line>` premise that fails at runtime, or whose path no longer resolves** — a store directory a peer change renamed: re-cite it from the depending package's own link. Every premise verified gets the citation that proves it (`file:line` + command output). Premises listed in the spec without citations: reject upstream.
 - **Append discoveries to `.claude/integrations/<lib>.md`.** If you observe behavior that contradicts or extends what's documented, update the doc as part of your work. Future architects must benefit.
 - **Hand off a doc edit with `pnpm harness:check` clean.** An integration doc carries a generated premise index, and a detector reports it stale the moment a premise is appended. Regenerate it with the command the detector names, in the same handoff, and say in your report that the check passed. Left to the reviewer, your finishing step becomes a rejection that costs a whole review round — it did, three times, before this was written down.
 <!-- nina:slot integrations.7 -->

@@ -40,7 +40,13 @@ a doc there that no integration declares is a note: a project kept one for the l
 record of why, and one for a boundary a later plan creates, and from the profile nobody could tell either from
 a declaration that was forgotten. The same `"deferred"` says which, with its reason —
 `".claude/integrations/prisma-d1.md": "retired: Prisma was replaced by Drizzle"` — rather than a second list
-for the same decision.
+for the same decision. A doc whose premises cite installed source by a path that no longer resolves is a note
+too, with the first such path. Citations went into the package manager's store, whose directory names carry a
+suffix for each peer dependency: in one project, adding `@types/node` renamed the directory of every package that
+peers on it, the versions and files byte-identical, and 12 of the 31 store paths its specs and docs cited
+pointed nowhere a fresh install looks. A premise now cites the package's own link (`<package dir>/node_modules/
+<lib>/<file>:<line>`, the version beside it), which a peer change does not rename; a template with `<lib>` in it,
+or a path elided with `...`, is not read as one.
 
 `where` answers the question that comes before all of them: **an agent has something to write — does
 it go here at all?** The composed tree carries no provenance, because `nina:slot` and `nina:requires`
