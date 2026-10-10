@@ -15,7 +15,7 @@ import { parseGraph, validateGraph } from '../graph.mjs';
 import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync, readdirSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { SLOT, closedGate, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 import { missingNeeds } from '../surfaces.mjs';
@@ -184,6 +184,7 @@ export async function unwiredScripts(layerRoot, surfaces, target) {
 
 const STORE = 'node_modules/.pnpm/';
 const PATH_CHAR = /[\w.@+\-/]/;
+const STORE_DIR = `${sep}node_modules${sep}.pnpm${sep}`;
 
 /** The project's root and every directory two levels down holding a package.json: where a package links its deps. */
 function packageDirs(target) {
@@ -206,22 +207,79 @@ function packageDirs(target) {
   return dirs;
 }
 
+/** The libraries a `node_modules` directory links, scoped ones included. */
+function linksIn(modules) {
+  const out = [];
+  let entries = [];
+  try {
+    entries = readdirSync(modules);
+  } catch {
+    return out;
+  }
+  for (const name of entries.filter((entry) => !entry.startsWith('.'))) {
+    if (!name.startsWith('@')) out.push(join(modules, name));
+    else {
+      try {
+        for (const inner of readdirSync(join(modules, name))) out.push(join(modules, name, inner));
+      } catch {
+        // Not a scope after all.
+      }
+    }
+  }
+  return out;
+}
+
 /**
- * The paths into the package manager's store that a text cites and the install here no longer uses. Only the
- * store: its directory names carry a suffix per peer, renamed when an unrelated dependency changes one, and the
- * old directory stays on disk, linked by nothing — so a citation is stale once the library it names is linked
- * from another directory, though the file is still there; for a library no package links directly, once the path
- * is gone. A path through a package's own link, or one written from some package's directory, cannot be told stale
- * from here. A line number after a path is not part of it; a template (`<lib>` follows), an elision (`...`, `…`)
- * and a URL are not citations. Each occurrence of the store is read outwards, in one pass.
+ * Each store's directories the install uses: those a package links, and every one they link in turn. What is left
+ * is what a peer change renamed away, kept on disk and linked by nothing.
+ *
+ * @param {string} target - The project directory.
+ * @returns {Map<string, Set<string>>} Store directory (real path) → the names in it still in use.
+ */
+function liveStoreDirs(target) {
+  const live = new Map();
+  const queue = [];
+  const reach = (link) => {
+    let real;
+    try {
+      real = realpathSync(link);
+    } catch {
+      return;
+    }
+    const at = real.indexOf(STORE_DIR);
+    if (at === -1) return;
+    const store = real.slice(0, at + STORE_DIR.length - 1);
+    const name = real.slice(at + STORE_DIR.length).split(sep)[0];
+    if (!live.has(store)) live.set(store, new Set());
+    if (live.get(store).has(name)) return;
+    live.get(store).add(name);
+    queue.push(join(store, name, 'node_modules'));
+  };
+  for (const dir of packageDirs(target)) for (const link of linksIn(join(dir, 'node_modules'))) reach(link);
+  while (queue.length > 0) for (const link of linksIn(queue.pop())) reach(link);
+  return live;
+}
+
+/**
+ * The paths into the package manager's store that a text cites and the install no longer uses. Only the store: its
+ * directory names carry a suffix per peer, renamed when an unrelated dependency changes one, and the old directory
+ * stays on disk, linked by nothing — so a citation still opens on the machine that wrote it. A store path is stale
+ * when its file is gone, or when its directory is not among those the install reaches from the packages' own links
+ * (the root and packages two levels down); a store nothing reaches is judged by the file alone. A path through a
+ * package's own link, or one written from some package's directory, cannot be told stale from here. A line number
+ * after a path is not part of it; an elision (`...`, `…`), a template and a URL are not citations. Each occurrence of
+ * the store is read outwards, and the next is looked for past it, so the text is read once.
  *
  * @param {string} text
  * @param {string} target - The project directory.
+ * @param {Map<string, Map<string, Set<string>>>} [reached] - What the install reaches, by project, kept between
+ *   the docs of one run so the store is walked once.
  * @returns {string[]} Each stale path once, in the order cited.
  */
-export function unresolvedCitations(text, target) {
+export function unresolvedCitations(text, target, reached = new Map()) {
   const cited = new Set();
-  for (let at = text.indexOf(STORE); at !== -1; at = text.indexOf(STORE, at + STORE.length)) {
+  let at = text.indexOf(STORE);
+  while (at !== -1) {
     let start = at;
     while (start > 0 && PATH_CHAR.test(text[start - 1])) start -= 1;
     let end = at + STORE.length;
@@ -229,37 +287,28 @@ export function unresolvedCitations(text, target) {
     const path = text.slice(start, end).replace(/[/.]+$/, '');
     const url = text[start - 1] === ':' && path.startsWith('//');
     const elided = text[start - 1] === '…' || text[end] === '…' || path.split('/').includes('...');
-    if (url || elided || text[end] === '<' || path.endsWith('.pnpm')) continue;
-    cited.add(path);
+    if (!url && !elided && !path.endsWith('.pnpm')) cited.add(path);
+    at = text.indexOf(STORE, end);
   }
   if (cited.size === 0) return [];
-  const dirs = packageDirs(target);
+  if (!reached.has(target)) reached.set(target, liveStoreDirs(target));
+  const live = reached.get(target);
   const stale = (path) => {
-    const at = path.indexOf(STORE);
-    const [dir, inner, ...rest] = path.slice(at + STORE.length).split('/');
+    const from = path.indexOf(STORE);
+    const [dir, ...rest] = path.slice(from + STORE.length).split('/');
     // The store the citation names: the one under the directory it is written in (a spike's own), else the
     // project's — an absolute path from another machine, or `../../` from a package's directory, leads there.
-    const prefix = path.startsWith('/') ? '' : path.slice(0, at).replace(/^(?:\.\.?\/)+/, '');
-    const named = join(target, prefix, 'node_modules', '.pnpm', dir);
-    const file = join(named, inner ?? '', ...rest);
-    let home;
+    const prefix = path.startsWith('/') ? '' : path.slice(0, from).replace(/^(?:\.\.?\/)+/, '');
+    const named = join(target, prefix, 'node_modules', '.pnpm');
+    if (!existsSync(join(named, dir, ...rest))) return true;
+    let store;
     try {
-      home = realpathSync(named);
+      store = realpathSync(named);
     } catch {
       return true;
     }
-    if (inner !== 'node_modules' || rest.length === 0) return !existsSync(file);
-    const lib = rest[0].startsWith('@') ? rest.slice(0, 2).join('/') : rest[0];
-    // Only a link into the same store vouches for it: a spike's store may hold a directory of the same name.
-    const linked = dirs.flatMap((d) => {
-      try {
-        return [realpathSync(join(d, 'node_modules', lib))];
-      } catch {
-        return [];
-      }
-    }).filter((real) => real.startsWith(dirname(home) + sep));
-    if (linked.length === 0) return !existsSync(file);
-    return !linked.some((real) => real.startsWith(home + sep));
+    const used = live.get(store);
+    return Boolean(used) && !used.has(dir);
   };
   return [...cited].filter(stale);
 }
@@ -392,9 +441,10 @@ export async function check(argv, ctx) {
   // A premise cites installed source by its path, and a path into the package manager's store dies when a peer
   // change renames the directory: the version and the file unchanged, the citation pointing where no fresh install
   // looks. Said per doc, so each premise is re-cited before anyone trusts it.
+  const reached = new Map();
   for (const doc of docs.filter((name) => name.endsWith('.md')).sort()) {
     const key = `.claude/integrations/${doc}`;
-    const gone = unresolvedCitations(await readFile(join(target, key), 'utf8').catch(() => ''), target);
+    const gone = unresolvedCitations(await readFile(join(target, key), 'utf8').catch(() => ''), target, reached);
     if (gone.length > 0) {
       notes.push(
         `${key} cites ${gone.length} path(s) in the package manager's store that the install no longer uses — ${gone[0]}${gone.length > 1 ? ', …' : ''}: a peer change renames those directories, and the old one stays on disk linked by nothing; re-cite each from the depending package's own node_modules link, with its version beside it`,
