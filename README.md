@@ -21,7 +21,7 @@ the same mistake, NINA turns the lesson into a rule in the next release.
   release, and the upgrade that installs it closes the request.
 - `nina pipeline --view` draws the pipeline as a pixel office: each agent at its stage's desk, walking the work
   over to the next one, a question mark over whoever asked, a party when a task passes. It follows the session live,
-  or replays one, in a page it opens in the browser.
+  or replays one, in a page on this machine that the command prints a link to.
 
 ## Why
 
