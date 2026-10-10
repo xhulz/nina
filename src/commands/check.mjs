@@ -287,7 +287,8 @@ export function unresolvedCitations(text, target, reached = new Map()) {
     const path = text.slice(start, end).replace(/[/.]+$/, '');
     const url = text[start - 1] === ':' && path.startsWith('//');
     const elided = text[start - 1] === '…' || text[end] === '…' || path.split('/').includes('...');
-    if (!url && !elided && !path.endsWith('.pnpm')) cited.add(path);
+    const template = text[end] === '<';
+    if (!url && !elided && !template && !path.endsWith('.pnpm')) cited.add(path);
     at = text.indexOf(STORE, end);
   }
   if (cited.size === 0) return [];
