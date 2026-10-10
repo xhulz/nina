@@ -382,6 +382,21 @@ expect(
       !undeclared.includes('".claude/integrations/queue.md" is deferred') && !undeclared.includes('stripe.md documents no'),
     `check: an integration doc nothing declares is noted, and one deferred with a reason says it — got ${undeclared}`,
   );
+  // A premise cited by its path in the package manager's store dies when a peer change renames the directory: the
+  // version and the file unchanged. The package's own link survives it, and a template is no citation.
+  await mkdir(join(dir, 'packages', 'api', 'node_modules', 'stripe'), { recursive: true });
+  await writeFile(join(dir, 'packages', 'api', 'node_modules', 'stripe', 'index.js'), '');
+  await writeFile(
+    join(dir, '.claude', 'integrations', 'stripe.md'),
+    '# stripe\n\n| P1 | `packages/api/node_modules/stripe/index.js:12` (stripe 17.1.0) |\n| P2 | `node_modules/.pnpm/stripe@17.1.0_@types+node@22.15.17/node_modules/stripe/index.js:40` |\n' +
+      '| P3 | the form was `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` |\n| P4 | `/nowhere/at/all/node_modules/stripe/lib.js:7` |\n',
+  );
+  const cited = run(['check', '--project', dir]).out;
+  expect(
+    cited.includes('.claude/integrations/stripe.md cites 2 installed path(s) that no longer resolve — node_modules/.pnpm/stripe@17.1.0_@types+node@22.15.17/node_modules/stripe/index.js, …') &&
+      !cited.includes('packages/api/node_modules/stripe/index.js') && !cited.includes('old-pay.md cites'),
+    `check: an integration doc citing an installed path that no longer resolves is noted, the package's own link and a template are not — got ${cited}`,
+  );
 }
 
 // ─── upgrade: refuses while the project would lose text it wrote ────────────────────────
@@ -4694,6 +4709,22 @@ const dated = (date, status = 'active') =>
   expect(
     (await projectSlots(devLayers, ['frontend'])).has('.claude/frontend.md project.1') && !(await projectSlots(devLayers, ['db'])).has('.claude/frontend.md project.1'),
     'surfaces: the frontend conventions are owed by a frontend project until it writes them, and by no other',
+  );
+
+  // Two requests from a D1 project. A premise about installed source cites the package's own link: the store
+  // directory behind it is renamed when an unrelated dependency changes a peer, and every citation rots. And the SQL
+  // the dba reads on D1 is the text D1 runs, which its migration tool rewrites — no other database is told so.
+  const pager = await composed('pager');
+  const [pagerDba, pagerClaude, pagerArchitect, pagerTester] = await Promise.all(['.claude/agents/dba.md', 'CLAUDE.md', '.claude/agents/architect.md', '.claude/agents/integration-tester.md'].map((rel) => read(pager, rel)));
+  const ledgerDba = await read(ledger, '.claude/agents/dba.md');
+  expect(
+    pagerDba.includes('**On D1, the SQL you read is the text D1 runs, not the file.**') && pagerDba.includes('or whose last statement lacks its `;`') && !ledgerDba.includes('the text D1 runs'),
+    'surfaces: a D1 project\'s dba reads the text D1 runs and refuses what its tool rewrites, and no other database hears of it',
+  );
+  expect(
+    pagerClaude.includes("the package's own link, not the store directory a peer change renames") && pagerArchitect.includes('`<package dir>/node_modules/<lib>/<file>:<line>`') &&
+      pagerTester.includes('or whose path no longer resolves') && ![pagerClaude, pagerArchitect, pagerTester].some((text) => text.includes('node_modules/.pnpm/<lib>')),
+    'surfaces: an installed library is cited through the package\'s own link, a path that no longer resolves is refused, and the store form is gone',
   );
 
   // A stack means nothing without its concern.

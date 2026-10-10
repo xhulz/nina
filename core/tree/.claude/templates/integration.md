@@ -26,8 +26,9 @@ Read this table and the sections your task actually cites. Not the whole file.
 
 **Evidence.** The form depends on the kind:
 
-- `installed-library` — `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>`, with the lines that
-  prove it quoted. From the version actually installed here, not the latest release.
+- `installed-library` — `<package dir>/node_modules/<lib>/<file>:<line>`, with the lines that prove it
+  quoted and the version beside it. From the version actually installed here, not the latest release,
+  and through the package's own link: the store directory behind it is renamed by a peer change.
 - `live-api` — the request sent and the response received, verbatim, or the contract-test case that
   pins it. The vendor's documentation is not evidence: it describes what they intend, and you are
   depending on what they do.

@@ -183,6 +183,25 @@ export async function unwiredScripts(layerRoot, surfaces, target) {
 }
 
 /**
+ * The paths under a `node_modules` that a text cites and the project does not have — a line number after one is not
+ * part of it, and a path elided with `...` is a template, not a citation.
+ *
+ * @param {string} text
+ * @param {string} target - The project directory relative paths resolve from.
+ * @returns {string[]} Each unresolved path once, in the order cited.
+ */
+export function unresolvedCitations(text, target) {
+  const cited = new Set();
+  for (const match of text.matchAll(/(?:[\w.@+-]+\/)*node_modules\/[\w.@+\-/]+/g)) {
+    const path = match[0].replace(/[/.]+$/, '');
+    const after = path.split('node_modules/').pop();
+    if (text[match.index + match[0].length] === '<' || !after || after === '.pnpm' || path.split('/').includes('...')) continue;
+    cited.add(text[match.index - 1] === '/' ? `/${path}` : path);
+  }
+  return [...cited].filter((path) => !existsSync(path.startsWith('/') ? path : join(target, path)));
+}
+
+/**
  * `nina check`.
  *
  * @param {string[]} argv - Command arguments; `--project <dir>` selects the target.
@@ -306,6 +325,18 @@ export async function check(argv, ctx) {
     const why = deferredWhy(profile, key);
     if (why) deferredUsed.add(key);
     notes.push(why ? `deferred: ${key} — ${why}` : `${key} documents no declared integration — declare it, or say under "deferred" why not: retired, or waiting for its boundary`);
+  }
+  // A premise cites installed source by its path, and a path into the package manager's store dies when a peer
+  // change renames the directory: the version and the file unchanged, the citation pointing where no fresh install
+  // looks. Said per doc, so each premise is re-cited before anyone trusts it.
+  for (const doc of docs.filter((name) => name.endsWith('.md')).sort()) {
+    const key = `.claude/integrations/${doc}`;
+    const gone = unresolvedCitations(await readFile(join(target, key), 'utf8').catch(() => ''), target);
+    if (gone.length > 0) {
+      notes.push(
+        `${key} cites ${gone.length} installed path(s) that no longer resolve — ${gone[0]}${gone.length > 1 ? ', …' : ''}: re-cite each from the depending package's own node_modules link, with its version beside it`,
+      );
+    }
   }
 
   const slots = await projectSlots(resolved.dir, surfaces);

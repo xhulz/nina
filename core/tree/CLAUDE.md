@@ -120,7 +120,7 @@ a request against the pinned version, quoting the composed file and line, and it
 <!-- nina:slot project.5 roles-heading -->
 
 - **planner** → decompose ambiguous or multi-step tasks into ordered subtasks
-- **architect** → design the TS technical approach AND cite external-library premises (`node_modules/.pnpm/<lib>/.../<file>:<line>`); write a spec before code exists
+- **architect** → design the TS technical approach AND cite external-library premises (`<package dir>/node_modules/<lib>/<file>:<line>` + version); write a spec before code exists
 - **implementer** → write TS code AND test files strictly to spec; runs typecheck/lint/build only (NOT vitest)
 <!-- nina:slot db.4 -->
 <!-- nina:slot integrations.3 -->

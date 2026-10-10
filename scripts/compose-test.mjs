@@ -238,8 +238,10 @@ const BUDGETS = {
   '.claude/agents-overview.md': 6000,
   // Raised for two lessons one project learned three times each: a filter is specified by what it refuses, and one
   // that mirrors another program's parse is premised on that program's whole input path, not the one stage it copies.
-  '.claude/agents/architect.md': 16950,
-  '.claude/agents/dba.md': 12500,
+  // And for the integrations surface's citation form: the package's own link, not a store directory a peer renames.
+  '.claude/agents/architect.md': 17000,
+  // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
+  '.claude/agents/dba.md': 13100,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
