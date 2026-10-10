@@ -29,7 +29,7 @@
  * The NINA office: the project's pipeline as a floor plan seen from above. `nina pipeline --view` serves this page
  * with the room filled in below, and streams the gate ledger's beats at /events. Every stage has a desk in the room
  * of its phase — design, build, review and the gates, the test lab, release — off one corridor; the orchestrator,
- * NINA, keeps the reception, the owner stands at its counter, and new agents come in from the garden. Everything is
+ * NINA, keeps the reception, the owner is the phone on its counter, and new agents come in from the garden. Everything is
  * drawn here, in pixels, on a small canvas scaled up; nothing is fetched from anywhere else. The view starts close
  * enough to read and follows the work around the floor; dragging, the wheel and the buttons take it over.
  */
@@ -66,6 +66,16 @@ const SPRITE = {
   cheer: ['os......so', 'oshhhhhhso', 'ohhhhhhhho', 'ohssssssho', 'ossessesso', '.osssssso.', '..otttto..', '.otttttto.', '.otttttto.', '.otttttto.', '.otttttto.', '.oppppppo.', '.opp..ppo.', 'okko..okko'],
   sitA: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '.sotttto..', 'sotttttto.', 'otttttttto', 'otttttttto', '.otttttto.'],
   sitB: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', '.ohhhhhho.', '..ottttos.', '.ottttttos', 'otttttttto', 'otttttttto', '.otttttto.'],
+};
+// NINA, the orchestrator, is a woman with long hair and a skirt: `d` is the skirt. At rest she faces the room.
+const NINA_SPRITE = {
+  front: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohssssssho', 'ohsessesho', 'ohssssssho', 'ohhottohho', 'ohttttttho', 'otttttttto', 'osttttttso', '.oddddddo.', 'oddddddddo', '.oso..oso.', '.okk..kko.'],
+  frontA: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohssssssho', 'ohsessesho', 'ohssssssho', 'ohhottohho', 'ohttttttho', 'otttttttto', 'osttttttso', '.oddddddo.', 'oddddddddo', '.oso..oso.', '.okk...oo.'],
+  frontB: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohssssssho', 'ohsessesho', 'ohssssssho', 'ohhottohho', 'ohttttttho', 'otttttttto', 'osttttttso', '.oddddddo.', 'oddddddddo', '.oso..oso.', '..oo..kko.'],
+  back: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'otthhhhtto', 'osttttttso', '.oddddddo.', 'oddddddddo', '.oso..oso.', '.okk..kko.'],
+  backA: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'otthhhhtto', 'osttttttso', '.oddddddo.', 'oddddddddo', '.oso..oso.', '.okk...oo.'],
+  backB: ['..oooooo..', '.ohhhhhho.', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'ohhhhhhhho', 'otthhhhtto', 'osttttttso', '.oddddddo.', 'oddddddddo', '.oso..oso.', '..oo..kko.'],
+  cheer: ['os......so', 'oshhhhhhso', 'ohhhhhhhho', 'ohssssssho', 'ohsessesho', 'ohssssssho', 'ohhottohho', '.ohttttho.', '.otttttto.', '.oddddddo.', 'oddddddddo', '.oso..oso.', '.oso..oso.', 'okko..okko'],
 };
 const BUBBLE = {
   ask: ['.ooooooo.', 'owwwwwwwo', 'owwkkkwwo', 'owwwwkwwo', 'owwwkkwwo', 'owwwkwwwo', 'owwwwwwwo', 'owwwkwwwo', '.oowwwoo.', '...owo...', '....o....'],
@@ -190,8 +200,11 @@ for (const room of rooms.values()) {
   }
 }
 const COUNTER = { x: lobby.x + 14, y: lobby.y + FACE + 22, w: 104 };
-const BOSS_HOME = { x: COUNTER.x + 52, y: COUNTER.y + 2, room: lobby, exit: [{ x: COUNTER.x + COUNTER.w + 10, y: COUNTER.y + 2 }, { x: COUNTER.x + COUNTER.w + 10, y: lobby.laneY }], kind: 'boss' };
-const OWNER_HOME = { x: COUNTER.x + 30, y: COUNTER.y + 30, room: lobby, exit: [{ x: COUNTER.x + 30, y: lobby.laneY }], kind: 'stand' };
+// NINA stands at the end of the counter, facing the room: behind it, only her head showed.
+const BOSS_HOME = { x: COUNTER.x + COUNTER.w + 10, y: COUNTER.y + 8, room: lobby, exit: [{ x: COUNTER.x + COUNTER.w + 10, y: lobby.laneY }], kind: 'stand' };
+// The owner is not drawn: they are the phone on the counter, where the gate's calls ring and their answers come in.
+const PHONE = { x: COUNTER.x + 72, y: COUNTER.y - 11 };
+const OWNER_HOME = { x: PHONE.x + 5, y: PHONE.y + 14, room: lobby, kind: 'line' };
 const ENTRANCE = { x: lobby.x + 150, y: FLOOR_H - 2, room: lobby, exit: [{ x: lobby.x + 150, y: lobby.laneY }], kind: 'stand' };
 
 /** The way from where someone stands to a spot: out to their room's lane, along the corridor when it is another room. */
@@ -402,11 +415,10 @@ function person(key, role, look) {
 }
 // The orchestrator is NINA: the session that follows the router and hands the work on.
 const boss = person('orchestrator', null, 'orchestrator-boss');
-Object.assign(boss, { x: BOSS_HOME.x, y: BOSS_HOME.y, at: BOSS_HOME, pose: 'boss', home: BOSS_HOME });
-boss.colors.t = '#2f4a8a';
+Object.assign(boss, { x: BOSS_HOME.x, y: BOSS_HOME.y, at: BOSS_HOME, home: BOSS_HOME, sprites: NINA_SPRITE });
+Object.assign(boss.colors, { h: '#8b3a1a', s: '#f1c27d', t: '#ffd34d', d: '#2f4a8a' });
 const owner = person('owner', null, ROOM.owner);
-Object.assign(owner, { x: OWNER_HOME.x, y: OWNER_HOME.y, at: OWNER_HOME, facing: 'up', home: OWNER_HOME });
-owner.colors.t = '#ffd34d';
+Object.assign(owner, { x: OWNER_HOME.x, y: OWNER_HOME.y, at: OWNER_HOME, home: OWNER_HOME, hidden: true });
 
 const walk = (p, to, then) => p.queue.push({ kind: 'walk', to, then });
 const wait = (p, ms) => p.queue.push({ kind: 'wait', ms });
@@ -456,7 +468,7 @@ function place(p, spot) {
   p.x = spot.x;
   p.y = spot.y;
   p.at = spot;
-  p.pose = spot.kind === 'seat' ? 'sit' : spot.kind === 'boss' ? 'boss' : 'stand';
+  p.pose = spot.kind === 'seat' ? 'sit' : 'stand';
 }
 
 /** Who reported or works as this agent: known by id, or the person at its desk still waiting for theirs. */
@@ -642,7 +654,6 @@ function reset() {
     p.carrying = null;
     place(p, p.home);
   }
-  owner.facing = 'up';
   lines.length = 0;
   confetti = [];
   banner = null;
@@ -703,8 +714,8 @@ function step(p, dt) {
     }
     if (p.path.length === 0) {
       p.at = c.to;
-      p.pose = c.to.kind === 'boss' ? 'boss' : 'stand';
-      p.facing = p === owner ? 'up' : 'down';
+      p.pose = 'stand';
+      p.facing = 'down';
       p.current = null;
       c.then?.();
     }
@@ -866,21 +877,19 @@ function aim(dt, now) {
 }
 
 function drawPerson(p, now) {
+  if (p.hidden) return;
+  const set = p.sprites ?? SPRITE;
   const hop = p.cheerUntil > now ? Math.round(Math.abs(Math.sin(now / 110)) * 3) : 0;
   if (p.pose === 'sit') {
     const rows = p.typing && Math.floor(now / 170) % 2 ? SPRITE.sitB : SPRITE.sitA;
     paint(w, rows, p.x - 5, p.y - 14 - hop, p.colors);
     return;
   }
-  if (p.pose === 'boss') {
-    paint(w, SPRITE.front.slice(0, 10), p.x - 5, p.y - 14 - hop, p.colors);
-    return;
-  }
   const stepping = p.pose === 'walk' && Math.floor(now / 150) % 2;
   const up = p.facing === 'up';
-  let rows = up ? SPRITE.back : SPRITE.front;
-  if (p.pose === 'walk') rows = up ? (stepping ? SPRITE.backA : SPRITE.backB) : stepping ? SPRITE.frontA : SPRITE.frontB;
-  if (p.cheerUntil > now) rows = SPRITE.cheer;
+  let rows = up ? set.back : set.front;
+  if (p.pose === 'walk') rows = up ? (stepping ? set.backA : set.backB) : stepping ? set.frontA : set.frontB;
+  if (p.cheerUntil > now) rows = set.cheer;
   rect(w, p.x - 4, p.y, 8, 1, 'rgba(0,0,0,0.22)');
   paint(w, rows, p.x - 5, p.y - 14 - hop, p.colors, p.facing === 'left');
   if (p.carrying) box(w, p.x + 3, p.y - 8 - hop, 5, 4, p.carrying);
@@ -914,17 +923,21 @@ function drawWorld(now) {
       for (let i = 0; i <= len; i += 1) rect(w, cx + Math.round(Math.sin(turn * Math.PI * 2) * i), cy - Math.round(Math.cos(turn * Math.PI * 2) * i), 1, 1, C.ink);
     }
   }
-  // The orchestrator stands behind the counter, which is drawn over them; everyone else by how far down they stand.
-  if (boss.pose === 'boss') drawPerson(boss, now);
+  // The counter, then everyone by how far down they stand.
   box(w, COUNTER.x, COUNTER.y - 6, COUNTER.w, 8, C.counter);
   box(w, COUNTER.x, COUNTER.y + 1, COUNTER.w, 10, C.woodMid);
   rect(w, COUNTER.x + 1, COUNTER.y + 10, COUNTER.w - 2, 1, C.woodDark);
   box(w, COUNTER.x + 20, COUNTER.y - 14, 14, 9, C.frame);
-  rect(w, COUNTER.x + 21, COUNTER.y - 13, 12, 6, boss.pose === 'boss' ? C.screen : C.screenOff);
-  box(w, COUNTER.x + 70, COUNTER.y - 12, 12, 7, C.frame);
-  const crowd = [...people.values(), owner, ...(boss.pose === 'boss' ? [] : [boss])].sort((a, b) => a.y - b.y);
+  rect(w, COUNTER.x + 21, COUNTER.y - 13, 12, 6, boss.at === BOSS_HOME && !boss.current ? C.screen : C.screenOff);
+  // The owner's phone, shaking while the gate's call waits on them.
+  const shake = owner.bubble?.kind === 'phone' && Math.floor(now / 70) % 2 ? 1 : 0;
+  box(w, PHONE.x + shake, PHONE.y, 11, 6, C.rack);
+  rect(w, PHONE.x + 2 + shake, PHONE.y + 2, 7, 1, C.key);
+  rect(w, PHONE.x + 2 + shake, PHONE.y + 4, 7, 1, C.key);
+  box(w, PHONE.x - 1 + shake, PHONE.y - 3, 13, 3, C.red);
+  const crowd = [...people.values(), owner, boss].sort((a, b) => a.y - b.y);
   for (const p of crowd) drawPerson(p, now);
-  for (const p of [...crowd, ...(boss.pose === 'boss' ? [boss] : [])]) drawBubble(p);
+  for (const p of crowd) drawBubble(p);
   confetti = confetti.filter((c) => c.until > now && c.y < LH);
   for (const c of confetti) rect(w, c.x, c.y, 2, 1, c.color);
 }
@@ -1003,11 +1016,11 @@ function drawScreen(now) {
   }
   {
     const [x, y] = at(COUNTER.x + COUNTER.w / 2, COUNTER.y + 6);
-    plate('NINA', x, y, label, C.signText, (COUNTER.w - 8) * scale);
-    const [ownerX, ownerY] = at(owner.x + 7, owner.y - 5);
-    s.font = `700 ${label}px ${SANS}`;
-    const width = Math.min(s.measureText(ROOM.owner).width, 80 * scale);
-    plate(ROOM.owner, ownerX + width / 2 + ui(4), ownerY, label, '#ffd34d', 80 * scale + ui(8));
+    plate('reception', x, y, label, '#fff8e8', (COUNTER.w - 8) * scale);
+    // NINA's name goes with her, beside her head, wherever she carries the work.
+    const [ninaX, ninaY] = at(boss.x + 7, boss.y - 9);
+    s.font = `600 ${label}px ${SANS}`;
+    plate('NINA', ninaX + s.measureText('NINA').width / 2 + ui(8), ninaY, label, C.signText, 40 * scale);
   }
   // What stays put on the screen: the title, the zoom (in the page), the log, a pass worth a party.
   const size = ui(12);

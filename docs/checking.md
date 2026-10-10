@@ -115,14 +115,15 @@ nina pipeline --view --open                         # the system's browser opene
 
 The same graph as an office seen from above, in pixels: a floor plan with a room for each phase — design, build,
 review and the gates, the test lab, release — off one corridor, a desk for each stage in its room (two for a stage
-that runs as several agents), the orchestrator — NINA — behind the reception counter, the owner at it, a garden outside the
+that runs as several agents), the orchestrator — NINA, drawn as a woman facing the room — at the reception, the owner
+as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger and nothing else, so it shows what the ledger holds — who worked, what they answered, the
 ids of the issues they named — and never a word anyone wrote. A dispatch is someone sitting down to work, the
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
 in red to its fixer) and by the orchestrator otherwise. A verdict is a check or a cross over their head; a verdict
 the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
-asking at a cap, the owner's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
+asking at a cap, the reception's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
 down for a dispatch the owner refused, or for a run that never reported within three hours (the longest of 227
 measured took 108 minutes), gets up and leaves; neither keeps the work from ending. A pass is a party when nothing since the last dispatch was sent back,
 something since then could route to `done`, nobody is still at work and no dispatch follows within twenty seconds

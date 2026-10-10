@@ -9,7 +9,7 @@
  *   a verdict                         a check over their head, or a cross when it sends work back
  *   a verdict the graph sends to the  a question mark over the one who asked, until the owner speaks
  *   owner, or the orchestrator asking
- *   the gate asking at a cap          the owner's phone rings
+ *   the gate asking at a cap          the phone on the reception's counter rings, the owner's line
  *   a pass that ends the work         a party
  *
  * The page is served from this machine alone, on the loopback address, for as long as the command runs, and its
