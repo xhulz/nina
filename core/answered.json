@@ -44,6 +44,9 @@
   "2026-10-10-architect__mirrored-parsers-cite-the-whole-input-path": {
     "in": "core/tree/.claude/agents/architect.md"
   },
+  "2026-10-10-architect__security-filters-list-their-bypasses": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
   "2026-10-10-implementer__fails-if-mutations-are-run": {
     "in": "core/tree/.claude/agents/implementer.md"
   }

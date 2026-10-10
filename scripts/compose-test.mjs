@@ -236,9 +236,9 @@ const HISTORY = /\b\d+ (?:times|invocations|runs|rounds) (?:in|out of) \d+\b[^.]
 
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
-  // Raised for a lesson a project learned three times: a filter that mirrors another program's parse is premised
-  // on that program's whole input path, not the one stage it copies.
-  '.claude/agents/architect.md': 16100,
+  // Raised for two lessons one project learned three times each: a filter is specified by what it refuses, and one
+  // that mirrors another program's parse is premised on that program's whole input path, not the one stage it copies.
+  '.claude/agents/architect.md': 16950,
   '.claude/agents/dba.md': 12500,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
@@ -253,8 +253,8 @@ const BUDGETS = {
   // overwrite-and-restore.
   '.claude/agents/qa.md': 13600,
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
-  // two rules above — the mutations the implementer ran, a mirrored parse's whole input path.
-  '.claude/agents/reviewer.md': 20450,
+  // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path.
+  '.claude/agents/reviewer.md': 20650,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
