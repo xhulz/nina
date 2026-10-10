@@ -245,7 +245,7 @@ const BUDGETS = {
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
   // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle — and again
   // when the implementer began running each test's named mutation itself, in a mirror, before handing off.
-  '.claude/agents/implementer.md': 18700,
+  '.claude/agents/implementer.md': 18950,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
