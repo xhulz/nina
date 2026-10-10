@@ -45,9 +45,10 @@ longer uses is a note too, with the first such path. The store's directory names
 dependency: in one project, adding `@types/node` renamed the directory of every package that peers on it, the
 versions and files byte-identical, and the old directories stayed on disk linked by nothing — so the citations
 still opened on the machine that wrote them, and 12 of the 31 store paths its specs and docs cited pointed nowhere
-a fresh install looks. A store path is therefore stale once the library it names is linked, from the root or a
-package two levels down, into another directory of the same store — a spike's own store vouches only for its own
-paths — or, for a library nothing links directly, once the path is gone. Only the integration docs are read, the
+a fresh install looks. A store path is therefore stale when its file is gone, or when its directory is not among
+those the install reaches: the ones the root and the packages two levels down link, and every one those link in
+turn. A transitive copy still in use is reached, a renamed one is not — the walk found a second library renamed
+by the same peer, used only from inside the first — and a spike's own store answers only for its own paths. Only the integration docs are read, the
 premises that outlast a task; a spec's citations are the integration-tester's to refuse when it runs. Only store
 paths, too: a path through a package's link, or one written from some package's directory, cannot be told stale
 from here, and a template, an elision and a URL are not citations. A premise now cites the package's own link

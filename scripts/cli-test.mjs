@@ -399,13 +399,16 @@ expect(
   await writeFile(join(store(spike, 'stripe@17.1.0'), 'index.js'), '');
   await writeFile(join(spike, 'package.json'), '{}');
   await symlink(store(spike, 'stripe@17.1.0'), join(spike, 'node_modules', 'stripe'));
-  // A dependency of a dependency: in the project's store, linked by no package — only the spike links its own copy.
-  const deep = (root) => join(root, 'node_modules', '.pnpm', 'deep@2.0.0', 'node_modules', 'deep');
-  for (const root of [dir, spike]) {
-    await mkdir(deep(root), { recursive: true });
-    await writeFile(join(deep(root), 'index.js'), '');
+  // A dependency of a dependency, live though the package links another version of it directly: the live stripe
+  // links deep@2.0.0, the package deep@3.0.0. And the spike links its own deep@2.0.0, which vouches for nothing here.
+  const deep = (root, version) => join(root, 'node_modules', '.pnpm', `deep@${version}`, 'node_modules', 'deep');
+  for (const [root, version] of [[dir, '2.0.0'], [dir, '3.0.0'], [spike, '2.0.0']]) {
+    await mkdir(deep(root, version), { recursive: true });
+    await writeFile(join(deep(root, version), 'index.js'), '');
   }
-  await symlink(deep(spike), join(spike, 'node_modules', 'deep'));
+  await symlink(deep(dir, '2.0.0'), join(dir, 'node_modules', '.pnpm', 'stripe@17.1.0_@types+node@22', 'node_modules', 'deep'));
+  await symlink(deep(dir, '3.0.0'), join(dir, 'packages', 'api', 'node_modules', 'deep'));
+  await symlink(deep(spike, '2.0.0'), join(spike, 'node_modules', 'deep'));
   await writeFile(
     join(dir, '.claude', 'integrations', 'stripe.md'),
     '# stripe\n\n| P1 | `packages/api/node_modules/stripe/index.js:12` (stripe 17.1.0), run as `node_modules/drizzle-kit/bin.cjs` |\n' +
