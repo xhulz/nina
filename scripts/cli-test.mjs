@@ -416,7 +416,7 @@ expect(
       '| P3 | the form was `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` |\n| P4 | `/nowhere/at/all/node_modules/.pnpm/gone@1.0.0/node_modules/gone/lib.js:7`. |\n' +
       '| P5 | `../../node_modules/.pnpm/stripe@17.1.0_@types+node@22/node_modules/stripe/index.js:3` |\n| P6 | <https://example.com/node_modules/.pnpm/x@1.0.0/node_modules/x/a.js> |\n' +
       '| P7 | `spikes/s/node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js:9` |\n| P8 | `/…/node_modules/.pnpm/y@1.0.0/node_modules/y/a.js` |\n' +
-      '| P9 | `node_modules/.pnpm/deep@2.0.0/node_modules/deep/index.js:1` |\n',
+      '| P9 | `node_modules/.pnpm/deep@2.0.0/node_modules/deep/index.js:1` |\n| P10 | a row reads `node_modules/.pnpm/gone@9.9.9/node_modules/<lib>/x.js` |\n',
   );
   const cited = run(['check', '--project', dir]).out;
   expect(
