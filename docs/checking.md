@@ -110,7 +110,7 @@ list the ones they match.
 ```bash
 nina pipeline --view --project ../thing             # live: the newest session, as the gate records it
 nina pipeline --view --replay --session 85d7        # one session played from its first dispatch
-nina pipeline --view --no-open                      # served, but the browser left to you
+nina pipeline --view --open                         # the system's browser opened on it too
 ```
 
 The same graph as an office seen from above, in pixels: a floor plan with a room for each phase — design, build,
@@ -131,10 +131,11 @@ and the orchestrator commits before it dispatches; without the rest, a reviewer 
 about to reject threw a party.
 
 It is a page served on the loopback address for as long as the command runs, on port 6462 (NINA on a phone's
-keypad) or any free one, and the command opens it in the system's browser — saying so only when the opener did,
-which a machine with no display does not. VS Code's own browser opens a page only
-for an extension or for a click, so it is not opened there: with `workbench.browser.openLocalhostLinks` on (1.140),
-the address the command prints opens beside the conversation at a click. A Claude Code mod was the first idea and
+keypad) or any free one, and the command prints its address at the end of a line, where a terminal makes it a
+link: whoever wants to watch clicks it. VS Code's own browser opens a page only for an extension or for a click,
+and an extension is not NINA's to install in anyone's editor; with `workbench.browser.openLocalhostLinks` on
+(1.140), the click opens it beside the conversation. `--open` opens the system's browser on it too, and says so
+only when the opener did, which a machine with no display does not. A Claude Code mod was the first idea and
 was probed before a line of this was written: in the editor's chat panel Claude Code runs a mod's hooks, but its
 session reports no surface to draw on and no drawing is ever asked for — a mod draws in the terminal and the
 desktop app only.

@@ -12,11 +12,12 @@
  *   the gate asking at a cap          the owner's phone rings
  *   a pass that ends the work         a party
  *
- * The page is served from this machine alone, on the loopback address, for as long as the command runs, and opened
- * in the system's browser. A Claude Code mod was the first idea, and a probe on 2.1.294 settled it: in the editor's
- * chat panel a mod's hooks run, its session reports no surface to draw on, and no drawing is ever asked for. A mod
- * draws in the terminal and the desktop app only. VS Code's own browser opens a page only for an extension, or for
- * a click on a link once `workbench.browser.openLocalhostLinks` is on (1.140), so it is offered, not opened.
+ * The page is served from this machine alone, on the loopback address, for as long as the command runs, and its
+ * address is printed for a click — opened in the system's browser only when asked. A Claude Code mod was the first
+ * idea, and a probe on 2.1.294 settled it: in the editor's chat panel a mod's hooks run, its session reports no surface
+ * to draw on, and no drawing is ever asked for. A mod draws in the terminal and the desktop app only. VS Code's own
+ * browser opens a page only for an extension — and an extension is not NINA's to install in anyone's editor — or for
+ * a click on a link, beside the conversation once `workbench.browser.openLocalhostLinks` is on (1.140).
  */
 
 import { spawn } from 'node:child_process';
@@ -389,12 +390,12 @@ function openInBrowser(url) {
 }
 
 /**
- * Runs the office until Ctrl+C: serves it, opens it in the system's browser unless told not to, and says where.
+ * Runs the office until Ctrl+C: serves it, says where for a click, and opens it in the system's browser when asked.
  *
  * @param {{target: string, wanted?: string, replay?: boolean, port?: number, open?: boolean}} options
  * @returns {Promise<number>} Process exit code.
  */
-export async function viewOffice({ target, wanted, replay = false, port = OFFICE_PORT, open = true }) {
+export async function viewOffice({ target, wanted, replay = false, port = OFFICE_PORT, open = false }) {
   if (wanted) {
     const { picked, why, dir } = sessionLedgers(target, wanted);
     if (!picked) {
@@ -420,8 +421,11 @@ export async function viewOffice({ target, wanted, replay = false, port = OFFICE
   });
   const what = replay ? `replaying session ${sessionLedgers(target, wanted).picked.session.slice(0, 8)}` : wanted ? `live, session ${wanted}` : 'live, following the newest session';
   const opened = open ? await openInBrowser(office.url) : false;
+  // The address ends its line, with nothing after it, so a terminal makes it a link.
   console.log(`  the office · ${basename(target)} · ${what}`);
-  console.log(`  ${office.url}${open ? (opened ? ' — opened in the browser' : ' — no browser could be opened from here') : ''} · Ctrl+C closes it\n`);
+  if (open && !opened) console.log('  No browser could be opened from here.');
+  console.log(`  ${opened ? 'Opened in your browser' : 'Click to watch your agents at work'}: ${office.url}`);
+  console.log('  Ctrl+C closes the office.\n');
   await stopped;
   await office.close();
   return 0;

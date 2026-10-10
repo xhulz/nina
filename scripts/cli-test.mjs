@@ -6052,8 +6052,9 @@ await release();
     badPort.status === 2 && badPort.out.includes('--port takes a port number') && withoutView.status === 2 && withoutView.out.includes('means nothing without --view'),
     `office: a port that is no port is refused, and the office's flags without --view are too — got ${badPort.out}${withoutView.out}`,
   );
-  // It opens by itself: the address goes to the system's opener — a stub here, first on the PATH — unless the
-  // command is told not to; it says it opened only when the opener did; and Ctrl+C closes it cleanly either way.
+  // The address is printed for a click, at the end of its line where a terminal makes it a link, and nothing is
+  // opened; `--open` hands it to the system's opener too — a stub here, first on the PATH — and says it opened only
+  // when the opener did. Ctrl+C closes it cleanly either way.
   const opened = join(await scratch(), 'opened.txt');
   const opener = async (exit) => {
     const dir = await scratch();
@@ -6070,10 +6071,10 @@ await release();
       });
       let out = '';
       const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
-      // The line is printed once the opener has answered, so whatever it did is done by then.
+      // The last line is printed once the opener has answered, so whatever it did is done by then.
       child.stdout.on('data', (chunk) => {
         out += chunk;
-        if (out.includes('Ctrl+C closes it')) child.kill('SIGINT');
+        if (out.includes('Ctrl+C closes the office')) child.kill('SIGINT');
       });
       child.stderr.on('data', (chunk) => (out += chunk));
       child.on('close', (status) => {
@@ -6086,26 +6087,27 @@ await release();
     await rm(opened, { force: true });
     return text;
   };
-  const byItself = await viewing(working);
-  const handedTo = await handed();
-  const address = byItself.out.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
+  const linkLine = (out, lead) => out.split('\n').find((l) => l.includes(lead))?.match(new RegExp(`${lead}: (http://127\\.0\\.0\\.1:\\d+)$`))?.[1];
+  const offered = await viewing(working);
+  const untouched = await handed();
   expect(
-    byItself.status === 0 && address && handedTo === address && byItself.out.includes('opened in the browser'),
-    `office: the command opens the page in the system's browser by itself — got ${byItself.status}, opener ${JSON.stringify(handedTo)}, ${byItself.out}`,
+    offered.status === 0 && untouched === '' && linkLine(offered.out, 'Click to watch your agents at work') && !offered.out.includes('Opened in your browser'),
+    `office: the address is printed for a click, ending its line, and no browser is opened — got ${offered.status}, opener ${JSON.stringify(untouched)}, ${offered.out}`,
   );
-  const noDisplay = await viewing(broken);
+  const asked = await viewing(working, ['--open']);
+  const handedTo = await handed();
+  expect(
+    asked.status === 0 && handedTo && linkLine(asked.out, 'Opened in your browser') === handedTo,
+    `office: --open hands the address to the system's browser, and says so — got ${asked.status}, opener ${JSON.stringify(handedTo)}, ${asked.out}`,
+  );
+  const noDisplay = await viewing(broken, ['--open']);
   const triedOn = await handed();
   expect(
-    noDisplay.status === 0 && triedOn.startsWith('http://127.0.0.1:') && !noDisplay.out.includes('opened in the browser') && noDisplay.out.includes('no browser could be opened from here'),
-    `office: an opener that fails is not reported as opening the page — got ${noDisplay.out}`,
+    noDisplay.status === 0 && triedOn.startsWith('http://127.0.0.1:') && noDisplay.out.includes('No browser could be opened from here.') && linkLine(noDisplay.out, 'Click to watch your agents at work') === triedOn,
+    `office: an opener that fails is not reported as opening the page, and the link is offered instead — got ${noDisplay.out}`,
   );
-  const leftAlone = await viewing(working, ['--no-open']);
-  const untouched = await handed();
-  const noOpenAlone = run(['pipeline', '--no-open', '--project', project]);
-  expect(
-    leftAlone.status === 0 && untouched === '' && !leftAlone.out.includes('opened in the browser') && noOpenAlone.status === 2 && noOpenAlone.out.includes('means nothing without --view'),
-    `office: --no-open serves the page and opens nothing, and means nothing without --view — got ${leftAlone.status}, ${leftAlone.out}${noOpenAlone.out}`,
-  );
+  const openAlone = run(['pipeline', '--open', '--project', project]);
+  expect(openAlone.status === 2 && openAlone.out.includes('means nothing without --view'), `office: --open means nothing without --view — got ${openAlone.out}`);
 }
 
 for (const f of failures) console.log(`  ✗ ${f}`);
