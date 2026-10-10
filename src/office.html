@@ -8,19 +8,30 @@
 <style>
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; background: #1b1d26; overflow: hidden; }
-  canvas { display: block; }
+  canvas { display: block; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  #zoom { position: fixed; top: 10px; right: 10px; display: flex; gap: 4px; }
+  #zoom button { font: 600 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width: 34px; height: 30px; padding: 0 9px; color: #fff8e8; background: rgba(34, 32, 43, 0.88); border: 2px solid #262331; border-radius: 4px; cursor: pointer; }
+  #zoom button:hover { background: #3a3f58; }
+  #zoom button[aria-pressed="true"] { color: #ffd34d; }
 </style>
 </head>
 <body>
 <canvas id="screen"></canvas>
+<div id="zoom" role="toolbar" aria-label="zoom">
+  <button id="zoom-out" type="button" title="zoom out (−)" aria-label="zoom out">−</button>
+  <button id="zoom-fit" type="button" title="the whole office (0)">fit</button>
+  <button id="zoom-in" type="button" title="zoom in (+)" aria-label="zoom in">+</button>
+</div>
 <script>
 'use strict';
 /*
  * The NINA office: the project's pipeline as a floor plan seen from above. `nina pipeline --view` serves this page
  * with the room filled in below, and streams the gate ledger's beats at /events. Every stage has a desk in the room
- * of its phase — design, build, review and the gates, the test lab, release — off one corridor; the orchestrator
- * keeps the reception, the owner stands at its counter, and new agents come in from the garden. Everything is drawn
- * here, in pixels, on a small canvas scaled up; nothing is fetched from anywhere else.
+ * of its phase — design, build, review and the gates, the test lab, release — off one corridor; the orchestrator,
+ * NINA, keeps the reception, the owner stands at its counter, and new agents come in from the garden. Everything is
+ * drawn here, in pixels, on a small canvas scaled up; nothing is fetched from anywhere else. The view starts close
+ * enough to read and follows the work around the floor; dragging, the wheel and the buttons take it over.
  */
 const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'implementer', 'reviewer', 'qa', 'dba', 'integration-tester', 'devops', 'secops'], many: ['architect', 'implementer', 'reviewer'], owner: 'you', replay: false };
 
@@ -389,6 +400,7 @@ function person(key, role, look) {
     colors: { o: C.ink, h: HAIRS[h % HAIRS.length], s: SKINS[(h >> 3) % SKINS.length], e: C.ink, t: stages.get(role)?.shirt ?? SHIRTS[h % SHIRTS.length], p: '#3a3f58', k: '#22202b' },
   };
 }
+// The orchestrator is NINA: the session that follows the router and hands the work on.
 const boss = person('orchestrator', null, 'orchestrator-boss');
 Object.assign(boss, { x: BOSS_HOME.x, y: BOSS_HOME.y, at: BOSS_HOME, pose: 'boss', home: BOSS_HOME });
 boss.colors.t = '#2f4a8a';
@@ -469,6 +481,10 @@ function note(at, text) {
 }
 let confetti = [];
 let banner = null;
+/** What the view follows when it is closer than the whole office: a person as they walk, or a spot. */
+let focus = null;
+const follow = (target) => (focus = target);
+const RECEPTION = { x: COUNTER.x + COUNTER.w / 2, y: COUNTER.y + 14 };
 /** The stage a dispatch past its cap was for, while the gate's call waits on the owner. */
 let capRole = null;
 function settleCap() {
@@ -507,10 +523,14 @@ function onBeat(b) {
     const from = b.from?.agent ? people.get(b.from.agent) : null;
     const carrier = from && from !== p && !from.leaving ? from : boss;
     const folder = b.from?.back ? C.red : C.paper;
-    act(carrier, () => (carrier.carrying = folder));
+    act(carrier, () => {
+      carrier.carrying = folder;
+      follow(carrier);
+    });
     walk(carrier, stage.drop, () => {
       carrier.carrying = null;
       stage.folder = { color: folder, until: performance.now() + 8000 };
+      if (focus === carrier) follow(stage.drop);
     });
     wait(carrier, 300);
     const home = homeOf(carrier);
@@ -543,7 +563,10 @@ function onBeat(b) {
       }
     };
     if (b.instant) finish();
-    else act(p, finish);
+    else {
+      act(p, finish);
+      follow(p);
+    }
     if (!b.instant) note(b.at, `${b.role} ${b.verdict}${b.issues.length ? ` · ${b.issues.slice(0, 3).join(', ')}${b.issues.length > 3 ? '…' : ''}` : ''}${b.asks ? ' — asks you' : ''}`);
     return;
   }
@@ -558,7 +581,10 @@ function onBeat(b) {
   }
   if (b.type === 'question') {
     say(boss, 'ask');
-    if (!b.instant) note(b.at, `orchestrator asks ${ROOM.owner}`);
+    if (!b.instant) {
+      note(b.at, `NINA asks ${ROOM.owner}`);
+      follow(RECEPTION);
+    }
     return;
   }
   if (b.type === 'answered') {
@@ -566,6 +592,7 @@ function onBeat(b) {
     if (!b.instant) {
       say(owner, 'talk', 1500);
       note(b.at, `${ROOM.owner} answered`);
+      follow(RECEPTION);
     }
     return;
   }
@@ -573,7 +600,10 @@ function onBeat(b) {
     capRole = b.role;
     say(boss, 'alarm');
     say(owner, 'phone');
-    if (!b.instant) note(b.at, `gate: ${b.source} → ${b.role} would go past its cap — asking ${ROOM.owner}`);
+    if (!b.instant) {
+      note(b.at, `gate: ${b.source} → ${b.role} would go past its cap — asking ${ROOM.owner}`);
+      follow(RECEPTION);
+    }
     return;
   }
   if (b.type === 'refused' || b.type === 'stale') {
@@ -593,6 +623,7 @@ function onBeat(b) {
     if (!b.instant) {
       say(owner, 'talk', 2000);
       note(b.at, `${ROOM.owner} spoke`);
+      follow(RECEPTION);
     }
   }
 }
@@ -615,6 +646,7 @@ function reset() {
   confetti = [];
   banner = null;
   capRole = null;
+  focus = null;
 }
 
 // ─── the stream ───────────────────────────────────────────────────────────────────────────────
@@ -688,10 +720,49 @@ world.height = LH;
 const w = world.getContext('2d');
 const screen = document.getElementById('screen');
 const s = screen.getContext('2d');
+// Drawn at a scale that is not a whole number, the office is first blown up by the next whole number and then shrunk
+// smoothly, so every pixel comes out the same size instead of alternating between two.
+const crisp = document.createElement('canvas');
+const cg = crisp.getContext('2d');
+
+// ─── the view ─────────────────────────────────────────────────────────────────────────────────
+// Sizes are in office pixels; `scale` is screen pixels for each. Fitted whole into a window beside the conversation
+// the office drew a person under twenty screen pixels tall, so the view starts at READABLE screen points an office
+// pixel — the whole office when that is nearly what fits — and follows the work; the viewer's own zoom is kept. The
+// title and the zoom keep a band of their own above the office, so neither covers a room's name.
+const READABLE = 2.5;
+const CLOSEST = 8;
+const BAND = 48;
+const HANDS_OFF_MS = 12000;
+const ZOOM_KEY = 'nina-office-zoom';
+let dpr = 1;
+let fit = 1;
 let scale = 1;
+let band = 0;
 let ox = 0;
 let oy = 0;
-let dpr = 1;
+const cam = { x: LW / 2, y: LH / 2 };
+let handsOffUntil = 0;
+/** 'fit', a zoom the viewer chose in points an office pixel, or null when they never chose. */
+let chosen = null;
+try {
+  const kept = localStorage.getItem(ZOOM_KEY);
+  chosen = kept === 'fit' ? 'fit' : Number(kept) > 0 ? Number(kept) : null;
+} catch {
+  // A page without storage starts at the readable zoom every time.
+}
+function level() {
+  const whole = fit / dpr;
+  if (chosen === 'fit' || (chosen === null && whole >= READABLE * 0.85)) return whole;
+  return Math.max(whole, Math.min(CLOSEST, chosen ?? READABLE));
+}
+/** The middle of the part of the screen the office is drawn in. */
+const middle = () => [screen.width / 2, band + (screen.height - band) / 2];
+const ui = (points) => Math.round(points * dpr);
+
+function syncButtons() {
+  document.getElementById('zoom-fit').setAttribute('aria-pressed', String(level() <= (fit / dpr) * 1.001));
+}
 
 function resize() {
   dpr = window.devicePixelRatio || 1;
@@ -699,13 +770,93 @@ function resize() {
   screen.height = Math.floor(window.innerHeight * dpr);
   screen.style.width = `${window.innerWidth}px`;
   screen.style.height = `${window.innerHeight}px`;
-  const fit = Math.min(screen.width / LW, screen.height / LH);
-  scale = fit >= 2 ? Math.floor(fit) : fit;
-  ox = Math.floor((screen.width - LW * scale) / 2);
-  oy = Math.floor((screen.height - LH * scale) / 2);
+  band = Math.round(BAND * dpr);
+  fit = Math.min(screen.width / LW, (screen.height - band) / LH);
+  scale = level() * dpr;
+  syncButtons();
 }
 window.addEventListener('resize', resize);
 resize();
+
+/** Zooms by a factor, keeping the office pixel under a screen point where it is. */
+function zoomBy(factor, sx = middle()[0], sy = middle()[1]) {
+  const [mx, my] = middle();
+  const wx = cam.x + (sx - mx) / scale;
+  const wy = cam.y + (sy - my) / scale;
+  const next = Math.min(CLOSEST, level() * factor);
+  chosen = next <= (fit / dpr) * 1.001 ? 'fit' : next;
+  try {
+    localStorage.setItem(ZOOM_KEY, String(chosen));
+  } catch {
+    // Kept for this page only.
+  }
+  scale = level() * dpr;
+  cam.x = wx - (sx - mx) / scale;
+  cam.y = wy - (sy - my) / scale;
+  syncButtons();
+}
+const handsOn = () => (handsOffUntil = performance.now() + HANDS_OFF_MS);
+
+document.getElementById('zoom-in').addEventListener('click', () => zoomBy(1.25));
+document.getElementById('zoom-out').addEventListener('click', () => zoomBy(0.8));
+document.getElementById('zoom-fit').addEventListener('click', () => zoomBy(0));
+window.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === '+' || e.key === '=') zoomBy(1.25);
+  else if (e.key === '-' || e.key === '_') zoomBy(0.8);
+  else if (e.key === '0') zoomBy(0);
+});
+let drag = null;
+screen.addEventListener('pointerdown', (e) => {
+  drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y };
+  screen.setPointerCapture(e.pointerId);
+  screen.classList.add('dragging');
+});
+screen.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  cam.x = drag.cx - ((e.clientX - drag.x) * dpr) / scale;
+  cam.y = drag.cy - ((e.clientY - drag.y) * dpr) / scale;
+  handsOn();
+});
+const dropDrag = () => {
+  drag = null;
+  screen.classList.remove('dragging');
+};
+screen.addEventListener('pointerup', dropDrag);
+screen.addEventListener('pointercancel', dropDrag);
+// A double click hands the view back to the work.
+screen.addEventListener('dblclick', () => (handsOffUntil = 0));
+screen.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    // A pinch on a trackpad arrives as the wheel with Ctrl held; two fingers alone move the view.
+    if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.01), e.clientX * dpr, e.clientY * dpr);
+    else {
+      cam.x += (e.deltaX * dpr) / scale;
+      cam.y += (e.deltaY * dpr) / scale;
+    }
+    handsOn();
+  },
+  { passive: false },
+);
+
+/** Eases the view toward what it follows, unless the viewer moved it lately, and keeps the office on screen. */
+function aim(dt, now) {
+  scale = level() * dpr;
+  const viewW = screen.width / scale;
+  const viewH = (screen.height - band) / scale;
+  if (focus && now > handsOffUntil) {
+    const ease = Math.min(1, dt * 2.5);
+    cam.x += (focus.x - cam.x) * ease;
+    cam.y += (focus.y - 8 - cam.y) * ease;
+  }
+  cam.x = viewW >= LW ? LW / 2 : Math.min(LW - viewW / 2, Math.max(viewW / 2, cam.x));
+  cam.y = viewH >= LH ? LH / 2 : Math.min(LH - viewH / 2, Math.max(viewH / 2, cam.y));
+  const [mx, my] = middle();
+  ox = Math.round(mx - cam.x * scale);
+  oy = Math.round(my - cam.y * scale);
+}
 
 function drawPerson(p, now) {
   const hop = p.cheerUntil > now ? Math.round(Math.abs(Math.sin(now / 110)) * 3) : 0;
@@ -771,11 +922,15 @@ function drawWorld(now) {
   for (const c of confetti) rect(w, c.x, c.y, 2, 1, c.color);
 }
 
-function text(str, x, y, size, color, align = 'left', max = Infinity, weight = '') {
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+
+/** Writes a line, shrinking it until it fits `max`, and returns how wide it came out. */
+function text(str, x, y, size, color, align = 'left', max = Infinity, weight = '', family = MONO) {
   let px = size;
-  const font = () => `${weight}${weight ? ' ' : ''}${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+  const font = () => `${weight}${weight ? ' ' : ''}${px}px ${family}`;
   s.font = font();
-  while (px > 6 * dpr && s.measureText(str).width > max) {
+  while (px > ui(7) && s.measureText(str).width > max) {
     px -= 1;
     s.font = font();
   }
@@ -783,54 +938,93 @@ function text(str, x, y, size, color, align = 'left', max = Infinity, weight = '
   s.textBaseline = 'middle';
   s.fillStyle = color;
   s.fillText(str, x, y);
+  return s.measureText(str).width;
+}
+
+function panel(x, y, width, height, fill = 'rgba(27,29,38,0.84)') {
+  s.fillStyle = fill;
+  s.beginPath();
+  if (s.roundRect) s.roundRect(x, y, width, height, ui(3));
+  else s.rect(x, y, width, height);
+  s.fill();
+}
+
+/** A name on a dark plate, centred on a screen point, never wider than `max`. */
+function plate(str, cx, cy, size, color, max) {
+  let px = size;
+  s.font = `600 ${px}px ${SANS}`;
+  while (px > ui(7) && s.measureText(str).width > max - ui(8)) {
+    px -= 1;
+    s.font = `600 ${px}px ${SANS}`;
+  }
+  const width = s.measureText(str).width + ui(8);
+  const height = px + ui(6);
+  panel(cx - width / 2, cy - height / 2, width, height, 'rgba(34,32,43,0.9)');
+  text(str, cx, cy + ui(0.5), px, color, 'center', Infinity, '600', SANS);
 }
 
 function drawScreen(now) {
   s.imageSmoothingEnabled = false;
   s.fillStyle = '#1b1d26';
   s.fillRect(0, 0, screen.width, screen.height);
-  s.drawImage(world, ox, oy, LW * scale, LH * scale);
+  if (Number.isInteger(scale) || scale > 4) s.drawImage(world, ox, oy, LW * scale, LH * scale);
+  else {
+    const k = Math.max(1, Math.ceil(scale));
+    if (crisp.width !== LW * k) {
+      crisp.width = LW * k;
+      crisp.height = LH * k;
+    }
+    cg.imageSmoothingEnabled = false;
+    cg.drawImage(world, 0, 0, LW * k, LH * k);
+    s.imageSmoothingEnabled = true;
+    s.imageSmoothingQuality = 'high';
+    s.drawImage(crisp, ox, oy, LW * scale, LH * scale);
+    s.imageSmoothingEnabled = false;
+  }
+  // Names in the office, at the screen's resolution and never smaller than can be read.
   const at = (x, y) => [ox + x * scale, oy + y * scale];
-  const small = Math.max(8 * dpr, Math.round(scale * 3.1));
+  const label = Math.max(ui(11), Math.round(scale * 3.4));
   for (const room of rooms.values()) {
     const [x, y] = at(room.x + 12, room.y + 8.5);
-    text(room.name, x, y, small, C.signText, 'left', (signWidth(room) - 8) * scale);
+    text(room.name, x, y, label, C.signText, 'left', (signWidth(room) - 7) * scale, '600', SANS);
   }
   for (const stage of stages.values()) {
     for (const d of stage.desks) {
       const [x, y] = at(d.dx + 18, d.dy + 21.5);
-      text(stage.role, x, y, small, '#fff8e8', 'center', 34 * scale);
+      plate(stage.role, x, y, label, '#fff8e8', (DESK_STEP - 4) * scale);
     }
   }
   {
     const [x, y] = at(COUNTER.x + COUNTER.w / 2, COUNTER.y + 6);
-    text('orchestrator', x, y, small, '#fff8e8', 'center', (COUNTER.w - 8) * scale);
-    const [ownerX, ownerY] = at(OWNER_HOME.x + 8, OWNER_HOME.y - 4);
-    text(ROOM.owner, ownerX, ownerY, small, '#ffd34d', 'left', 70 * scale, 'bold');
+    plate('NINA', x, y, label, C.signText, (COUNTER.w - 8) * scale);
+    const [ownerX, ownerY] = at(owner.x + 7, owner.y - 5);
+    s.font = `700 ${label}px ${SANS}`;
+    const width = Math.min(s.measureText(ROOM.owner).width, 80 * scale);
+    plate(ROOM.owner, ownerX + width / 2 + ui(4), ownerY, label, '#ffd34d', 80 * scale + ui(8));
   }
+  // What stays put on the screen: the title, the zoom (in the page), the log, a pass worth a party.
+  const size = ui(12);
   {
-    const label = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}`;
-    const [hx, hy] = at(4, LH - GARDEN + 2);
-    s.font = `${small}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-    const width = Math.min(s.measureText(label).width + 10 * dpr, LW * scale * 0.7);
-    s.fillStyle = 'rgba(27,29,38,0.78)';
-    s.fillRect(hx, hy, width, small * 1.5);
-    text(label, hx + 5 * dpr, hy + small * 0.78, small, '#e6e8ee', 'left', width - 10 * dpr);
+    const title = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}`;
+    s.font = `${size}px ${MONO}`;
+    s.fillStyle = '#1b1d26';
+    s.fillRect(0, 0, screen.width, band);
+    const width = Math.min(s.measureText(title).width + ui(16), screen.width - ui(150));
+    panel(ui(10), ui(9), width, ui(30));
+    text(title, ui(18), ui(24), size, '#e6e8ee', 'left', width - ui(16));
   }
   if (lines.length > 0) {
-    const lineH = small * 1.3;
-    const [lx, ly] = at(0, LH);
-    const top = ly - lines.length * lineH - lineH * 0.4;
-    s.fillStyle = 'rgba(27,29,38,0.78)';
-    s.fillRect(lx, top, LW * scale, ly - top);
-    lines.forEach((l, i) => text(l, lx + 8 * dpr, top + lineH * (i + 0.8), small, '#fff8e8', 'left', LW * scale - 16 * dpr));
+    const lineH = ui(19);
+    const top = screen.height - lines.length * lineH - ui(12);
+    s.fillStyle = 'rgba(27,29,38,0.84)';
+    s.fillRect(0, top, screen.width, screen.height - top);
+    lines.forEach((l, i) => text(l, ui(14), top + ui(6) + lineH * (i + 0.5), size, '#fff8e8', 'left', screen.width - ui(28)));
   }
   if (banner && banner.until > now) {
-    const [bx, by] = at(LW / 2, FLOOR_H / 2);
-    const big = Math.round(scale * 10);
-    s.fillStyle = 'rgba(27,29,38,0.68)';
-    s.fillRect(bx - LW * scale * 0.3, by - big, LW * scale * 0.6, big * 2);
-    text(`✓ ${banner.text}`, bx, by, big, '#3ec74d', 'center', LW * scale * 0.56, 'bold');
+    const big = ui(Math.max(20, Math.min(40, window.innerWidth / 22)));
+    const width = Math.min(screen.width * 0.86, big * 16);
+    panel(screen.width / 2 - width / 2, screen.height / 2 - big, width, big * 2, 'rgba(27,29,38,0.78)');
+    text(`✓ ${banner.text}`, screen.width / 2, screen.height / 2, big, '#3ec74d', 'center', width - big, 'bold');
   }
 }
 
@@ -844,6 +1038,7 @@ function frame(now) {
     c.y += c.vy * dt;
     c.vy += 30 * dt;
   }
+  aim(dt, now);
   drawWorld(now);
   drawScreen(now);
   requestAnimationFrame(frame);

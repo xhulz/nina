@@ -119,7 +119,7 @@ nina compose --project ../thing [--check]     # rebuild a project's harness file
 nina check --project ../thing                 # is what the project declared about itself true?
 nina where <path> --project ../thing          # does this path belong to the harness, and which layer?
 nina pipeline --project ../thing              # the agent chain drawn: gates, loop-backs, models, skills
-nina pipeline --view --project ../thing       # the office: each agent at its stage's desk, live or --replay, for VS Code's Simple Browser
+nina pipeline --view --project ../thing       # the office: each agent at its stage's desk, live or --replay, opened in the browser
 nina wire --project ../thing [--apply]        # merge the hooks and npm scripts its version needs
 nina upgrade --project ../thing --to <v> [--apply]   # what a move costs, then the whole move
 nina gate --selftest --project ../thing       # would the loop gate still hold a loop past its cap?
