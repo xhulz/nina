@@ -146,8 +146,10 @@ export function officeBeats(ledger, graph, now = Date.now()) {
       // A message is told apart by its id too: an agent that stopped without a declared verdict left nothing on the
       // ledger, so until the dispatch says it was resumed, its resumption looks like a message — and the id that
       // changes when the dispatch lands is what reaches a page that already has the guess.
-      beats.push({ id: start.message ? `${id}:message` : id, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
-      if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work: id });
+      // A refusal names the work by that same id, so the page finds whoever sat down for it.
+      const work = start.message ? `${id}:message` : id;
+      beats.push({ id: work, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
+      if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work });
       else if (!start.message && (start.end === null || start.end - start.at >= STALE_MS) && now >= start.at + STALE_MS) {
         beats.push({ id: `stale:${id}`, at: start.at + STALE_MS, type: 'stale', role: e.role, agent: start.agent, work: id });
       }

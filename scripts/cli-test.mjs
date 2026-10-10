@@ -4538,7 +4538,8 @@ const dated = (date, status = 'active') =>
   // on that program's whole input path. The reviewer holds both; the history behind them is not composed.
   expect(
     implementer.includes('**So run it first, before `DIFF-READY`:**') && implementer.includes('goes red row by row') && implementer.includes('**Mutations run:**') &&
-      implementer.includes("Run each test's named mutation on a scratch copy in plain `node`") && reviewer.includes("the implementer's **Mutations run** does not show red") &&
+      implementer.includes("Run each test's named mutation on a scratch copy in plain `node`") && implementer.includes('is not the suite, and is yours to run') &&
+      reviewer.includes("the implementer's **Mutations run** does not show red") &&
       !implementer.includes('The fourth time this lesson came back'),
     'compose: the implementer runs each mutation it names on a copy before handing off and lists them, and the reviewer starts from the list',
   );
@@ -5944,6 +5945,14 @@ await release();
   expect(
     landed?.message === false && landed.resumed === true && landed.id !== sentTo(running, 'toolu_sm').id,
     `office: a guess the dispatch overturns reaches the page as a beat of its own — got ${JSON.stringify(landed)}`,
+  );
+  // A message refused at a cap names the work it refuses by that work beat's own id, so the page finds it.
+  const refusedMessage = beatsOf([...running, { k: 'ask', at: at(3), role: 'implementer', source: 'reviewer', token: 'REJECTED', round: 3, max: 2, id: 'toolu_sm' }, ran(30, 'qa')]);
+  const sentWork = refusedMessage.find((b) => b.type === 'work' && b.id.startsWith('pre:toolu_sm'));
+  const refusal = refusedMessage.find((b) => b.type === 'refused');
+  expect(
+    sentWork?.message === true && refusal?.work === sentWork.id,
+    `office: a refused message names the beat it refuses by that beat's id — got ${JSON.stringify([sentWork?.id, refusal?.work])}`,
   );
   // Past the 4 MB tail the oldest lines drop off: an id holds as long as its entry does.
   const said = [{ k: 'reset', at: at(1), why: 'prompt' }, { k: 'reset', at: at(1), why: 'prompt' }];

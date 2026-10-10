@@ -154,6 +154,7 @@ quickly; moving to a session that was already running, what it did before the mo
 playing out again. The orchestrator's question reaches the ledger only because the gate's `PreToolUse` hook also
 matches `AskUserQuestion` — the moment it was asked and the moment it was answered, nothing it said. A project wired
 before that has the hook narrower than it needs: `check` names the tool it does not match, `upgrade` says so without
-stopping the move, and `nina wire --apply` widens it in place. The page answers only to this machine's own names
+stopping the move, and `nina wire --apply` widens it in place — but a group matched by a regular expression, or
+kept in the local settings file, is its owner's to widen, and both say so instead. The page answers only to this machine's own names
 for itself, on any port a forwarding gives it, so a page elsewhere that rebinds its domain to the loopback address
 is refused.
