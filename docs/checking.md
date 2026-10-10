@@ -131,7 +131,8 @@ and the orchestrator commits before it dispatches; without the rest, a reviewer 
 about to reject threw a party.
 
 It is a page served on the loopback address for as long as the command runs, on port 6462 (NINA on a phone's
-keypad) or any free one, and the command opens it in the system's browser. VS Code's own browser opens a page only
+keypad) or any free one, and the command opens it in the system's browser — saying so only when the opener did,
+which a machine with no display does not. VS Code's own browser opens a page only
 for an extension or for a click, so it is not opened there: with `workbench.browser.openLocalhostLinks` on (1.140),
 the address the command prints opens beside the conversation at a click. A Claude Code mod was the first idea and
 was probed before a line of this was written: in the editor's chat panel Claude Code runs a mod's hooks, but its
@@ -141,9 +142,10 @@ desktop app only.
 The view starts at two and a half screen points an office pixel, closer than the whole office when the window is
 smaller than that: fitted whole into a window beside the conversation, a person came out under twenty pixels tall.
 Closer than the whole, it follows the work — the folder as it is carried, the desk of whoever reports, the
-reception for a question. Dragging, the wheel, a pinch, `+`, `−` and `0` take it over until the viewer has left it
-alone for twelve seconds, or double-clicks; the zoom they choose is kept by their browser. Names are written at the
-screen's resolution, never under eleven points. The session is picked as `gate --status` picks it, through the same function.
+reception for a question. Dragging, the wheel and a pinch take it over until the viewer has left it alone for
+twelve seconds, or double-clicks; `+`, `−`, `0` and the buttons zoom without taking it, around what it follows. The
+zoom chosen is kept by the viewer's browser. Names are written at the screen's resolution, at eleven points or
+more — smaller only to fit on a desk when the whole office is squeezed into a small window. The session is picked as `gate --status` picks it, through the same function.
 Live, a client is handed what came before it connected at once, to set the room by, and then each beat as the gate
 writes it; a replay plays one session from its first dispatch with its gaps shortened, the owner's messages passing
 quickly; moving to a session that was already running, what it did before the move sets the room rather than
@@ -151,4 +153,5 @@ playing out again. The orchestrator's question reaches the ledger only because t
 matches `AskUserQuestion` — the moment it was asked and the moment it was answered, nothing it said. A project wired
 before that has the hook narrower than it needs: `check` names the tool it does not match, `upgrade` says so without
 stopping the move, and `nina wire --apply` widens it in place. The page answers only to this machine's own names
-for itself, so a page elsewhere that rebinds its domain to the loopback address is refused.
+for itself, on any port a forwarding gives it, so a page elsewhere that rebinds its domain to the loopback address
+is refused.

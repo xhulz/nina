@@ -367,7 +367,7 @@ export async function upgrade(argv, ctx) {
   // A script already run whose hooks this NINA needs more of — a matcher that grew — holds what it held, so it does
   // not stop the move; it is said, with what fixes it.
   const stillRun = new Set([...(await shippedScripts(onto.dir, kept))].filter((s) => scriptsBefore.has(s)));
-  const widened = stillRun.size > 0 ? (await missingWiring(target, stillRun)).filter((w) => w.includes('`nina wire --apply` widens it')) : [];
+  const widened = stillRun.size > 0 ? (await missingWiring(target, stillRun)).filter((w) => / hook running `[^`]+` does not match /.test(w)) : [];
   if (widened.length > 0) {
     for (const w of widened) console.log(`  · ${w}`);
     console.log('');

@@ -142,7 +142,10 @@ export function officeBeats(ledger, graph, now = Date.now()) {
       // The folder comes from whoever reported last only along an edge of the graph — a diff to its reviewer, a
       // rejection back to its fixer; work the orchestrator hands out on its own plan, it carries itself.
       const handed = reported && graph.edges.some((edge) => edge.from === reported.role && edge.token === reported.verdict && edge.to === e.role);
-      beats.push({ id, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
+      // A message is told apart by its id too: an agent that stopped without a declared verdict left nothing on the
+      // ledger, so until the dispatch says it was resumed, its resumption looks like a message — and the id that
+      // changes when the dispatch lands is what reaches a page that already has the guess.
+      beats.push({ id: start.message ? `${id}:message` : id, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
       if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work: id });
       else if (!start.message && (start.end === null || start.end - start.at >= STALE_MS) && now >= start.at + STALE_MS) {
         beats.push({ id: `stale:${id}`, at: start.at + STALE_MS, type: 'stale', role: e.role, agent: start.agent, work: id });
@@ -291,9 +294,9 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
 
   const server = createServer((req, res) => {
     // Only this machine's own names for itself: a page elsewhere that rebinds its domain to the loopback address
-    // reaches the port, and is refused here.
-    const port = server.address()?.port;
-    if (![`127.0.0.1:${port}`, `localhost:${port}`].includes(String(req.headers.host ?? ''))) {
+    // reaches the port, and is refused here. Any port, since a forwarded one — an editor's port forwarding, a
+    // container's — reaches this one under another number.
+    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(String(req.headers.host ?? ''))) {
       res.writeHead(403, { 'content-type': 'text/plain' });
       res.end('not from here\n');
       return;
@@ -355,6 +358,37 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
 }
 
 /**
+ * Hands an address to the system's opener. One that is not there fails at once, and one with no display to open on
+ * exits with an error soon after; one still running after two seconds is taken to have opened it. Windows' explorer
+ * answers 1 even when it opened the page.
+ *
+ * @param {string} url
+ * @returns {Promise<boolean>} Whether the browser was opened.
+ */
+function openInBrowser(url) {
+  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
+  return new Promise((resolveOpen) => {
+    let child;
+    try {
+      child = spawn(opener, [url], { stdio: 'ignore', detached: true });
+    } catch {
+      resolveOpen(false);
+      return;
+    }
+    const timer = setTimeout(() => resolveOpen(true), 2000);
+    child.once('error', () => {
+      clearTimeout(timer);
+      resolveOpen(false);
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      resolveOpen(code === 0 || process.platform === 'win32');
+    });
+    child.unref();
+  });
+}
+
+/**
  * Runs the office until Ctrl+C: serves it, opens it in the system's browser unless told not to, and says where.
  *
  * @param {{target: string, wanted?: string, replay?: boolean, port?: number, open?: boolean}} options
@@ -378,21 +412,17 @@ export async function viewOffice({ target, wanted, replay = false, port = OFFICE
     console.error(`  the office could not open a port — ${error?.message ?? error}\n`);
     return 1;
   }
-  const what = replay ? `replaying session ${sessionLedgers(target, wanted).picked.session.slice(0, 8)}` : wanted ? `live, session ${wanted}` : 'live, following the newest session';
-  console.log(`  the office · ${basename(target)} · ${what}`);
-  console.log(`  ${office.url}${open ? ' — opened in the browser' : ''} · Ctrl+C closes it\n`);
-  if (open) {
-    const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
-    try {
-      spawn(opener, [office.url], { stdio: 'ignore', detached: true }).on('error', () => undefined).unref();
-    } catch {
-      // The address is printed above.
-    }
-  }
-  await new Promise((resolveStop) => {
+  // Listening for Ctrl+C before saying it closes the office: pressed in between, with no listener yet, it would kill
+  // the process outright instead.
+  const stopped = new Promise((resolveStop) => {
     process.once('SIGINT', resolveStop);
     process.once('SIGTERM', resolveStop);
   });
+  const what = replay ? `replaying session ${sessionLedgers(target, wanted).picked.session.slice(0, 8)}` : wanted ? `live, session ${wanted}` : 'live, following the newest session';
+  const opened = open ? await openInBrowser(office.url) : false;
+  console.log(`  the office · ${basename(target)} · ${what}`);
+  console.log(`  ${office.url}${open ? (opened ? ' — opened in the browser' : ' — no browser could be opened from here') : ''} · Ctrl+C closes it\n`);
+  await stopped;
   await office.close();
   return 0;
 }

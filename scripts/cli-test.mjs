@@ -3570,6 +3570,23 @@ const dated = (date, status = 'active') =>
     narrow.length === 1 && narrow[0].includes('does not match AskUserQuestion') && narrow[0].includes('`nina wire --apply` widens it'),
     `wiring: a gate hook from before the office misses the orchestrator's questions, and is named as narrow, not absent — got ${narrow}`,
   );
+  const ownRegex = await withMatcher('(Agent|Task|SendMessage)');
+  expect(
+    ownRegex.length === 1 && ownRegex[0].includes('does not match AskUserQuestion') && !ownRegex[0].includes('nina wire --apply') && ownRegex[0].includes('.claude/settings.json holds it'),
+    `wiring: a narrow matcher written as a regular expression is its owner's to widen, and \`wire\` — which leaves it alone — is not promised — got ${ownRegex}`,
+  );
+  // An upgrade says it too, and goes on: the hook still holds what it held.
+  const narrowed = await scratch();
+  run(['init', '--project', narrowed, '--surfaces', 'frontend', '--core', '0.48.0']);
+  const narrowedSettings = join(narrowed, '.claude', 'settings.json');
+  const wiredThere = JSON.parse(await readFile(narrowedSettings, 'utf8'));
+  for (const g of wiredThere.hooks.PreToolUse) if (JSON.stringify(g).includes('loop-gate')) g.matcher = 'Agent|Task|SendMessage';
+  await writeFile(narrowedSettings, JSON.stringify(wiredThere));
+  const movingOn = run(['upgrade', '--project', narrowed, '--to', 'dev'], { loud: true }).out;
+  expect(
+    movingOn.includes('· the PreToolUse hook running `scripts/loop-gate.mjs` does not match AskUserQuestion — `nina wire --apply` widens it'),
+    `wiring: an upgrade names a hook its scripts need more of, with what widens it — got ${movingOn}`,
+  );
   expect((await withMatcher('*')).length === 0, 'wiring: a matcher of * reaches every tool');
   expect((await withMatcher('Agent | Task | SendMessage')).length === 1, 'wiring: spaces make it a regular expression that reaches none of them');
   expect((await withMatcher('(Agent|Task|SendMessage|AskUserQuestion)')).length === 0 && (await withMatcher('.*')).length === 0, 'wiring: a regular expression that reaches them is wired');
@@ -5902,10 +5919,17 @@ await release();
   // A message to an agent still running, seen before its `dispatch` entry is written: the `pre` says so.
   const running = [ran(0, 'implementer'), { k: 'pre', at: at(3), role: 'implementer', id: 'toolu_sm', via: 'SendMessage', agent: 'implementer-' + n }];
   const resumedLater = [ran(100, 'implementer', 'DIFF-READY'), { k: 'pre', at: at(200), role: 'implementer', id: 'toolu_sm2', via: 'SendMessage', agent: 'implementer-' + n }];
-  const sentTo = (entries, id) => beatsOf(entries).find((b) => b.id === `pre:${id}`);
+  const sentTo = (entries, id) => beatsOf(entries).find((b) => b.type === 'work' && b.id.startsWith(`pre:${id}`));
   expect(
     sentTo(running, 'toolu_sm')?.message === true && sentTo(resumedLater, 'toolu_sm2')?.message === false && sentTo(resumedLater, 'toolu_sm2')?.resumed === true,
     'office: a message in flight to a running agent is a message, to one that reported a resume',
+  );
+  // An agent that stopped without a declared verdict left nothing on the ledger: the guess is a message until the
+  // dispatch says it was resumed, and the beat's id changes with it, so a page that already had the guess gets the work.
+  const landed = sentTo([...running, { k: 'dispatch', at: at(30), role: 'implementer', id: 'toolu_sm', via: 'SendMessage', agent: 'implementer-' + n, resumed: true }], 'toolu_sm');
+  expect(
+    landed?.message === false && landed.resumed === true && landed.id !== sentTo(running, 'toolu_sm').id,
+    `office: a guess the dispatch overturns reaches the page as a beat of its own — got ${JSON.stringify(landed)}`,
   );
   // Past the 4 MB tail the oldest lines drop off: an id holds as long as its entry does.
   const said = [{ k: 'reset', at: at(1), why: 'prompt' }, { k: 'reset', at: at(1), why: 'prompt' }];
@@ -5968,15 +5992,21 @@ await release();
       "office: the page is served with the room filled in, stages in the order the line takes them, and an owner's name stays text — got " + page.slice(page.indexOf('const ROOM'), page.indexOf('const ROOM') + 200),
     );
     const port = new URL(office.url).port;
-    const rebound = await new Promise((resolveGet) => {
-      const req = httpRequest({ host: '127.0.0.1', port, path: '/events', headers: { host: `evil.example:${port}` } }, (res) => {
-        res.resume();
-        resolveGet(res.statusCode);
+    const statusAs = (host) =>
+      new Promise((resolveGet) => {
+        const req = httpRequest({ host: '127.0.0.1', port, path: '/', headers: { host } }, (res) => {
+          res.resume();
+          resolveGet(res.statusCode);
+        });
+        req.on('error', () => resolveGet(0));
+        req.end();
       });
-      req.on('error', () => resolveGet(0));
-      req.end();
-    });
-    expect(rebound === 403, `office: a request naming another host is refused — got ${rebound}`);
+    const rebound = [await statusAs(`evil.example:${port}`), await statusAs(`127.0.0.1.evil.example:${port}`)];
+    const forwarded = await statusAs('localhost:16462');
+    expect(
+      rebound.every((code) => code === 403) && forwarded === 200,
+      `office: a request naming another host is refused, and this machine's own name on a forwarded port is not — got ${rebound}, ${forwarded}`,
+    );
     let appended = false;
     const live = await stream(
       `${office.url}/events`,
@@ -6023,29 +6053,27 @@ await release();
     `office: a port that is no port is refused, and the office's flags without --view are too — got ${badPort.out}${withoutView.out}`,
   );
   // It opens by itself: the address goes to the system's opener — a stub here, first on the PATH — unless the
-  // command is told not to, and Ctrl+C closes it cleanly either way.
-  const stubs = await scratch();
-  const opened = join(stubs, 'opened.txt');
-  for (const name of ['open', 'xdg-open']) await writeFile(join(stubs, name), '#!/bin/sh\necho "$@" >> "$NINA_TEST_OPENED"\n', { mode: 0o755 });
-  const viewing = (extra, settled) =>
+  // command is told not to; it says it opened only when the opener did; and Ctrl+C closes it cleanly either way.
+  const opened = join(await scratch(), 'opened.txt');
+  const opener = async (exit) => {
+    const dir = await scratch();
+    for (const name of ['open', 'xdg-open']) await writeFile(join(dir, name), `#!/bin/sh\necho "$@" >> "$NINA_TEST_OPENED"\nexit ${exit}\n`, { mode: 0o755 });
+    return dir;
+  };
+  const working = await opener(0);
+  const broken = await opener(3);
+  const viewing = (stubs, extra = []) =>
     new Promise((resolveRun) => {
       const child = spawn(process.execPath, [NINA, 'pipeline', '--view', '--replay', '--port', '0', ...extra, '--project', project], {
         cwd: ROOT,
         env: { ...process.env, PATH: `${stubs}:${process.env.PATH}`, NINA_TEST_OPENED: opened },
       });
       let out = '';
-      let asked = false;
       const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
-      const stop = async () => {
-        for (let i = 0; i < 50 && !settled(); i += 1) await new Promise((r) => setTimeout(r, 100));
-        child.kill('SIGINT');
-      };
+      // The line is printed once the opener has answered, so whatever it did is done by then.
       child.stdout.on('data', (chunk) => {
         out += chunk;
-        if (!asked && out.includes('Ctrl+C closes it')) {
-          asked = true;
-          stop();
-        }
+        if (out.includes('Ctrl+C closes it')) child.kill('SIGINT');
       });
       child.stderr.on('data', (chunk) => (out += chunk));
       child.on('close', (status) => {
@@ -6053,19 +6081,29 @@ await release();
         resolveRun({ status, out });
       });
     });
-  const byItself = await viewing([], () => existsSync(opened));
-  const handedTo = existsSync(opened) ? (await readFile(opened, 'utf8')).trim() : '';
+  const handed = async () => {
+    const text = existsSync(opened) ? (await readFile(opened, 'utf8')).trim() : '';
+    await rm(opened, { force: true });
+    return text;
+  };
+  const byItself = await viewing(working);
+  const handedTo = await handed();
   const address = byItself.out.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
   expect(
     byItself.status === 0 && address && handedTo === address && byItself.out.includes('opened in the browser'),
     `office: the command opens the page in the system's browser by itself — got ${byItself.status}, opener ${JSON.stringify(handedTo)}, ${byItself.out}`,
   );
-  await rm(opened, { force: true });
-  let waited = 0;
-  const leftAlone = await viewing(['--no-open'], () => (waited += 1) > 5);
+  const noDisplay = await viewing(broken);
+  const triedOn = await handed();
+  expect(
+    noDisplay.status === 0 && triedOn.startsWith('http://127.0.0.1:') && !noDisplay.out.includes('opened in the browser') && noDisplay.out.includes('no browser could be opened from here'),
+    `office: an opener that fails is not reported as opening the page — got ${noDisplay.out}`,
+  );
+  const leftAlone = await viewing(working, ['--no-open']);
+  const untouched = await handed();
   const noOpenAlone = run(['pipeline', '--no-open', '--project', project]);
   expect(
-    leftAlone.status === 0 && !existsSync(opened) && !leftAlone.out.includes('opened in the browser') && noOpenAlone.status === 2 && noOpenAlone.out.includes('means nothing without --view'),
+    leftAlone.status === 0 && untouched === '' && !leftAlone.out.includes('opened in the browser') && noOpenAlone.status === 2 && noOpenAlone.out.includes('means nothing without --view'),
     `office: --no-open serves the page and opens nothing, and means nothing without --view — got ${leftAlone.status}, ${leftAlone.out}${noOpenAlone.out}`,
   );
 }

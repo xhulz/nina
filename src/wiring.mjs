@@ -384,7 +384,10 @@ export async function missingWiring(target, shipped) {
     const need = h.matcher ? h.matcher.split('|') : [];
     const unmatched = need.filter((tool) => !running.some((g) => matcherReaches(g.matcher, tool)));
     if (running.length > 0 && unmatched.length > 0 && unmatched.length < need.length) {
-      out.push(`the ${h.event} hook running \`${h.script}${h.mode ? ` ${h.mode}` : ''}\` does not match ${unmatched.join(', ')} — \`nina wire --apply\` widens it to ${h.matcher}`);
+      // `wire` leaves a group in the local file, or one matched by a regular expression, to its owner.
+      const foreign = running.find((g) => g.from !== '.claude/settings.json' || !plainMatcher(g.matcher));
+      const fix = foreign ? `${foreign.from} holds it, so widen it there to ${h.matcher}` : `\`nina wire --apply\` widens it to ${h.matcher}`;
+      out.push(`the ${h.event} hook running \`${h.script}${h.mode ? ` ${h.mode}` : ''}\` does not match ${unmatched.join(', ')} — ${fix}`);
       continue;
     }
     out.push(

@@ -588,7 +588,8 @@ function onBeat(b) {
     return;
   }
   if (b.type === 'answered') {
-    hush(boss, ['ask']);
+    // The owner's answer answers every question waiting on them, a stage's sent to them included.
+    for (const p of [boss, ...people.values()]) hush(p, ['ask']);
     if (!b.instant) {
       say(owner, 'talk', 1500);
       note(b.at, `${ROOM.owner} answered`);
@@ -808,12 +809,18 @@ window.addEventListener('keydown', (e) => {
 });
 let drag = null;
 screen.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
   drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y };
   screen.setPointerCapture(e.pointerId);
   screen.classList.add('dragging');
 });
 screen.addEventListener('pointermove', (e) => {
   if (!drag) return;
+  // A release the page never heard of — over a menu, outside the window — ends the drag at the next move.
+  if (e.buttons === 0) {
+    dropDrag();
+    return;
+  }
   cam.x = drag.cx - ((e.clientX - drag.x) * dpr) / scale;
   cam.y = drag.cy - ((e.clientY - drag.y) * dpr) / scale;
   handsOn();
