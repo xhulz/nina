@@ -382,20 +382,44 @@ expect(
       !undeclared.includes('".claude/integrations/queue.md" is deferred') && !undeclared.includes('stripe.md documents no'),
     `check: an integration doc nothing declares is noted, and one deferred with a reason says it — got ${undeclared}`,
   );
-  // A premise cited by its path in the package manager's store dies when a peer change renames the directory: the
-  // version and the file unchanged. The package's own link survives it, and a template is no citation.
-  await mkdir(join(dir, 'packages', 'api', 'node_modules', 'stripe'), { recursive: true });
-  await writeFile(join(dir, 'packages', 'api', 'node_modules', 'stripe', 'index.js'), '');
+  // A premise cited by its path in the package manager's store goes stale when a peer change renames the directory:
+  // the version and the file unchanged, the old directory left on disk and linked by nothing. So a store path is
+  // stale once the library it names is linked from another directory of the same store — a spike's own store does
+  // not count — or once it is gone. A package's own link is not read, nor a template, an elision or a URL.
+  const store = (root, name) => join(root, 'node_modules', '.pnpm', name, 'node_modules', 'stripe');
+  for (const name of ['stripe@17.1.0', 'stripe@17.1.0_@types+node@22']) {
+    await mkdir(store(dir, name), { recursive: true });
+    await writeFile(join(store(dir, name), 'index.js'), '');
+  }
+  await mkdir(join(dir, 'packages', 'api', 'node_modules'), { recursive: true });
+  await writeFile(join(dir, 'packages', 'api', 'package.json'), '{}');
+  await symlink(store(dir, 'stripe@17.1.0_@types+node@22'), join(dir, 'packages', 'api', 'node_modules', 'stripe'));
+  const spike = join(dir, 'spikes', 's');
+  await mkdir(store(spike, 'stripe@17.1.0'), { recursive: true });
+  await writeFile(join(store(spike, 'stripe@17.1.0'), 'index.js'), '');
+  await writeFile(join(spike, 'package.json'), '{}');
+  await symlink(store(spike, 'stripe@17.1.0'), join(spike, 'node_modules', 'stripe'));
+  // A dependency of a dependency: in the project's store, linked by no package — only the spike links its own copy.
+  const deep = (root) => join(root, 'node_modules', '.pnpm', 'deep@2.0.0', 'node_modules', 'deep');
+  for (const root of [dir, spike]) {
+    await mkdir(deep(root), { recursive: true });
+    await writeFile(join(deep(root), 'index.js'), '');
+  }
+  await symlink(deep(spike), join(spike, 'node_modules', 'deep'));
   await writeFile(
     join(dir, '.claude', 'integrations', 'stripe.md'),
-    '# stripe\n\n| P1 | `packages/api/node_modules/stripe/index.js:12` (stripe 17.1.0) |\n| P2 | `node_modules/.pnpm/stripe@17.1.0_@types+node@22.15.17/node_modules/stripe/index.js:40` |\n' +
-      '| P3 | the form was `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` |\n| P4 | `/nowhere/at/all/node_modules/stripe/lib.js:7` |\n',
+    '# stripe\n\n| P1 | `packages/api/node_modules/stripe/index.js:12` (stripe 17.1.0), run as `node_modules/drizzle-kit/bin.cjs` |\n' +
+      '| P2 | `node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js:40-44` |\n' +
+      '| P3 | the form was `node_modules/.pnpm/<lib>@<version>/.../<file>:<line>` |\n| P4 | `/nowhere/at/all/node_modules/.pnpm/gone@1.0.0/node_modules/gone/lib.js:7`. |\n' +
+      '| P5 | `../../node_modules/.pnpm/stripe@17.1.0_@types+node@22/node_modules/stripe/index.js:3` |\n| P6 | <https://example.com/node_modules/.pnpm/x@1.0.0/node_modules/x/a.js> |\n' +
+      '| P7 | `spikes/s/node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js:9` |\n| P8 | `/…/node_modules/.pnpm/y@1.0.0/node_modules/y/a.js` |\n' +
+      '| P9 | `node_modules/.pnpm/deep@2.0.0/node_modules/deep/index.js:1` |\n',
   );
   const cited = run(['check', '--project', dir]).out;
   expect(
-    cited.includes('.claude/integrations/stripe.md cites 2 installed path(s) that no longer resolve — node_modules/.pnpm/stripe@17.1.0_@types+node@22.15.17/node_modules/stripe/index.js, …') &&
-      !cited.includes('packages/api/node_modules/stripe/index.js') && !cited.includes('old-pay.md cites'),
-    `check: an integration doc citing an installed path that no longer resolves is noted, the package's own link and a template are not — got ${cited}`,
+    cited.includes(".claude/integrations/stripe.md cites 2 path(s) in the package manager's store that the install no longer uses — node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js, …") &&
+      !/drizzle-kit|example\.com|y@1\.0\.0|deep@|old-pay\.md cites/.test(cited),
+    `check: a store path the install no longer links, or that is gone, is noted; the live one, a spike's own, a package's link, a template, a URL and an elision are not — got ${cited}`,
   );
 }
 
@@ -4718,7 +4742,7 @@ const dated = (date, status = 'active') =>
   const [pagerDba, pagerClaude, pagerArchitect, pagerTester] = await Promise.all(['.claude/agents/dba.md', 'CLAUDE.md', '.claude/agents/architect.md', '.claude/agents/integration-tester.md'].map((rel) => read(pager, rel)));
   const ledgerDba = await read(ledger, '.claude/agents/dba.md');
   expect(
-    pagerDba.includes('**On D1, the SQL you read is the text D1 runs, not the file.**') && pagerDba.includes('or whose last statement lacks its `;`') && !ledgerDba.includes('the text D1 runs'),
+    pagerDba.includes('**On D1, the SQL you read is the text D1 runs, not the file.**') && pagerDba.includes('`BEGIN TRANSACTION` or `COMMIT;` anywhere') && !ledgerDba.includes('the text D1 runs'),
     'surfaces: a D1 project\'s dba reads the text D1 runs and refuses what its tool rewrites, and no other database hears of it',
   );
   expect(
