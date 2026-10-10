@@ -292,7 +292,7 @@ export function unresolvedCitations(text, target, reached = new Map()) {
     // A store directory is `<name>@<version>`, or the store's own `node_modules`, where it hoists; anything else
     // (`resend@*`, a name cut short) mentions the store, and cites nothing in it.
     const dir = path.slice(path.indexOf(STORE) + STORE.length).split('/')[0];
-    const named = dir === 'node_modules' || /^(?:@[^+@]+\+)?[^@]+@\d/.test(dir);
+    const named = dir === 'node_modules' || /^(?:@[^+@]+\+)?[^@]+@\w/.test(dir);
     if (!url && !elided && !template && named) cited.add(path);
     at = text.indexOf(STORE, end);
   }

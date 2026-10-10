@@ -419,11 +419,12 @@ expect(
       '| P5 | `../../node_modules/.pnpm/stripe@17.1.0_@types+node@22/node_modules/stripe/index.js:3` |\n| P6 | <https://example.com/node_modules/.pnpm/x@1.0.0/node_modules/x/a.js> |\n' +
       '| P7 | `spikes/s/node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js:9` |\n| P8 | `/…/node_modules/.pnpm/y@1.0.0/node_modules/y/a.js` |\n' +
       '| P9 | `node_modules/.pnpm/deep@2.0.0/node_modules/deep/index.js:1` |\n| P10 | a row reads `node_modules/.pnpm/gone@9.9.9/node_modules/<lib>/x.js` |\n' +
-      '| P11 | hoisted: `node_modules/.pnpm/node_modules/deep/index.js` |\n| P12 | `node_modules/.pnpm/gone@9.9.9_.../dist/x.js` |\n| P13 | `node_modules/.pnpm/resend@*` does not exist |\n',
+      '| P11 | hoisted: `node_modules/.pnpm/node_modules/deep/index.js` |\n| P12 | `node_modules/.pnpm/gone@9.9.9_.../dist/x.js` |\n| P13 | `node_modules/.pnpm/resend@*` does not exist |\n' +
+      '| P14 | hoisted once: `node_modules/.pnpm/node_modules/ghost/index.js` |\n| P15 | `node_modules/.pnpm/local@file+..+local/node_modules/local/index.js` |\n',
   );
   const cited = run(['check', '--project', dir]).out;
   expect(
-    cited.includes(".claude/integrations/stripe.md cites 2 path(s) in the package manager's store that the install no longer uses — node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js, …") &&
+    cited.includes(".claude/integrations/stripe.md cites 4 path(s) in the package manager's store that the install no longer uses — node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js, …") &&
       !/drizzle-kit|example\.com|y@1\.0\.0|deep@|\.pnpm\/node_modules|resend|old-pay\.md cites/.test(cited),
     `check: a store path the install no longer links, or that is gone, is noted; the live one, a spike's own, a package's link, a template, a URL and an elision are not — got ${cited}`,
   );
