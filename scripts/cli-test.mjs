@@ -6022,6 +6022,52 @@ await release();
     badPort.status === 2 && badPort.out.includes('--port takes a port number') && withoutView.status === 2 && withoutView.out.includes('means nothing without --view'),
     `office: a port that is no port is refused, and the office's flags without --view are too — got ${badPort.out}${withoutView.out}`,
   );
+  // It opens by itself: the address goes to the system's opener — a stub here, first on the PATH — unless the
+  // command is told not to, and Ctrl+C closes it cleanly either way.
+  const stubs = await scratch();
+  const opened = join(stubs, 'opened.txt');
+  for (const name of ['open', 'xdg-open']) await writeFile(join(stubs, name), '#!/bin/sh\necho "$@" >> "$NINA_TEST_OPENED"\n', { mode: 0o755 });
+  const viewing = (extra, settled) =>
+    new Promise((resolveRun) => {
+      const child = spawn(process.execPath, [NINA, 'pipeline', '--view', '--replay', '--port', '0', ...extra, '--project', project], {
+        cwd: ROOT,
+        env: { ...process.env, PATH: `${stubs}:${process.env.PATH}`, NINA_TEST_OPENED: opened },
+      });
+      let out = '';
+      let asked = false;
+      const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
+      const stop = async () => {
+        for (let i = 0; i < 50 && !settled(); i += 1) await new Promise((r) => setTimeout(r, 100));
+        child.kill('SIGINT');
+      };
+      child.stdout.on('data', (chunk) => {
+        out += chunk;
+        if (!asked && out.includes('Ctrl+C closes it')) {
+          asked = true;
+          stop();
+        }
+      });
+      child.stderr.on('data', (chunk) => (out += chunk));
+      child.on('close', (status) => {
+        clearTimeout(timer);
+        resolveRun({ status, out });
+      });
+    });
+  const byItself = await viewing([], () => existsSync(opened));
+  const handedTo = existsSync(opened) ? (await readFile(opened, 'utf8')).trim() : '';
+  const address = byItself.out.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
+  expect(
+    byItself.status === 0 && address && handedTo === address && byItself.out.includes('opened in the browser'),
+    `office: the command opens the page in the system's browser by itself — got ${byItself.status}, opener ${JSON.stringify(handedTo)}, ${byItself.out}`,
+  );
+  await rm(opened, { force: true });
+  let waited = 0;
+  const leftAlone = await viewing(['--no-open'], () => (waited += 1) > 5);
+  const noOpenAlone = run(['pipeline', '--no-open', '--project', project]);
+  expect(
+    leftAlone.status === 0 && !existsSync(opened) && !leftAlone.out.includes('opened in the browser') && noOpenAlone.status === 2 && noOpenAlone.out.includes('means nothing without --view'),
+    `office: --no-open serves the page and opens nothing, and means nothing without --view — got ${leftAlone.status}, ${leftAlone.out}${noOpenAlone.out}`,
+  );
 }
 
 for (const f of failures) console.log(`  ✗ ${f}`);

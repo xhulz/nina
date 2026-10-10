@@ -12,10 +12,11 @@
  *   the gate asking at a cap          the owner's phone rings
  *   a pass that ends the work         a party
  *
- * The page is served from this machine alone, on the loopback address, for as long as the command runs. VS Code
- * shows it beside the conversation in its Simple Browser. A Claude Code mod was the first idea, and a probe on
- * 2.1.294 settled it: in the editor's chat panel a mod's hooks run, its session reports no surface to draw on, and
- * no drawing is ever asked for. A mod draws in the terminal and the desktop app only.
+ * The page is served from this machine alone, on the loopback address, for as long as the command runs, and opened
+ * in the system's browser. A Claude Code mod was the first idea, and a probe on 2.1.294 settled it: in the editor's
+ * chat panel a mod's hooks run, its session reports no surface to draw on, and no drawing is ever asked for. A mod
+ * draws in the terminal and the desktop app only. VS Code's own browser opens a page only for an extension, or for
+ * a click on a link once `workbench.browser.openLocalhostLinks` is on (1.140), so it is offered, not opened.
  */
 
 import { spawn } from 'node:child_process';
@@ -354,12 +355,12 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
 }
 
 /**
- * Runs the office until Ctrl+C: serves it, says where, and how to put it beside the conversation in VS Code.
+ * Runs the office until Ctrl+C: serves it, opens it in the system's browser unless told not to, and says where.
  *
  * @param {{target: string, wanted?: string, replay?: boolean, port?: number, open?: boolean}} options
  * @returns {Promise<number>} Process exit code.
  */
-export async function viewOffice({ target, wanted, replay = false, port = OFFICE_PORT, open = false }) {
+export async function viewOffice({ target, wanted, replay = false, port = OFFICE_PORT, open = true }) {
   if (wanted) {
     const { picked, why, dir } = sessionLedgers(target, wanted);
     if (!picked) {
@@ -379,9 +380,7 @@ export async function viewOffice({ target, wanted, replay = false, port = OFFICE
   }
   const what = replay ? `replaying session ${sessionLedgers(target, wanted).picked.session.slice(0, 8)}` : wanted ? `live, session ${wanted}` : 'live, following the newest session';
   console.log(`  the office · ${basename(target)} · ${what}`);
-  console.log(`  ${office.url}`);
-  console.log('  In VS Code: Cmd+Shift+P (Ctrl+Shift+P) → "Simple Browser: Show" → that address, to watch it beside the conversation.');
-  console.log('  Ctrl+C closes it.\n');
+  console.log(`  ${office.url}${open ? ' — opened in the browser' : ''} · Ctrl+C closes it\n`);
   if (open) {
     const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
     try {

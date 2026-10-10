@@ -169,7 +169,7 @@ export function historyOf(records, since) {
  * Runs the command.
  *
  * @param {string[]} argv - `[--project <dir>] [--for <number or words>] [--since <YYYY-MM-DD>]`, or `--view [--session <id>]
- *   [--replay] [--port <n>] [--open]` for the office.
+ *   [--replay] [--port <n>] [--no-open]` for the office.
  * @returns {Promise<number>} Process exit code.
  */
 export async function pipeline(argv) {
@@ -181,7 +181,7 @@ export async function pipeline(argv) {
     return 1;
   }
   // The office: the same graph as a room, its agents at their desks, live or replayed (src/office.mjs).
-  const viewOnly = ['--session', '--replay', '--port', '--open'].filter((flag) => argv.includes(flag));
+  const viewOnly = ['--session', '--replay', '--port', '--no-open'].filter((flag) => argv.includes(flag));
   if (viewOnly.length > 0 && !argv.includes('--view')) {
     console.error(`  ${viewOnly.join(', ')} ${viewOnly.length > 1 ? 'belong' : 'belongs'} to the office, and mean${viewOnly.length > 1 ? '' : 's'} nothing without --view`);
     return 2;
@@ -198,7 +198,7 @@ export async function pipeline(argv) {
       console.error(`  --port takes a port number, 0 to 65535, and was given ${port}`);
       return 2;
     }
-    return viewOffice({ target: dir, wanted: arg('--session') || undefined, replay: argv.includes('--replay'), port: port === null ? undefined : Number(port), open: argv.includes('--open') });
+    return viewOffice({ target: dir, wanted: arg('--session') || undefined, replay: argv.includes('--replay'), port: port === null ? undefined : Number(port), open: !argv.includes('--no-open') });
   }
   const graphText = readFileSync(graphPath, 'utf8');
   const graph = parseGraph(graphText);
