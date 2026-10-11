@@ -311,12 +311,17 @@ export function verified(records, known, { owners = new Map(), targets = null } 
 
 /**
  * Lessons that came back after the rule they graduated into reached this project: their newest request is
- * closed, and the pill has been counted more times since it was filed. The pill is retired by then, and
+ * closed, and the pill has been counted more times since it closed. The pill is retired by then, and
  * nothing read a retired pill's count — one project's lesson graduated twice and was learned a third time,
  * while two retired pills went from 3 to 8 and from 5 to 11 without a word to anyone.
  *
  * Each is `due` — it reopens the request — once it came back as many times as a lesson takes to graduate
  * ({@link CAPTURE_AT}): one recurrence may be noise, and a rule is judged failed on the evidence that made it.
+ *
+ * Counted from the close, not the filing: a lesson keeps recurring while its request waits for a release, without
+ * the rule, and a project two releases behind read those as the rule failing the moment it arrived — two pills
+ * filed at 3 had reached 8 and 11, and the upgrade that closed their requests reopened them in the same run. A
+ * request closed before the close was counted has only its filing to go by.
  *
  * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills, retired ones included.
  * @param {Awaited<ReturnType<typeof filedRequests>>} filed - Its requests.
@@ -339,7 +344,7 @@ export function relapsed(known, filed) {
     if (newestRecord(filed, pill)?.status === 'declined') continue;
     const shelved = pill.replace(/^\.claude\/pills\//, `.claude/pills/${RETIRED}/`);
     const lesson = known.find((l) => l.rel === pill || l.rel === shelved);
-    const then = Number(request.occurrences);
+    const then = Number(request.occurrences_at_close || request.occurrences);
     if (lesson && Number.isFinite(then) && lesson.occurrences > then) {
       const recurred = lesson.occurrences - then;
       out.push({ lesson, request, recurred, due: recurred >= CAPTURE_AT });
@@ -441,6 +446,7 @@ export async function filedRequests(target) {
       target: fields.target ?? '',
       date: fields.date ?? '',
       occurrences: fields.occurrences ?? '',
+      occurrences_at_close: fields.occurrences_at_close ?? '',
       rule_in: fields.rule_in ?? '',
       answered_in: fields.answered_in ?? '',
       declined: fields.declined ?? '',
@@ -468,7 +474,13 @@ async function answerRequest(target, file, answer) {
   const path = join(target, HARNESS, 'requests', file);
   const text = await readFile(path, 'utf8');
   const fields = frontmatter(text) ?? {};
-  const extra = Object.entries(answer.fields ?? {}).map(([k, v]) => `\n${k}: ${oneLine(v)}`).join('');
+  // A lesson closed is counted from here on (`relapsed`): what it recurred while it waited was without the rule.
+  // A reopening's pill is already on the retired shelf.
+  const read = (rel) => readFile(join(target, rel), 'utf8').catch(() => null);
+  const shelved = String(fields.pill ?? '').replace(/^\.claude\/pills\//, `.claude/pills/${RETIRED}/`);
+  const pill = answer.status === 'closed' && fields.pill ? frontmatter((await read(fields.pill)) ?? (await read(shelved))) : null;
+  const counted = /^\d+$/.test(pill?.occurrences ?? '') ? { occurrences_at_close: pill.occurrences } : {};
+  const extra = Object.entries({ ...(answer.fields ?? {}), ...counted }).map(([k, v]) => `\n${k}: ${oneLine(v)}`).join('');
   await writeFile(path, text.replace(/^status: .*$/m, `status: ${answer.status}${extra}`));
   // A declined lesson is still this project's lesson: the harness said it does not belong in every
   // project, not that it stopped being true in this one. So is one whose rule went into a layer this
