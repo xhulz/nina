@@ -192,3 +192,34 @@ stopping the move, and `nina wire --apply` widens it in place — but a group ma
 kept in the local settings file, is its owner's to widen, and both say so instead. The page answers only to this machine's own names
 for itself, on any port a forwarding gives it, so a page elsewhere that rebinds its domain to the loopback address
 is refused.
+
+## Every report in one page: `nina dashboard`
+
+```bash
+nina dashboard --project ../thing [--port <n>] [--open]
+```
+
+The reports a person reads, a tab each, in a page on this machine, its address printed for a click the way the
+office's is: **Office** (the office itself, mounted at `/office/`), **Tasks** (`runs`: each cycle with who worked on
+it, its length and cost), **Pipeline** (`pipeline`: the line, its gates, who sends work back and how many rounds per
+issue, each stage's model, skills and what it ran), **Pills** (`pills`: every pill with its stage, count and trigger,
+then the problems, and the notes folded), **Learning** (`learn`: the five links, the requests, what came back after
+graduating, the before and after of each lesson) and **Stats** (`stats`: the stages, the cost, the context and the
+size of each change against its chain). A tab is read again every fifteen seconds while it is open; the office
+streams on its own.
+
+The commands stay. The project's hooks run `pills`, `learn --check` and `compose --check` every turn and hand what
+they print to the model, CI runs them, and an agent asked how a project is doing reads `nina runs` or `nina stats` —
+a page it cannot read. So nothing on a tab is counted for the page: each is served from the function its command
+prints from — `taskList`, `pipelineData`, `pillsData`, `learningData`, `statsData` — split out of the report that used
+to compute and print in one, its text output left byte for byte what it was. A second copy of a count is what this
+repository has shipped drifting more than once. The learning tab reads the store as it stands, where `nina learn`
+takes a snapshot first: the project's hooks take one every turn, and a snapshot every fifteen seconds would read the
+transcripts that often. Each tab is trimmed to what it draws — no record, pill or report goes out whole — and every
+text goes into the page as text, never as markup.
+
+It is served the way the office is, through the same functions (`src/serve.mjs`): the loopback address, port 6463 or
+any free one, a request naming another host refused, `--open` for the system's browser. The office's poll of its
+ledger starts when its tab is first opened. `nina help` lists the commands a person runs from day to day, the
+dashboard among them; `nina help --all` lists the rest — measurement and maintenance, most of it drawn better here —
+and every command still runs by name.

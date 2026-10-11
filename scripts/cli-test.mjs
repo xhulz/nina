@@ -18,10 +18,10 @@ import { appendFile, chmod, copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm,
 import { existsSync, rmSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cyclesOf, decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
-import { asRead } from '../src/store.mjs';
+import { cyclesOf, decodeProjectDir, modelMatches, statsData } from '../src/commands/stats.mjs';
+import { asRead, projectRecords } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
 import { CAPTURE_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
@@ -39,6 +39,10 @@ import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, planted
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
 import { PARTY_QUIET_MS, STALE_MS, busyFor, officeBeats, officeTimeline, serveOffice, storeNames } from '../src/office.mjs';
+import { serveDashboard } from '../src/dashboard.mjs';
+import { taskList } from '../src/commands/runs.mjs';
+import { pipelineData } from '../src/commands/pipeline.mjs';
+import { pillsData } from '../src/commands/pills.mjs';
 import { request as httpRequest } from 'node:http';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
@@ -5121,6 +5125,88 @@ const dated = (date, status = 'active') =>
     `context: stats sets a stage's first rounds beside its resumed ones — got ${stats}`,
   );
   expect(run(['runs', '--project', await scratch()], { loud: true }).status === 1, 'runs: a directory with no profile says so');
+}
+
+// ─── dashboard: the reports a person reads, in one page, each from what its command prints ─────
+{
+  // The commands stay — hooks, CI and agents read their text — and every tab is served from the function the command
+  // prints from: a second copy of a count drifts.
+  const dir = realpathSync(await composed('acme'));
+  const round = (id, role, verdict, ts, extra = {}) => ({
+    project: slugFor(dir), dispatch_id: id, session: 's-dash', role, verdict, ts, result_ts: ts.replace(':00.000Z', ':30.000Z'),
+    tokens: { input: 0, output: 1e5, write_5m: 0, write_1h: 0, read: 0 }, usage_model: 'claude-sonnet-5', desc: 'Build the export', ...extra,
+  });
+  await mkdir(join(process.env.NINA_DATA, 'snapshots'), { recursive: true });
+  await writeFile(
+    join(process.env.NINA_DATA, 'snapshots', `${slugFor(dir)}.jsonl`),
+    `${[
+      round('d1', 'architect', 'SPEC-READY', '2026-09-20T10:00:00.000Z', { desc: 'Spec the export' }),
+      round('d2', 'implementer', 'DIFF-READY', '2026-09-20T10:10:00.000Z', { files_touched: 3 }),
+      round('d3', 'reviewer', 'APPROVED', '2026-09-20T10:20:00.000Z'),
+      round('d4', 'qa', 'PASS', '2026-09-20T10:30:00.000Z'),
+      round('d5', 'implementer', 'DIFF-READY', '2026-09-21T09:00:00.000Z', { desc: 'Fix the label', files_touched: 1 }),
+    ].map((r) => JSON.stringify(r)).join('\n')}\n`,
+  );
+  await plant(dir, 'reviewer/dash.md', WELL_FORMED.replace('id: reviewer-never-approve-on-a-local-run', 'id: reviewer-dash'));
+  const ctx = { root: ROOT };
+  const served = await serveDashboard({ target: dir, ctx, port: 0 });
+  try {
+    const get = async (path) => {
+      const res = await fetch(`${served.url}${path}`, { redirect: 'manual' });
+      return { status: res.status, type: res.headers.get('content-type') ?? '', location: res.headers.get('location'), text: await res.text() };
+    };
+    const page = await get('/');
+    expect(page.status === 200 && page.text.includes('<title>NINA dashboard</title>') && page.text.includes(`"project":"${basename(dir)}"`) && !page.text.includes('/*NINA_DASHBOARD*/null'), 'dashboard: the page is served with the project filled in');
+    const api = async (tab) => JSON.parse((await get(`/api/${tab}`)).text);
+    const rounds = (projectRecords(dir) ?? []).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    const tasks = await api('tasks');
+    const pills = await api('pills');
+    const pipe = await api('pipeline');
+    const statsTab = await api('stats');
+    const learningTab = await api('learning');
+    expect(
+      JSON.stringify(tasks.tasks) === JSON.stringify(taskList(rounds)) && tasks.tasks.map((x) => x.name).join(' | ') === 'Fix the label | Spec the export' &&
+        JSON.stringify(pills) === JSON.stringify(await pillsData(dir, ctx)) && pills.files === 1 &&
+        JSON.stringify(pipe.line) === JSON.stringify(pipelineData(dir).line) && pipe.edges.length === pipelineData(dir).graph.edges.length &&
+        JSON.stringify(statsTab) === JSON.stringify(statsData(rounds, ctx)) && statsTab.runs === 5,
+      `dashboard: each tab is what its command prints from — got ${JSON.stringify({ tasks: tasks.tasks?.length, pills: pills.files, line: pipe.line, runs: statsTab.runs })}`,
+    );
+    // A pill's words are the project's: the tabs carry its name, stage and count, and never what it says.
+    const everything = JSON.stringify([tasks, pills, pipe, statsTab, learningTab]);
+    expect(
+      learningTab.runs === 5 && typeof learningTab.active === 'number' && Array.isArray(learningTab.checks) &&
+        !everything.includes('warm cache CI does not have') && !everything.includes('approve on CI, never on a local run'),
+      'dashboard: the tabs are trimmed to what they draw — no pill, record or report text goes out',
+    );
+    const office = await get('/office');
+    const officePage = await get('/office/');
+    expect(office.status === 301 && office.location === '/office/' && officePage.status === 200 && officePage.text.includes('<title>NINA office</title>'), 'dashboard: the office is mounted at /office/, where its relative stream resolves');
+    expect((await get('/api/nope')).status === 404 && (await get('/elsewhere')).status === 404, 'dashboard: nothing else is served');
+    const port = new URL(served.url).port;
+    const rebound = await new Promise((resolveGet) => {
+      const req = httpRequest({ host: '127.0.0.1', port, path: '/api/stats', headers: { host: `evil.example:${port}` } }, (res) => {
+        res.resume();
+        resolveGet(res.statusCode);
+      });
+      req.on('error', () => resolveGet(0));
+      req.end();
+    });
+    expect(rebound === 403, `dashboard: a request naming another host is refused, its data included — got ${rebound}`);
+  } finally {
+    await served.close();
+  }
+  const bare = await scratch();
+  const noProfile = run(['dashboard', '--project', bare]);
+  const badPort = run(['dashboard', '--project', dir, '--port', 'abc']);
+  expect(noProfile.status === 1 && noProfile.out.includes('no .nina/profile.json') && badPort.status === 2 && badPort.out.includes('--port takes a port number'), `dashboard: a directory with no profile, or a port that is no port, is refused — got ${noProfile.out}${badPort.out}`);
+
+  // The help lists what a person runs from day to day; every command still runs by name, and --all lists them all.
+  const daily = run(['help']).out;
+  const all = run(['help', '--all']).out;
+  expect(
+    daily.includes('    dashboard ') && !/\n    release /.test(daily) && daily.includes('`nina help --all` lists the rest too') && /\n    release /.test(all) && all.includes('    dashboard '),
+    `help: the daily commands by default, every one with --all — got ${daily}`,
+  );
 }
 
 // ─── deferred: a decision the project has not made yet, said once, with why ─────────────

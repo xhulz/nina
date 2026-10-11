@@ -172,6 +172,54 @@ export function historyOf(records, since) {
  *   [--replay] [--port <n>] [--open]` for the office.
  * @returns {Promise<number>} Process exit code.
  */
+/**
+ * A composed pipeline, as data: what `nina pipeline` draws and the dashboard's pipeline tab shows — the line and where
+ * it ends, the gates, the stages that run as several agents, who sends work back to whom and how many rounds per
+ * issue, and each stage's model, effort, skills and what it ran since `since`; the project's own agents; and which
+ * chain each task shape takes. Null when the project has no composed graph.
+ *
+ * @param {string} dir - The project.
+ * @param {{since?: string}} [options] - The first day of the history each stage is measured over.
+ */
+export function pipelineData(dir, { since } = {}) {
+  const graphPath = join(dir, '.claude', 'graph.md');
+  if (!existsSync(graphPath)) return null;
+  const graphText = readFileSync(graphPath, 'utf8');
+  const graph = parseGraph(graphText);
+  const words = stageWords(graphText);
+  const shape = shapeOf(graph);
+  const claude = join(dir, 'CLAUDE.md');
+  const profile = readProfile(dir).profile ?? {};
+  const agentsDir = join(dir, '.claude', 'agents');
+  const specs = new Map();
+  for (const file of existsSync(agentsDir) ? readdirSync(agentsDir).filter((f) => f.endsWith('.md')).sort() : []) {
+    specs.set(file.replace(/\.md$/, ''), readFileSync(join(agentsDir, file), 'utf8'));
+  }
+  const from = since || localDay(new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString());
+  const records = projectRecords(dir);
+  const history = records ? historyOf(records, from) : null;
+  return {
+    project: basename(dir),
+    core: profile.core ?? null,
+    surfaces: (profile.surfaces ?? []).slice().sort(),
+    graph,
+    line: shape.line,
+    ends: shape.ends,
+    gates: shape.gates,
+    many: [...(graph.many ?? new Map())].map(([stage, { when }]) => ({ stage, when })),
+    back: shape.back,
+    since: from,
+    measured: history !== null,
+    stages: [...graph.stages].map((stage) => {
+      const spec = specs.get(stage) ?? '';
+      const front = frontmatter(spec) ?? {};
+      return { stage, model: front.model ?? null, effort: front.effort ?? null, words: words.get(stage) ?? '', history: history?.get(stage) ?? null, skills: [...required(spec).skills].sort() };
+    }),
+    own: [...specs.keys()].filter((role) => !graph.stages.has(role)).map((role) => ({ role, description: (frontmatter(specs.get(role)) ?? {}).description ?? '' })),
+    shapes: existsSync(claude) ? chainsByShape(readFileSync(claude, 'utf8')) : [],
+  };
+}
+
 export async function pipeline(argv) {
   const arg = (flag) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] ?? '' : null);
   const dir = resolve(arg('--project') ?? process.cwd());
@@ -200,12 +248,9 @@ export async function pipeline(argv) {
     }
     return viewOffice({ target: dir, wanted: arg('--session') || undefined, replay: argv.includes('--replay'), port: port === null ? undefined : Number(port), open: argv.includes('--open') });
   }
-  const graphText = readFileSync(graphPath, 'utf8');
-  const graph = parseGraph(graphText);
-  const words = stageWords(graphText);
-  const shape = shapeOf(graph);
-  const claude = join(dir, 'CLAUDE.md');
-  const shapes = existsSync(claude) ? chainsByShape(readFileSync(claude, 'utf8')) : [];
+  const data = pipelineData(dir, { since: arg('--since') || undefined });
+  const { graph, shapes } = data;
+  const shape = { line: data.line, ends: data.ends, gates: data.gates, back: data.back };
 
   // `--for`: one shape's chain, and only the stages on it.
   const query = arg('--for');
@@ -232,9 +277,7 @@ export async function pipeline(argv) {
   const padName = (s, n) => `${name(s)}${' '.repeat(Math.max(n - s.length, 1))}`;
 
   // A pipeline composed by hand draws all the same; only the header has less to say.
-  const profile = readProfile(dir).profile ?? {};
-  const surfaces = (profile.surfaces ?? []).slice().sort();
-  console.log(`  pipeline · ${basename(dir)}${profile.core ? ` · core ${profile.core}` : ''}${surfaces.length ? ` · surfaces ${surfaces.join(', ')}` : ''}`);
+  console.log(`  pipeline · ${data.project}${data.core ? ` · core ${data.core}` : ''}${data.surfaces.length ? ` · surfaces ${data.surfaces.join(', ')}` : ''}`);
 
   // The stages this drawing covers: all of them, or those the chosen shape's chain names.
   const onChain = chosen ? (chosen.chain.match(/[a-z][a-z-]*/g) ?? []).filter((w) => graph.stages.has(w)) : null;
@@ -300,30 +343,18 @@ export async function pipeline(argv) {
   }
 
   // Each stage: what it does, on which model and effort, with which skills, and what it did lately.
-  const agentsDir = join(dir, '.claude', 'agents');
-  const specs = new Map();
-  for (const file of existsSync(agentsDir) ? readdirSync(agentsDir).filter((f) => f.endsWith('.md')).sort() : []) {
-    specs.set(file.replace(/\.md$/, ''), readFileSync(join(agentsDir, file), 'utf8'));
-  }
-  const since = arg('--since') || localDay(new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString());
-  const runs = projectRecords(dir);
-  const history = runs ? historyOf(runs, since) : null;
-  const stages = [...graph.stages].filter((s) => covered.has(s));
-  const col = Math.max(...stages.map((s) => s.length), 10) + 2;
-  console.log(`\n  ${dim(history ? `stages · what each ran since ${since}, from the measured history` : 'stages · no measured history for this project yet')}`);
-  for (const stage of stages) {
-    const spec = specs.get(stage) ?? '';
-    const front = frontmatter(spec) ?? {};
-    const on = [front.model, front.effort].filter(Boolean).join(' · ') || 'no spec';
-    console.log(`    ${padName(stage, col)}${on.padEnd(26)}${dim(fit(words.get(stage) ?? '', width - col - 32))}`);
-    if (history) {
-      const h = history.get(stage);
+  const stages = data.stages.filter((s) => covered.has(s.stage));
+  const col = Math.max(...stages.map((s) => s.stage.length), 10) + 2;
+  console.log(`\n  ${dim(data.measured ? `stages · what each ran since ${data.since}, from the measured history` : 'stages · no measured history for this project yet')}`);
+  for (const { stage, model, effort, words, history: h, skills } of stages) {
+    const on = [model, effort].filter(Boolean).join(' · ') || 'no spec';
+    console.log(`    ${padName(stage, col)}${on.padEnd(26)}${dim(fit(words, width - col - 32))}`);
+    if (data.measured) {
       const said = !h
         ? 'no run'
         : `${h.runs} run(s)${h.rounds > h.runs ? ` in ${h.rounds} rounds` : ''}${h.read === 0 ? ', no verdict read' : `, sent back ${h.back} of ${h.read} (${Math.round((100 * h.back) / h.read)}%)`}`;
       console.log(`    ${' '.repeat(col)}${dim('ran     ')}${said}`);
     }
-    const skills = [...required(spec).skills].sort();
     if (skills.length > 0) {
       const lines = [];
       let current = '';
@@ -341,12 +372,10 @@ export async function pipeline(argv) {
 
   if (!chosen) {
     // An agent the project wrote for itself is not a stage, and the graph does not route to it.
-    const own = [...specs.keys()].filter((role) => !graph.stages.has(role));
-    if (own.length > 0) {
+    if (data.own.length > 0) {
       console.log(`\n  ${dim("the project's own agents, outside the pipeline")}`);
-      for (const role of own) {
-        const front = frontmatter(specs.get(role)) ?? {};
-        console.log(`    ${role}${' '.repeat(Math.max(col - role.length, 2))}${dim(fit(front.description ?? '', width - col - 6))}`);
+      for (const { role, description } of data.own) {
+        console.log(`    ${role}${' '.repeat(Math.max(col - role.length, 2))}${dim(fit(description, width - col - 6))}`);
       }
     }
     if (shapes.length > 0) {

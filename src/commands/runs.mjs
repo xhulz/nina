@@ -66,10 +66,23 @@ function summarize(cycle) {
     unpriced,
     name: String(rounds[0]?.desc ?? '').trim() || '(no description)',
     how: ENDS[cycle.end](rounds.at(-1)),
+    end_kind: cycle.end,
     stages: [...stages.values()].map((s) => ({ ...s, runs: s.runs.size })),
     files: files.length ? Math.max(...files) : null,
     peak: peaks.length ? Math.max(...peaks) : null,
   };
+}
+
+/**
+ * A project's pieces of work, newest first: what `nina runs` prints and the dashboard's tasks tab shows.
+ *
+ * @param {object[]} records - The project's measured rounds.
+ * @returns {ReturnType<typeof summarize>[]}
+ */
+export function taskList(records) {
+  return cyclesOf(records.filter((r) => r.status !== 'denied'))
+    .map(summarize)
+    .sort((a, b) => b.start.localeCompare(a.start));
 }
 
 /** A duration in minutes, as hours and minutes. */
@@ -103,9 +116,7 @@ export async function runs(argv) {
     );
     return 1;
   }
-  const cycles = cyclesOf(records)
-    .map(summarize)
-    .sort((a, b) => b.start.localeCompare(a.start));
+  const cycles = taskList(records);
   const shown = cycles.slice(0, last);
   console.log(
     `  ${bold(pink(projectName(records[0].project)))} · ${cycles.length} cycle(s)` +
