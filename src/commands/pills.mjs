@@ -445,18 +445,21 @@ export async function pills(argv, ctx) {
   }
   if (cited > 0) notes.push(`${resolved} of ${cited} citation(s) still resolve`);
 
-  // A lesson learned three times is not a correction any more; it is a rule nobody wrote down.
-  // A project cannot write the harness, and a pill retired before the release that carries its rule arrives
-  // leaves the lesson nowhere: it goes as a request, and waits.
+  // A lesson learned three times is not a correction any more; it is a rule nobody wrote down. A convention of
+  // this codebase becomes one here; one every project of its shape needs goes to the harness as a request, since
+  // a project cannot write the harness, and waits — a pill retired before its rule arrives leaves the lesson nowhere.
   for (const c of candidates) {
     const home = gates && c.applies.length > 0 ? graduationTarget(c.applies, gates) : null;
-    const asked = requested.get(`.claude/pills/${c.label}`);
+    const pill = `.claude/pills/${c.label}`;
+    const asked = requested.get(pill);
     notes.push(
       `${c.label} has recurred ${c.seen} times — that is a rule, not a pill.` +
-        (home ? ` Its home is ${home.layer}, since ${home.why}.` : '') +
-        (asked
-          ? ` It went to the harness as a request on ${asked.date} (${asked.status}); the \`nina upgrade\` to the release that answers it retires this pill.`
-          : ' `harness:check` sends it to the harness as a request, or `nina learn --graduate` does now; keep it active until the release that answers it retires it.'),
+        (asked?.status === 'declined'
+          ? ` The harness declined it on ${asked.date}: make it a rule here, then \`nina learn --graduate ${pill} --here <file>\` retires it.`
+          : asked
+            ? ` It went to the harness as a request on ${asked.date} (${asked.status}); the \`nina upgrade\` to the release that answers it retires this pill.`
+            : ` A convention of this codebase becomes a rule here — \`nina learn --graduate ${pill} --here <file>\` retires it;` +
+              ` one any project of this shape needs goes to the harness with \`nina learn --graduate ${pill}\`${home ? `, and its home there is ${home.layer}, since ${home.why}` : ''}.`),
     );
   }
 

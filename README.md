@@ -278,14 +278,19 @@ after I redesigned it:
 ```mermaid
 flowchart LR
     A["loop-back"] --> B["lesson for the role"]
-    B -->|"learned a 3rd time"| C["request to the harness"]
+    B -->|"learned a 3rd time"| G{"whose rule?"}
+    G -->|"this codebase's"| H["rule in the project's own layer"]
+    G -->|"every project's"| C["request to the harness"]
     C -->|"answered"| D["rule in a core or surface layer"]
     D -->|"next release"| E["nina upgrade --apply"]
     E -->|"closes the request, retires the lesson"| F["verify: loop-back rate before and after"]
 ```
 
-A lesson learned for the third time now gets filed automatically, as a request against the pinned version. A
-project can't edit the harness. It can only ask. I answer requests in the harness repo, into a file the next
+A lesson learned for the third time has to graduate, and the project is asked where until it says. A convention
+of its own codebase becomes a rule in its own layer, right there, and the lesson retires. A rule every project
+needs becomes a request against the pinned version, because a project can't edit the harness. It can only ask.
+It used to file every lesson that way, and a convention of one codebase went all the way to me and back only to
+stay a lesson. I answer requests in the harness repo, into a file the next
 release freezes, and the upgrade that installs the answer closes the request and retires the lesson. The first
 full cycle has already happened: the three lessons in the second output became harness rules in 0.20.0, and the
 upgrade closed all three requests by itself.
