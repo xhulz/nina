@@ -472,11 +472,12 @@ function leave(p, instant = false) {
 function dismissReported(keep, instant) {
   let delay = 400;
   for (const q of [...people.values()]) {
-    if (keep.includes(q) || !q.reported || q.typing || q.leaving || q.current || q.queue.length > 0) continue;
+    // A report still on its way to the desk counts: the leaving is queued behind it.
+    if (keep.includes(q) || !(q.reported || q.reporting) || q.leaving) continue;
     if (instant) leave(q, true);
     else {
       wait(q, delay);
-      act(q, () => q.reported && !q.typing && leave(q));
+      act(q, () => q.reported && !q.typing && !q.leaving && leave(q));
       delay += 350;
     }
   }
@@ -540,6 +541,7 @@ function onBeat(b) {
     }
     p.work = b.id;
     p.reported = false;
+    p.reporting = false;
     // The dispatch the gate asked about went out: the phone stops.
     if (capRole === b.role) settleCap();
     p.leaving = false;
@@ -547,7 +549,7 @@ function onBeat(b) {
     if (b.instant) {
       place(p, slot);
       p.typing = true;
-      dismissReported([p], true);
+      if (!b.message) dismissReported([p], true);
       return;
     }
     note(b.at, `${b.from ? `${b.from.role} → ` : ''}${b.role}${b.resumed ? ' (resumed)' : ''}`);
@@ -567,8 +569,8 @@ function onBeat(b) {
     wait(carrier, 300);
     // NINA goes back to the reception; an agent who handed the work on is done, and leaves.
     if (carrier === boss) walk(boss, BOSS_HOME, () => place(boss, BOSS_HOME));
-    else act(carrier, () => leave(carrier));
-    dismissReported([p, carrier], false);
+    else act(carrier, () => carrier.reported && !carrier.typing && leave(carrier));
+    if (!b.message) dismissReported([p, carrier], false);
     if (p.x !== slot.x || p.y !== slot.y) walk(p, slot);
     act(p, () => {
       place(p, slot);
@@ -588,8 +590,8 @@ function onBeat(b) {
     const finish = () => {
       p.typing = false;
       p.reported = true;
-      if (b.asks) say(p, 'ask');
-      else if (!b.instant) say(p, b.back ? 'back' : 'pass', 3000);
+      p.reporting = false;
+      if (!b.asks && !b.instant) say(p, b.back ? 'back' : 'pass', 3000);
       // Someone standing beside a full desk goes once their report is in.
       if (p.slot?.extra) {
         if (b.instant) leave(p, true);
@@ -599,9 +601,12 @@ function onBeat(b) {
         }
       }
     };
+    // The question goes up at once, so an answer that follows within the moment below finds it to take down.
+    if (b.asks) say(p, 'ask');
     if (b.instant) finish();
     else {
       // Seen at work a moment before the report: in a replay, one often lands as its agent reaches the desk.
+      p.reporting = true;
       wait(p, 1200);
       act(p, finish);
       follow(p);
@@ -1053,7 +1058,7 @@ function drawScreen(now) {
   const size = ui(12);
   {
     // Whether anything is going on: between dispatches the room is still, and says so.
-    const working = [...new Set([...people.values()].filter((p) => p.typing).map((p) => p.role))];
+    const working = [...new Set([...people.values()].filter((p) => p.work && !p.reported && !p.leaving).map((p) => p.role))];
     const going = status === 'live' || status === 'replay' ? (working.length > 0 ? ` · at work: ${working.join(', ')}` : ' · waiting for the next dispatch') : '';
     const title = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}${going}`;
     s.font = `${size}px ${MONO}`;
