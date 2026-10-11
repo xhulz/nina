@@ -20,7 +20,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
+import { cyclesOf, decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { asRead } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
@@ -38,7 +38,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
-import { PARTY_QUIET_MS, STALE_MS, TIMELINE, busyFor, officeBeats, serveOffice } from '../src/office.mjs';
+import { PARTY_QUIET_MS, STALE_MS, busyFor, officeBeats, officeTimeline, serveOffice, storeNames } from '../src/office.mjs';
 import { request as httpRequest } from 'node:http';
 import { modelFindings, required } from '../src/tools.mjs';
 import { words } from '../src/shell.mjs';
@@ -4300,6 +4300,15 @@ const dated = (date, status = 'active') =>
     /1–2 files\s+3\s+1 \(33%\)/.test(out) && /3–9 files\s+7\s+4 \(57%\)/.test(out) && /10\+ files\s+2\s+2 \(100%\)/.test(out),
     `proportion: each cycle is sized by its largest write and marked by whether it was designed — got ${out}`,
   );
+  // A write is let through only by a stage that reviews it: a verdict that could not be read, or another design's
+  // own, reads nothing — so the design after it is still the same change.
+  const cut = (...steps) => cyclesOf(steps.map(([role, verdict], i) => ({ project: '-p', session: 's', ts: `2026-09-24T11:${String(i).padStart(2, '0')}:00.000Z`, role, verdict }))).length;
+  expect(
+    cut(['implementer', 'DIFF-READY'], ['reviewer', 'UNCLEAR'], ['architect', 'SPEC-READY']) === 1 &&
+      cut(['implementer', 'DIFF-READY'], ['architect', 'SPEC-READY'], ['planner', 'PLAN-READY']) === 1 &&
+      cut(['implementer', 'DIFF-READY'], ['reviewer', 'APPROVED'], ['planner', 'PLAN-READY']) === 2,
+    'proportion: only a stage that reviews lets a write through to the next design',
+  );
 }
 
 // ─── stats: whose history it is ─────────────────────────────────────────────────────────
@@ -6158,56 +6167,83 @@ await release();
     fg.filter((b) => b.type === 'work').length === 1 && fg[0].type === 'work' && fg[0].at === t0 && fg[0].agent === 'arch-fg',
     `office: a foreground run starts work where its pre stands, once, with the agent its dispatch names — got ${JSON.stringify(fg)}`,
   );
-  const inFlight = beatsOf([{ k: 'pre', at: at(0), role: 'architect', id: 'toolu_x' }], t0 + 60_000).filter((b) => !TIMELINE.has(b.type));
+  const inFlight = beatsOf([{ k: 'pre', at: at(0), role: 'architect', id: 'toolu_x' }], t0 + 60_000);
   expect(inFlight.length === 1 && inFlight[0].agent === null, 'office: a run still going has no agent yet, and the page binds its verdict to it');
 
-  // The timeline beside the room: the session's work cut the way `nina runs` cuts it, each piece named by the words
-  // its first dispatch was given, from when it went out to the verdict that closed it.
+  // The timeline beside the room: the session's work cut the way `nina runs` cuts it, each task named by the words
+  // its first dispatch was given, with who worked on it, from when it went out to the verdict that closed it.
   const described = (s, role, verdict, desc) => ran(s, role, verdict).map((e) => (e.k === 'verdict' ? e : { ...e, desc }));
-  const pieces = beatsOf(
-    [
-      described(0, 'architect', 'SPEC-READY', 'Design the export'),
-      described(10, 'implementer', 'DIFF-READY', 'Implement the export'),
-      // Side by side, a rejection dispatched before an approval: the spec's correction is still this piece's.
-      described(20, 'reviewer', 'REJECTED', 'Review the export: controls'),
-      described(21, 'reviewer', 'APPROVED', 'Review the export: patterns'),
-      described(40, 'architect', 'SPEC-READY', 'Correct the export spec'),
-      described(50, 'implementer', 'DIFF-READY', 'Fix the export'),
-      described(60, 'reviewer', 'APPROVED', 'Re-review the export'),
-      described(70, 'qa', 'PASS', 'QA the export'),
-      described(100, 'implementer', undefined, 'Implement the import'),
-    ],
-    t0 + 101_000,
-  );
-  const timeline = pieces.filter((b) => TIMELINE.has(b.type));
-  const starts = timeline.filter((b) => b.type === 'task');
-  const closes = timeline.filter((b) => b.type === 'task-end');
+  const exportWork = [
+    described(0, 'architect', 'SPEC-READY', 'Design the export'),
+    described(10, 'implementer', 'DIFF-READY', 'Implement the export'),
+    // Side by side, a rejection dispatched before an approval: the spec's correction is still this task's.
+    described(20, 'reviewer', 'REJECTED', 'Review the export: controls'),
+    described(21, 'reviewer', 'APPROVED', 'Review the export: patterns'),
+    described(40, 'architect', 'SPEC-READY', 'Correct the export spec'),
+    described(50, 'implementer', 'DIFF-READY', 'Fix the export'),
+    described(60, 'reviewer', 'APPROVED', 'Re-review the export'),
+    described(70, 'qa', 'PASS', 'QA the export'),
+    described(100, 'implementer', undefined, 'Implement the import'),
+  ].flat();
+  const tasks = officeTimeline(exportWork, t0 + 101_000);
   expect(
-    starts.map((b) => b.name).join(' | ') === 'Design the export | Implement the import' && starts[0].at === t0 && starts[1].at === t0 + 100_000 &&
-      closes.length === 1 && closes[0].task === starts[0].task && closes[0].how === 'closed' && closes[0].at === t0 + 75_000 &&
-      pieces.indexOf(starts[0]) === pieces.findIndex((b) => b.type === 'work') + 1,
-    `office: the session's work is cut into pieces, named by their first dispatch, closed by qa, a rejection beside an approval not ending one — got ${JSON.stringify(timeline)}`,
+    tasks.map((x) => x.name).join(' | ') === 'Design the export | Implement the import' && tasks[0].start === t0 && tasks[0].end === t0 + 75_000 &&
+      tasks[0].how === 'closed' && tasks[1].start === t0 + 100_000 && tasks[1].end === null &&
+      JSON.stringify(tasks[0].who) === '[["architect",2],["implementer",2],["reviewer",3],["qa",1]]' && JSON.stringify(tasks[1].who) === '[["implementer",1]]',
+    `office: the session's work is cut into tasks, named by their first dispatch, with who worked on each, closed by qa, a rejection beside an approval not ending one — got ${JSON.stringify(tasks)}`,
   );
   // Seven runs of five seconds, two of them side by side from 20 s to 26 s: 36 seconds at work.
-  // Each run says which piece it belongs to, so the page can list who worked on each.
-  const workOf = (key) => pieces.filter((b) => b.type === 'work' && b.task === key).map((b) => b.role).join(' ');
+  expect(tasks[0]?.busy === 36_000, `office: a task counts the time anyone was at work on it, runs side by side once — got ${tasks[0]?.busy}`);
+  expect(!officeBeats(exportWork, graph).some((b) => b.type.startsWith('task')), 'office: the timeline is not a beat of the room');
+  const qaRunning = officeTimeline([described(0, 'implementer', 'DIFF-READY', 'Implement x'), described(10, 'reviewer', 'APPROVED', 'Review x'), described(20, 'qa', undefined, 'QA x')].flat(), t0 + 30_000);
+  expect(qaRunning.length === 1 && qaRunning[0].end === null, 'office: a qa still at work does not close its task');
+  // The cut moves as the ledger grows, so the list is cut again and sent whole. A review still at work lets nothing
+  // through: the design that follows is the same task until the review approves, and then a task of its own.
+  const reviewing = [described(0, 'implementer', 'DIFF-READY', 'Implement x'), [{ k: 'pre', at: at(10), role: 'reviewer', id: 'toolu_rv', desc: 'Review x' }], described(20, 'architect', 'SPEC-READY', 'Design y')].flat();
+  const reviewed = [...reviewing, { k: 'dispatch', at: at(10), role: 'reviewer', agent: 'rv', via: 'Agent', id: 'toolu_rv' }, { k: 'verdict', at: at(30), agent: 'rv', role: 'reviewer', verdict: 'APPROVED', declared: true }];
   expect(
-    workOf(starts[0]?.task) === 'architect implementer reviewer reviewer architect implementer reviewer qa' && workOf(starts[1]?.task) === 'implementer',
-    `office: each run names the piece of work it belongs to — got ${workOf(starts[0]?.task)} / ${workOf(starts[1]?.task)}`,
+    officeTimeline(reviewing, t0 + 25_000).length === 1 && officeTimeline(reviewed, t0 + 31_000).map((x) => x.name).join(' | ') === 'Implement x | Design y',
+    'office: a design after a review still at work stays in its task until the review lets the write through',
   );
-  expect(closes[0]?.busy === 36_000, `office: a piece counts the time anyone was at work on it, runs side by side once — got ${closes[0]?.busy}`);
-  const qaRunning = beatsOf([described(0, 'implementer', 'DIFF-READY', 'Implement x'), described(10, 'reviewer', 'APPROVED', 'Review x'), described(20, 'qa', undefined, 'QA x')], t0 + 30_000);
-  expect(!qaRunning.some((b) => b.type === 'task-end'), 'office: a qa still at work does not close its piece');
-  // A ledger from before the gate kept the words: the measurement store's, by dispatch id — and a name learned later
-  // reaches a page that has the piece unnamed, by an id of its own.
-  const unnamed = ran(0, 'implementer', 'DIFF-READY');
-  const bare = officeBeats(unnamed, graph, Number.POSITIVE_INFINITY).find((b) => b.type === 'task');
-  const fromStore = officeBeats(unnamed, graph, Number.POSITIVE_INFINITY, new Map([[unnamed[0].id, 'Implement from the store']])).find((b) => b.type === 'task');
+  // A dispatch refused at the gate's question, known only once the orchestrator went on: the task it would have begun
+  // goes, where sent piece by piece it stayed on the page as a task running for ever.
+  const refusedFirst = [
+    described(0, 'implementer', 'DIFF-READY', 'Implement x'), described(10, 'reviewer', 'APPROVED', 'Review x'), described(20, 'qa', 'PASS', 'QA x'),
+    [{ k: 'pre', at: at(30), role: 'architect', id: 'toolu_refused', desc: 'Design what was refused' }, { k: 'ask', at: at(30), role: 'architect', source: 'reviewer', token: 'REJECTED', round: 3, max: 2, id: 'toolu_refused' }],
+  ].flat();
+  const goneOn = [...refusedFirst, ...described(40, 'implementer', undefined, 'Implement y')];
   expect(
-    bare?.name === null && fromStore?.name === 'Implement from the store' && bare.id !== fromStore.id && bare.task === fromStore.task,
-    `office: a dispatch the ledger names nothing for takes the store's name, under an id that changes with it — got ${JSON.stringify([bare, fromStore])}`,
+    officeTimeline(refusedFirst, t0 + 31_000).some((x) => x.name === 'Design what was refused') && !officeTimeline(goneOn, t0 + 41_000).some((x) => x.name === 'Design what was refused'),
+    'office: a task a refused dispatch began leaves the timeline once the refusal is known',
+  );
+  // A ledger from before the gate kept the words: the measurement store's, by dispatch id.
+  const unnamed = ran(0, 'implementer', 'DIFF-READY');
+  expect(
+    officeTimeline(unnamed, Number.POSITIVE_INFINITY)[0]?.name === null &&
+      officeTimeline(unnamed, Number.POSITIVE_INFINITY, new Map([[unnamed[0].id, 'Implement from the store']]))[0]?.name === 'Implement from the store',
+    'office: a dispatch the ledger names nothing for takes the store\'s name',
   );
   expect(busyFor([{ at: 0, end: 7_200_000 }, { at: 50_400_000, end: 54_000_000 }]) === 10_800_000, 'office: a night between two runs is not time at work');
+  // The store is read for names again only when it changed: a dispatch it never names would otherwise have it read
+  // whole every few seconds for as long as the office runs.
+  {
+    const named = await scratch();
+    const snaps = join(process.env.NINA_DATA, 'snapshots');
+    await mkdir(snaps, { recursive: true });
+    const file = join(snaps, `${slugFor(named)}.jsonl`);
+    const row = (id, desc) => `${JSON.stringify({ dispatch_id: id, desc })}\n`;
+    await writeFile(file, row('toolu_s1', 'From the store'));
+    const names = storeNames(named);
+    const first = names([{ k: 'pre', id: 'toolu_s1' }]);
+    const again = names([{ k: 'pre', id: 'toolu_s1' }, { k: 'pre', id: 'toolu_never' }]);
+    await writeFile(file, row('toolu_s1', 'From the store') + row('toolu_never', 'Named at last'));
+    await utimes(file, new Date(), new Date(Date.now() + 5000));
+    const later = names([{ k: 'pre', id: 'toolu_never' }]);
+    expect(
+      first.get('toolu_s1') === 'From the store' && again === first && later.get('toolu_never') === 'Named at last',
+      `office: the store is read for names when one is missing and the store changed since, not otherwise — got ${JSON.stringify([...first, ...later])}`,
+    );
+  }
 
   // The folder goes along the graph's edges: a spec to its implementer, a diff to its reviewer, a rejection back.
   const flow = [ran(0, 'architect', 'SPEC-READY'), ran(10, 'implementer', 'DIFF-READY'), ran(20, 'reviewer', 'REJECTED', { issues: ['a'] }), ran(30, 'implementer', 'DIFF-READY'), ran(40, 'implementer')];
@@ -6349,15 +6385,32 @@ await release();
       `office: a request naming another host is refused, and this machine's own name on a forwarded port is not — got ${rebound}, ${forwarded}`,
     );
     let appended = false;
+    const freshAt = (events) => events.findIndex((e) => e.event === 'beat' && !e.data.instant);
     const live = await stream(
       `${office.url}/events`,
-      (events) => events.some((e) => e.event === 'beat' && !e.data.instant),
+      // The new beat, and the timeline sent again after it, cut anew.
+      (events) => freshAt(events) >= 0 && events.slice(freshAt(events)).some((e) => e.event === 'timeline'),
       async (events) => {
         if (!appended && events.filter((e) => e.event === 'beat').length >= works.length) {
           appended = true;
-          await appendFile(ledger, `${JSON.stringify({ k: 'verdict', at: at(45), agent: 'implementer-5', role: 'implementer', verdict: 'DIFF-READY', declared: true })}\n`);
+          const closing = [
+            { k: 'verdict', at: at(45), agent: 'implementer-5', role: 'implementer', verdict: 'DIFF-READY', declared: true },
+            { k: 'pre', at: at(50), role: 'reviewer', id: 'toolu_live_rv' },
+            { k: 'verdict', at: at(55), agent: 'reviewer-live', role: 'reviewer', verdict: 'APPROVED', declared: true },
+            { k: 'dispatch', at: at(56), role: 'reviewer', agent: 'reviewer-live', via: 'Agent', id: 'toolu_live_rv' },
+            { k: 'pre', at: at(60), role: 'qa', id: 'toolu_live_qa' },
+            { k: 'verdict', at: at(65), agent: 'qa-live', role: 'qa', verdict: 'PASS', declared: true },
+            { k: 'dispatch', at: at(66), role: 'qa', agent: 'qa-live', via: 'Agent', id: 'toolu_live_qa' },
+          ];
+          await appendFile(ledger, closing.map((e) => `${JSON.stringify(e)}\n`).join(''));
         }
       },
+    );
+    const timelines = live.filter((e) => e.event === 'timeline').map((e) => e.data.tasks);
+    expect(
+      timelines.length >= 2 && timelines[0].length === 1 && timelines[0][0].end === null &&
+        timelines.at(-1)[0].how === 'closed' && timelines.at(-1)[0].who.some(([role]) => role === 'qa'),
+      `office: a client is sent the timeline as it connects, and again, whole, when the ledger changes it — got ${JSON.stringify(timelines)}`,
     );
     const restored = live.filter((e) => e.event === 'beat' && e.data.instant);
     const fresh = live.find((e) => e.event === 'beat' && !e.data.instant);
@@ -6379,11 +6432,13 @@ await release();
     );
     const replayBeats = played.filter((e) => e.event === 'beat');
     expect(played[0]?.data.replay === true && replayBeats.every((e) => !e.data.instant), 'office: a replay plays the session from its first dispatch, each beat in its turn');
-    // The timeline moves nobody: a piece of work's start goes out with the dispatch that began it, not a beat later.
+    // The timeline goes out with the beat that changed it — cut from the ledger up to that beat, so nothing early.
+    const firstWork = played.findIndex((e) => e.event === 'beat');
+    const told = played.findIndex((e) => e.event === 'timeline');
     expect(
-      replayBeats[0]?.data.type === 'work' && replayBeats[1]?.data.type === 'task' && arrived.get(replayBeats[1]) - arrived.get(replayBeats[0]) < 200 &&
-        arrived.get(replayBeats[2]) - arrived.get(replayBeats[1]) >= 400,
-      `office: a replay sends a piece's start with the dispatch that began it — got ${JSON.stringify(replayBeats.map((e) => [e.data.type, arrived.get(e)]))}`,
+      told === firstWork + 1 && arrived.get(played[told]) - arrived.get(played[firstWork]) < 200 &&
+        played[told].data.tasks.length === 1 && JSON.stringify(played[told].data.tasks[0].who) === '[["architect",1]]',
+      `office: a replay sends the timeline as it stood at the beat that changed it — got ${JSON.stringify(played.map((e) => [e.event, e.data?.type ?? e.data?.tasks?.length]))}`,
     );
   } finally {
     await replayed.close();

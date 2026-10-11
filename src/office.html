@@ -551,8 +551,6 @@ function settleCap() {
 }
 
 function onBeat(b) {
-  if (b.type === 'task' || b.type === 'task-end') return onTimeline(b);
-  if (b.type === 'work' && b.task && !b.message) workedOn(b.task, b.role);
   if (b.type === 'work' || b.type === 'verdict') lastActivity = Math.max(lastActivity, b.at);
   const stage = b.role ? stages.get(b.role) : null;
   if (b.type === 'work') {
@@ -716,7 +714,7 @@ function reset() {
     place(p, p.home);
   }
   lines.length = 0;
-  tasks.clear();
+  tasks = [];
   lastActivity = 0;
   drawTasks();
   confetti = [];
@@ -736,6 +734,10 @@ events.addEventListener('hello', (m) => {
   status = hello.session ? (hello.replay ? 'replay' : 'live') : 'waiting for the first dispatch';
 });
 events.addEventListener('beat', (m) => onBeat(JSON.parse(m.data)));
+events.addEventListener('timeline', (m) => {
+  tasks = JSON.parse(m.data).tasks ?? [];
+  drawTasks();
+});
 events.addEventListener('end', () => (status = 'replay finished — reload to watch it again'));
 events.onerror = () => {
   if (!status.startsWith('replay finished')) status = 'reconnecting…';
@@ -843,14 +845,15 @@ function syncButtons() {
 // ─── the timeline beside the room ─────────────────────────────────────────────────────────────
 /*
  * The session's work, task by task, as the server cuts it — the way `nina runs` does: each named by the words the
- * orchestrator gave its first dispatch, from when that went out to the verdict that closed it. A task still open
- * counts up while anyone is at work on it, and stops at the last thing that happened while nobody is.
+ * orchestrator gave its first dispatch, with the stages that worked on it, from when that went out to the verdict
+ * that closed it. The server sends the whole list whenever it changes, and it replaces what is here. A task still
+ * open counts up while anyone is at work on it, and stops at the last thing that happened while nobody is.
  */
 const SIDE = 300;
 /** Narrower than this, the timeline is drawn over the room, and starts hidden. */
 const NARROW = 760;
 const TASKS_KEY = 'nina-office-tasks';
-const tasks = new Map();
+let tasks = [];
 /** The newest dispatch or verdict: a replay's clock, and where an idle task's count stops. */
 let lastActivity = 0;
 let tasksOpen = (() => {
@@ -862,24 +865,6 @@ let tasksOpen = (() => {
   }
   return window.innerWidth >= NARROW;
 })();
-
-/** A task as first heard of: by its first dispatch, which comes just before the task's own beat. */
-const taskFor = (key, at) => {
-  if (!tasks.has(key)) tasks.set(key, { name: null, start: at, end: null, how: null, busy: null, who: new Map() });
-  return tasks.get(key);
-};
-
-function onTimeline(b) {
-  if (b.type === 'task') Object.assign(taskFor(b.task, b.at), { name: b.name, start: b.at });
-  else if (tasks.has(b.task)) Object.assign(tasks.get(b.task), { end: b.at, how: b.how, busy: b.busy ?? null });
-  drawTasks();
-}
-
-/** Who worked on a task: each stage in the order it first did, and how many times it was sent. */
-function workedOn(key, role) {
-  const who = taskFor(key, Date.now()).who;
-  who.set(role, (who.get(role) ?? 0) + 1);
-}
 
 /** The stages someone is at work for now. */
 const atWork = () => [...new Set([...people.values()].filter((p) => p.work && !p.reported && !p.leaving).map((p) => p.role))];
@@ -915,7 +900,7 @@ function drawTasks() {
     el.textContent = text;
     return el;
   };
-  const shown = [...tasks.values()].sort((a, b) => b.start - a.start);
+  const shown = [...tasks].sort((a, b) => b.start - a.start);
   document.getElementById('task-list').replaceChildren(
     ...shown.map((t) => {
       const li = document.createElement('li');
@@ -923,7 +908,7 @@ function drawTasks() {
       const idle = running && working.length === 0;
       li.className = running ? (idle ? 'idle' : 'running') : t.how === 'closed' ? 'done' : 'ended';
       li.append(line('name', t.name || '(no description)'));
-      if (t.who.size > 0) li.append(line('who', [...t.who].map(([role, n]) => (n > 1 ? `${role} ×${n}` : role)).join(' · ')));
+      if (t.who?.length > 0) li.append(line('who', t.who.map(([role, n]) => (n > 1 ? `${role} ×${n}` : role)).join(' · ')));
       if (running) {
         const upTo = idle ? Math.max(t.start, lastActivity) : Math.max(t.start, clock);
         li.append(line('when', `${stamp(t.start, clock)} → now · ${counter(upTo - t.start)}`));
@@ -936,7 +921,7 @@ function drawTasks() {
       return li;
     }),
   );
-  document.getElementById('task-empty').hidden = tasks.size > 0;
+  document.getElementById('task-empty').hidden = tasks.length > 0;
 }
 setInterval(drawTasks, 1000);
 

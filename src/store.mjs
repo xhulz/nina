@@ -92,9 +92,21 @@ function storeNamesOf(dir) {
  * @returns {object[]|null} Null when the store has nothing for it.
  */
 export function projectRecords(dir, store = snapshotsDir()) {
+  const file = projectStoreFile(dir, store);
+  return file === null ? null : readStoreFile(file);
+}
+
+/**
+ * The file a project's records are kept in, or null when the store has none for it.
+ *
+ * @param {string} dir - The project.
+ * @param {string} [store] - The store directory.
+ * @returns {string|null}
+ */
+export function projectStoreFile(dir, store = snapshotsDir()) {
   for (const name of storeNamesOf(dir)) {
     const file = join(store, `${name}.jsonl`);
-    if (existsSync(file)) return readStoreFile(file);
+    if (existsSync(file)) return file;
   }
   return null;
 }

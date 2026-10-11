@@ -133,7 +133,7 @@ that runs as several agents), the orchestrator — NINA, drawn as a woman facing
 as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger, so it shows what the ledger holds — who worked, what they answered, the ids of the issues
-they named, the few words the orchestrator gave each dispatch — and never a word anyone wrote. A dispatch is someone sitting down to work, the
+they named, the few words the orchestrator gave each dispatch — and never what an agent wrote or reported. A dispatch is someone sitting down to work, the
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
 in red to its fixer) and by the orchestrator otherwise; whoever handed it on then leaves, and everyone else whose
 report is in gets up as the work moves on, so the room holds the work in hand and not everyone who ever sat in it.
@@ -153,11 +153,14 @@ sent), when it started and ended, and how long it took; a task still open counts
 and stops at the last thing that happened while nobody is. A task is a cycle, cut as `nina runs` cuts one
 (`cyclesOf`, one function for both): a session's dispatches up to the verdict that closes them, named by the words
 the orchestrator gave the first. The gate keeps those words on each dispatch's entries; a ledger written before it
-did takes them from the measurement store, by the dispatch's id, and a name learned that way later reaches the page
-under a beat id of its own. A task that waited — overnight, on the owner — also says how long anyone was at work on
-it: its runs' spans joined, so runs side by side count once. On a narrow window it is drawn over the room and
-starts hidden; the `tasks` button, or `t`, shows or hides it, and the viewer's browser keeps the choice. A replay
-sends a task's start with the dispatch that began it, since the timeline moves nobody in the room.
+did takes them from the measurement store, by the dispatch's id, read again only when the store has changed. A task
+that waited — overnight, on the owner — also says how long anyone was at work on it: its runs' spans joined, so runs
+side by side count once. The list is cut again as the ledger grows and sent whole whenever it changes, and the page
+replaces what it has: the cut moves — a review still at work lets nothing through until its verdict, a refused
+dispatch is known only once the orchestrator goes on — and sent task by task, a task a later fact merged away stayed
+on the page running for ever. A replay sends it as it stood at each beat, cut from the ledger up to that beat. On a
+narrow window it is drawn over the room and starts hidden; the `tasks` button, or `t`, shows or hides it, and the
+viewer's browser keeps the choice.
 
 It is a page served on the loopback address for as long as the command runs, on port 6462 (NINA on a phone's
 keypad) or any free one, and the command prints its address at the end of a line, where a terminal makes it a
