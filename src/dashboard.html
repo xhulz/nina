@@ -290,7 +290,7 @@ async function load(tab) {
     const data = await res.json();
     if (tab !== current) return;
     const scroll = view.scrollTop;
-    view.replaceChildren(el('div', { class: 'wrap' }, res.ok ? RENDER[tab](data) : el('p', { class: 'empty bad' }, data?.error ?? `${tab} could not be read`)));
+    view.replaceChildren(el('div', { class: 'wrap' }, res.ok ? RENDER[tab](data) : el('p', { class: 'empty bad' }, said(data?.error ?? `${tab} could not be read`))));
     view.scrollTop = scroll;
   } catch (error) {
     if (tab === current) view.replaceChildren(el('div', { class: 'wrap' }, el('p', { class: 'empty bad' }, said(`${tab} could not be read — is \`nina dashboard\` still running? ${error.message}`))));

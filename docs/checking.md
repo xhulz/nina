@@ -218,6 +218,8 @@ takes a snapshot first: the project's hooks take one every turn, and a snapshot 
 transcripts that often. A tab carries what its command prints — a pill's name, stage, count and trigger, the notes
 and problems `nina pills` lists, the words the orchestrator gave a dispatch, each stage's words and the task shapes
 `nina pipeline` draws — and never a pill's body, a report, a prompt or a whole record; nothing leaves the machine. Every text goes into the page as text, never as markup.
+A tab that fails to read says why in the terminal running the dashboard, and the page gets only that it failed: the
+error's message carries the project's paths and its stack the code's (CodeQL's `js/stack-trace-exposure`).
 
 It is served the way the office is, through the same functions (`src/serve.mjs`): the loopback address, port 6463 or
 any free one, a request naming another host refused, `--open` for the system's browser. The office's poll of its
