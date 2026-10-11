@@ -112,12 +112,11 @@ model each side ran on, rather than print a number that measures the model:
   lesson keeps recurring while its request waits for a release, without the rule, and counted from the filing
   a project two releases behind had two lessons reopened by the very upgrade that brought their rule — so
   the close records the count (`occurrences_at_close`), and a request closed before it did counts from its
-  filing. Reopening it, `--check` files a
-  request naming where the rule went and in which release, and `nina requests` marks it as a rule that did
-  not hold. It reopens once the lesson came back as many times as it took to graduate — three: one
-  recurrence may be noise, and `learn` shows it as watched until then. A rule a project made of its own is
-  watched the same way, and one that did not hold goes to the harness as a request, proposed for the layer
-  its roles live in.
+  filing. Reopening it, `--check` files a request naming where the rule went and in which release, and
+  `nina requests` marks it as a rule that did not hold. It reopens once the lesson came back as many times
+  as it took to graduate — three: one recurrence may be noise, and `learn` shows it as watched until then.
+  A rule a project made of its own is watched the same way, and one that did not hold goes to the harness as
+  a request, proposed for the layer its roles live in.
 - **A stage is handed its lessons.** Every spec told its stage to read its pills, and a stage found them by
   opening every file in its directory and every shared one to see whether it applied — one reviewer read
   one in seven runs of fifteen while twelve applied to it. The loop gate's hook on `SubagentStart` now hands
