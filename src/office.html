@@ -423,7 +423,6 @@ Object.assign(owner, { x: OWNER_HOME.x, y: OWNER_HOME.y, at: OWNER_HOME, home: O
 const walk = (p, to, then) => p.queue.push({ kind: 'walk', to, then });
 const wait = (p, ms) => p.queue.push({ kind: 'wait', ms });
 const act = (p, fn) => p.queue.push({ kind: 'do', fn });
-const homeOf = (p) => (p === boss ? BOSS_HOME : p === owner ? OWNER_HOME : p.slot);
 
 function say(p, kind, ms) {
   p.bubble = { kind, until: ms ? performance.now() + ms : Infinity };
@@ -433,14 +432,14 @@ function hush(p, kinds) {
 }
 
 /** A free desk of a stage for someone, sending its longest-idle occupant away when every desk is taken. */
-function seatAt(stage, p) {
+function seatAt(stage, p, instant = false) {
   const mine = stage.slots.find((sl) => sl.who === p);
   if (mine) return mine;
   let slot = stage.slots.find((sl) => !sl.who);
   if (!slot) {
     const idle = stage.slots.filter((sl) => sl.who && !sl.who.typing && !sl.who.current && sl.who.queue.length === 0).sort((a, b) => a.who.born - b.who.born)[0];
     if (idle) {
-      leave(idle.who);
+      leave(idle.who, instant);
       slot = idle;
     }
   }
@@ -456,12 +455,31 @@ function seatAt(stage, p) {
   return slot;
 }
 
-function leave(p) {
+/** Someone gets up and walks out to the garden; while the room is being set, they are simply gone. */
+function leave(p, instant = false) {
   if (p.slot && p.slot.who === p) p.slot.who = null;
   p.slot = null;
   p.typing = false;
   p.leaving = true;
-  walk(p, ENTRANCE, () => p.leaving && people.delete(p.key));
+  if (instant) people.delete(p.key);
+  else walk(p, ENTRANCE, () => p.leaving && people.delete(p.key));
+}
+
+/**
+ * Those whose report is in get up once the work moves on, one after another, so the room shows the work in hand
+ * rather than everyone who ever sat in it — restored, they are simply gone. A resumed one stays.
+ */
+function dismissReported(keep, instant) {
+  let delay = 400;
+  for (const q of [...people.values()]) {
+    if (keep.includes(q) || !q.reported || q.typing || q.leaving || q.current || q.queue.length > 0) continue;
+    if (instant) leave(q, true);
+    else {
+      wait(q, delay);
+      act(q, () => q.reported && !q.typing && leave(q));
+      delay += 350;
+    }
+  }
 }
 
 function place(p, spot) {
@@ -521,13 +539,15 @@ function onBeat(b) {
       people.set(key, p);
     }
     p.work = b.id;
+    p.reported = false;
     // The dispatch the gate asked about went out: the phone stops.
     if (capRole === b.role) settleCap();
     p.leaving = false;
-    const slot = seatAt(stage, p);
+    const slot = seatAt(stage, p, b.instant);
     if (b.instant) {
       place(p, slot);
       p.typing = true;
+      dismissReported([p], true);
       return;
     }
     note(b.at, `${b.from ? `${b.from.role} → ` : ''}${b.role}${b.resumed ? ' (resumed)' : ''}`);
@@ -545,9 +565,10 @@ function onBeat(b) {
       if (focus === carrier) follow(stage.drop);
     });
     wait(carrier, 300);
-    const home = homeOf(carrier);
-    if (home) walk(carrier, home, () => place(carrier, home));
-    else leave(carrier);
+    // NINA goes back to the reception; an agent who handed the work on is done, and leaves.
+    if (carrier === boss) walk(boss, BOSS_HOME, () => place(boss, BOSS_HOME));
+    else act(carrier, () => leave(carrier));
+    dismissReported([p, carrier], false);
     if (p.x !== slot.x || p.y !== slot.y) walk(p, slot);
     act(p, () => {
       place(p, slot);
@@ -561,21 +582,27 @@ function onBeat(b) {
       p = person(b.agent, b.role, b.agent);
       p.agent = b.agent;
       people.set(b.agent, p);
-      place(p, seatAt(stage, p));
+      place(p, seatAt(stage, p, b.instant));
     }
     if (!p) return;
     const finish = () => {
       p.typing = false;
+      p.reported = true;
       if (b.asks) say(p, 'ask');
       else if (!b.instant) say(p, b.back ? 'back' : 'pass', 3000);
       // Someone standing beside a full desk goes once their report is in.
       if (p.slot?.extra) {
-        wait(p, b.instant ? 0 : 2500);
-        act(p, () => leave(p));
+        if (b.instant) leave(p, true);
+        else {
+          wait(p, 2500);
+          act(p, () => leave(p));
+        }
       }
     };
     if (b.instant) finish();
     else {
+      // Seen at work a moment before the report: in a replay, one often lands as its agent reaches the desk.
+      wait(p, 1200);
       act(p, finish);
       follow(p);
     }
@@ -623,7 +650,7 @@ function onBeat(b) {
     // A dispatch the owner refused never ran; a run that never reported has stopped. Either way, whoever sat down
     // for it gets up — and a refusal answers the gate's call.
     const p = [...people.values()].find((x) => x.work === b.work);
-    if (p && (!p.agent || b.type === 'stale')) leave(p);
+    if (p && (!p.agent || b.type === 'stale')) leave(p, b.instant);
     if (b.type === 'refused' && capRole === b.role) settleCap();
     if (!b.instant) note(b.at, b.type === 'refused' ? `${b.role}: not sent — ${ROOM.owner} said no` : `${b.role} stopped without a report`);
     return;
@@ -1025,7 +1052,10 @@ function drawScreen(now) {
   // What stays put on the screen: the title, the zoom (in the page), the log, a pass worth a party.
   const size = ui(12);
   {
-    const title = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}`;
+    // Whether anything is going on: between dispatches the room is still, and says so.
+    const working = [...new Set([...people.values()].filter((p) => p.typing).map((p) => p.role))];
+    const going = status === 'live' || status === 'replay' ? (working.length > 0 ? ` · at work: ${working.join(', ')}` : ' · waiting for the next dispatch') : '';
+    const title = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}${going}`;
     s.font = `${size}px ${MONO}`;
     s.fillStyle = '#1b1d26';
     s.fillRect(0, 0, screen.width, band);
