@@ -166,13 +166,6 @@ export function historyOf(records, since) {
 }
 
 /**
- * Runs the command.
- *
- * @param {string[]} argv - `[--project <dir>] [--for <number or words>] [--since <YYYY-MM-DD>]`, or `--view [--session <id>]
- *   [--replay] [--port <n>] [--open]` for the office.
- * @returns {Promise<number>} Process exit code.
- */
-/**
  * A composed pipeline, as data: what `nina pipeline` draws and the dashboard's pipeline tab shows — the line and where
  * it ends, the gates, the stages that run as several agents, who sends work back to whom and how many rounds per
  * issue, and each stage's model, effort, skills and what it ran since `since`; the project's own agents; and which
@@ -220,6 +213,13 @@ export function pipelineData(dir, { since } = {}) {
   };
 }
 
+/**
+ * Runs the command.
+ *
+ * @param {string[]} argv - `[--project <dir>] [--for <number or words>] [--since <YYYY-MM-DD>]`, or `--view [--session <id>]
+ *   [--replay] [--port <n>] [--open]` for the office.
+ * @returns {Promise<number>} Process exit code.
+ */
 export async function pipeline(argv) {
   const arg = (flag) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] ?? '' : null);
   const dir = resolve(arg('--project') ?? process.cwd());

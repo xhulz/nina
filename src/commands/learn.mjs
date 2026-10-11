@@ -900,9 +900,11 @@ async function graduate(target, profile, layerRoot, known, which, here) {
  * @param {string} target - The project directory.
  * @param {string} layerRoot - Its pinned release, which says whether the loop gate ships.
  * @param {{surfaces?: string[]}} profile - The project's profile.
- * @param {{days?: number, records?: object[], known?: Awaited<ReturnType<typeof lessons>>}} [options]
+ * @param {{days?: number, records?: object[], known?: Awaited<ReturnType<typeof lessons>>, report?: boolean}} [options] -
+ *   `report: false` reads only what the detector acts on: it runs every turn, and the rest — what was applied, what a
+ *   lesson changed, the gate's ledgers, the release's scripts — is the report's.
  */
-export async function learningData(target, layerRoot, profile, { days = CAPTURE_DAYS, records, known } = {}) {
+export async function learningData(target, layerRoot, profile, { days = CAPTURE_DAYS, records, known, report = true } = {}) {
   const rounds = records ?? (await recorded(target));
   const pills = known ?? (await lessons(target));
   // Who each loop-back sent work back to, read off the project's own graph.
@@ -910,15 +912,15 @@ export async function learningData(target, layerRoot, profile, { days = CAPTURE_
   const owners = sentBackTo(rounds, loops);
   const targets = loops ? new Set([...loops.values()].flatMap((byToken) => [...byToken.values()].flatMap((to) => [...to.keys()]))) : null;
   const filed = await filedRequests(target);
+  const owed = { late: overdue(rounds, pills, new Date(), days, owners), filed, owed: undecided(pills, filed) };
+  if (!report) return owed;
   const active = pills.filter((l) => !l.retired);
   return {
+    ...owed,
     days,
     runs: new Set(rounds.map(runOf)).size,
     rounds: rounds.length,
     span: rounds.length ? [day(rounds[0].ts), day(rounds.at(-1).ts)] : null,
-    late: overdue(rounds, pills, new Date(), days, owners),
-    filed,
-    owed: undecided(pills, filed),
     active,
     ready: active.filter((l) => l.occurrences >= GRADUATION_AT),
     open: filed.filter((r) => r.status === 'open'),
@@ -984,7 +986,7 @@ export async function learn(argv, ctx) {
   }
   if (argv.includes('--close')) return close(target, argv[argv.indexOf('--close') + 1] ?? '');
 
-  const learning = await learningData(target, resolved.dir, profile, { days, records, known });
+  const learning = await learningData(target, resolved.dir, profile, { days, records, known, report: !check });
   const { late, filed, owed } = learning;
 
   if (check) {
