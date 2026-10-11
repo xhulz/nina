@@ -1541,6 +1541,13 @@ async function sound(fixture, core) {
     backSince.status === 1 && backSince.out.includes('came back 3 time(s) after its rule shipped in 9.9.9') && (await listed()).length === filedBefore.length + 1,
     `learn: and three times since the close reopens it — got ${backSince.status} ${backSince.out}`,
   );
+  // Closed again by hand, it keeps one count, the new one: the frontmatter reads the last of two lines.
+  run(['learn', '--close', waited, '--project', behind]);
+  const reclosed = await readFile(join(behind, '.nina', 'requests', waited), 'utf8');
+  expect(
+    (reclosed.match(/^occurrences_at_close: /gm) ?? []).length === 1 && /^occurrences_at_close: 11$/m.test(reclosed),
+    `learn: a request closed twice keeps one count, the newer — got\n${reclosed}`,
+  );
 }
 
 // ─── learn: a lesson that is this codebase's convention graduates in its own project ─────

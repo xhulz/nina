@@ -481,7 +481,9 @@ async function answerRequest(target, file, answer) {
   const pill = answer.status === 'closed' && fields.pill ? frontmatter((await read(fields.pill)) ?? (await read(shelved))) : null;
   const counted = /^\d+$/.test(pill?.occurrences ?? '') ? { occurrences_at_close: pill.occurrences } : {};
   const extra = Object.entries({ ...(answer.fields ?? {}), ...counted }).map(([k, v]) => `\n${k}: ${oneLine(v)}`).join('');
-  await writeFile(path, text.replace(/^status: .*$/m, `status: ${answer.status}${extra}`));
+  // Closed again by hand, a request keeps one count: the frontmatter reads the last of two, and that was the old one.
+  const kept = counted.occurrences_at_close ? text.replace(/^occurrences_at_close: .*\n/gm, '') : text;
+  await writeFile(path, kept.replace(/^status: .*$/m, `status: ${answer.status}${extra}`));
   // A declined lesson is still this project's lesson: the harness said it does not belong in every
   // project, not that it stopped being true in this one. So is one whose rule went into a layer this
   // project does not compose — retiring it there would drop the lesson with nothing in its place.
