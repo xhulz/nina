@@ -437,9 +437,16 @@ export const WRITERS = new Set(['implementer', 'solidity-dev']);
 const DESIGNERS = new Set(['planner', 'architect']);
 
 /**
+ * The verdict a run still at work stands in with, for a reader that cuts a session as it happens — the office's
+ * timeline: it closes nothing, being neither a closing verdict nor one that could not be read, and it lets no
+ * write through. A run with none at all would read as unreadable, and a qa still at work would close its cycle.
+ */
+export const IN_FLIGHT = 'IN-FLIGHT';
+
+/**
  * A session's records cut into cycles: each up to the verdict that closes one, or to the next design stage
- * after code was written unless a loop-back sent the work there, or to a closing stage whose verdict cannot
- * be read (see `proportionReport`). What `stats` sizes and `nina runs` prices.
+ * after code was written and let through, or to a closing stage whose verdict cannot be read (see
+ * `proportionReport`). What `stats` sizes, `nina runs` prices and the office's timeline names.
  *
  * @param {object[]} records - Records of any number of sessions and projects.
  * @returns {{runs: object[], end: 'closed'|'unreadable'|'next'|'open'}[]} In the order they happened within
@@ -455,21 +462,28 @@ export function cyclesOf(records) {
   /** @type {{runs: object[], end: 'closed'|'unreadable'|'next'|'open'}[]} */
   const cycles = [];
   const unread = (verdict) => !verdict || verdict === 'UNCLEAR' || verdict === 'NONE';
+  // Code was written, and what reviewed its latest write let it through: a verdict read after it, and nothing sent
+  // back since. Read off the one verdict dispatched before the design, the gates that run side by side made it a
+  // matter of which went out last — a rejection beside three approvals ended the change its own fix belonged to.
+  const letThrough = (cycle) => {
+    const write = cycle.findLastIndex((x) => WRITERS.has(x.role));
+    if (write < 0) return false;
+    const since = cycle.slice(write + 1).map((x) => x.verdict).filter((v) => !unread(v) && v !== IN_FLIGHT);
+    return since.length > 0 && !since.some(isLoopBack);
+  };
   for (const runs of bySession.values()) {
     let cycle = [];
-    let previous = null;
     const end = (how) => {
       if (cycle.length > 0) cycles.push({ runs: cycle, end: how });
       cycle = [];
     };
     for (const r of runs) {
-      if (DESIGNERS.has(r.role) && cycle.some((x) => WRITERS.has(x.role)) && !isLoopBack(previous)) end('next');
+      if (DESIGNERS.has(r.role) && letThrough(cycle)) end('next');
       cycle.push(r);
       if (r.role in CYCLE_ENDS) {
         if (r.verdict === CYCLE_ENDS[r.role]) end('closed');
         else if (unread(r.verdict)) end('unreadable');
       }
-      if (!unread(r.verdict)) previous = r.verdict;
     }
     end('open');
   }
@@ -482,9 +496,10 @@ export function cyclesOf(records) {
  * (`CYCLE_ENDS`), so a loop-back's fix rounds stay with the design that preceded them — the owner's own
  * prompts were tried as the boundary first, and every "pode seguir" after a spec cut a pipeline in two.
  * Two more things end a cycle, both found in real sessions: a design stage dispatched after code was
- * written starts the next change — the light chain has no qa to close it, and it was absorbed into the
- * design that followed — unless the verdict before it sent work back, which the graph routes into both
- * designers; and a closing stage whose verdict cannot be read still closes it, counted as unreadable,
+ * written and let through starts the next change — the light chain has no qa to close it, and it was absorbed
+ * into the design that followed — but not while anything since the latest write sent work back, which the graph
+ * routes into both designers, or nothing has read that write yet, as when a fix and its spec's correction go out
+ * together; and a closing stage whose verdict cannot be read still closes it, counted as unreadable,
  * because a qa run with no verdict line otherwise let one cycle swallow a dozen pipelines. A cycle is
  * sized by the most files any one of its writers wrote, not their sum, so three fix rounds on two files
  * stay two files; and only edits through the edit tools count, so a file written from a shell is missed

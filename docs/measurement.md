@@ -64,8 +64,11 @@ as the model it names.
 `stats` also sets the size of each change against the chain that carried it — the core's first hard
 rule, which nothing had measured. A cycle is a session's dispatches up to the verdict that closes one
 (qa `PASS`, devops `DEPLOYED`, secops `SECURE`), or up to the next design stage after code was written
-unless a loop-back sent the work there; a closing stage whose verdict cannot be read closes it too, and
-is counted. It is sized by the most files any one writer wrote in it — through the edit tools, so a
+and let through — something read the latest write and nothing since sent work back; a closing stage whose
+verdict cannot be read closes it too, and is counted. Read off the one verdict dispatched before the design,
+as it first was, the gates that run side by side made the boundary depend on which went out last: a rejection
+beside three approvals ended the change its own fix belonged to, and so did a fix sent out together with its
+spec's correction. The same cut names the tasks in the office's timeline (`docs/checking.md`). It is sized by the most files any one writer wrote in it — through the edit tools, so a
 shell-written file is missed and the size is a floor — and the report is a distribution rather than a
 list of violations: a critical path is gated in full at any size and cannot be seen in a file count,
 and one spec legitimately covers sibling steps. Two boundaries were wrong before this one. The owner's

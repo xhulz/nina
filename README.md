@@ -20,8 +20,9 @@ the same mistake, NINA turns the lesson into a rule in the next release.
 - A lesson the pipeline learns three times becomes a request to the harness. The answer ships as a rule in a
   release, and the upgrade that installs it closes the request.
 - `nina pipeline --view` draws the pipeline as a pixel office: each agent at its stage's desk, walking the work
-  over to the next one, a question mark over whoever asked, a party when a task passes. It follows the session live,
-  or replays one, in a page on this machine that the command prints a link to.
+  over to the next one, a question mark over whoever asked, a party when a task passes, and beside the room a timeline
+  of the session's tasks: who worked on each, and how long it took. It follows the session live, or replays one, in a
+  page on this machine that the command prints a link to.
 
 ## Why
 
