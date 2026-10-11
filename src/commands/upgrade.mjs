@@ -618,7 +618,7 @@ export async function upgrade(argv, ctx) {
         } else if (a.status === 'closed') {
           console.log(`    closed ${HARNESS}/requests/${a.file} — the rule is now in ${a.where}${a.pill ? `; retired ${a.pill}` : ''}`);
         } else {
-          console.log(`    declined ${HARNESS}/requests/${a.file} — ${a.why}. The pill stays active: it is this project's lesson.`);
+          console.log(`    declined ${HARNESS}/requests/${a.file} — ${a.why}. The pill stays active until this project makes it a rule of its own.`);
         }
       }
     }

@@ -126,6 +126,7 @@ const COMMANDS = {
       '--check': 'as a detector: say only what is owed',
       '--days <n>': 'how far back to look',
       '--graduate <pill>': 'send a lesson to the harness as a request',
+      '--here <file>': 'with --graduate: the project made it a rule of its own, in this file; retire the pill',
       '--close <request>': 'close a request whose rule reached this project some other way',
       '--deep': 'have a model read why the pipeline sent work back',
       '--dry-run': 'with --deep: say what would be read, and read nothing',

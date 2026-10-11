@@ -15,9 +15,9 @@ nina pills --project ../thing            # is the corpus well formed, delivered,
 nina pills --project ../thing --quiet    # detector mode: silent unless something is wrong
 ```
 
-It reports a third thing: a pill that has recurred three times, with the layer its lesson should
-move to — the core when the roles it applies to are composed by every project, the surface those
-roles exist for otherwise. Composition strips the `nina:requires` gate, so that answer comes from
+It reports a third thing: a pill that has recurred three times, with the two ways it can graduate — a
+rule in its own project, or a request to the harness and the layer it would move to there: the core when
+the roles it applies to are composed by every project, the surface those roles exist for otherwise. Composition strips the `nina:requires` gate, so that answer comes from
 the layers rather than from the composed spec. It is a note, not a failure, because a recurring
 lesson is work to do rather than a defect.
 
@@ -67,20 +67,30 @@ model each side ran on, rather than print a number that measures the model:
   is the noise the detectors exist to remove. Relearning counts as capture: bumping `occurrences`
   sets `last_seen`, and that settles it too. It also snapshots its own project first, so a project
   observes itself instead of depending on one global hook pointed at a checkout of this repo.
-- **Graduation needs no command in the project.** A lesson learned a third time is sent by `--check`
-  itself as a **request** under the project's `.nina/requests/` — the pinned version, the layer the
-  rule belongs in, the lesson in the project's words — because a project cannot edit the harness,
-  only ask, and asking decides nothing. `nina requests`, run here, is this repository's inbox: every
-  open request from every project measured on the machine. It is answered here too, with
+- **Where a lesson graduates is the project's call, asked for until it is made.** A lesson learned a third
+  time is a rule nobody wrote down, and it goes one of two ways. A convention of one codebase becomes a rule
+  in that project — its own layer under `.nina/project/tree/`, or a file it owns — and `nina learn --graduate
+  <pill> --here <file>` retires the pill and keeps a record under `.nina/requests/`. A rule any project of
+  that shape needs goes to the harness: `nina learn --graduate <pill>` writes a **request** there — the pinned
+  version, the layer the rule belongs in, the lesson in the project's words — because a project cannot edit
+  the harness, only ask, and asking decides nothing. `--check` names each lesson at three with both commands,
+  every turn, until one of them is run. It used to file every one as a request on its own, which decided
+  the question before anyone asked it: a convention of one codebase went the whole way — request, decline,
+  release, upgrade — and came back still a pill, since the one step it needed, a rule in its own project,
+  was the one nothing asked for. It is asked rather than filed for the same reason the request once was
+  filed: before, the detector's hint reached only the person, from the Stop hook; it now reaches the model
+  before its next message, and stays until the decision is made. `nina requests`, run here, is this
+  repository's inbox: every open request from every project measured on the machine, and below them what
+  projects made rules of their own in the last thirty days — a project can misjudge a rule as its own, and
+  one every project needs goes into a layer here. A request is answered here too, with
   `--answer <request> --in <layer file>` or `--decline <request> --why <reason>`, into
   `core/answered.json`, which the next release freezes. The `nina upgrade --apply` that installs that
-  release closes the request in its project and retires the pill; a decline leaves the pill active,
-  because the lesson is still true where it was learned. A pill retired, by either path or by hand, moves to `.claude/pills/retired/<the directory it was read from>/` (`nina pills --tidy` moves any still in place): every agent opens every pill in its directory and in `shared/` to see which apply, and in the first new project 16 KB of the 33 KB it opened on every dispatch was retired. The answer is not written into the project
+  release closes the request in its project and retires the pill; a decline leaves the pill active, and
+  `--check` asks the project for it as a rule of its own. A pill retired, by either path or by hand, moves to `.claude/pills/retired/<the directory it was read from>/` (`nina pills --tidy` moves any still in place): every agent opens every pill in its directory and in `shared/` to see which apply, and in the first new project 16 KB of the 33 KB it opened on every dispatch was retired. The answer is not written into the project
   from here: this repository does not edit the projects it serves, and an answer only becomes true
   for a project when it installs the release that carries it — and a rule that went into a surface
   the project does not declare closes its request without retiring the pill, since the rule never
-  arrives there. Before this, both of the project's ends were commands somebody had to remember — the detector announced the first with a hint telling the project to
-  write a lesson it had already written three times, and nothing prompted the second at all. The
+  arrives there. Before this, both of the project's ends were commands somebody had to remember. The
   compose suite checks every answer names a layer file that exists, since the upgrade tells the
   project its rule lives there.
 - **A lesson belongs to the stage whose work was sent back.** Capture counted a loop-back against the
@@ -101,7 +111,9 @@ model each side ran on, rather than print a number that measures the model:
   told. A pill counted more times than when its now-closed request was filed reopens it: `--check` files a
   request naming where the rule went and in which release, and `nina requests` marks it as a rule that did
   not hold. It reopens once the lesson came back as many times as it took to graduate — three: one
-  recurrence may be noise, and `learn` shows it as watched until then.
+  recurrence may be noise, and `learn` shows it as watched until then. A rule a project made of its own is
+  watched the same way, and one that did not hold goes to the harness as a request, proposed for the layer
+  its roles live in.
 - **A stage is handed its lessons.** Every spec told its stage to read its pills, and a stage found them by
   opening every file in its directory and every shared one to see whether it applied — one reviewer read
   one in seven runs of fifteen while twelve applied to it. The loop gate's hook on `SubagentStart` now hands

@@ -95,31 +95,34 @@ The two are not interchangeable, and that is why they sit in different places:
 learned once is a note. The same pill learned a third time is evidence that the surrounding rules do
 not cover the case, and the fix belongs where nobody has to remember it:
 
-- a convention the codebase should state → `.claude/patterns.md` or `CLAUDE.md`
+- a convention of this codebase → this project's `.claude/patterns.md`, `CLAUDE.md` or the agent's own
+  spec, each written through its copy under `.nina/project/tree/` (`nina where <file>` lists the slots),
+  then `nina compose`
 - a premise about a dependency → `.claude/integrations/<slug>.md`
 - a correction that would apply to **any** project of this shape → back into the harness itself, as
   a rule in the core or in the surface that implies it
 
-Once the rule is written where it belongs, set the pill `status: retired` and move it to
-`.claude/pills/retired/<the directory it was in>/` — `nina pills --tidy` does it, and so do `nina learn
---close` and `nina upgrade`. A retired pill is history, not instruction, and there no agent opens it to
-find out. Deleting it would lose the reason the rule exists.
+Which of these it is, is this project's call, and only the last leaves it. When a pill reaches three
+occurrences, `harness:check` asks for the call every turn until it is made:
 
-A lesson that belongs in the harness cannot be written there from this project — the core and the
-surfaces live in another repository, and this project composes a frozen version of them. So
-graduating it is a request, and nobody has to remember to make it: when a pill reaches three
-occurrences, `harness:check` writes one under `.nina/requests/`, carrying the pinned version, the
-layer the rule belongs in and the lesson in this project's words. **Commit it with the pill.** The
-harness maintainer answers it in a release — with the rule, or with the reason it stays here — and
-the `nina upgrade` that installs that release closes the request: a rule retires the pill, a decline
-leaves it active as this project's own lesson. Until then the pill stays active; retiring it earlier
-drops the lesson in the gap. (`nina learn --graduate <pill>` sends one sooner, by hand.)
+- **A rule here:** write it, then `nina learn --graduate <pill> --here <file>`. That retires the pill —
+  `status: retired`, moved to `.claude/pills/retired/<the directory it was in>/` — and keeps a record under
+  `.nina/requests/`, so the lesson is still watched: if it comes back three more times, the rule did not
+  hold, and `harness:check` sends it to the harness. A retired pill is history, not instruction, and there
+  no agent opens it to find out. Deleting it would lose the reason the rule exists.
+- **A rule for every project:** the core and the surfaces live in another repository, and this project
+  composes a frozen version of them, so this graduation is a request. `nina learn --graduate <pill>` writes
+  one under `.nina/requests/`, carrying the pinned version, the layer the rule belongs in and the lesson in
+  this project's words. **Commit it with the pill.** The harness maintainer answers it in a release — with
+  the rule, or with the reason it stays here — and the `nina upgrade` that installs that release closes the
+  request: a rule retires the pill; a decline leaves it active, and `harness:check` asks for it as a rule
+  here. Until then the pill stays active; retiring it earlier drops the lesson in the gap.
 
-`nina pills` names every active pill that has reached three occurrences and proposes where it
-should go: the core when its roles are composed by every project, or the surface that its roles
-exist for. That is a proposal, not a verdict — a reviewer lesson can still be about one surface, and
-only a person can tell. It is reported as a note, never a failure: a recurring lesson is work to
-do, not a defect.
+Either can be done before three. `nina pills` names every active pill that has reached three
+occurrences and, for the harness, proposes where it should go: the core when its roles are composed by
+every project, or the surface that its roles exist for. That is a proposal, not a verdict — a reviewer
+lesson can still be about one surface, and only a person can tell. It is reported as a note, never a
+failure: a recurring lesson is work to do, not a defect.
 
 ## Reading contract (referenced from each agent spec)
 

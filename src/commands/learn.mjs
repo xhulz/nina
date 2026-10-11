@@ -6,7 +6,7 @@
  *   observe   its runs are recorded                        — the snapshot
  *   capture   a mistake that will recur is written down    — a pill
  *   apply     the next run reads it                        — the role's spec tells it to
- *   graduate  a lesson that keeps recurring becomes a rule — a request to the harness
+ *   graduate  a lesson that keeps recurring becomes a rule — here, or by a request to the harness
  *   verify    the rule is seen to have helped              — the loop-back rate, before and after
  *
  * An audit found every link but the first open. Capture ran at 3% of the rate the router asked
@@ -24,11 +24,11 @@
 
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { HARNESS, readProfile, slugFor, snapshotsDir } from '../paths.mjs';
 import { localDay, projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
-import { byVersion, closedGate, layerRootFor } from './compose.mjs';
+import { byVersion, closedGate, layerRootFor, noticeOf } from './compose.mjs';
 import { GRADUATION_AT, RETIRED, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
 import { decodeProjectDir } from './stats.mjs';
 import { snapshot } from './snapshot.mjs';
@@ -346,19 +346,52 @@ export function relapsed(known, filed) {
   return out;
 }
 
+/** A record's `target` when the lesson became a rule in its own project instead of going to the harness. */
+export const HERE = 'project';
+
+/** How far back the harness inbox lists the rules projects made of their own lessons. */
+const MADE_HERE_DAYS = 30;
+
 /**
- * Lessons that have recurred often enough to graduate and have no request yet. Before this, the
- * threshold was a note in a report someone had to go and read; the per-turn detector now files
- * the request itself.
+ * Lessons owed a graduation, and so a decision only the project can make: where the rule goes. Each is active
+ * and either recurred often enough with nothing recorded for it, or was declined by the harness — which leaves
+ * the rule to its project — and not made one there yet.
+ *
+ * The detector used to file every lesson at three as a request to the harness. A convention of one codebase
+ * then went the whole way — request, decline, release, upgrade — and came back still a pill: the one step it
+ * needed, a rule in its own project, was the one nothing asked for.
  *
  * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills.
- * @param {{pill: string}[]} filed - Requests already written, open or closed.
- * @returns {Awaited<ReturnType<typeof lessons>>}
+ * @param {Awaited<ReturnType<typeof filedRequests>>} filed - What it has recorded about them.
+ * @returns {{lesson: Awaited<ReturnType<typeof lessons>>[number], declined?: Awaited<ReturnType<typeof filedRequests>>[number]}[]}
  */
-function unfiled(known, filed) {
-  const asked = new Set(filed.map((r) => r.pill));
-  return known.filter((l) => !l.retired && l.occurrences >= GRADUATION_AT && !asked.has(l.rel));
+export function undecided(known, filed) {
+  const newest = new Map();
+  for (const r of filed) {
+    if (!r.pill) continue;
+    const had = newest.get(r.pill);
+    if (!had || r.date >= had.date) newest.set(r.pill, r);
+  }
+  const out = [];
+  for (const lesson of known.filter((l) => !l.retired)) {
+    const last = newest.get(lesson.rel);
+    if (!last && lesson.occurrences >= GRADUATION_AT) out.push({ lesson });
+    else if (last?.status === 'declined') out.push({ lesson, declined: last });
+  }
+  return out;
 }
+
+/**
+ * Where a graduated lesson's rule went, as a clause: "it became a rule here in …" or "its rule shipped in …".
+ *
+ * @param {{target: string, rule_in: string, answered_in: string}} request - The record of its graduation.
+ * @param {boolean} [layer] - Whether to name the layer a shipped rule went into.
+ * @returns {string}
+ */
+const ruleWent = (request, layer = true) =>
+  request.target === HERE
+    ? `it became a rule here in ${request.rule_in}`
+    : `its rule shipped in ${request.answered_in || 'a release'}${layer ? ` (${request.rule_in || request.target})` : ''}`;
 
 /**
  * Every request this project has written, with its status.
@@ -381,6 +414,7 @@ export async function filedRequests(target) {
       occurrences: fields.occurrences ?? '',
       rule_in: fields.rule_in ?? '',
       answered_in: fields.answered_in ?? '',
+      declined: fields.declined ?? '',
     });
   }
   return out;
@@ -409,13 +443,23 @@ async function answerRequest(target, file, answer) {
   // A declined lesson is still this project's lesson: the harness said it does not belong in every
   // project, not that it stopped being true in this one. So is one whose rule went into a layer this
   // project does not compose — retiring it there would drop the lesson with nothing in its place.
-  if (!answer.retire || !fields.pill || !existsSync(join(target, fields.pill))) return { pill: null };
-  const pill = await readFile(join(target, fields.pill), 'utf8');
+  return { pill: answer.retire ? await retirePill(target, fields.pill) : null };
+}
+
+/**
+ * Retires a pill, and moves it out of the way of the agents that open every pill to see which apply.
+ *
+ * @param {string} target - The project directory.
+ * @param {string} rel - The pill, relative to the project.
+ * @returns {Promise<string|null>} The pill retired, or null when there is none at that path.
+ */
+async function retirePill(target, rel) {
+  if (!rel || !existsSync(join(target, rel))) return null;
+  const pill = await readFile(join(target, rel), 'utf8');
   const retired = /^status: .*$/m.test(pill) ? pill.replace(/^status: .*$/m, 'status: retired') : pill.replace(/^---\n/, '---\nstatus: retired\n');
-  await writeFile(join(target, fields.pill), retired);
-  // And out of the way of the agents that open every pill to see which apply.
+  await writeFile(join(target, rel), retired);
   await tidyRetired(target);
-  return { pill: fields.pill };
+  return rel;
 }
 
 /**
@@ -609,18 +653,19 @@ async function fileRequest(target, profile, layerRoot, lesson, { reopens = null,
   const date = localDay(new Date().toISOString());
   // Asked about the pill where it was learned, a retired one included: its request names that path.
   const pill = reopens?.pill ?? lesson.rel;
-  // The directory separator becomes `__`, so `reviewer/a.b.md` and `reviewer-a/b.md` stay two
-  // names — flattening both `/` and `.` to `-` gave them the same one.
-  const name = pill.replace(/^\.claude\/pills\//, '').replace(/\.md$/, '').replace(/\//g, '__');
   const dir = join(target, HARNESS, 'requests');
-  // Never over a request already written: the same lesson can be sent more than once on one day.
-  let file = `${date}-${name}.md`;
-  for (let n = 1; existsSync(join(dir, file)); n += 1) file = `${date}-${name}-again${n > 1 ? `-${n}` : ''}.md`;
   await mkdir(dir, { recursive: true });
-  const heading = reopens
-    ? `**A lesson that graduated into \`${reopens.rule_in || reopens.target}\` in ${reopens.answered_in || 'a release'} came back ${recurred} time(s) since** — ` +
-      `the rule did not hold here. It reopens ${HARNESS}/requests/${reopens.file}.`
-    : `**A lesson this project has learned ${lesson.occurrences} time(s), proposed as a rule in \`${target_.layer}\`** — ${target_.why}.`;
+  const file = recordName(dir, pill, date);
+  // A rule this project made of its own that did not hold goes to the harness, as a rule for the layer its roles
+  // live in; one the harness shipped goes back to where it went.
+  const mine = reopens?.target === HERE;
+  const heading = mine
+    ? `**A lesson this project made a rule in \`${reopens.rule_in}\` came back ${recurred} time(s) since** — the rule did not hold here, ` +
+      `so it goes to the harness, proposed as a rule in \`${target_.layer}\`: ${target_.why}. It reopens ${HARNESS}/requests/${reopens.file}.`
+    : reopens
+      ? `**A lesson that graduated into \`${reopens.rule_in || reopens.target}\` in ${reopens.answered_in || 'a release'} came back ${recurred} time(s) since** — ` +
+        `the rule did not hold here. It reopens ${HARNESS}/requests/${reopens.file}.`
+      : `**A lesson this project has learned ${lesson.occurrences} time(s), proposed as a rule in \`${target_.layer}\`** — ${target_.why}.`;
   await writeFile(
     join(dir, file),
     [
@@ -629,7 +674,7 @@ async function fileRequest(target, profile, layerRoot, lesson, { reopens = null,
       'status: open',
       `date: ${date}`,
       `core: ${profile.core}`,
-      `target: ${reopens?.target || target_.layer}`,
+      `target: ${reopens && !mine ? reopens.target || target_.layer : target_.layer}`,
       `pill: ${pill}`,
       `occurrences: ${lesson.occurrences}`,
       ...(reopens ? [`reopens: ${reopens.file}`, `rule_in: ${oneLine(reopens.rule_in)}`] : []),
@@ -649,16 +694,138 @@ async function fileRequest(target, profile, layerRoot, lesson, { reopens = null,
 }
 
 /**
- * `nina learn --graduate <pill>` — files a request by hand. The detector files one on its own
- * once a lesson reaches three occurrences; this is for sending one sooner.
+ * A file name under `.nina/requests/` for a record about one pill, never one already written: the same
+ * lesson can be recorded more than once on one day.
  *
+ * @param {string} dir - The project's `.nina/requests/`.
+ * @param {string} pill - The pill, relative to the project.
+ * @param {string} date - Today, as the owner's day.
+ * @returns {string}
+ */
+function recordName(dir, pill, date) {
+  // The directory separator becomes `__`, so `reviewer/a.b.md` and `reviewer-a/b.md` stay two
+  // names — flattening both `/` and `.` to `-` gave them the same one.
+  const name = pill.replace(/^\.claude\/pills\//, '').replace(/\.md$/, '').replace(/\//g, '__');
+  let file = `${date}-${name}.md`;
+  for (let n = 1; existsSync(join(dir, file)); n += 1) file = `${date}-${name}-again${n > 1 ? `-${n}` : ''}.md`;
+  return file;
+}
+
+/**
+ * Why a file cannot hold the rule a project makes of its own lesson, or null when it can.
+ *
+ * The rule goes where the project writes and its agents read. A composed file is neither — the next compose
+ * overwrites it, and the edit guard refuses the edit — so its rule goes in the project layer's copy; a pill, a
+ * plan or NINA's own records are not where a rule lives.
+ *
+ * @param {string} target - The project directory.
+ * @param {string} file - The file named, as given.
+ * @returns {Promise<string|null>}
+ */
+async function notHere(target, file) {
+  const rel = relative(target, resolve(target, file));
+  if (!file || rel === '' || rel.startsWith('..') || isAbsolute(rel)) return `${file || 'no file'} is not a file inside the project`;
+  const path = join(target, rel);
+  if (!(await stat(path).catch(() => null))?.isFile()) return `${rel} is not a file — write the rule first, then graduate the lesson into it`;
+  const posix = rel.split(sep).join('/');
+  if (noticeOf(await readFile(path, 'utf8'))) {
+    return `${posix} is composed from the harness, and the next compose overwrites it — write the rule in this project's layer, ` +
+      `${HARNESS}/project/tree/${posix} (\`nina where ${posix}\` lists its slots), and name that file`;
+  }
+  if (posix.startsWith('.claude/pills/')) return `${posix} is a pill — a rule lives where no agent has to remember to apply it`;
+  if (posix.startsWith('.claude/plans/')) return `${posix} is a plan, work in progress — the rule outlives it`;
+  if (posix.startsWith(`${HARNESS}/`) && !posix.startsWith(`${HARNESS}/project/tree/`)) {
+    return `${posix} is NINA's own record — the rule goes in ${HARNESS}/project/tree/ or a file the project owns`;
+  }
+  return null;
+}
+
+/**
+ * Records a lesson this project made a rule of its own, and retires its pill.
+ *
+ * Written beside the requests and closed from the start, so the reader that watches a graduated lesson for
+ * coming back — {@link relapsed} — watches this one too, and the harness inbox lists it, where a rule every
+ * project needs can still be raised.
+ *
+ * @param {string} target - The project directory.
+ * @param {{core: string}} profile - The project's profile.
+ * @param {Awaited<ReturnType<typeof lessons>>[number]} lesson - The lesson.
+ * @param {string} rule - The file that now holds the rule, relative to the project.
+ * @returns {Promise<string>} The record's file name.
+ */
+async function graduateHere(target, profile, lesson, rule) {
+  const date = localDay(new Date().toISOString());
+  const dir = join(target, HARNESS, 'requests');
+  await mkdir(dir, { recursive: true });
+  const file = recordName(dir, lesson.rel, date);
+  await writeFile(
+    join(dir, file),
+    [
+      '---',
+      'kind: project-rule',
+      'status: closed',
+      `date: ${date}`,
+      `core: ${profile.core}`,
+      `target: ${HERE}`,
+      `pill: ${lesson.rel}`,
+      `occurrences: ${lesson.occurrences}`,
+      `rule_in: ${rule}`,
+      '---',
+      '',
+      `**A lesson this project has learned ${lesson.occurrences} time(s), made a rule here in \`${rule}\`** — a convention of this codebase.`,
+      '',
+      `If it comes back ${CAPTURE_AT} more times, the rule did not hold, and \`harness:check\` sends it to the harness.`,
+      '',
+      lesson.body,
+      '',
+    ].join('\n'),
+    { flag: 'wx' },
+  );
+  await retirePill(target, lesson.rel);
+  return file;
+}
+
+/**
+ * `nina learn --graduate <pill>` — sends a lesson to the harness as a request; with `--here <file>`, records
+ * that the project made it a rule of its own, in that file, and retires the pill. The detector asks for one or
+ * the other once a lesson reaches three occurrences, and either can be done sooner.
+ *
+ * @param {string|null} here - The file that holds the rule, for a lesson that graduates in its own project.
  * @returns {Promise<number>} Process exit code.
  */
-async function graduate(target, profile, layerRoot, known, which) {
+async function graduate(target, profile, layerRoot, known, which, here) {
   const lesson = known.find((l) => l.rel === which || l.path === resolve(target, which));
   if (!lesson) {
     console.error(`  no pill at ${which} — run \`nina learn\` to list them\n`);
     return 1;
+  }
+  if (here !== null) {
+    // Declined is the one answer from the harness that leaves the rule to the project. A request still open is
+    // waiting on it, and a pill retired has graduated already.
+    const pending = (await filedRequests(target)).find((r) => r.pill === lesson.rel && r.status !== 'declined');
+    if (pending || lesson.retired) {
+      console.error(
+        pending
+          ? `  ${lesson.rel} has a ${pending.status} record already: ${HARNESS}/requests/${pending.file}\n`
+          : `  ${lesson.rel} is retired already\n`,
+      );
+      return 1;
+    }
+    const why = await notHere(target, here);
+    if (why) {
+      console.error(`  ${why}\n`);
+      return 1;
+    }
+    const rule = relative(target, resolve(target, here)).split(sep).join('/');
+    const file = await graduateHere(target, profile, lesson, rule);
+    console.log(`  made a rule here: ${lesson.rel} → ${rule}`);
+    console.log(`  recorded in ${HARNESS}/requests/${file}; the pill is retired, under .claude/pills/${RETIRED}/`);
+    console.log(
+      rule.startsWith(`${HARNESS}/project/tree/`)
+        ? '  `nina compose` puts it where the agents read it; commit the rule, the record and the pill together\n'
+        : '  commit the rule, the record and the pill together\n',
+    );
+    return 0;
   }
   if (lesson.roles.length === 0) {
     console.error(`  ${lesson.rel} names no role in applies_to, so there is no layer to send it to — \`nina pills\` says what to fix\n`);
@@ -724,7 +891,8 @@ export async function learn(argv, ctx) {
   if (argv.includes('--deep')) return deepReport(target, records, known, argv);
 
   if (argv.includes('--graduate')) {
-    return graduate(target, profile, resolved.dir, known, argv[argv.indexOf('--graduate') + 1] ?? '');
+    const here = argv.includes('--here') ? argv[argv.indexOf('--here') + 1] ?? '' : null;
+    return graduate(target, profile, resolved.dir, known, argv[argv.indexOf('--graduate') + 1] ?? '', here);
   }
   if (argv.includes('--close')) return close(target, argv[argv.indexOf('--close') + 1] ?? '');
 
@@ -734,7 +902,7 @@ export async function learn(argv, ctx) {
   const targets = loops ? new Set([...loops.values()].flatMap((byToken) => [...byToken.values()].flatMap((to) => [...to.keys()]))) : null;
   const late = overdue(records, known, new Date(), days, owners);
   const filed = await filedRequests(target);
-  const owed = unfiled(known, filed);
+  const owed = undecided(known, filed);
 
   if (check) {
     // During `nina upgrade --apply`: this is about history, not the move — see upgrade.mjs.
@@ -751,14 +919,13 @@ export async function learn(argv, ctx) {
     } catch (error) {
       exported = `the export to Langfuse could not start — ${error.message}`;
     }
-    // A lesson at three occurrences used to be reported here with the command that files it, and
-    // then it waited for someone to type that command. Filing decides nothing — the request is a
-    // proposal the harness maintainer accepts or declines — so the detector files it and says so
-    // once. The per-line actions matter too: one hint for the whole detector told a project to
-    // "write the lesson" when the lesson was written three times over and only needed sending.
+    // A lesson at three occurrences used to be filed here as a request to the harness, which decided where it
+    // went before anyone asked: a convention of one codebase went the whole way and came back still a pill. Where
+    // a lesson graduates is the project's judgment, so it is asked for, every turn until it is made (`undecided`).
+    // A lesson that came back after it graduated is no judgment — the rule did not hold — and goes to the
+    // harness on its own, said once.
     const sent = [];
-    // A lesson that came back after its rule shipped goes back to the harness the way it went the first time.
-    const outgoing = [...owed.map((lesson) => ({ lesson })), ...relapsed(known, filed).filter((r) => r.due).map(({ lesson, request, recurred }) => ({ lesson, reopens: request, recurred }))];
+    const outgoing = relapsed(known, filed).filter((r) => r.due).map(({ lesson, request, recurred }) => ({ lesson, reopens: request, recurred }));
     const stuck = outgoing
       .filter((o) => o.lesson.roles.length === 0)
       .map((o) => ({ ...o, why: 'names no role in applies_to, so no layer can take it', fix: 'fix its frontmatter — `nina pills` says what is wrong' }));
@@ -775,7 +942,7 @@ export async function learn(argv, ctx) {
         stuck.push({ ...o, why: `could not be written to ${HARNESS}/requests/ — ${error.message}`, fix: `make it writable, or send it by hand: \`nina learn --graduate ${o.lesson.rel}\`` });
       }
     }
-    if (late.length === 0 && sent.length === 0 && due.length === 0 && stuck.length === 0 && !exported) {
+    if (late.length === 0 && owed.length === 0 && sent.length === 0 && due.length === 0 && stuck.length === 0 && !exported) {
       console.log('learn: current');
       return 0;
     }
@@ -788,12 +955,23 @@ export async function learn(argv, ctx) {
       for (const r of o.recent) console.log(`      ${r.ts}  ${r.desc || '(no description)'}  session ${r.session}`);
       console.log('    → ask of each whether it would happen again; if so, write the pill, or bump `occurrences` and `last_seen` on the one that already says it');
     }
-    const what = (o) =>
-      o.reopens
-        ? `${o.lesson.rel} came back ${o.recurred} time(s) after its rule shipped in ${o.reopens.answered_in || 'a release'} (${o.reopens.rule_in || o.reopens.target})`
-        : `${o.lesson.rel} has recurred ${o.lesson.occurrences} times`;
+    for (const { lesson, declined } of owed) {
+      const here = `\`nina learn --graduate ${lesson.rel} --here <file>\``;
+      if (declined) {
+        console.log(`  ${lesson.rel} was declined by the harness${declined.answered_in ? ` in ${declined.answered_in}` : ''}: ${declined.declined || 'no reason recorded'}`);
+        console.log(`    → make it a rule of this project — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}; or, if the reason says a rule already covers it, set the pill's status to retired`);
+        continue;
+      }
+      console.log(`  ${lesson.rel} has recurred ${lesson.occurrences} times — a rule, not a pill. Where it goes is this project's call:`);
+      console.log(`    → a convention of this codebase: write the rule in this project's layer under ${HARNESS}/project/tree/ (\`nina where <file>\` lists the slots) or in a file it owns, then ${here}`);
+      console.log(`    → a rule any project of this shape needs: \`nina learn --graduate ${lesson.rel}\` sends it to the harness; commit the request with the pill`);
+    }
+    const what = (o) => `${o.lesson.rel} came back ${o.recurred} time(s) after ${ruleWent(o.reopens)}`;
     for (const s of sent) {
-      console.log(`  ${what(s)} — sent to the harness as ${HARNESS}/requests/${s.file}${s.reopens ? ', reopening the rule' : `, proposing a rule in ${s.layer}`}`);
+      console.log(
+        `  ${what(s)} — sent to the harness as ${HARNESS}/requests/${s.file}` +
+          (s.reopens.target === HERE ? `, the rule this project made having not held: proposed for ${s.layer}` : ', reopening the rule'),
+      );
       console.log('    → commit it with the pill; nothing else is owed here. `nina upgrade` to the release that answers it closes it and retires the pill');
     }
     for (const o of due) {
@@ -807,6 +985,7 @@ export async function learn(argv, ctx) {
     console.log(
       `learn: ${[
         late.length && `${late.length} role(s) keep being sent back with nothing written down`,
+        owed.length && `${owed.length} lesson(s) to graduate, here or in the harness`,
         sent.length && `${sent.length} lesson(s) sent to the harness`,
         due.length && `${due.length} lesson(s) to send to the harness`,
         stuck.length && `${stuck.length} lesson(s) cannot be sent`,
@@ -844,16 +1023,24 @@ export async function learn(argv, ctx) {
           `${use.listed} only listed the directory — measured since ${use.from}. Reading is not obeying; nothing here can see that.`
       : '  apply     not measured yet — runs recorded from now on say whether they read their pills',
   );
+  const madeHere = filed.filter((r) => r.target === HERE).length;
   console.log(
     `  graduate  ${ready.length} lesson(s) at ${GRADUATION_AT}+ occurrences · ${open.length} request(s) open` +
+      (madeHere ? ` · ${madeHere} made a rule here` : '') +
       (Math.max(0, ...active.map((l) => l.occurrences)) < 2
         ? ' — no lesson has ever been counted twice; bump `occurrences` when one recurs'
         : ''),
   );
-  for (const l of ready.filter((l) => owed.includes(l))) console.log(`            not sent yet: ${l.rel} — the next \`harness:check\` sends it`);
+  for (const { lesson, declined } of owed) {
+    console.log(
+      declined
+        ? `            declined by the harness: ${lesson.rel} — make it a rule here, \`nina learn --graduate ${lesson.rel} --here <file>\``
+        : `            to graduate: ${lesson.rel} — here (\`--graduate ${lesson.rel} --here <file>\`) or in the harness (\`--graduate ${lesson.rel}\`)`,
+    );
+  }
   for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
   for (const r of relapsed(known, filed)) {
-    const shipped = `came back ${r.recurred} time(s) after its rule shipped in ${r.request.answered_in || 'a release'}`;
+    const shipped = `came back ${r.recurred} time(s) after ${ruleWent(r.request, false)}`;
     if (r.due) console.log(`            ✗ ${r.lesson.rel} ${shipped} — the rule did not hold; \`harness:check\` reopens it`);
     else console.log(`            · ${r.lesson.rel} ${shipped} — watched; it reopens at ${CAPTURE_AT}`);
   }
@@ -990,6 +1177,10 @@ async function recordAnswer(argv, ctx, open) {
 export async function requests(argv = [], ctx = { root: '.' }) {
   const check = argv.includes('--check');
   const found = [];
+  // What projects made rules of their own lately: theirs to make, and listed so one every project needs can
+  // still be raised into a layer here — a project can misjudge a rule as its own.
+  const since = localDay(new Date(Date.now() - MADE_HERE_DAYS * 86_400_000).toISOString());
+  const madeHere = [];
   const files = (await readdir(snapshotsDir()).catch(() => [])).filter((f) => f.endsWith('.jsonl'));
   for (const file of files) {
     const dir = decodeProjectDir(file.replace(/\.jsonl$/, ''));
@@ -998,6 +1189,7 @@ export async function requests(argv = [], ctx = { root: '.' }) {
     for (const f of (await readdir(reqDir).catch(() => [])).filter((f) => f.endsWith('.md'))) {
       const fields = frontmatter(await readFile(join(reqDir, f), 'utf8'));
       if (fields?.status === 'open') found.push({ dir, f, id: f.replace(/\.md$/, ''), fields });
+      else if (fields?.target === HERE && String(fields.date ?? '') >= since) madeHere.push({ dir, fields });
     }
   }
   if (argv.includes('--answer') || argv.includes('--decline')) return recordAnswer(argv, ctx, found);
@@ -1031,8 +1223,18 @@ export async function requests(argv = [], ctx = { root: '.' }) {
     );
     return 1;
   }
+  const listMadeHere = () => {
+    if (madeHere.length === 0) return;
+    console.log(`  ${madeHere.length} lesson(s) made a rule in their own project in the last ${MADE_HERE_DAYS} days — one every project needs goes into a layer here:\n`);
+    for (const m of madeHere) {
+      console.log(`  ${m.fields.date}  ${m.fields.pill} → ${m.fields.rule_in}`);
+      console.log(`              ${m.dir}`);
+    }
+    console.log('');
+  };
   if (found.length === 0) {
     console.log('  no open requests — no project has graduated a lesson to the harness\n');
+    listMadeHere();
     return 0;
   }
   console.log(`\n  ${found.length} open request(s)\n`);
@@ -1047,5 +1249,6 @@ export async function requests(argv = [], ctx = { root: '.' }) {
     console.log(`              ${state}`);
   }
   console.log('');
+  listMadeHere();
   return 0;
 }
