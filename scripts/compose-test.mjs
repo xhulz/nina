@@ -239,15 +239,19 @@ const BUDGETS = {
   // Raised for two lessons one project learned three times each: a filter is specified by what it refuses, and one
   // that mirrors another program's parse is premised on that program's whole input path, not the one stage it copies.
   // And for the integrations surface's citation form: the package's own link, not a store directory a peer renames.
-  '.claude/agents/architect.md': 17000,
+  // And for two more from the same project: a check covers every form the rule it enforces names, read from the
+  // library, and a case built to fail calls the function its real case calls.
+  '.claude/agents/architect.md': 17550,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   '.claude/agents/dba.md': 13100,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
   // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle — and again
-  // when the implementer began running each test's named mutation itself, in a mirror, before handing off.
-  '.claude/agents/implementer.md': 18950,
+  // when the implementer began running each test's named mutation itself, in a mirror, before handing off; and
+  // again for three lessons the same project learned three times each: a test's own judging code is under test, the
+  // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it.
+  '.claude/agents/implementer.md': 20000,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -255,8 +259,9 @@ const BUDGETS = {
   // overwrite-and-restore.
   '.claude/agents/qa.md': 13600,
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
-  // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path.
-  '.claude/agents/reviewer.md': 20750,
+  // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path —
+  // and a case that skips the code that judges, and a citation that resolves without saying the sentence.
+  '.claude/agents/reviewer.md': 21100,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
@@ -271,7 +276,9 @@ const BUDGETS = {
   // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs.
   '.claude/router.md': 17000,
   '.claude/templates/integration.md': 3000,
-  'CLAUDE.md': 25000,
+  // Raised when Hard Rule #9 named the members a sweep kept skipping: a fake's accessors, a type alias's fields, a
+  // local whose value is a function.
+  'CLAUDE.md': 25250,
 };
 
 /**

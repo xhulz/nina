@@ -24,7 +24,7 @@ import { decodeProjectDir, modelMatches } from '../src/commands/stats.mjs';
 import { asRead } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
-import { CAPTURE_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, verified } from '../src/commands/learn.mjs';
+import { CAPTURE_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
@@ -1297,6 +1297,8 @@ async function sound(fixture, core) {
   const sentOff = run(['learn', '--graduate', '.claude/pills/reviewer/lesson.md', '--project', dir]);
   const reqs = await readdir(join(dir, '.nina', 'requests')).catch(() => []);
   expect(sentOff.status === 0 && reqs.length === 1, `learn: --graduate sends the lesson to the harness as a request — got ${sentOff.status}, ${reqs.length} request(s)\n${sentOff.out}`);
+  const waiting = run(['learn', '--graduate', '.claude/pills/reviewer/lesson.md', '--here', '.nina/profile.json', '--project', dir]);
+  expect(waiting.status === 1 && waiting.out.includes('is recorded already, open'), `learn --here: a lesson waiting on the harness is not made a rule here meanwhile — got ${waiting.status}\n${waiting.out}`);
   expect(run(['learn', '--check', '--project', dir]).status === 0, 'learn: once it is sent, the detector is quiet');
   expect(
     run(['learn', '--graduate', '.claude/pills/reviewer/lesson.md', '--project', dir]).status === 1,
@@ -1479,6 +1481,15 @@ async function sound(fixture, core) {
     ],
   );
   expect(sameDay.length === 0 && bothClosed.length === 0, `learn: a reopening filed the same day is the newest, however a directory lists it — got ${JSON.stringify({ sameDay, bothClosed })}`);
+  // And what decides whether a lesson is asked for reads the newest record the same way, in either listing order.
+  const declinedReopen = { file: '2026-09-05-reviewer__m-again.md', status: 'declined', pill: '.claude/pills/reviewer/m.md', date: '2026-09-05', occurrences: '6', reopens: 'x' };
+  const madeHere = { file: '2026-09-05-reviewer__m.md', status: 'closed', target: 'project', pill: '.claude/pills/reviewer/m.md', date: '2026-09-05', occurrences: '3' };
+  const shelf = [{ rel: '.claude/pills/retired/reviewer/m.md', retired: true, occurrences: 6 }];
+  expect(
+    undecided(shelf, [declinedReopen, madeHere]).length === 1 && undecided(shelf, [madeHere, declinedReopen]).length === 1 &&
+      relapsed(shelf, [madeHere, declinedReopen]).length === 0,
+    'learn: a declined reopening filed the same day as what it reopens is the newest record, however a directory lists them',
+  );
 }
 
 // ─── learn: a lesson that is this codebase's convention graduates in its own project ─────
@@ -1498,6 +1509,9 @@ async function sound(fixture, core) {
   await writeFile(join(dir, '.claude', 'patterns.md'), '<!-- nina:generated — composed by `nina compose`. -->\n# patterns\n');
   await writeFile(join(dir, '.claude', 'plans', 'step.md'), 'a plan\n');
   await writeFile(join(dir, 'eslint.config.js'), 'export default [];\n');
+  await writeFile(join(dir, '.nina', 'project', 'tree', '.claude', 'agents', 'reviewer.md'), '- name every fake member\n');
+  await mkdir(join(dir, '.claude', 'pills', 'retired', 'implementer'), { recursive: true });
+  await writeFile(join(dir, '.claude', 'pills', 'retired', 'implementer', 'old.md'), lesson(4, 'retired'));
   const here = (file) => run(['learn', '--graduate', pill, '--here', file, '--project', dir]);
   const refusals = {
     composed: here('.claude/patterns.md'),
@@ -1506,12 +1520,17 @@ async function sound(fixture, core) {
     record: here('.nina/profile.json'),
     missing: here('.claude/nope.md'),
     outside: here('../elsewhere.md'),
+    slotless: here('.nina/project/tree/.claude/agents/reviewer.md'),
   };
   expect(
     Object.values(refusals).every((r) => r.status === 1) && refusals.composed.out.includes('.nina/project/tree/.claude/patterns.md') &&
-      refusals.missing.out.includes('write the rule first') && !existsSync(join(dir, '.nina', 'requests')) && existsSync(join(dir, pill)),
-    `learn --here: a composed file, a pill, a plan, NINA's own records, a missing file and one outside the project hold no rule — got ${JSON.stringify(refusals)}`,
+      refusals.missing.out.includes('write the rule first') && refusals.slotless.out.includes('fills no project slot') &&
+      !existsSync(join(dir, '.nina', 'requests')) && existsSync(join(dir, pill)),
+    `learn --here: a composed file, a pill, a plan, NINA's own records, a missing file, one outside the project and a fragment no slot composes hold no rule — got ${JSON.stringify(refusals)}`,
   );
+  const shelved = run(['learn', '--graduate', '.claude/pills/retired/implementer/old.md', '--here', 'eslint.config.js', '--project', dir]);
+  expect(shelved.status === 1 && shelved.out.includes('is retired already'), `learn --here: a pill already retired is not graduated again — got ${shelved.status}\n${shelved.out}`);
+  await rm(join(dir, '.claude', 'pills', 'retired', 'implementer', 'old.md'));
   const made = here('.nina/project/tree/.claude/agents/implementer.md');
   const records = await readdir(join(dir, '.nina', 'requests')).catch(() => []);
   const record = records.length === 1 ? await readFile(join(dir, '.nina', 'requests', records[0]), 'utf8') : '';
@@ -1550,6 +1569,18 @@ async function sound(fixture, core) {
     relapse.status === 1 && relapse.out.includes('the rule this project made having not held') && /^target: core$/m.test(request) &&
       /^status: open$/m.test(request) && request.includes(`reopens: ${records[0]}`) && request.includes('made a rule in `.nina/project/tree/.claude/agents/implementer.md`'),
     `learn: a rule made here that did not hold goes to the harness, for its roles' layer — got ${relapse.out}\n${request}`,
+  );
+  // Declined there, the lesson is the project's again: not filed over and over, but asked for as its rule anew.
+  await writeFile(join(dir, '.nina', 'requests', sent[0]), request.replace('status: open', 'status: declined\nanswered_in: 9.9.9\ndeclined: this codebase only'));
+  const again = run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } });
+  expect(
+    again.status === 1 && again.out.includes('the rule this project made did not hold: make it again') && (await readdir(join(dir, '.nina', 'requests'))).length === 2,
+    `learn: a rule made here, back and declined by the harness, is asked for again here and not refiled — got ${again.status}\n${again.out}`,
+  );
+  const remade = run(['learn', '--graduate', '.claude/pills/retired/implementer/fakes.md', '--here', 'eslint.config.js', '--project', dir]);
+  expect(
+    remade.status === 0 && run(['learn', '--check', '--project', dir], { env: { NINA_HOOK: 'context' } }).status === 0 && (await readdir(join(dir, '.nina', 'requests'))).length === 3,
+    `learn --here: making it a rule again settles it, watched from the count it had — got ${remade.status}\n${remade.out}`,
   );
 
   // Declined by the harness, the lesson is the project's to make a rule of: asked for until it is.
@@ -1952,6 +1983,11 @@ source: the 2026-09-01 review
   await mkdir(join(dir, '.nina', 'requests'), { recursive: true });
   await writeFile(join(dir, '.nina', 'requests', '2026-01-02-reviewer__keeps-happening.md'), '---\nkind: harness-request\nstatus: open\ndate: 2026-01-02\npill: .claude/pills/reviewer/keeps-happening.md\n---\n');
   expect(run(['pills', '--project', dir], { loud: true }).out.includes('went to the harness as a request on 2026-01-02 (open)'), 'pills: and one already requested says so');
+  await writeFile(join(dir, '.nina', 'requests', '2026-01-03-dba__also-happening.md'), '---\nkind: harness-request\nstatus: declined\ndate: 2026-01-03\npill: .claude/pills/dba/also-happening.md\n---\n');
+  expect(
+    run(['pills', '--project', dir], { loud: true }).out.includes('The harness declined it on 2026-01-03: make it a rule here, then `nina learn --graduate .claude/pills/dba/also-happening.md --here <file>`'),
+    'pills: one the harness declined is made a rule here',
+  );
   // Counted by directory alone, a project whose lessons for a stage were all shared was told it had none.
   await plant(dir, 'shared/for-qa.md', recurring('shared-for-qa', 'qa, implementer', 1));
   const coverage = run(['pills', '--project', dir], { loud: true }).out;
@@ -4713,6 +4749,32 @@ const dated = (date, status = 'active') =>
     architect.includes('**Specify a filter by what it refuses.**') && architect.includes('every input the tool reads') && architect.includes('validated in its constructor or type') &&
       reviewer.includes('**A filter needs a row for each adversarial input**') && !architect.includes('passed every credential besides'),
     'compose: a filter is specified by the inputs it refuses, with allowlists at trust boundaries, and the reviewer holds it to that',
+  );
+  // Five more lessons the third project learned three times each, said in the core's terms rather than the project's.
+  expect(
+    architect.includes('A check that enforces a written rule covers every form the rule names, read from the installed library') &&
+      architect.includes('A row failing under a class of input enumerates the class'),
+    'compose: a check covers every form the rule it enforces names, read from the library',
+  );
+  expect(
+    architect.includes('A case built to fail calls the function its real case calls') && implementer.includes("So does a test's own judging code") &&
+      implementer.includes('a case for each member whose absence would pass unnoticed') && reviewer.includes('A case built to fail that calls a helper beneath the code that judges'),
+    "compose: a test's own judging code is under test — its failing cases call it, it reports a violation, and an assembled list is pinned member by member",
+  );
+  expect(
+    implementer.includes('Report the run on the final bytes') && implementer.includes('read its log line by line') && implementer.includes('read from what the run saw') &&
+      implementer.includes('went red on a copy of the final bytes'),
+    'compose: the implementer reports its mutation run on the final bytes, read line by line, each claim naming what the run saw',
+  );
+  expect(
+    implementer.includes("A sentence about a dependency's behavior") && implementer.includes('or it says the behavior is unobserved') &&
+      reviewer.includes('a citation that only resolves proves nothing'),
+    "compose: a sentence about a dependency's behavior cites what says it, and the reviewer opens what it cites",
+  );
+  expect(
+    claude.includes("an object literal's methods and accessors — a hand-built fake's too — and a local whose value is a function") &&
+      claude.includes('A data local, and a literal typed by a documented declaration, need none'),
+    "compose: Hard Rule #9 names the members a sweep kept skipping, and what needs no TSDoc",
   );
 }
 

@@ -23,12 +23,12 @@
  */
 
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { HARNESS, readProfile, slugFor, snapshotsDir } from '../paths.mjs';
 import { localDay, projectRecords } from '../store.mjs';
 import { isLoopBack, runOf } from '../transcripts.mjs';
-import { byVersion, closedGate, layerRootFor, noticeOf } from './compose.mjs';
+import { SLOT, byVersion, closedGate, layerRootFor, noticeOf } from './compose.mjs';
 import { GRADUATION_AT, RETIRED, frontmatter, graduationTarget, list, pillFiles, roleGates, tidyRetired } from './pills.mjs';
 import { decodeProjectDir } from './stats.mjs';
 import { snapshot } from './snapshot.mjs';
@@ -335,6 +335,8 @@ export function relapsed(known, filed) {
   }
   const out = [];
   for (const [pill, request] of newest) {
+    // Declined since: the harness left it to the project, which is asked for it as a rule of its own (`undecided`).
+    if (newestRecord(filed, pill)?.status === 'declined') continue;
     const shelved = pill.replace(/^\.claude\/pills\//, `.claude/pills/${RETIRED}/`);
     const lesson = known.find((l) => l.rel === pill || l.rel === shelved);
     const then = Number(request.occurrences);
@@ -366,19 +368,37 @@ const MADE_HERE_DAYS = 30;
  * @returns {{lesson: Awaited<ReturnType<typeof lessons>>[number], declined?: Awaited<ReturnType<typeof filedRequests>>[number]}[]}
  */
 export function undecided(known, filed) {
-  const newest = new Map();
-  for (const r of filed) {
-    if (!r.pill) continue;
-    const had = newest.get(r.pill);
-    if (!had || r.date >= had.date) newest.set(r.pill, r);
-  }
   const out = [];
-  for (const lesson of known.filter((l) => !l.retired)) {
-    const last = newest.get(lesson.rel);
-    if (!last && lesson.occurrences >= GRADUATION_AT) out.push({ lesson });
-    else if (last?.status === 'declined') out.push({ lesson, declined: last });
+  for (const lesson of known) {
+    const last = newestRecord(filed, learnedAt(lesson.rel));
+    if (!last && !lesson.retired && lesson.occurrences >= GRADUATION_AT) out.push({ lesson });
+    // Retired, only when what was declined reopened it: a rule that did not hold, sent to the harness and declined
+    // there, is the project's to make again — otherwise nothing could settle it. One retired by hand after its
+    // first request was declined is settled.
+    else if (last?.status === 'declined' && (!lesson.retired || last.reopens)) out.push({ lesson, declined: last });
   }
   return out;
+}
+
+/** Where a pill was learned — the path its records name — whether or not it has since been retired. */
+const learnedAt = (rel) => rel.replace(new RegExp(`^\\.claude/pills/${RETIRED}/`), '.claude/pills/');
+
+/**
+ * The newest record about one pill: by date, and on one date the one that counted most, since what comes after
+ * — a reopening, a rule made again — is written with the count it saw. By the order a directory lists them, a
+ * record written the same day read as older.
+ *
+ * @param {Awaited<ReturnType<typeof filedRequests>>} filed - The project's records.
+ * @param {string} pill - Where the pill was learned.
+ * @returns {Awaited<ReturnType<typeof filedRequests>>[number]|undefined}
+ */
+function newestRecord(filed, pill) {
+  let newest;
+  for (const r of filed) {
+    if (r.pill !== pill) continue;
+    if (!newest || r.date > newest.date || (r.date === newest.date && Number(r.occurrences) > Number(newest.occurrences))) newest = r;
+  }
+  return newest;
 }
 
 /**
@@ -415,6 +435,7 @@ export async function filedRequests(target) {
       rule_in: fields.rule_in ?? '',
       answered_in: fields.answered_in ?? '',
       declined: fields.declined ?? '',
+      reopens: fields.reopens ?? '',
     });
   }
   return out;
@@ -722,20 +743,31 @@ function recordName(dir, pill, date) {
  * @param {string} file - The file named, as given.
  * @returns {Promise<string|null>}
  */
-async function notHere(target, file) {
+async function notHere(target, file, layerRoot) {
   const rel = relative(target, resolve(target, file));
-  if (!file || rel === '' || rel.startsWith('..') || isAbsolute(rel)) return `${file || 'no file'} is not a file inside the project`;
+  if (!file || rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return `${file || 'no file'} is not a file inside the project`;
   const path = join(target, rel);
   if (!(await stat(path).catch(() => null))?.isFile()) return `${rel} is not a file — write the rule first, then graduate the lesson into it`;
   const posix = rel.split(sep).join('/');
-  if (noticeOf(await readFile(path, 'utf8'))) {
+  const text = await readFile(path, 'utf8');
+  if (noticeOf(text)) {
     return `${posix} is composed from the harness, and the next compose overwrites it — write the rule in this project's layer, ` +
       `${HARNESS}/project/tree/${posix} (\`nina where ${posix}\` lists its slots), and name that file`;
   }
   if (posix.startsWith('.claude/pills/')) return `${posix} is a pill — a rule lives where no agent has to remember to apply it`;
   if (posix.startsWith('.claude/plans/')) return `${posix} is a plan, work in progress — the rule outlives it`;
-  if (posix.startsWith(`${HARNESS}/`) && !posix.startsWith(`${HARNESS}/project/tree/`)) {
-    return `${posix} is NINA's own record — the rule goes in ${HARNESS}/project/tree/ or a file the project owns`;
+  const layer = `${HARNESS}/project/tree/`;
+  if (posix.startsWith(`${HARNESS}/`) && !posix.startsWith(layer)) {
+    return `${posix} is NINA's own record — the rule goes in ${layer} or a file the project owns`;
+  }
+  // A fragment composes only into a slot its core file opens for the project: anywhere else, no agent reads it.
+  if (posix.startsWith(layer)) {
+    const composed = posix.slice(layer.length);
+    const projectSlots = (lines) => new Set(lines.split('\n').map((l) => SLOT.exec(l.trim())?.[1]).filter((s) => s?.startsWith('project.')));
+    const open = projectSlots(await readFile(join(layerRoot, 'core', 'tree', composed), 'utf8').catch(() => ''));
+    if (![...projectSlots(text)].some((s) => open.has(s))) {
+      return `${posix} fills no project slot of ${composed}, so nothing composes it and no agent would read the rule — \`nina where ${composed}\` lists the slots`;
+    }
   }
   return null;
 }
@@ -757,7 +789,8 @@ async function graduateHere(target, profile, lesson, rule) {
   const date = localDay(new Date().toISOString());
   const dir = join(target, HARNESS, 'requests');
   await mkdir(dir, { recursive: true });
-  const file = recordName(dir, lesson.rel, date);
+  const pill = learnedAt(lesson.rel);
+  const file = recordName(dir, pill, date);
   await writeFile(
     join(dir, file),
     [
@@ -767,7 +800,7 @@ async function graduateHere(target, profile, lesson, rule) {
       `date: ${date}`,
       `core: ${profile.core}`,
       `target: ${HERE}`,
-      `pill: ${lesson.rel}`,
+      `pill: ${pill}`,
       `occurrences: ${lesson.occurrences}`,
       `rule_in: ${rule}`,
       '---',
@@ -781,7 +814,13 @@ async function graduateHere(target, profile, lesson, rule) {
     ].join('\n'),
     { flag: 'wx' },
   );
-  await retirePill(target, lesson.rel);
+  // A record with the pill still active would stop the asking with the lesson nowhere: both, or neither.
+  try {
+    await retirePill(target, lesson.rel);
+  } catch (error) {
+    await rm(join(dir, file), { force: true });
+    throw error;
+  }
   return file;
 }
 
@@ -801,17 +840,13 @@ async function graduate(target, profile, layerRoot, known, which, here) {
   }
   if (here !== null) {
     // Declined is the one answer from the harness that leaves the rule to the project. A request still open is
-    // waiting on it, and a pill retired has graduated already.
-    const pending = (await filedRequests(target)).find((r) => r.pill === lesson.rel && r.status !== 'declined');
-    if (pending || lesson.retired) {
-      console.error(
-        pending
-          ? `  ${lesson.rel} has a ${pending.status} record already: ${HARNESS}/requests/${pending.file}\n`
-          : `  ${lesson.rel} is retired already\n`,
-      );
+    // waiting on it, and a pill retired by any other record has graduated already.
+    const last = newestRecord(await filedRequests(target), learnedAt(lesson.rel));
+    if (last ? last.status !== 'declined' : lesson.retired) {
+      console.error(last ? `  ${lesson.rel} is recorded already, ${last.status}: ${HARNESS}/requests/${last.file}\n` : `  ${lesson.rel} is retired already\n`);
       return 1;
     }
-    const why = await notHere(target, here);
+    const why = await notHere(target, here, layerRoot);
     if (why) {
       console.error(`  ${why}\n`);
       return 1;
@@ -959,7 +994,11 @@ export async function learn(argv, ctx) {
       const here = `\`nina learn --graduate ${lesson.rel} --here <file>\``;
       if (declined) {
         console.log(`  ${lesson.rel} was declined by the harness${declined.answered_in ? ` in ${declined.answered_in}` : ''}: ${declined.declined || 'no reason recorded'}`);
-        console.log(`    → make it a rule of this project — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}; or, if the reason says a rule already covers it, set the pill's status to retired`);
+        console.log(
+          lesson.retired
+            ? `    → the rule this project made did not hold: make it again where its agents read it — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}`
+            : `    → make it a rule of this project — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}; or, if the reason says a rule already covers it, set the pill's status to retired`,
+        );
         continue;
       }
       console.log(`  ${lesson.rel} has recurred ${lesson.occurrences} times — a rule, not a pill. Where it goes is this project's call:`);

@@ -44,10 +44,25 @@
   "2026-10-10-architect__mirrored-parsers-cite-the-whole-input-path": {
     "in": "core/tree/.claude/agents/architect.md"
   },
+  "2026-10-10-architect__rule-checkers-cover-every-form-the-rule-names": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
   "2026-10-10-architect__security-filters-list-their-bypasses": {
     "in": "core/tree/.claude/agents/architect.md"
   },
   "2026-10-10-implementer__fails-if-mutations-are-run": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-10-shared__controls-drive-the-code-they-guard": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-11-implementer__a-miss-in-your-mutation-log-is-a-claim-to-fix": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-11-implementer__tsdoc-covers-fake-members-and-local-functions": {
+    "in": "core/tree/CLAUDE.md"
+  },
+  "2026-10-11-shared__doc-claims-match-the-recorded-premises": {
     "in": "core/tree/.claude/agents/implementer.md"
   }
 }
