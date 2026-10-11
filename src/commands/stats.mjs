@@ -462,13 +462,18 @@ export function cyclesOf(records) {
   /** @type {{runs: object[], end: 'closed'|'unreadable'|'next'|'open'}[]} */
   const cycles = [];
   const unread = (verdict) => !verdict || verdict === 'UNCLEAR' || verdict === 'NONE';
-  // Code was written, and what reviewed its latest write let it through: a verdict read after it, and nothing sent
-  // back since. Read off the one verdict dispatched before the design, the gates that run side by side made it a
-  // matter of which went out last — a rejection beside three approvals ended the change its own fix belonged to.
+  // Code was written, and what reviewed its latest write let it through: a verdict read from a stage that reviews —
+  // neither one that writes nor one that designs — and nothing sent back since. Read off the one verdict dispatched
+  // before the design, the gates that run side by side made it a matter of which went out last — a rejection beside
+  // three approvals ended the change its own fix belonged to.
   const letThrough = (cycle) => {
     const write = cycle.findLastIndex((x) => WRITERS.has(x.role));
     if (write < 0) return false;
-    const since = cycle.slice(write + 1).map((x) => x.verdict).filter((v) => !unread(v) && v !== IN_FLIGHT);
+    const since = cycle
+      .slice(write + 1)
+      .filter((x) => !WRITERS.has(x.role) && !DESIGNERS.has(x.role))
+      .map((x) => x.verdict)
+      .filter((v) => !unread(v) && v !== IN_FLIGHT);
     return since.length > 0 && !since.some(isLoopBack);
   };
   for (const runs of bySession.values()) {
@@ -498,8 +503,8 @@ export function cyclesOf(records) {
  * Two more things end a cycle, both found in real sessions: a design stage dispatched after code was
  * written and let through starts the next change — the light chain has no qa to close it, and it was absorbed
  * into the design that followed — but not while anything since the latest write sent work back, which the graph
- * routes into both designers, or nothing has read that write yet, as when a fix and its spec's correction go out
- * together; and a closing stage whose verdict cannot be read still closes it, counted as unreadable,
+ * routes into both designers, or no stage that reviews has read that write yet, as when a fix and its spec's
+ * correction go out together; and a closing stage whose verdict cannot be read still closes it, counted as unreadable,
  * because a qa run with no verdict line otherwise let one cycle swallow a dozen pipelines. A cycle is
  * sized by the most files any one of its writers wrote, not their sum, so three fix rounds on two files
  * stay two files; and only edits through the edit tools count, so a file written from a shell is missed

@@ -64,7 +64,7 @@ as the model it names.
 `stats` also sets the size of each change against the chain that carried it — the core's first hard
 rule, which nothing had measured. A cycle is a session's dispatches up to the verdict that closes one
 (qa `PASS`, devops `DEPLOYED`, secops `SECURE`), or up to the next design stage after code was written
-and let through — something read the latest write and nothing since sent work back; a closing stage whose
+and let through — a stage that reviews read the latest write and nothing since sent work back; a closing stage whose
 verdict cannot be read closes it too, and is counted. Read off the one verdict dispatched before the design,
 as it first was, the gates that run side by side made the boundary depend on which went out last: a rejection
 beside three approvals ended the change its own fix belonged to, and so did a fix sent out together with its
