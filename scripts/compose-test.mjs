@@ -240,8 +240,9 @@ const BUDGETS = {
   // that mirrors another program's parse is premised on that program's whole input path, not the one stage it copies.
   // And for the integrations surface's citation form: the package's own link, not a store directory a peer renames.
   // And for two more from the same project: a check covers every form the rule it enforces names, read from the
-  // library, and a case built to fail calls the function its real case calls.
-  '.claude/agents/architect.md': 17550,
+  // library, a case built to fail calls the function its real case calls, and a sentence the spec dictates about a
+  // dependency cites what says it.
+  '.claude/agents/architect.md': 17750,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   '.claude/agents/dba.md': 13100,
   '.claude/agents/devops.md': 11500,
@@ -251,7 +252,7 @@ const BUDGETS = {
   // when the implementer began running each test's named mutation itself, in a mirror, before handing off; and
   // again for three lessons the same project learned three times each: a test's own judging code is under test, the
   // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it.
-  '.claude/agents/implementer.md': 20000,
+  '.claude/agents/implementer.md': 20050,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -276,9 +277,9 @@ const BUDGETS = {
   // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs.
   '.claude/router.md': 17000,
   '.claude/templates/integration.md': 3000,
-  // Raised when Hard Rule #9 named the members a sweep kept skipping: a fake's accessors, a type alias's fields, a
-  // local whose value is a function.
-  'CLAUDE.md': 25250,
+  // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
+  // local whose value is a function — and the three it does not cover.
+  'CLAUDE.md': 25300,
 };
 
 /**
