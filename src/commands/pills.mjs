@@ -342,37 +342,25 @@ export function validate(pill, text, roles, today) {
  * @param {{root: string}} [ctx] - CLI context; `root` is the NINA install directory.
  * @returns {Promise<number>} Process exit code.
  */
-export async function pills(argv, ctx) {
-  const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
-  const quiet = argv.includes('--quiet');
+/**
+ * A project's pills, checked: what `nina pills` prints and the dashboard's pills tab shows — each pill's stage, status,
+ * count and trigger, and the problems and notes over the whole corpus. Null when the project has composed no agents.
+ *
+ * @param {string} target - The project.
+ * @param {{root?: string}} [ctx] - CLI context: where the layers are, to say where a recurring lesson belongs.
+ */
+export async function pillsData(target, ctx) {
   const pillsDir = join(target, '.claude', 'pills');
   const agentsDir = join(target, '.claude', 'agents');
-
-  if (!existsSync(agentsDir)) {
-    console.error(`  no .claude/agents under ${target} — run \`nina compose\` first.\n`);
-    return 1;
-  }
+  if (!existsSync(agentsDir)) return null;
   const roles = (await readdir(agentsDir))
     .filter((f) => f.endsWith('.md'))
     .map((f) => f.replace(/\.md$/, ''))
     .sort();
-
   const today = new Date().toISOString().slice(0, 10);
-  if (argv.includes('--tidy')) {
-    const moved = await tidyRetired(target);
-    for (const m of moved) console.log(`  moved ${m} → ${RETIRED}/${m}`);
-    console.log(moved.length ? `\npills: ${moved.length} retired pill(s) moved where no agent opens them\n` : 'pills: no retired pill where agents read\n');
-    return 0;
-  }
   const files = existsSync(pillsDir) ? await pillFiles(pillsDir) : [];
 
-  // The directory itself is composed, so its presence says nothing. An empty corpus is the
-  // normal state of a new project and the suspicious state of an old one — say which, and
-  // leave the judgement to whoever knows how long the pipeline has been running.
-  if (files.length === 0) {
-    if (!quiet) console.log(`  no pill written yet under ${target} — either nothing has been learned the expensive way, or nothing was written down.\n`);
-    return 0;
-  }
+  if (files.length === 0) return { files: 0, active: 0, retired: 0, problems: [], notes: [], pills: [] };
   const problems = [];
   const notes = [];
   const active = [];
@@ -404,8 +392,21 @@ export async function pills(argv, ctx) {
   let resolved = 0;
   let cited = 0;
 
+  const each = [];
   for (const pill of files) {
     const result = validate(pill, await readFile(pill.path, 'utf8'), roles, today);
+    const f = result.fields ?? {};
+    each.push({
+      label: result.label,
+      status: f.status ?? null,
+      roles: list(f.applies_to),
+      occurrences: Number(f.occurrences ?? 1) || 1,
+      date: f.date ?? null,
+      last_seen: f.last_seen ?? null,
+      severity: f.severity ?? null,
+      trigger: f.trigger ?? null,
+      problems: result.problems.length,
+    });
     problems.push(...result.problems);
     notes.push(...result.notes);
     if (pill.dir && pill.dir !== 'shared' && pill.dir !== RETIRED) taught.add(pill.dir);
@@ -478,14 +479,40 @@ export async function pills(argv, ctx) {
   const dated = active.map((p) => p.date).filter(Boolean).sort();
   if (dated.length > 0) notes.push(`oldest active pill is ${dated[0]}, newest ${dated[dated.length - 1]}`);
 
+  return { files: files.length, active: active.length, retired, problems, notes, pills: each };
+}
+
+export async function pills(argv, ctx) {
+  const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
+  const quiet = argv.includes('--quiet');
+  const agentsDir = join(target, '.claude', 'agents');
+
+  if (!existsSync(agentsDir)) {
+    console.error(`  no .claude/agents under ${target} — run \`nina compose\` first.\n`);
+    return 1;
+  }
+  if (argv.includes('--tidy')) {
+    const moved = await tidyRetired(target);
+    for (const m of moved) console.log(`  moved ${m} → ${RETIRED}/${m}`);
+    console.log(moved.length ? `\npills: ${moved.length} retired pill(s) moved where no agent opens them\n` : 'pills: no retired pill where agents read\n');
+    return 0;
+  }
+  const { files, active, retired, problems, notes } = await pillsData(target, ctx);
+  // The directory itself is composed, so its presence says nothing. An empty corpus is the
+  // normal state of a new project and the suspicious state of an old one — say which, and
+  // leave the judgement to whoever knows how long the pipeline has been running.
+  if (files === 0) {
+    if (!quiet) console.log(`  no pill written yet under ${target} — either nothing has been learned the expensive way, or nothing was written down.\n`);
+    return 0;
+  }
   if (!(quiet && problems.length === 0)) {
-    console.log(`  ${files.length} pill(s): ${active.length} active, ${retired} retired\n`);
+    console.log(`  ${files} pill(s): ${active} active, ${retired} retired\n`);
     for (const p of problems) console.log(`  ✗ ${p}`);
     for (const n of notes) console.log(`  · ${n}`);
     if (problems.length === 0 && notes.length === 0) console.log('  ✓ every pill is well formed, placed where it is read, and carries evidence');
     console.log(
       problems.length === 0
-        ? `\npills: all ${files.length} well formed${notes.length > 0 ? ` (${notes.length} note(s))` : ''}\n`
+        ? `\npills: all ${files} well formed${notes.length > 0 ? ` (${notes.length} note(s))` : ''}\n`
         : `\npills: ${problems.length} problem(s)\n`,
     );
   }

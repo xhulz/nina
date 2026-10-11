@@ -893,6 +893,47 @@ async function graduate(target, profile, layerRoot, known, which, here) {
 }
 
 /**
+ * Whether a project's pipeline is learning, link by link, as data: what `nina learn` prints, what its detector acts
+ * on, and what the dashboard's learning tab shows. Read from the store and the pills as they stand — `learn` takes a
+ * snapshot first, the dashboard does not, since the project's hooks take one every turn.
+ *
+ * @param {string} target - The project directory.
+ * @param {string} layerRoot - Its pinned release, which says whether the loop gate ships.
+ * @param {{surfaces?: string[]}} profile - The project's profile.
+ * @param {{days?: number, records?: object[], known?: Awaited<ReturnType<typeof lessons>>}} [options]
+ */
+export async function learningData(target, layerRoot, profile, { days = CAPTURE_DAYS, records, known } = {}) {
+  const rounds = records ?? (await recorded(target));
+  const pills = known ?? (await lessons(target));
+  // Who each loop-back sent work back to, read off the project's own graph.
+  const loops = loadProject(target)?.loops ?? null;
+  const owners = sentBackTo(rounds, loops);
+  const targets = loops ? new Set([...loops.values()].flatMap((byToken) => [...byToken.values()].flatMap((to) => [...to.keys()]))) : null;
+  const filed = await filedRequests(target);
+  const active = pills.filter((l) => !l.retired);
+  return {
+    days,
+    runs: new Set(rounds.map(runOf)).size,
+    rounds: rounds.length,
+    span: rounds.length ? [day(rounds[0].ts), day(rounds.at(-1).ts)] : null,
+    late: overdue(rounds, pills, new Date(), days, owners),
+    filed,
+    owed: undecided(pills, filed),
+    active,
+    ready: active.filter((l) => l.occurrences >= GRADUATION_AT),
+    open: filed.filter((r) => r.status === 'open'),
+    madeHere: filed.filter((r) => r.target === HERE).length,
+    relapses: relapsed(pills, filed),
+    use: applied(rounds, pills),
+    checks: verified(rounds, pills, { owners, targets }),
+    // The loops the lessons are about, as the gate counted them — beside the lessons, because a loop the
+    // gate held is a lesson waiting to be asked for.
+    activity: gateActivity(target, new Date(Date.now() - days * 86_400_000).toISOString()),
+    gated: (await shippedScripts(layerRoot, profile.surfaces ?? [])).has(GATE),
+  };
+}
+
+/**
  * Runs the learning report, the detector, or a graduation.
  *
  * @param {string[]} argv - `[--project <dir>] [--check] [--graduate <pill>] [--days N]`.
@@ -943,13 +984,8 @@ export async function learn(argv, ctx) {
   }
   if (argv.includes('--close')) return close(target, argv[argv.indexOf('--close') + 1] ?? '');
 
-  // Who each loop-back sent work back to, read off the project's own graph.
-  const loops = loadProject(target)?.loops ?? null;
-  const owners = sentBackTo(records, loops);
-  const targets = loops ? new Set([...loops.values()].flatMap((byToken) => [...byToken.values()].flatMap((to) => [...to.keys()]))) : null;
-  const late = overdue(records, known, new Date(), days, owners);
-  const filed = await filedRequests(target);
-  const owed = undecided(known, filed);
+  const learning = await learningData(target, resolved.dir, profile, { days, records, known });
+  const { late, filed, owed } = learning;
 
   if (check) {
     // During `nina upgrade --apply`: this is about history, not the move — see upgrade.mjs.
@@ -1048,17 +1084,13 @@ export async function learn(argv, ctx) {
     return 1;
   }
 
-  const active = known.filter((l) => !l.retired);
-  const ready = active.filter((l) => l.occurrences >= GRADUATION_AT);
-  const open = filed.filter((r) => r.status === 'open');
-  const use = applied(records, known);
-  const checks = verified(records, known, { owners, targets });
-  const span = records.length ? `${day(records[0].ts)} → ${day(records.at(-1).ts)}` : '';
+  const { active, ready, open, use, checks, activity, gated } = learning;
+  const span = learning.span ? `${learning.span[0]} → ${learning.span[1]}` : '';
 
   console.log(`\n  learning — core ${profile.core}\n`);
   console.log(
     records.length
-      ? `  observe   ${new Set(records.map(runOf)).size} run(s) in ${records.length} round(s) recorded, ${span}`
+      ? `  observe   ${learning.runs} run(s) in ${records.length} round(s) recorded, ${span}`
       : '  observe   ✗ nothing recorded — no transcripts found for this project, so no link below can be measured',
   );
   if (late.length === 0) console.log(`  capture   ✓ no role has looped back ${CAPTURE_AT}+ times without a lesson in the last ${days} days`);
@@ -1074,7 +1106,7 @@ export async function learn(argv, ctx) {
           `${use.listed} only listed the directory — measured since ${use.from}. Reading is not obeying; nothing here can see that.`
       : '  apply     not measured yet — runs recorded from now on say whether they read their pills',
   );
-  const madeHere = filed.filter((r) => r.target === HERE).length;
+  const { madeHere } = learning;
   console.log(
     `  graduate  ${ready.length} lesson(s) at ${GRADUATION_AT}+ occurrences · ${open.length} request(s) open` +
       (madeHere ? ` · ${madeHere} made a rule here` : '') +
@@ -1090,7 +1122,7 @@ export async function learn(argv, ctx) {
     );
   }
   for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
-  for (const r of relapsed(known, filed)) {
+  for (const r of learning.relapses) {
     const shipped = `came back ${r.recurred} time(s) after ${ruleWent(r.request, false)}`;
     if (r.due) console.log(`            ✗ ${r.lesson.rel} ${shipped} — the rule did not hold; \`harness:check\` reopens it`);
     else console.log(`            · ${r.lesson.rel} ${shipped} — watched; it reopens at ${CAPTURE_AT}`);
@@ -1116,9 +1148,7 @@ export async function learn(argv, ctx) {
   }
   // The loops the lessons are about, as the gate counted them — beside the lessons, because a loop the
   // gate held is a lesson waiting to be asked for.
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const activity = gateActivity(target, since);
-  if (!(await shippedScripts(resolved.dir, profile.surfaces ?? [])).has(GATE)) {
+  if (!gated) {
     console.log(`  loops     core ${profile.core} has no loop gate — the caps in .claude/graph.md are instructions`);
   } else if (!activity) {
     console.log('  loops     the gate has no ledger for this project — `nina gate --selftest` says whether it is wired');

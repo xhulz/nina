@@ -28,6 +28,7 @@ import { langfuse } from '../src/commands/langfuse.mjs';
 import { pipeline } from '../src/commands/pipeline.mjs';
 import { runs } from '../src/commands/runs.mjs';
 import { status } from '../src/commands/status.mjs';
+import { dashboard } from '../src/commands/dashboard.mjs';
 
 /** The NINA install directory (the parent of `bin/`). */
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -42,6 +43,7 @@ const PROJECT = { '--project <dir>': 'the project to act on (default: the workin
  */
 const COMMANDS = {
   init: {
+    daily: true,
     run: init,
     help: 'start a harness for a project: profile, surfaces, and what to fill',
     options: {
@@ -54,9 +56,16 @@ const COMMANDS = {
     },
   },
   status: {
+    daily: true,
     run: status,
     help: "one screen: the pin, the install and the newest release, the hooks, the gate, check, what the week cost, the learning",
     options: { ...PROJECT, '--offline': 'do not ask the registry for the newest release' },
+  },
+  dashboard: {
+    daily: true,
+    run: dashboard,
+    help: 'the office, the tasks, the pipeline, the pills, the learning and the stats in one page here, its address printed for a click',
+    options: { ...PROJECT, '--port <n>': 'the port to serve it on (default 6463, or any free one)', '--open': 'open it in the system browser too' },
   },
   snapshot: {
     run: snapshot,
@@ -79,11 +88,13 @@ const COMMANDS = {
     },
   },
   runs: {
+    daily: true,
     run: runs,
     help: 'what each piece of work cost: its cycles, their stages and rounds, what was sent back, time and cost',
     options: { ...PROJECT, '--since <date>': 'from this day on, YYYY-MM-DD', '--last <n>': 'how many cycles (default: 10)' },
   },
   check: {
+    daily: true,
     run: check,
     help: "validate a project's profile, vocabulary and integrations",
     options: {
@@ -93,6 +104,7 @@ const COMMANDS = {
     },
   },
   compose: {
+    daily: true,
     run: compose,
     help: "rebuild a project's harness files from the core, its surfaces and its own layer",
     options: {
@@ -102,8 +114,9 @@ const COMMANDS = {
       '--expect-unfilled <slots>': 'slots, comma-separated, a move is known to leave unfilled',
     },
   },
-  where: { run: where, help: 'say which layer owns a path, and where a change to it goes', args: '<path>', options: PROJECT },
+  where: { daily: true, run: where, help: 'say which layer owns a path, and where a change to it goes', args: '<path>', options: PROJECT },
   pipeline: {
+    daily: true,
     run: pipeline,
     help: "draw the project's agent chain: the line, its gates, what goes back, each stage's model and skills",
     options: {
@@ -119,6 +132,7 @@ const COMMANDS = {
   },
   pills: { run: pills, help: 'validate the corrections the pipeline wrote about itself', options: { ...PROJECT, '--tidy': 'move retired pills to .claude/pills/retired/' } },
   learn: {
+    daily: true,
     run: learn,
     help: 'is the pipeline learning from its own runs? observe, capture, apply, graduate, verify; --deep reads why',
     options: {
@@ -135,6 +149,7 @@ const COMMANDS = {
     },
   },
   requests: {
+    daily: true,
     run: requests,
     help: "the lessons projects have graduated to the harness — this repo's inbox",
     options: {
@@ -146,6 +161,7 @@ const COMMANDS = {
     },
   },
   wire: {
+    daily: true,
     run: wire,
     help: "merge the hooks and npm scripts a project's harness needs to run",
     options: { ...PROJECT, '--to <version>': 'wire for this release instead of the pinned one', '--apply': 'write them, instead of printing them' },
@@ -162,6 +178,7 @@ const COMMANDS = {
     },
   },
   upgrade: {
+    daily: true,
     run: upgrade,
     help: 'move a project to a newer core, reporting what it costs',
     options: {
@@ -214,13 +231,20 @@ const COMMANDS = {
 /** Options every command takes: the banner reads it, and the commands that print say less. */
 const EVERYWHERE = { '--quiet': 'say nothing unless something is wrong, and print no banner' };
 
-/** Prints the commands. */
-function help() {
+/**
+ * Prints the commands: the ones a person runs from day to day, or with `--all` every one. The rest — measurement and
+ * maintenance, most of them read better in `nina dashboard` — still run by name, and the hooks, CI and agents run them.
+ *
+ * @param {boolean} [all]
+ */
+function help(all = false) {
   console.log('  usage: nina <command> [options]        nina <command> --help for its options');
   console.log('         nina              on a terminal: the banner once, then type commands under it\n');
   for (const [name, c] of Object.entries(COMMANDS)) {
-    console.log(`    ${name.padEnd(12)} ${c.help}`);
+    if (all || c.daily) console.log(`    ${name.padEnd(12)} ${c.help}`);
   }
+  const more = Object.entries(COMMANDS).filter(([, c]) => !c.daily).map(([name]) => name);
+  if (!all && more.length > 0) console.log(`\n  \`nina help --all\` lists the rest too: ${more.join(', ')}.`);
   console.log('');
 }
 
@@ -284,7 +308,7 @@ async function main() {
 
   if (!name || name === 'help' || name === '--help' || name === '-h') {
     if (name === 'help' && COMMANDS[argv[0]]) commandHelp(argv[0]);
-    else help();
+    else help(argv.includes('--all'));
     return 0;
   }
   const command = COMMANDS[name];

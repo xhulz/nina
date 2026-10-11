@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NINA dashboard</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #1b1d26; --panel: #22202b; --panel2: #2a2836; --line: #34324a; --ink: #e6e8ee; --soft: #a9adbf; --faint: #7d8199;
+    --accent: #ffd34d; --pink: #ff7ab8; --green: #3ec74d; --amber: #f2a93b; --red: #e45b5b; --blue: #6ea8ff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 2px solid var(--line); background: var(--panel); }
+  header h1 { margin: 0; font: 600 15px var(--mono); color: var(--accent); letter-spacing: 0.04em; }
+  header .what { color: var(--soft); font-size: 13px; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  nav a { padding: 6px 12px; border-radius: 4px; color: var(--soft); text-decoration: none; font: 600 13px var(--mono); border: 2px solid transparent; }
+  nav a:hover { color: var(--ink); background: var(--panel2); }
+  nav a[aria-current="page"] { color: var(--accent); border-color: var(--line); background: var(--bg); }
+  main { flex: 1; min-height: 0; position: relative; }
+  #office { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+  #view { position: absolute; inset: 0; overflow-y: auto; padding: 20px 16px 40px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h2 { margin: 0 0 4px; font: 600 18px var(--sans); }
+  h3 { margin: 28px 0 10px; font: 600 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+  .sub { color: var(--faint); font-size: 13px; margin: 0 0 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  .card .k { color: var(--faint); font-size: 12px; }
+  .card .v { font: 600 22px var(--mono); margin-top: 2px; }
+  .card .n { color: var(--soft); font-size: 12px; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font: 600 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid #2a2838; vertical-align: top; }
+  td.num, th.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+  .scroll { overflow-x: auto; }
+  .role { color: var(--pink); font-family: var(--mono); }
+  .mono { font-family: var(--mono); }
+  code.mono { font-size: 0.92em; color: var(--ink); }
+  .soft { color: var(--soft); } .faint { color: var(--faint); }
+  .ok { color: var(--green); } .warn { color: var(--amber); } .bad { color: var(--red); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { padding: 1px 7px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); font: 12px var(--mono); color: var(--soft); white-space: nowrap; }
+  .chip.back { border-color: #6b4a1f; color: var(--amber); }
+  .bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--panel2); min-width: 60px; }
+  .bar span { display: block; height: 100%; }
+  .list { margin: 0; padding-left: 18px; } .list li { margin: 3px 0; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .node { padding: 6px 10px; border-radius: 5px; background: var(--panel); border: 1px solid var(--line); font: 600 13px var(--mono); color: var(--pink); }
+  .node.end { color: var(--soft); }
+  .arrow { color: var(--faint); font-family: var(--mono); }
+  .stage { display: grid; grid-template-columns: 170px 1fr; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid #2a2838; }
+  .empty { color: var(--faint); padding: 30px 0; text-align: center; }
+  .note { margin: 4px 0; font-size: 13px; }
+  @media (max-width: 640px) { .stage { grid-template-columns: 1fr; } nav { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>NINA</h1>
+  <span class="what" id="what"></span>
+  <nav id="tabs" aria-label="tabs"></nav>
+</header>
+<main>
+  <iframe id="office" title="the office" hidden></iframe>
+  <section id="view" aria-live="polite"></section>
+</main>
+<script>
+'use strict';
+/*
+ * The dashboard: the reports a person reads, a tab each, drawn from what `nina dashboard` serves at `api/<tab>` —
+ * the same data each command prints from. Nothing is fetched from anywhere else, and nothing a report says is put
+ * into the page as markup: every text goes in as text.
+ */
+const ROOM = /*NINA_DASHBOARD*/null || { project: 'demo' };
+const TABS = [
+  ['office', 'Office'],
+  ['tasks', 'Tasks'],
+  ['pipeline', 'Pipeline'],
+  ['pills', 'Pills'],
+  ['learning', 'Learning'],
+  ['stats', 'Stats'],
+];
+/** How often an open tab is read again. The office streams on its own. */
+const REFRESH_MS = 15_000;
+
+/** An element, its attributes, and its children — strings go in as text. */
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') node.className = v;
+    else if (k === 'style') node.setAttribute('style', v);
+    else node.setAttribute(k, v === true ? '' : v);
+  }
+  for (const child of children.flat(Infinity)) {
+    if (child === null || child === undefined || child === false) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+/** A sentence whose `quoted` words are commands, set in the monospace face. */
+const said = (text) => String(text).split(/`([^`]+)`/).map((part, i) => (i % 2 ? el('code', { class: 'mono' }, part) : part));
+const card = (k, v, n) => el('div', { class: 'card' }, el('div', { class: 'k' }, k), el('div', { class: 'v' }, v), n ? el('div', { class: 'n' }, n) : null);
+const pct = (a, b) => (b > 0 ? `${Math.round((100 * a) / b)}%` : '—');
+const money = (n) => (n === null || n === undefined ? '—' : `$${n >= 100 ? n.toFixed(0) : n.toFixed(2)}`);
+const span = (m) => (m === null || m === undefined ? '—' : m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`);
+const when = (iso) => {
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? '—' : t.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+const kTokens = (n) => (typeof n === 'number' ? `${Math.round(n / 1000)}k` : '—');
+/** A bar of parts, each `[share, color]`, as wide as its container. */
+const bar = (parts) => el('div', { class: 'bar' }, parts.filter(([n]) => n > 0).map(([n, color]) => el('span', { style: `width:${(n * 100).toFixed(2)}%;background:${color}` })));
+const table = (head, rows, numeric = []) =>
+  el('div', { class: 'scroll' }, el('table', {}, el('thead', {}, el('tr', {}, head.map((h, i) => el('th', { class: numeric.includes(i) ? 'num' : null }, h)))), el('tbody', {}, rows.map((r) => el('tr', {}, r.map((c, i) => el('td', { class: numeric.includes(i) ? 'num' : null }, c)))))));
+
+// ─── the tabs ─────────────────────────────────────────────────────────────────────────────────
+const RENDER = {
+  tasks(d) {
+    if (!d || d.tasks.length === 0) return el('p', { class: 'empty' }, 'No task measured yet: the first dispatch the snapshot records starts one.');
+    const shown = d.tasks;
+    const cost = shown.reduce((a, t) => a + (t.cost ?? 0), 0);
+    const done = shown.filter((t) => t.minutes !== null).map((t) => t.minutes).sort((a, b) => a - b);
+    return el('div', {},
+      el('h2', {}, 'Tasks'),
+      el('p', { class: 'sub' }, said(`Each task is a cycle: the dispatches up to the verdict that closes them, named by the first one's description — as \`nina runs\` cuts them. Newest first${d.total > shown.length ? `, the last ${shown.length} of ${d.total}` : ''}.`)),
+      el('div', { class: 'cards' },
+        card('tasks', String(d.total)),
+        card('cost shown', money(cost), 'at API list prices'),
+        card('median length', span(done.length ? done[Math.floor(done.length / 2)] : null), 'from first dispatch to last verdict'),
+      ),
+      el('h3', {}, 'every task'),
+      table(['started', 'task', 'who worked on it', 'length', 'cost', 'end'],
+        shown.map((t) => [
+          el('span', { class: 'mono soft' }, when(t.start)),
+          el('div', {}, el('div', {}, t.name), t.files !== null || t.peak !== null ? el('div', { class: 'faint' }, [t.files !== null ? `largest write ${t.files} file(s)` : null, t.peak !== null ? `context up to ${kTokens(t.peak)}` : null].filter(Boolean).join(' · ')) : null),
+          el('div', { class: 'chips' }, t.stages.map((s) => el('span', { class: s.back ? 'chip back' : 'chip' }, `${s.role}${s.rounds > 1 ? ` ×${s.rounds}` : ''}${s.back ? ` · ${s.back} back` : ''}`))),
+          span(t.minutes),
+          money(t.cost),
+          el('span', { class: t.end_kind === 'closed' ? 'ok' : t.end_kind === 'open' ? 'warn' : 'faint' }, t.end_kind === 'closed' ? '✓ ' + t.how.replace(/^ended at /, '') : t.how),
+        ]), [3, 4]),
+    );
+  },
+
+  pipeline(d) {
+    if (!d) return el('p', { class: 'empty' }, said('No composed pipeline here: `nina compose` writes .claude/graph.md.'));
+    const node = (s) => el('span', { class: ['done', 'human'].includes(s) ? 'node end' : 'node' }, `${s}${d.many.some((m) => m.stage === s) ? ' ×n' : ''}`);
+    const chain = (stages) => el('div', { class: 'flow' }, stages.flatMap((s, i) => (i === 0 ? [node(s)] : [el('span', { class: 'arrow' }, '→'), node(s)])));
+    return el('div', {},
+      el('h2', {}, 'Pipeline'),
+      el('p', { class: 'sub' }, `${d.project}${d.core ? ` · core ${d.core}` : ''}${d.surfaces.length ? ` · surfaces ${d.surfaces.join(', ')}` : ''}`),
+      el('h3', {}, 'the line'),
+      chain(d.line),
+      d.ends.length ? el('div', { style: 'margin-top:10px' }, d.ends.map((e) => el('div', { class: 'flow', style: 'margin:6px 0 0 24px' }, el('span', { class: 'arrow' }, '↳'), chain(e.path), el('span', { class: 'faint' }, e.when)))) : null,
+      d.gates.length ? [el('h3', {}, 'gates, when the diff calls for them'), d.gates.map((g) => el('div', { class: 'flow', style: 'margin:6px 0' }, chain([g.from, g.gate, g.to]), el('span', { class: 'faint' }, g.beside.length ? `beside the ${g.beside.join(', ')} · ${g.when}` : g.when)))] : null,
+      d.many.length ? [el('h3', {}, 'several agents at once'), table(['stage', 'when'], d.many.map((m) => [el('span', { class: 'role' }, m.stage), m.when]))] : null,
+      d.back.length ? [el('h3', {}, 'sent back: to whom, on which verdict, rounds per issue'),
+        table(['from', 'to', 'verdict', 'rounds', 'why'], d.back.map((e) => [el('span', { class: 'role' }, e.from), el('span', { class: 'role' }, e.to), el('span', { class: 'mono' }, e.token), e.to === 'human' ? '—' : e.max === null ? '?' : String(e.max), el('span', { class: 'soft' }, e.when ?? '')]), [3])] : null,
+      el('h3', {}, d.measured ? `stages · what each ran since ${d.since}` : 'stages · no measured history yet'),
+      d.stages.map((s) => el('div', { class: 'stage' },
+        el('div', {}, el('div', { class: 'role' }, s.stage), el('div', { class: 'faint mono' }, [s.model, s.effort].filter(Boolean).join(' · ') || 'no spec')),
+        el('div', {},
+          el('div', {}, s.words),
+          s.history ? el('div', { class: 'soft' }, `${s.history.runs} run(s)${s.history.rounds > s.history.runs ? ` in ${s.history.rounds} rounds` : ''}${s.history.read === 0 ? ', no verdict read' : `, sent back ${s.history.back} of ${s.history.read} (${pct(s.history.back, s.history.read)})`}`) : d.measured ? el('div', { class: 'faint' }, 'no run') : null,
+          s.skills.length ? el('div', { class: 'chips', style: 'margin-top:6px' }, s.skills.map((k) => el('span', { class: 'chip' }, k))) : null,
+        ),
+      )),
+      d.own.length ? [el('h3', {}, "the project's own agents"), table(['agent', 'what it does'], d.own.map((o) => [el('span', { class: 'role' }, o.role), o.description]))] : null,
+      d.shapes.length ? [el('h3', {}, 'which chain a task takes, by its shape'), table(['shape', 'chain'], d.shapes.map((s) => [s.shape, el('span', { class: 'mono soft' }, s.chain)]))] : null,
+    );
+  },
+
+  pills(d) {
+    if (!d) return el('p', { class: 'empty' }, said('No composed agents here: `nina compose` first.'));
+    if (d.files === 0) return el('p', { class: 'empty' }, 'No pill written yet: either nothing has been learned the expensive way, or nothing was written down.');
+    const order = [...d.pills].sort((a, b) => (a.status === 'retired') - (b.status === 'retired') || b.occurrences - a.occurrences || String(b.last_seen ?? b.date).localeCompare(String(a.last_seen ?? a.date)));
+    return el('div', {},
+      el('h2', {}, 'Pills'),
+      el('p', { class: 'sub' }, said('The corrections the pipeline wrote about itself, checked as `nina pills` checks them. A lesson learned three times is a rule: it graduates here or to the harness.')),
+      el('div', { class: 'cards' },
+        card('pills', String(d.files)),
+        card('active', String(d.active)),
+        card('retired', String(d.retired), 'made rules, here or in the harness'),
+        card('problems', String(d.problems.length), d.problems.length ? 'see below' : 'every pill well formed'),
+      ),
+      d.problems.length ? [el('h3', {}, 'problems'), d.problems.map((p) => el('p', { class: 'note bad' }, '✗ ', said(p)))] : null,
+      el('h3', {}, 'every pill'),
+      table(['pill', 'for', 'times', 'last seen', 'status', 'when it applies'],
+        order.map((p) => [
+          el('span', { class: 'mono' }, p.label),
+          el('div', { class: 'chips' }, p.roles.map((r) => el('span', { class: 'chip' }, r))),
+          el('span', { class: p.occurrences >= 3 && p.status !== 'retired' ? 'warn' : null }, String(p.occurrences)),
+          el('span', { class: 'mono soft' }, p.last_seen ?? p.date ?? '—'),
+          el('span', { class: p.status === 'retired' ? 'faint' : 'ok' }, p.status ?? '—'),
+          el('span', { class: 'soft' }, p.trigger ?? ''),
+        ]), [2]),
+      d.notes.length ? el('details', { style: 'margin-top:24px' }, el('summary', { class: 'soft', style: 'cursor:pointer' }, `${d.notes.length} note(s): citations that moved, lessons that recur`), d.notes.map((n) => el('p', { class: 'note soft' }, '· ', said(n)))) : null,
+    );
+  },
+
+  learning(d) {
+    if (!d) return el('p', { class: 'empty' }, 'No profile here to read the learning cycle of.');
+    const measured = d.checks.filter((c) => c.before);
+    const unmeasured = d.checks.filter((c) => !c.before);
+    return el('div', {},
+      el('h2', {}, 'Learning'),
+      el('p', { class: 'sub' }, said('Whether the pipeline learns from its own runs, link by link, as `nina learn` reads it.')),
+      el('div', { class: 'cards' },
+        card('observe', d.rounds ? `${d.runs} runs` : '—', d.rounds ? `${d.rounds} rounds, ${d.span[0]} → ${d.span[1]}` : 'nothing recorded'),
+        card('capture', d.late.length ? `${d.late.length} owed` : '✓', d.late.length ? 'stages sent back with nothing written down' : `no stage sent back 3+ times without a lesson in ${d.days} days`),
+        card('apply', d.use.measured ? pct(d.use.read, d.use.measured) : '—', d.use.measured ? `of ${d.use.measured} runs read a lesson` : 'not measured yet'),
+        card('graduate', `${d.open.length} open`, `${d.ready.length} at 3+ · ${d.madeHere} made a rule here`),
+        card('loops', d.gated ? (d.activity ? String(d.activity.rounds) : '—') : 'no gate', d.activity ? `rounds on capped edges · ${d.activity.held} sent to you` : d.gated ? 'no ledger yet' : 'caps are instructions'),
+      ),
+      d.late.length ? [el('h3', {}, 'capture · sent back with nothing written down'), d.late.map((o) => el('div', { class: 'note' }, el('span', { class: 'role' }, o.role), ` ${o.count} loop-back(s) ${o.since ? `since its newest lesson (${o.since})` : 'and no lesson at all'}`, el('ul', { class: 'list soft' }, o.recent.map((r) => el('li', {}, `${when(r.ts)} · ${r.desc ?? '(no description)'}`)))))] : null,
+      d.owed.length ? [el('h3', {}, 'to graduate · here or in the harness'), d.owed.map((o) => el('p', { class: 'note' }, el('span', { class: 'mono' }, o.rel), o.declined ? el('span', { class: 'soft' }, ` — declined by the harness${o.declined.in ? ` in ${o.declined.in}` : ''}: ${o.declined.why}`) : el('span', { class: 'soft' }, ` — recurred ${o.occurrences} times`)))] : null,
+      d.open.length ? [el('h3', {}, 'requests open in the harness'), table(['since', 'pill', 'proposed for'], d.open.map((r) => [el('span', { class: 'mono soft' }, r.date), el('span', { class: 'mono' }, r.pill), r.target]))] : null,
+      d.relapses.length ? [el('h3', {}, 'came back after graduating'), d.relapses.map((r) => el('p', { class: `note ${r.due ? 'bad' : 'soft'}` }, `${r.due ? '✗' : '·'} ${r.rel} came back ${r.recurred} time(s) after ${r.target === 'project' ? `it became a rule here in ${r.rule_in}` : `its rule shipped in ${r.answered_in || 'a release'}`}${r.due ? ' — the rule did not hold' : ' — watched'}`))] : null,
+      el('h3', {}, 'verify · is each lesson sent back less since?'),
+      measured.length
+        ? table(['lesson', 'stage', 'before → after', 'n', 'change', 'other stages'], measured.map((c) => [
+            el('span', { class: 'mono' }, c.rel.replace(/^\.claude\/pills\//, '')),
+            el('span', { class: 'role' }, c.role),
+            `${pct(c.before.loops, c.before.n)} → ${pct(c.after.loops, c.after.n)}`,
+            `${c.before.n} → ${c.after.n}`,
+            el('span', { class: c.change === 'lower' ? 'ok' : c.change === 'higher' ? 'bad' : 'faint' }, { lower: 'sent back less', higher: 'sent back more', unclear: 'no clear change' }[c.change]),
+            el('span', { class: 'soft' }, `${pct(c.control.before.loops, c.control.before.n)} → ${pct(c.control.after.loops, c.control.after.n)}`),
+          ]), [3])
+        : el('p', { class: 'note faint' }, 'No lesson could be measured yet.'),
+      unmeasured.length ? el('p', { class: 'note faint' }, `${unmeasured.length} more could not be measured.`) : null,
+    );
+  },
+
+  stats(d) {
+    if (!d) return el('p', { class: 'empty' }, 'Nothing measured for this project yet: its hooks snapshot it every turn.');
+    const rows = d.stages.rows;
+    const busiest = Math.max(1, ...rows.map((s) => s.rounds));
+    return el('div', {},
+      el('h2', {}, 'Stats'),
+      el('p', { class: 'sub' }, said(`${d.span[0]} → ${d.span[1]}, as \`nina stats\` measures it in this project${d.denied ? ` · ${d.denied} dispatch(es) denied by a hook, not counted` : ''}.`)),
+      el('div', { class: 'cards' },
+        card('runs', String(d.runs), `${d.rounds} rounds`),
+        d.cost ? card('cost', money(d.cost.total), `at API list prices of ${d.cost.pricesAsOf}`) : null,
+        d.proportion ? card('cycles that wrote code', String(d.proportion.built)) : null,
+      ),
+      el('h3', {}, 'stages · what each ran, and what came of it'),
+      table(['stage', 'runs', 'rounds', 'sent back', 'rate', 'median', ''],
+        rows.map((s) => [
+          el('span', { class: 'role' }, s.role),
+          String(s.runs),
+          String(s.rounds),
+          String(s.loop),
+          pct(s.loop, s.clear),
+          s.median_s === null ? '—' : `${(s.median_s / 60).toFixed(1)}m`,
+          el('div', { style: `width:${Math.max(8, (100 * s.rounds) / busiest)}%` }, bar([[(s.clear - s.loop) / s.rounds, 'var(--pink)'], [s.loop / s.rounds, 'var(--amber)'], [(s.rounds - s.clear) / s.rounds, '#4a4860']])),
+        ]), [1, 2, 3, 4, 5]),
+      el('p', { class: 'note faint' }, 'pink: went forward · amber: sent back · grey: no verdict read'),
+      d.stages.outside.length ? el('p', { class: 'note faint' }, `Agents outside the pipeline: ${d.stages.outside.map(([r, n]) => `${r} ×${n}`).join(', ')}.`) : null,
+      d.cost ? [el('h3', {}, 'cost · by stage'),
+        table(['stage', 'runs', 'median', 'total', 'share', ''], d.cost.rows.map((r) => [el('span', { class: 'role' }, r.role), String(r.runs), money(r.median), money(r.total), pct(r.total, d.cost.total), bar([[r.total / d.cost.total, 'var(--pink)']])]), [1, 2, 3, 4]),
+        d.cost.unpriced ? el('p', { class: 'note faint' }, `${d.cost.unpriced} run(s) on a model the price table does not know.`) : null] : null,
+      d.context ? [el('h3', {}, 'context · every turn re-reads it all'),
+        table(['stage', 'rounds', 'n', 'turns', 'calls/turn', 'starts at', 'peak', 'prompt'], d.context.rows.map((r, i, all) => [i > 0 && all[i - 1].role === r.role ? '' : el('span', { class: 'role' }, r.role), el('span', { class: 'faint' }, r.label), String(r.n), String(r.turns), r.callsPerTurn.toFixed(2), kTokens(r.start), kTokens(r.peak), r.prompt === null ? '—' : r.prompt.toLocaleString('en-US')]), [2, 3, 4, 5, 6, 7])] : null,
+      d.proportion ? [el('h3', {}, 'proportion · the size of a change against its chain'),
+        table(['largest write', 'cycles', 'with a planner or architect', ''], d.proportion.rows.map((r) => [r.label, String(r.cycles), r.cycles ? `${r.designed} (${pct(r.designed, r.cycles)})` : '—', bar([[r.cycles ? r.designed / r.cycles : 0, 'var(--pink)']])]), [1, 2]),
+        d.proportion.over ? el('p', { class: 'note warn' }, `${d.proportion.over.count} implementer round(s) wrote more files than one step may (${d.proportion.over.limit}); the largest wrote ${d.proportion.over.largest}.`) : null] : null,
+    );
+  },
+};
+
+// ─── the frame ────────────────────────────────────────────────────────────────────────────────
+const view = document.getElementById('view');
+const office = document.getElementById('office');
+let current = null;
+let timer = null;
+
+async function load(tab) {
+  try {
+    const res = await fetch(`api/${tab}`, { cache: 'no-store' });
+    const data = await res.json();
+    if (tab !== current) return;
+    const scroll = view.scrollTop;
+    view.replaceChildren(el('div', { class: 'wrap' }, res.ok ? RENDER[tab](data) : el('p', { class: 'empty bad' }, data?.error ?? `${tab} could not be read`)));
+    view.scrollTop = scroll;
+  } catch (error) {
+    if (tab === current) view.replaceChildren(el('div', { class: 'wrap' }, el('p', { class: 'empty bad' }, said(`${tab} could not be read — is \`nina dashboard\` still running? ${error.message}`))));
+  }
+}
+
+function show(tab) {
+  if (!TABS.some(([key]) => key === tab)) tab = 'office';
+  current = tab;
+  clearInterval(timer);
+  for (const a of document.querySelectorAll('nav a')) {
+    if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
+  const isOffice = tab === 'office';
+  office.hidden = !isOffice;
+  view.hidden = isOffice;
+  // The office keeps its own stream; loaded once, it stays connected while other tabs are read.
+  if (isOffice && !office.getAttribute('src')) office.setAttribute('src', 'office/');
+  if (isOffice) return;
+  view.replaceChildren(el('div', { class: 'wrap' }, el('p', { class: 'empty' }, 'Reading…')));
+  load(tab);
+  timer = setInterval(() => document.visibilityState === 'visible' && load(tab), REFRESH_MS);
+}
+
+document.getElementById('tabs').append(...TABS.map(([key, label]) => el('a', { href: `#${key}`, 'data-tab': key }, label)));
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+fetch('api/overview', { cache: 'no-store' })
+  .then((r) => r.json())
+  .then((o) => {
+    document.getElementById('what').textContent = `${o.project}${o.core ? ` · core ${o.core}` : ''}${o.surfaces?.length ? ` · ${o.surfaces.join(', ')}` : ''}`;
+    document.title = `NINA dashboard · ${o.project}`;
+  })
+  .catch(() => (document.getElementById('what').textContent = ROOM.project));
+show(location.hash.slice(1) || 'office');
+</script>
+</body>
+</html>

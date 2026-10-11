@@ -22,7 +22,6 @@
  * a click on a link, beside the conversation once `workbench.browser.openLocalhostLinks` is on (1.140).
  */
 
-import { spawn } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename, dirname, join } from 'node:path';
@@ -34,6 +33,7 @@ import { projectStoreFile, readStoreFile } from './store.mjs';
 import { IN_FLIGHT, cyclesOf } from './commands/stats.mjs';
 import { isLoopBack } from './transcripts.mjs';
 import { shapeOf } from './commands/pipeline.mjs';
+import { listenHere, openInBrowser, refuseElsewhere, untilStopped } from './serve.mjs';
 
 /** The page, one self-contained file: the room, the sprites and the animation, with nothing fetched from anywhere. */
 const PAGE = join(dirname(fileURLToPath(import.meta.url)), 'office.html');
@@ -307,14 +307,14 @@ export function officeRoom(target) {
 const send = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
 /**
- * Serves the office: the page at `/`, its beats at `/events` as server-sent events. Live, each client is handed the
- * session's beats so far to set the room by, at once, and then each new one as the gate writes it, following the
- * newest session unless one was named; a replay plays one session from its start, its gaps shortened.
+ * The office's paths, for a server to mount: the page and its stream of beats and timeline, polling the ledger while
+ * anyone watches live. `serveOffice` mounts them at the root; the dashboard (`nina dashboard`) at `/office/`, where the
+ * page's relative `events` reaches `/office/events`.
  *
- * @param {{target: string, wanted?: string, replay?: boolean, port?: number}} options
- * @returns {Promise<{url: string, close: () => Promise<void>}>}
+ * @param {{target: string, wanted?: string, replay?: boolean}} options
+ * @returns {{handle: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, path: string) => boolean, close: () => void}}
  */
-export async function serveOffice({ target, wanted, replay = false, port = OFFICE_PORT }) {
+export function officeRoutes({ target, wanted, replay = false }) {
   const room = officeRoom(target);
   const graph = parseGraph(readFileSync(join(target, '.claude', 'graph.md'), 'utf8'));
   // A function, so a `$&` or `$'` in a project's name or its owner's is text and not a replacement pattern.
@@ -418,20 +418,16 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
     next();
   };
 
-  const server = createServer((req, res) => {
-    // Only this machine's own names for itself: a page elsewhere that rebinds its domain to the loopback address
-    // reaches the port, and is refused here. Any port, since a forwarded one — an editor's port forwarding, a
-    // container's — reaches this one under another number.
-    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(String(req.headers.host ?? ''))) {
-      res.writeHead(403, { 'content-type': 'text/plain' });
-      res.end('not from here\n');
-      return;
-    }
-    const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+  /**
+   * Serves the office's own paths — `/` and `/events`, relative to where it is mounted — and says whether it did.
+   *
+   * @returns {boolean}
+   */
+  const handle = (req, res, path) => {
     if (path === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       res.end(page);
-      return;
+      return true;
     }
     if (path === '/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
@@ -441,77 +437,51 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
       req.on('close', () => clients.delete(client));
       if (replay) play(client);
       else tick();
-      return;
+      return true;
     }
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('not here\n');
-  });
+    return false;
+  };
 
   const poll = setInterval(tick, POLL_MS);
-  const listen = (p) =>
-    new Promise((resolveListen, reject) => {
-      const onError = (error) => {
-        server.off('listening', onListening);
-        reject(error);
-      };
-      const onListening = () => {
-        server.off('error', onError);
-        resolveListen();
-      };
-      server.once('error', onError);
-      server.once('listening', onListening);
-      server.listen(p, '127.0.0.1');
-    });
-  try {
-    await listen(port);
-  } catch (error) {
-    if (error?.code !== 'EADDRINUSE' || port === 0) {
-      clearInterval(poll);
-      throw error;
-    }
-    await listen(0);
-  }
-  const url = `http://127.0.0.1:${server.address().port}`;
-  const close = () =>
-    new Promise((resolveClose) => {
-      clearInterval(poll);
-      for (const timer of timers) clearTimeout(timer);
-      for (const client of clients) client.res.end();
-      clients.clear();
-      server.close(() => resolveClose());
-    });
-  return { url, close };
+  const close = () => {
+    clearInterval(poll);
+    for (const timer of timers) clearTimeout(timer);
+    for (const client of clients) client.res.end();
+    clients.clear();
+  };
+  return { handle, close };
 }
 
 /**
- * Hands an address to the system's opener. One that is not there fails at once, and one with no display to open on
- * exits with an error soon after; one still running after two seconds is taken to have opened it. Windows' explorer
- * answers 1 even when it opened the page.
+ * Serves the office on its own: the page at `/`, its beats at `/events` as server-sent events (`officeRoutes`). Live,
+ * each client is handed the session's beats so far to set the room by, at once, and then each new one as the gate
+ * writes it, following the newest session unless one was named; a replay plays one session from its start, its gaps
+ * shortened.
  *
- * @param {string} url
- * @returns {Promise<boolean>} Whether the browser was opened.
+ * @param {{target: string, wanted?: string, replay?: boolean, port?: number}} options
+ * @returns {Promise<{url: string, close: () => Promise<void>}>}
  */
-function openInBrowser(url) {
-  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
-  return new Promise((resolveOpen) => {
-    let child;
-    try {
-      child = spawn(opener, [url], { stdio: 'ignore', detached: true });
-    } catch {
-      resolveOpen(false);
-      return;
-    }
-    const timer = setTimeout(() => resolveOpen(true), 2000);
-    child.once('error', () => {
-      clearTimeout(timer);
-      resolveOpen(false);
-    });
-    child.once('exit', (code) => {
-      clearTimeout(timer);
-      resolveOpen(code === 0 || process.platform === 'win32');
-    });
-    child.unref();
+export async function serveOffice({ target, wanted, replay = false, port = OFFICE_PORT }) {
+  const routes = officeRoutes({ target, wanted, replay });
+  const server = createServer((req, res) => {
+    if (refuseElsewhere(req, res)) return;
+    if (routes.handle(req, res, new URL(req.url ?? '/', 'http://localhost').pathname)) return;
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('not here\n');
   });
+  let url;
+  try {
+    url = await listenHere(server, port);
+  } catch (error) {
+    routes.close();
+    throw error;
+  }
+  const close = () =>
+    new Promise((resolveClose) => {
+      routes.close();
+      server.close(() => resolveClose());
+    });
+  return { url, close };
 }
 
 /**
@@ -538,12 +508,7 @@ export async function viewOffice({ target, wanted, replay = false, port = OFFICE
     console.error(`  the office could not open a port — ${error?.message ?? error}\n`);
     return 1;
   }
-  // Listening for Ctrl+C before saying it closes the office: pressed in between, with no listener yet, it would kill
-  // the process outright instead.
-  const stopped = new Promise((resolveStop) => {
-    process.once('SIGINT', resolveStop);
-    process.once('SIGTERM', resolveStop);
-  });
+  const stopped = untilStopped();
   const what = replay ? `replaying session ${sessionLedgers(target, wanted).picked.session.slice(0, 8)}` : wanted ? `live, session ${wanted}` : 'live, following the newest session';
   const opened = open ? await openInBrowser(office.url) : false;
   // The address ends its line, with nothing after it, so a terminal makes it a link.
