@@ -364,6 +364,8 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
   };
 
   const tick = () => {
+    // Nobody watching live: nothing to cut or send.
+    if (![...clients].some((client) => !client.replay)) return;
     const state = current();
     const now = Date.now();
     const beats = officeBeats(state.entries, graph, now);
