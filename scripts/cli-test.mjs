@@ -5157,6 +5157,12 @@ const dated = (date, status = 'active') =>
     };
     const page = await get('/');
     expect(page.status === 200 && page.text.includes('<title>NINA dashboard</title>') && page.text.includes(`"project":"${basename(dir)}"`) && !page.text.includes('/*NINA_DASHBOARD*/null'), 'dashboard: the page is served with the project filled in');
+    // A tab is shown by `hidden` on the others, and the office iframe's own `display: block` undid it: once opened,
+    // the office stayed drawn under every tab, which had no background of its own to cover it.
+    expect(
+      /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/.test(page.text) && /#view\s*\{[^}]*background:/.test(page.text),
+      'dashboard: a hidden tab is hidden whatever display a rule gives it, and a tab draws on its own background',
+    );
     const api = async (tab) => JSON.parse((await get(`/api/${tab}`)).text);
     const rounds = (projectRecords(dir) ?? []).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     const tasks = await api('tasks');
