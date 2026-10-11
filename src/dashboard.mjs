@@ -39,7 +39,8 @@ const roundsOf = (target) => (projectRecords(target) ?? []).sort((a, b) => Strin
 /**
  * What each tab is served, by its name. Each reads the project as it stands at the request, from the same function the
  * command prints from, and carries what that command prints — a pill's name, stage, count and trigger, the notes and
- * problems `nina pills` lists, the words the orchestrator gave a dispatch — and never a pill's body, a report, a prompt
+ * problems `nina pills` lists, the words the orchestrator gave a dispatch, each stage's words and the task shapes
+ * `nina pipeline` draws — and never a pill's body, a report, a prompt
  * or a whole record. Nothing leaves the machine: the page is served on the loopback address only.
  *
  * @param {string} target - The project directory.
