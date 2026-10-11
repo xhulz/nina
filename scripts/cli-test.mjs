@@ -5207,12 +5207,26 @@ const dated = (date, status = 'active') =>
   const fresh = await scratch();
   await mkdir(join(fresh, '.nina'), { recursive: true });
   await writeFile(join(fresh, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
-  const empty = await serveDashboard({ target: fresh, ctx, port: 0 });
+  // A pills directory that is a file makes its tab throw, with the project's path in the error.
+  await mkdir(join(fresh, '.claude', 'agents'), { recursive: true });
+  await writeFile(join(fresh, '.claude', 'agents', 'reviewer.md'), 'x\n');
+  await writeFile(join(fresh, '.claude', 'pills'), 'not a directory\n');
+  const toldLines = [];
+  const empty = await serveDashboard({ target: fresh, ctx, port: 0, tell: (line) => toldLines.push(line) });
   try {
     const officeless = await fetch(`${empty.url}/office/`);
+    const officeSays = await officeless.text();
     const pipe = await (await fetch(`${empty.url}/api/pipeline`)).json();
     const tasks = await (await fetch(`${empty.url}/api/tasks`)).json();
     expect(officeless.status === 404 && pipe === null && tasks.total === 0, `dashboard: a project with nothing composed yet serves empty tabs and no office — got ${officeless.status}, ${JSON.stringify(pipe)}, ${JSON.stringify(tasks)}`);
+    const broken = await fetch(`${empty.url}/api/pills`);
+    const brokenSays = await broken.text();
+    const told = toldLines.join('\n');
+    expect(
+      broken.status === 500 && !brokenSays.includes(fresh) && !brokenSays.includes('ENOTDIR') && !officeSays.includes(fresh) && !officeSays.includes('ENOENT') &&
+        told.includes('ENOTDIR') && told.includes('ENOENT') && told.includes(join(fresh, '.claude', 'pills')),
+      `dashboard: a tab that fails says why in the terminal, and the page gets no error text, path or stack — got ${broken.status} ${brokenSays} / ${officeSays} / ${told}`,
+    );
   } finally {
     await empty.close();
   }

@@ -95,10 +95,11 @@ export function dashboardTabs(target, ctx) {
 /**
  * Serves the dashboard: the page at `/`, each tab's data at `/api/<tab>`, and the office at `/office/`.
  *
- * @param {{target: string, ctx: {root: string}, port?: number}} options
+ * @param {{target: string, ctx: {root: string}, port?: number, tell?: (line: string) => void}} options - `tell` is where
+ *   a failure is said: the terminal by default.
  * @returns {Promise<{url: string, close: () => Promise<void>}>}
  */
-export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT }) {
+export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT, tell = console.error }) {
   const tabs = dashboardTabs(target, ctx);
   const room = JSON.stringify({ project: basename(target) }).replace(/</g, '\\u003c');
   const page = readFileSync(PAGE, 'utf8').replace('/*NINA_DASHBOARD*/null', () => room);
@@ -108,6 +109,9 @@ export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT }) {
     if (!office) office = officeRoutes({ target });
     return office;
   };
+  // What failed is said in the terminal that runs the dashboard, and never in the response: an error's message carries
+  // the project's paths, and a stack the code's.
+  const told = (what, error) => tell(`  ${what} could not be read — ${error?.stack ?? error}`);
   const json = (res, status, body) => {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body));
@@ -131,8 +135,9 @@ export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT }) {
       try {
         routes = officeFor();
       } catch (error) {
+        told('the office', error);
         res.writeHead(404, { 'content-type': 'text/plain' });
-        res.end(`no office here — ${error.message}\n`);
+        res.end('no office here: .claude/graph.md could not be read (`nina compose` writes it) — the terminal running `nina dashboard` says why\n');
         return;
       }
       if (routes.handle(req, res, path.slice('/office'.length))) return;
@@ -142,7 +147,8 @@ export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT }) {
       try {
         json(res, 200, await tabs[tab]());
       } catch (error) {
-        json(res, 500, { error: error?.message ?? String(error) });
+        told(`the ${tab} tab`, error);
+        json(res, 500, { error: `${tab} could not be read: the terminal running \`nina dashboard\` says why` });
       }
       return;
     }
