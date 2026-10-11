@@ -396,10 +396,19 @@ function newestRecord(filed, pill) {
   let newest;
   for (const r of filed) {
     if (r.pill !== pill) continue;
-    if (!newest || r.date > newest.date || (r.date === newest.date && Number(r.occurrences) > Number(newest.occurrences))) newest = r;
+    const later = !newest || r.date > newest.date ||
+      (r.date === newest.date && (Number(r.occurrences) > Number(newest.occurrences) ||
+        (Number(r.occurrences) === Number(newest.occurrences) && generation(r.file) > generation(newest.file))));
+    if (later) newest = r;
   }
   return newest;
 }
+
+/** Which record of one pill on one day a file name is: the first, `-again`, `-again-2`, … ({@link recordName}). */
+const generation = (file) => {
+  const again = /-again(?:-(\d+))?\.md$/.exec(String(file ?? ''));
+  return again ? Number(again[1] ?? 1) : 0;
+};
 
 /**
  * Where a graduated lesson's rule went, as a clause: "it became a rule here in …" or "its rule shipped in …".
@@ -743,7 +752,7 @@ function recordName(dir, pill, date) {
  * @param {string} file - The file named, as given.
  * @returns {Promise<string|null>}
  */
-async function notHere(target, file, layerRoot) {
+async function notHere(target, file, layerRoot, surfaces) {
   const rel = relative(target, resolve(target, file));
   if (!file || rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return `${file || 'no file'} is not a file inside the project`;
   const path = join(target, rel);
@@ -764,7 +773,10 @@ async function notHere(target, file, layerRoot) {
   if (posix.startsWith(layer)) {
     const composed = posix.slice(layer.length);
     const projectSlots = (lines) => new Set(lines.split('\n').map((l) => SLOT.exec(l.trim())?.[1]).filter((s) => s?.startsWith('project.')));
-    const open = projectSlots(await readFile(join(layerRoot, 'core', 'tree', composed), 'utf8').catch(() => ''));
+    const core = await readFile(join(layerRoot, 'core', 'tree', composed), 'utf8').catch(() => '');
+    const gate = closedGate(core, surfaces);
+    if (gate) return `${posix} is a fragment of ${composed}, which this project does not compose without the ${gate} surface — no agent would read the rule`;
+    const open = projectSlots(core);
     if (![...projectSlots(text)].some((s) => open.has(s))) {
       return `${posix} fills no project slot of ${composed}, so nothing composes it and no agent would read the rule — \`nina where ${composed}\` lists the slots`;
     }
@@ -846,7 +858,7 @@ async function graduate(target, profile, layerRoot, known, which, here) {
       console.error(last ? `  ${lesson.rel} is recorded already, ${last.status}: ${HARNESS}/requests/${last.file}\n` : `  ${lesson.rel} is retired already\n`);
       return 1;
     }
-    const why = await notHere(target, here, layerRoot);
+    const why = await notHere(target, here, layerRoot, profile.surfaces ?? []);
     if (why) {
       console.error(`  ${why}\n`);
       return 1;
@@ -996,7 +1008,7 @@ export async function learn(argv, ctx) {
         console.log(`  ${lesson.rel} was declined by the harness${declined.answered_in ? ` in ${declined.answered_in}` : ''}: ${declined.declined || 'no reason recorded'}`);
         console.log(
           lesson.retired
-            ? `    → the rule this project made did not hold: make it again where its agents read it — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}`
+            ? `    → the rule this project made did not hold: make it again where its agents read it — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}; or, if the reason says a rule already covers it, \`nina learn --close ${declined.file}\``
             : `    → make it a rule of this project — in its layer under ${HARNESS}/project/tree/, or a file it owns — then ${here}; or, if the reason says a rule already covers it, set the pill's status to retired`,
         );
         continue;

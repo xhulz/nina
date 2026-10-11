@@ -144,7 +144,7 @@ A rule keeps its number in every project, because other documents cite it as `Ha
 <!-- nina:slot db.6 -->
 <!-- nina:slot db.7 -->
 <!-- nina:slot pii.1 -->
-9. **TSDoc is mandatory on every TS declaration** (function, type, interface, class, method, enum) — exported or not, and members are declarations: the fields of an interface, a type alias or an inline type literal, class members, constructors, an object literal's methods and accessors — a hand-built fake's too — and a local whose value is a function, a mock's included. A data local, and a literal typed by a documented declaration, need none. Enforced in review, by a sweep of every file touched, not a sample.
+9. **TSDoc is mandatory on every TS declaration** (function, type, interface, class, method, enum) — exported or not, and members are declarations: the fields of an interface, a type alias or an inline type literal, class members, constructors, an object literal's methods and accessors — a hand-built fake's too — and a local whose value is a function, a mock's included. A data local, a literal typed by a documented declaration and a property descriptor passed as an argument need none. Enforced in review, by a sweep of every file touched, not a sample.
 <!-- nina:slot edge-cf.8 -->
 <!-- nina:slot integrations.4 -->
 <!-- nina:slot integrations.5 -->
