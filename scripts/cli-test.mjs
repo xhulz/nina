@@ -5183,17 +5183,32 @@ const dated = (date, status = 'active') =>
     expect(office.status === 301 && office.location === '/office/' && officePage.status === 200 && officePage.text.includes('<title>NINA office</title>'), 'dashboard: the office is mounted at /office/, where its relative stream resolves');
     expect((await get('/api/nope')).status === 404 && (await get('/elsewhere')).status === 404, 'dashboard: nothing else is served');
     const port = new URL(served.url).port;
-    const rebound = await new Promise((resolveGet) => {
-      const req = httpRequest({ host: '127.0.0.1', port, path: '/api/stats', headers: { host: `evil.example:${port}` } }, (res) => {
-        res.resume();
-        resolveGet(res.statusCode);
+    const asElsewhere = (path) =>
+      new Promise((resolveGet) => {
+        const req = httpRequest({ host: '127.0.0.1', port, path, headers: { host: `evil.example:${port}` } }, (res) => {
+          res.resume();
+          resolveGet(res.statusCode);
+        });
+        req.on('error', () => resolveGet(0));
+        req.end();
       });
-      req.on('error', () => resolveGet(0));
-      req.end();
-    });
-    expect(rebound === 403, `dashboard: a request naming another host is refused, its data included — got ${rebound}`);
+    const rebound = [await asElsewhere('/api/stats'), await asElsewhere('/office/events'), await asElsewhere('/')];
+    expect(rebound.every((code) => code === 403), `dashboard: a request naming another host is refused, its data and the office's stream included — got ${rebound}`);
   } finally {
     await served.close();
+  }
+  // A project with a profile and nothing composed yet: the tabs say so, and the office is not there to mount.
+  const fresh = await scratch();
+  await mkdir(join(fresh, '.nina'), { recursive: true });
+  await writeFile(join(fresh, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const empty = await serveDashboard({ target: fresh, ctx, port: 0 });
+  try {
+    const officeless = await fetch(`${empty.url}/office/`);
+    const pipe = await (await fetch(`${empty.url}/api/pipeline`)).json();
+    const tasks = await (await fetch(`${empty.url}/api/tasks`)).json();
+    expect(officeless.status === 404 && pipe === null && tasks.total === 0, `dashboard: a project with nothing composed yet serves empty tabs and no office — got ${officeless.status}, ${JSON.stringify(pipe)}, ${JSON.stringify(tasks)}`);
+  } finally {
+    await empty.close();
   }
   const bare = await scratch();
   const noProfile = run(['dashboard', '--project', bare]);

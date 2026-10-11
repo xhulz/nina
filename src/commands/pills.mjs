@@ -336,13 +336,6 @@ export function validate(pill, text, roles, today) {
 }
 
 /**
- * `nina pills`.
- *
- * @param {string[]} argv - Command arguments; `--project <dir>` selects the target.
- * @param {{root: string}} [ctx] - CLI context; `root` is the NINA install directory.
- * @returns {Promise<number>} Process exit code.
- */
-/**
  * A project's pills, checked: what `nina pills` prints and the dashboard's pills tab shows — each pill's stage, status,
  * count and trigger, and the problems and notes over the whole corpus. Null when the project has composed no agents.
  *
@@ -482,6 +475,13 @@ export async function pillsData(target, ctx) {
   return { files: files.length, active: active.length, retired, problems, notes, pills: each };
 }
 
+/**
+ * `nina pills`.
+ *
+ * @param {string[]} argv - Command arguments; `--project <dir>` selects the target.
+ * @param {{root: string}} [ctx] - CLI context; `root` is the NINA install directory.
+ * @returns {Promise<number>} Process exit code.
+ */
 export async function pills(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   const quiet = argv.includes('--quiet');
