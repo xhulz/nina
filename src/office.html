@@ -14,15 +14,41 @@
   #zoom button { font: 600 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-width: 34px; height: 30px; padding: 0 9px; color: #fff8e8; background: rgba(34, 32, 43, 0.88); border: 2px solid #262331; border-radius: 4px; cursor: pointer; }
   #zoom button:hover { background: #3a3f58; }
   #zoom button[aria-pressed="true"] { color: #ffd34d; }
+  #tasks { position: fixed; top: 0; right: 0; bottom: 0; width: 300px; box-sizing: border-box; padding: 16px 16px 24px 18px; overflow-y: auto; color: #e6e8ee; background: #22202b; border-left: 2px solid #262331; font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #tasks.overlay { top: 50px; width: min(300px, 88vw); border-top: 2px solid #262331; box-shadow: -6px 6px 18px rgba(0, 0, 0, 0.4); }
+  #tasks[hidden] { display: none; }
+  #tasks h2 { margin: 0; font: 600 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #ffd34d; }
+  #tasks .sub { margin: 2px 0 16px; color: #8a8fa8; font-size: 12px; }
+  #tasks .empty { color: #8a8fa8; margin: 0; }
+  #tasks ol { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid #3a3f58; }
+  #tasks li { position: relative; margin: 0 0 16px; padding-left: 8px; }
+  #tasks li::before { content: ''; position: absolute; left: -21px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: #6b7089; border: 2px solid #22202b; }
+  #tasks li.running::before { background: #ffd34d; animation: beat 1.2s ease-in-out infinite; }
+  #tasks li.idle::before { background: #c9a227; }
+  #tasks li.done::before { background: #3ec74d; }
+  #tasks .name { font-weight: 600; color: #fff8e8; overflow-wrap: anywhere; }
+  #tasks .when { margin-top: 3px; color: #a9adbf; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #tasks .who { margin-top: 3px; color: #c9cde0; font-size: 12px; overflow-wrap: anywhere; }
+  #tasks .now { margin-top: 2px; color: #ffd34d; font-size: 12px; }
+  #tasks .now.quiet { color: #8a8fa8; }
+  @keyframes beat { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { #tasks li.running::before { animation: none; } }
 </style>
 </head>
 <body>
 <canvas id="screen"></canvas>
 <div id="zoom" role="toolbar" aria-label="zoom">
+  <button id="tasks-toggle" type="button" title="the session's tasks (t)" aria-controls="tasks">tasks</button>
   <button id="zoom-out" type="button" title="zoom out (−)" aria-label="zoom out">−</button>
   <button id="zoom-fit" type="button" title="the whole office (0)">fit</button>
   <button id="zoom-in" type="button" title="zoom in (+)" aria-label="zoom in">+</button>
 </div>
+<aside id="tasks" aria-label="the session's tasks" hidden>
+  <h2>Tasks</h2>
+  <p class="sub">this session, newest first</p>
+  <p id="task-empty" class="empty">Nothing yet: the first dispatch starts a task.</p>
+  <ol id="task-list"></ol>
+</aside>
 <script>
 'use strict';
 /*
@@ -525,6 +551,9 @@ function settleCap() {
 }
 
 function onBeat(b) {
+  if (b.type === 'task' || b.type === 'task-end') return onTimeline(b);
+  if (b.type === 'work' && b.task && !b.message) workedOn(b.task, b.role);
+  if (b.type === 'work' || b.type === 'verdict') lastActivity = Math.max(lastActivity, b.at);
   const stage = b.role ? stages.get(b.role) : null;
   if (b.type === 'work') {
     if (!stage) return;
@@ -687,6 +716,9 @@ function reset() {
     place(p, p.home);
   }
   lines.length = 0;
+  tasks.clear();
+  lastActivity = 0;
+  drawTasks();
   confetti = [];
   banner = null;
   capRole = null;
@@ -808,11 +840,131 @@ function syncButtons() {
   document.getElementById('zoom-fit').setAttribute('aria-pressed', String(level() <= (fit / dpr) * 1.001));
 }
 
+// ─── the timeline beside the room ─────────────────────────────────────────────────────────────
+/*
+ * The session's work, task by task, as the server cuts it — the way `nina runs` does: each named by the words the
+ * orchestrator gave its first dispatch, from when that went out to the verdict that closed it. A task still open
+ * counts up while anyone is at work on it, and stops at the last thing that happened while nobody is.
+ */
+const SIDE = 300;
+/** Narrower than this, the timeline is drawn over the room, and starts hidden. */
+const NARROW = 760;
+const TASKS_KEY = 'nina-office-tasks';
+const tasks = new Map();
+/** The newest dispatch or verdict: a replay's clock, and where an idle task's count stops. */
+let lastActivity = 0;
+let tasksOpen = (() => {
+  try {
+    const kept = localStorage.getItem(TASKS_KEY);
+    if (kept !== null) return kept === 'open';
+  } catch {
+    // Kept for this page only.
+  }
+  return window.innerWidth >= NARROW;
+})();
+
+/** A task as first heard of: by its first dispatch, which comes just before the task's own beat. */
+const taskFor = (key, at) => {
+  if (!tasks.has(key)) tasks.set(key, { name: null, start: at, end: null, how: null, busy: null, who: new Map() });
+  return tasks.get(key);
+};
+
+function onTimeline(b) {
+  if (b.type === 'task') Object.assign(taskFor(b.task, b.at), { name: b.name, start: b.at });
+  else if (tasks.has(b.task)) Object.assign(tasks.get(b.task), { end: b.at, how: b.how, busy: b.busy ?? null });
+  drawTasks();
+}
+
+/** Who worked on a task: each stage in the order it first did, and how many times it was sent. */
+function workedOn(key, role) {
+  const who = taskFor(key, Date.now()).who;
+  who.set(role, (who.get(role) ?? 0) + 1);
+}
+
+/** The stages someone is at work for now. */
+const atWork = () => [...new Set([...people.values()].filter((p) => p.work && !p.reported && !p.leaving).map((p) => p.role))];
+
+const two = (n) => String(n).padStart(2, '0');
+/** A moment as the hour, with the day when it is not the day of `beside` — now, or the moment it follows. */
+function stamp(at, beside) {
+  const t = new Date(at);
+  const hm = `${two(t.getHours())}:${two(t.getMinutes())}`;
+  return t.toDateString() === new Date(beside).toDateString() ? hm : `${t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${hm}`;
+}
+/** A finished length of time: 2h05m, 41m, 50s. */
+function span(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}h${two(m % 60)}m` : `${m}m`;
+}
+/** A running count: 1:27:04, 27:04. */
+function counter(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  return h > 0 ? `${h}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
+}
+
+function drawTasks() {
+  if (!tasksOpen) return;
+  const clock = status.startsWith('replay') ? lastActivity : Date.now();
+  const working = atWork();
+  const line = (cls, text) => {
+    const el = document.createElement('div');
+    el.className = cls;
+    el.textContent = text;
+    return el;
+  };
+  const shown = [...tasks.values()].sort((a, b) => b.start - a.start);
+  document.getElementById('task-list').replaceChildren(
+    ...shown.map((t) => {
+      const li = document.createElement('li');
+      const running = t.end === null;
+      const idle = running && working.length === 0;
+      li.className = running ? (idle ? 'idle' : 'running') : t.how === 'closed' ? 'done' : 'ended';
+      li.append(line('name', t.name || '(no description)'));
+      if (t.who.size > 0) li.append(line('who', [...t.who].map(([role, n]) => (n > 1 ? `${role} ×${n}` : role)).join(' · ')));
+      if (running) {
+        const upTo = idle ? Math.max(t.start, lastActivity) : Math.max(t.start, clock);
+        li.append(line('when', `${stamp(t.start, clock)} → now · ${counter(upTo - t.start)}`));
+        li.append(line('now', idle ? `idle since ${stamp(lastActivity, clock)}` : `at work: ${working.join(', ')}`));
+      } else {
+        li.append(line('when', `${stamp(t.start, clock)} → ${stamp(t.end, t.start)} · ${span(t.end - t.start)}`));
+        // A task that waited — overnight, on the owner — says how much of it anyone was at work.
+        if (t.busy !== null && t.busy < (t.end - t.start) * 0.8) li.append(line('now quiet', `${span(t.busy)} at work`));
+      }
+      return li;
+    }),
+  );
+  document.getElementById('task-empty').hidden = tasks.size > 0;
+}
+setInterval(drawTasks, 1000);
+
+function showTasks(open) {
+  tasksOpen = open;
+  try {
+    localStorage.setItem(TASKS_KEY, open ? 'open' : 'closed');
+  } catch {
+    // Kept for this page only.
+  }
+  resize();
+  drawTasks();
+}
+document.getElementById('tasks-toggle').addEventListener('click', () => showTasks(!tasksOpen));
+
 function resize() {
   dpr = window.devicePixelRatio || 1;
-  screen.width = Math.floor(window.innerWidth * dpr);
+  // The timeline takes its width from the room on a wide window, and is drawn over it on a narrow one.
+  const overlay = window.innerWidth < NARROW;
+  const side = tasksOpen && !overlay ? SIDE : 0;
+  const aside = document.getElementById('tasks');
+  aside.hidden = !tasksOpen;
+  aside.classList.toggle('overlay', overlay);
+  document.getElementById('zoom').style.right = `${side + 10}px`;
+  document.getElementById('tasks-toggle').setAttribute('aria-pressed', String(tasksOpen));
+  screen.width = Math.floor((window.innerWidth - side) * dpr);
   screen.height = Math.floor(window.innerHeight * dpr);
-  screen.style.width = `${window.innerWidth}px`;
+  screen.style.width = `${window.innerWidth - side}px`;
   screen.style.height = `${window.innerHeight}px`;
   band = Math.round(BAND * dpr);
   fit = Math.min(screen.width / LW, (screen.height - band) / LH);
@@ -849,6 +1001,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '+' || e.key === '=') zoomBy(1.25);
   else if (e.key === '-' || e.key === '_') zoomBy(0.8);
   else if (e.key === '0') zoomBy(0);
+  else if (e.key === 't') showTasks(!tasksOpen);
 });
 let drag = null;
 screen.addEventListener('pointerdown', (e) => {
@@ -1059,13 +1212,13 @@ function drawScreen(now) {
   const size = ui(12);
   {
     // Whether anything is going on: between dispatches the room is still, and says so.
-    const working = [...new Set([...people.values()].filter((p) => p.work && !p.reported && !p.leaving).map((p) => p.role))];
+    const working = atWork();
     const going = status === 'live' || status === 'replay' ? (working.length > 0 ? ` · at work: ${working.join(', ')}` : ' · waiting for the next dispatch') : '';
     const title = `NINA office · ${ROOM.project}${session ? ` · ${session.slice(0, 8)}` : ''} · ${status}${going}`;
     s.font = `${size}px ${MONO}`;
     s.fillStyle = '#1b1d26';
     s.fillRect(0, 0, screen.width, band);
-    const width = Math.min(s.measureText(title).width + ui(16), screen.width - ui(150));
+    const width = Math.min(s.measureText(title).width + ui(16), screen.width - ui(230));
     panel(ui(10), ui(9), width, ui(30));
     text(title, ui(18), ui(24), size, '#e6e8ee', 'left', width - ui(16));
   }

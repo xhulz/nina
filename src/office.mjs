@@ -2,8 +2,10 @@
  * `nina pipeline --view` — the pipeline as an office seen from above, drawn in a browser page.
  *
  * Each stage of the project's composed graph has a desk, and each agent the loop gate saw launched is someone
- * sitting at one. The gate's ledger is the only thing read, and it holds metadata only, so the office shows who
- * worked, what they answered and the ids of the issues they named — never what anyone wrote:
+ * sitting at one. The gate's ledger is what is read, and it holds metadata only, so the office shows who worked,
+ * what they answered, the ids of the issues they named and the few words the orchestrator gave each dispatch —
+ * never what anyone wrote. Beside the room, a timeline of the session's work: each piece named by its first
+ * dispatch's words, from when it started to the verdict that closed it, as `nina runs` cuts and names them:
  *
  *   a dispatch                        someone sits down to work, the folder carried over by whoever handed it on
  *   a verdict                         a check over their head, or a cross when it sends work back
@@ -28,6 +30,8 @@ import { fileURLToPath } from 'node:url';
 import { TERMINALS, parseGraph } from './graph.mjs';
 import { readLedger, sessionLedgers } from './gate.mjs';
 import { readProfile } from './paths.mjs';
+import { projectRecords } from './store.mjs';
+import { IN_FLIGHT, cyclesOf } from './commands/stats.mjs';
 import { isLoopBack } from './transcripts.mjs';
 import { shapeOf } from './commands/pipeline.mjs';
 
@@ -64,6 +68,33 @@ const REFUSED_AFTER_MS = 5000;
 /** How often a live office looks at the ledger. The gate appends to it as each fact happens. */
 const POLL_MS = 700;
 
+/**
+ * How long anyone was at work on a piece of work: its runs' spans joined, so runs side by side count once and a
+ * night between two of them not at all — a piece begun one evening and closed the next morning was at work two hours.
+ *
+ * @param {{at: number, end: number|null}[]} starts - Its runs.
+ * @returns {number} Milliseconds.
+ */
+export function busyFor(starts) {
+  const spans = starts.map((s) => [s.at, Math.max(s.at, s.end ?? s.at)]).sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let open = null;
+  for (const [from, to] of spans) {
+    if (open && from <= open[1]) open[1] = Math.max(open[1], to);
+    else {
+      if (open) total += open[1] - open[0];
+      open = [from, to];
+    }
+  }
+  return open ? total + open[1] - open[0] : total;
+}
+
+/** The beats of the timeline beside the room, which move nobody in it. */
+export const TIMELINE = new Set(['task', 'task-end']);
+
+/** How often, at most, the measurement store is read for the names of dispatches a ledger carries none for. */
+const NAMES_EVERY_MS = 15_000;
+
 /** The longest a replay waits between two beats, and the shortest: hours of a session play in minutes. */
 const REPLAY_MAX_GAP_MS = 3000;
 const REPLAY_MIN_GAP_MS = 500;
@@ -78,12 +109,17 @@ const REPLAY_MIN_GAP_MS = 500;
  * still at work, and no dispatch follows within `PARTY_QUIET_MS`; at once when the pass routes only to a terminal.
  * A party that waits on the quiet is only beaten once `now` has passed it.
  *
+ * The work is also cut into pieces for the timeline — `task` where one starts, `task-end` where one ends — the way
+ * `nina runs` cuts a session (`cyclesOf`), each named by its first dispatch's description: the ledger's, or for a
+ * ledger from before the gate kept one, the measurement store's (`names`).
+ *
  * @param {object[]} entries - The ledger, oldest first.
  * @param {{edges: {from: string, to: string, token: string}[]}} graph - The project's parsed graph.
  * @param {number} [now] - The time a waiting party is judged against; `Infinity` for a session that has ended.
+ * @param {Map<string, string>} [names] - Descriptions by dispatch id, for entries that carry none.
  * @returns {object[]} Beats, each `{id, at, type, ...}`; the id is stable as the ledger grows.
  */
-export function officeBeats(ledger, graph, now = Date.now()) {
+export function officeBeats(ledger, graph, now = Date.now(), names = new Map()) {
   const entries = ledger.filter((e) => Number.isFinite(Date.parse(e?.at)));
   const time = (e) => Date.parse(e.at);
   const dispatches = new Map();
@@ -113,13 +149,34 @@ export function officeBeats(ledger, graph, now = Date.now()) {
     const after = e.k === 'pre' && e.id && asked.has(e.id) && !dispatches.has(e.id) ? entries.slice(i + 1).find((x) => x.k === 'pre' && time(x) > at + REFUSED_AFTER_MS) : null;
     starts.push({ i, at, role: e.role, agent: launched?.agent ?? null, message, refusedAt: after ? time(after) : null });
   });
-  const endOf = (s) => {
-    const v = verdicts.find((x) => time(x) >= s.at && (s.agent ? x.agent === s.agent : x.role === s.role));
-    return v ? time(v) : null;
-  };
-  for (const s of starts) s.end = s.message ? s.at : endOf(s);
+  const verdictOf = (s) => verdicts.find((x) => time(x) >= s.at && (s.agent ? x.agent === s.agent : x.role === s.role)) ?? null;
+  for (const s of starts) s.end = s.message ? s.at : verdictOf(s) ? time(verdictOf(s)) : null;
   const busyAt = (moment) =>
     starts.some((s) => !s.message && s.at <= moment && moment - s.at < STALE_MS && !(s.refusedAt !== null && s.refusedAt <= moment) && !(s.end !== null && s.end <= moment));
+
+  // The pieces of work: each run a record the way `nina runs` reads one — its stage, when it went out, its verdict —
+  // and the first of each piece names it and keys it, by the tool_use id that never changes as the ledger grows.
+  const runs = starts
+    .filter((s) => !s.message && s.refusedAt === null)
+    .map((s) => {
+      const e = entries[s.i];
+      const v = verdictOf(s);
+      return { ts: e.at, role: s.role, verdict: v ? v.verdict : now < s.at + STALE_MS ? IN_FLIGHT : null, desc: e.desc ?? names.get(e.id) ?? null, start: s, key: e.id ?? `at${s.i}` };
+    });
+  const taskAt = new Map();
+  /** The piece of work each run belongs to, by its start: the page lists, under each piece, who worked on it. */
+  const taskOf = new Map();
+  const ends = [];
+  for (const cycle of cyclesOf(runs)) {
+    const first = cycle.runs[0];
+    for (const r of cycle.runs) taskOf.set(r.start.i, first.key);
+    const name = first.desc ? String(first.desc) : null;
+    // Its name in its id: one learned later, from the store, reaches a page that already has the piece unnamed.
+    taskAt.set(first.start.i, { id: `task:${first.key}:${name ?? ''}`, at: first.start.at, type: 'task', task: first.key, name });
+    if (cycle.end === 'open') continue;
+    const at = Math.max(...cycle.runs.map((r) => r.start.end ?? r.start.at));
+    ends.push({ id: `task-end:${first.key}`, at, type: 'task-end', task: first.key, how: cycle.end, busy: busyFor(cycle.runs.map((r) => r.start)) });
+  }
 
   const beats = [];
   const seen = new Map();
@@ -148,7 +205,8 @@ export function officeBeats(ledger, graph, now = Date.now()) {
       // changes when the dispatch lands is what reaches a page that already has the guess.
       // A refusal names the work by that same id, so the page finds whoever sat down for it.
       const work = start.message ? `${id}:message` : id;
-      beats.push({ id: work, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
+      beats.push({ id: work, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null, task: taskOf.get(i) ?? null });
+      if (taskAt.has(i)) beats.push(taskAt.get(i));
       if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work });
       else if (!start.message && (start.end === null || start.end - start.at >= STALE_MS) && now >= start.at + STALE_MS) {
         beats.push({ id: `stale:${id}`, at: start.at + STALE_MS, type: 'stale', role: e.role, agent: start.agent, work: id });
@@ -183,8 +241,9 @@ export function officeBeats(ledger, graph, now = Date.now()) {
     // A reset written for the model's own question, by ledgers older than the `question` entry, is not the owner.
     else if (e.k === 'reset' && e.why !== 'ask') beats.push({ id, at, type: 'owner' });
   });
-  // Stable: beats of one moment keep the ledger's order. A beat that waited — a party, a refusal — sorts where it fell.
-  return beats.sort((a, b) => a.at - b.at);
+  // Stable: beats of one moment keep the ledger's order. A beat that waited — a party, a refusal — sorts where it fell,
+  // and a piece of work's end after the verdict that ended it.
+  return [...beats, ...ends].sort((a, b) => a.at - b.at);
 }
 
 /**
@@ -222,6 +281,24 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
   const clients = new Set();
   const timers = new Set();
 
+  // Names for the dispatches of a ledger written before the gate kept them: the measurement store's, by dispatch id,
+  // read again only when one is missing, and not more often than `NAMES_EVERY_MS`.
+  let named = { at: Number.NEGATIVE_INFINITY, names: new Map() };
+  const namesFor = (entries) => {
+    const missing = entries.some((e) => (e.k === 'pre' || e.k === 'dispatch') && e.via !== 'SendMessage' && e.id && !e.desc && !named.names.has(e.id));
+    if (missing && Date.now() - named.at >= NAMES_EVERY_MS) {
+      const records = (() => {
+        try {
+          return projectRecords(target) ?? [];
+        } catch {
+          return [];
+        }
+      })();
+      named = { at: Date.now(), names: new Map(records.filter((r) => r.dispatch_id && r.desc).map((r) => [r.dispatch_id, String(r.desc)])) };
+    }
+    return named.names;
+  };
+
   /** The session to show, and its entries; read again only when its ledger changed. */
   let cached = { path: null, size: -1, mtime: 0, entries: [] };
   const current = () => {
@@ -256,7 +333,7 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
     for (const client of clients) {
       if (client.replay) continue;
       if (client.session !== state.session) greet(client, state);
-      for (const beat of officeBeats(state.entries, graph, Date.now())) {
+      for (const beat of officeBeats(state.entries, graph, Date.now(), namesFor(state.entries))) {
         if (client.sent.has(beat.id)) continue;
         client.sent.add(beat.id);
         send(client.res, 'beat', { ...beat, instant: client.restoring || beat.at < client.since });
@@ -268,7 +345,7 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
   const play = (client) => {
     const state = current();
     greet(client, state);
-    const beats = officeBeats(state.entries, graph, Number.POSITIVE_INFINITY);
+    const beats = officeBeats(state.entries, graph, Number.POSITIVE_INFINITY, namesFor(state.entries));
     // What came before the first dispatch sets the room, at once: a session often opens on many of the owner's
     // messages, and played out they kept the office empty for a minute.
     let i = Math.max(0, beats.findIndex((b) => b.type === 'work'));
@@ -282,6 +359,8 @@ export async function serveOffice({ target, wanted, replay = false, port = OFFIC
       const beat = beats[i];
       send(client.res, 'beat', beat);
       i += 1;
+      // The timeline beside the room moves nobody: what it is told goes out with the beat it belongs to.
+      while (i < beats.length && TIMELINE.has(beats[i].type)) send(client.res, 'beat', beats[i++]);
       // The owner speaking moves nobody across the room: it passes quickly. An answer keeps its wait, or the question
       // it answers would not be seen.
       const quick = i < beats.length && beats[i].type === 'owner';

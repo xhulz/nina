@@ -132,8 +132,8 @@ review and the gates, the test lab, release — off one corridor, a desk for eac
 that runs as several agents), the orchestrator — NINA, drawn as a woman facing the room — at the reception, the owner
 as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
-reads the gate's ledger and nothing else, so it shows what the ledger holds — who worked, what they answered, the
-ids of the issues they named — and never a word anyone wrote. A dispatch is someone sitting down to work, the
+reads the gate's ledger, so it shows what the ledger holds — who worked, what they answered, the ids of the issues
+they named, the few words the orchestrator gave each dispatch — and never a word anyone wrote. A dispatch is someone sitting down to work, the
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
 in red to its fixer) and by the orchestrator otherwise; whoever handed it on then leaves, and everyone else whose
 report is in gets up as the work moves on, so the room holds the work in hand and not everyone who ever sat in it.
@@ -146,6 +146,18 @@ something since then could route to `done`, nobody is still at work and no dispa
 — at once when the pass routes only to a terminal. The quiet is there because qa's pass may still go on to devops,
 and the orchestrator commits before it dispatches; without the rest, a reviewer approving beside a dba that was
 about to reject threw a party.
+
+Beside the room, a timeline of the session's tasks, newest first — the visibility the owner asked for, without the
+detail: each task's name, who worked on it (each stage in the order it first did, and how many times it was
+sent), when it started and ended, and how long it took; a task still open counts up while anyone is at work on it,
+and stops at the last thing that happened while nobody is. A task is a cycle, cut as `nina runs` cuts one
+(`cyclesOf`, one function for both): a session's dispatches up to the verdict that closes them, named by the words
+the orchestrator gave the first. The gate keeps those words on each dispatch's entries; a ledger written before it
+did takes them from the measurement store, by the dispatch's id, and a name learned that way later reaches the page
+under a beat id of its own. A task that waited — overnight, on the owner — also says how long anyone was at work on
+it: its runs' spans joined, so runs side by side count once. On a narrow window it is drawn over the room and
+starts hidden; the `tasks` button, or `t`, shows or hides it, and the viewer's browser keeps the choice. A replay
+sends a task's start with the dispatch that began it, since the timeline moves nobody in the room.
 
 It is a page served on the loopback address for as long as the command runs, on port 6462 (NINA on a phone's
 keypad) or any free one, and the command prints its address at the end of a line, where a terminal makes it a

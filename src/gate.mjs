@@ -628,7 +628,7 @@ function onPost(input, project, path, at) {
   const resumed = tool === 'SendMessage' ? Boolean(response.resumedAgentId) : undefined;
   // The name an agent was launched with, if any: a later SendMessage may reach it by that name alone.
   const name = tool !== 'SendMessage' && typeof input.tool_input?.name === 'string' ? input.tool_input.name.slice(0, 80) : null;
-  append(path, { k: 'dispatch', at, role, agent, via: tool, id: input.tool_use_id ?? null, ...(name ? { name } : {}), ...(resumed === undefined ? {} : { resumed }) });
+  append(path, { k: 'dispatch', at, role, agent, via: tool, id: input.tool_use_id ?? null, ...describedAs(input), ...(name ? { name } : {}), ...(resumed === undefined ? {} : { resumed }) });
   return null;
 }
 
@@ -663,6 +663,18 @@ function confirmation(r) {
   };
 }
 
+/**
+ * The few words the orchestrator gave a dispatch — the `description` the measurement store keeps as `desc` — which
+ * the office names a piece of work by. A message to an agent carries none: it adds to work already named.
+ *
+ * @param {object} input - The hook's input.
+ * @returns {{desc?: string}}
+ */
+const describedAs = (input) => {
+  const desc = input.tool_name === 'SendMessage' ? null : input.tool_input?.description;
+  return typeof desc === 'string' && desc.trim() ? { desc: desc.trim().slice(0, 200) } : {};
+};
+
 /** A dispatch is about to go out: note when, and send the round past its edge's cap to the owner to confirm. */
 function onPre(input, project, path, at) {
   // The orchestrator asking the owner, as it asks: when it was, and nothing it said. Nothing counts it; the office
@@ -681,7 +693,7 @@ function onPre(input, project, path, at) {
   // names its agent when the ledger already knows it — never a name the model wrote that nothing launched — so the
   // office can tell a message to a running agent from a resume before the `dispatch` entry is written.
   const known = to?.agent && entries.some((e) => e.k === 'dispatch' && e.agent === to.agent);
-  append(path, { k: 'pre', at, role, id: input.tool_use_id ?? null, ...(to ? { via: 'SendMessage', ...(known ? { agent: to.agent } : {}) } : {}) });
+  append(path, { k: 'pre', at, role, id: input.tool_use_id ?? null, ...describedAs(input), ...(to ? { via: 'SendMessage', ...(known ? { agent: to.agent } : {}) } : {}) });
   const over = roundsFor(entries, role, project.loops, project.forward)
     .filter((r) => excess(r) > 0)
     .sort((a, b) => excess(b) - excess(a));
