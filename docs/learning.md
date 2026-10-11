@@ -108,7 +108,11 @@ model each side ran on, rather than print a number that measures the model:
   still not proof: the work changes too.
 - **A rule that did not hold goes back.** A retired pill's count was read by nothing: one lesson graduated
   twice and came back a third time, and two retired pills went from 3 to 8 and from 5 to 11 with nobody
-  told. A pill counted more times than when its now-closed request was filed reopens it: `--check` files a
+  told. A pill counted more times since its request closed reopens it. Since the close, not the filing: a
+  lesson keeps recurring while its request waits for a release, without the rule, and counted from the filing
+  a project two releases behind had two lessons reopened by the very upgrade that brought their rule — so
+  the close records the count (`occurrences_at_close`), and a request closed before it did counts from its
+  filing. Reopening it, `--check` files a
   request naming where the rule went and in which release, and `nina requests` marks it as a rule that did
   not hold. It reopens once the lesson came back as many times as it took to graduate — three: one
   recurrence may be noise, and `learn` shows it as watched until then. A rule a project made of its own is

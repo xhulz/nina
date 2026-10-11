@@ -1501,6 +1501,46 @@ async function sound(fixture, core) {
     undecided(shelf, [remadeSameDay, declinedReopen]).length === 0 && undecided(shelf, [declinedReopen, remadeSameDay]).length === 0,
     'learn: on one day and one count, the record written later by name is the newest',
   );
+
+  // A lesson recurs while its request waits for a release, without the rule. A project two releases behind had two
+  // pills filed at 3 reach 8 and 11, and the upgrade that closed their requests reopened them in the same run.
+  const behind = await scratch();
+  await mkdir(join(behind, '.nina', 'requests'), { recursive: true });
+  await writeFile(join(behind, '.nina', 'profile.json'), JSON.stringify({ core: pinned, surfaces: [], vocabulary: {} }));
+  await mkdir(join(behind, '.claude', 'pills', 'architect'), { recursive: true });
+  await mkdir(join(behind, '.claude', 'pills', 'retired', 'qa'), { recursive: true });
+  const pillText = (status, n) => `---\napplies_to: [architect]\nstatus: ${status}\ndate: 2026-10-01\nlast_seen: 2026-10-10\noccurrences: ${n}\n---\n**Rule:** cover every form.\n`;
+  await writeFile(join(behind, '.claude', 'pills', 'architect', 'forms.md'), pillText('active', 8));
+  const waited = '2026-10-02-architect__forms.md';
+  await writeFile(join(behind, '.nina', 'requests', waited), '---\nkind: harness-request\nstatus: open\ndate: 2026-10-02\ncore: 0.1.0\ntarget: core\npill: .claude/pills/architect/forms.md\noccurrences: 3\n---\n');
+  // And a reopening, whose pill is on the retired shelf already when its answer arrives.
+  await writeFile(join(behind, '.claude', 'pills', 'retired', 'qa', 'walk.md'), pillText('retired', 9).replace('[architect]', '[qa]'));
+  await writeFile(join(behind, '.nina', 'requests', '2026-10-01-qa__walk.md'), '---\nkind: harness-request\nstatus: closed\nanswered_in: 0.1.1\ndate: 2026-10-01\ncore: 0.1.0\ntarget: core\npill: .claude/pills/qa/walk.md\noccurrences: 3\n---\n');
+  const reopening = '2026-10-03-qa__walk-again.md';
+  await writeFile(join(behind, '.nina', 'requests', reopening), '---\nkind: harness-request\nstatus: open\ndate: 2026-10-03\ncore: 0.1.1\ntarget: core\npill: .claude/pills/qa/walk.md\noccurrences: 6\nreopens: 2026-10-01-qa__walk.md\n---\n');
+  const release = await scratch();
+  await mkdir(join(release, 'core'), { recursive: true });
+  await writeFile(
+    join(release, 'core', 'answered.json'),
+    JSON.stringify({ '2026-10-02-architect__forms': { in: 'core/tree/.claude/agents/architect.md' }, '2026-10-03-qa__walk-again': { in: 'core/tree/.claude/agents/qa.md' } }),
+  );
+  await closeAnswered(behind, release, '9.9.9');
+  const listed = async () => (await readdir(join(behind, '.nina', 'requests'))).sort();
+  const filedBefore = await listed();
+  const afterClose = run(['learn', '--check', '--project', behind], { env: { NINA_HOOK: 'context' } });
+  const waitedNow = await readFile(join(behind, '.nina', 'requests', waited), 'utf8');
+  const reopeningNow = await readFile(join(behind, '.nina', 'requests', reopening), 'utf8');
+  expect(
+    /^occurrences_at_close: 8$/m.test(waitedNow) && /^occurrences_at_close: 9$/m.test(reopeningNow) &&
+      afterClose.status === 0 && JSON.stringify(await listed()) === JSON.stringify(filedBefore),
+    `learn: a lesson is counted from the close of its request — what it recurred while it waited reopens nothing — got ${afterClose.status} ${afterClose.out}\n${waitedNow}\n${reopeningNow}`,
+  );
+  await writeFile(join(behind, '.claude', 'pills', 'retired', 'architect', 'forms.md'), pillText('retired', 11));
+  const backSince = run(['learn', '--check', '--project', behind], { env: { NINA_HOOK: 'context' } });
+  expect(
+    backSince.status === 1 && backSince.out.includes('came back 3 time(s) after its rule shipped in 9.9.9') && (await listed()).length === filedBefore.length + 1,
+    `learn: and three times since the close reopens it — got ${backSince.status} ${backSince.out}`,
+  );
 }
 
 // ─── learn: a lesson that is this codebase's convention graduates in its own project ─────
