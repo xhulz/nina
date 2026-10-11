@@ -163,7 +163,8 @@ Closer than the whole, it follows the work — the folder as it is carried, the 
 reception for a question. Dragging, the wheel and a pinch take it over until the viewer has left it alone for
 twelve seconds, or double-clicks; `+`, `−`, `0` and the buttons zoom without taking it, around what it follows. The
 zoom chosen is kept by the viewer's browser. Names are written at the screen's resolution, at eleven points or
-more — smaller only to fit on a desk when the whole office is squeezed into a small window. The session is picked as `gate --status` picks it, through the same function.
+more — smaller only to fit on a desk when the whole office is squeezed into a small window — and a stage's name
+stands above its desk's screen: on the desk's front, it hid the head of whoever sat there. The session is picked as `gate --status` picks it, through the same function.
 Live, a client is handed what came before it connected at once, to set the room by — the room it sets holds only
 the work still in hand and the reports since the last dispatch, since a session's hundreds of finished runs, walked out one by one, were a crowd running
 for the door — and then each beat as the gate

@@ -929,7 +929,7 @@ function drawPerson(p, now) {
 
 function drawBubble(p) {
   if (!p.bubble) return;
-  // Seated, beside the head: above it, the bubble would cover the desk's nameplate.
+  // Seated, beside the head: above it, the bubble would sit on the desk being worked at.
   if (p.pose === 'sit') paint(w, BUBBLE[p.bubble.kind], p.x + 5, p.y - 24, BUBBLE_COLORS);
   else paint(w, BUBBLE[p.bubble.kind], p.x - 4, p.y - 27, BUBBLE_COLORS);
 }
@@ -1041,9 +1041,10 @@ function drawScreen(now) {
     text(room.name, x, y, label, C.signText, 'left', (signWidth(room) - 7) * scale, '600', SANS);
   }
   for (const stage of stages.values()) {
+    // Above the screen, its bottom edge on it: on the desk's front, it covered the head of whoever sat there.
     for (const d of stage.desks) {
-      const [x, y] = at(d.dx + 18, d.dy + 21.5);
-      plate(stage.role, x, y, label, '#fff8e8', (DESK_STEP - 4) * scale);
+      const [x, y] = at(d.dx + 18, d.dy - 1);
+      plate(stage.role, x, y - (label + ui(6)) / 2, label, '#fff8e8', (DESK_STEP - 4) * scale);
     }
   }
   {
