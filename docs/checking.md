@@ -135,7 +135,9 @@ door new agents come in by, and each agent the loop gate saw launched sitting at
 reads the gate's ledger and nothing else, so it shows what the ledger holds — who worked, what they answered, the
 ids of the issues they named — and never a word anyone wrote. A dispatch is someone sitting down to work, the
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
-in red to its fixer) and by the orchestrator otherwise. A verdict is a check or a cross over their head; a verdict
+in red to its fixer) and by the orchestrator otherwise; whoever handed it on then leaves, and everyone else whose
+report is in gets up as the work moves on, so the room holds the work in hand and not everyone who ever sat in it.
+The title says who is at work, or that the room waits for the next dispatch: between dispatches nothing moves. A verdict is a check or a cross over their head; a verdict
 the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
 asking at a cap, the reception's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
 down for a dispatch the owner refused, or for a run that never reported within three hours (the longest of 227
@@ -162,7 +164,9 @@ reception for a question. Dragging, the wheel and a pinch take it over until the
 twelve seconds, or double-clicks; `+`, `−`, `0` and the buttons zoom without taking it, around what it follows. The
 zoom chosen is kept by the viewer's browser. Names are written at the screen's resolution, at eleven points or
 more — smaller only to fit on a desk when the whole office is squeezed into a small window. The session is picked as `gate --status` picks it, through the same function.
-Live, a client is handed what came before it connected at once, to set the room by, and then each beat as the gate
+Live, a client is handed what came before it connected at once, to set the room by — the room it sets holds only
+the work still in hand, since a session's hundreds of finished runs, walked out one by one, were a crowd running
+for the door — and then each beat as the gate
 writes it; a replay plays one session from its first dispatch with its gaps shortened, the owner's messages passing
 quickly; moving to a session that was already running, what it did before the move sets the room rather than
 playing out again. The orchestrator's question reaches the ledger only because the gate's `PreToolUse` hook also
