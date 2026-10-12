@@ -44,7 +44,7 @@ process.exit(
         ignore: /^check: declaration is sound/,
       },
       // The one link of the learning cycle that fails in silence: a role keeps being sent back
-      // and nothing is written down. It fires on the event — three loop-backs since that role's
+      // and nothing is written down. It fires on the event — sent back three times since that role's
       // newest lesson — not on a rate, so it says something new when it speaks. A lesson learned
       // a third time it sends to the harness itself, and says so once.
       {
