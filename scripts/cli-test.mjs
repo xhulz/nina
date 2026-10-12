@@ -4111,8 +4111,8 @@ const dated = (date, status = 'active') =>
     agentFile,
     `${await readFile(agentFile, 'utf8')}${[
       tool('Edit', { file_path: '/p/a.ts', old_string: 'x', new_string: 'y' }),
-      tool('Write', { file_path: '/p/b.ts', content: '' }),
-      tool('MultiEdit', { file_path: '/p/a.ts', edits: [] }),
+      tool('Write', { file_path: '/p/b.ts', content: 'one\ntwo\nthree\n' }),
+      tool('MultiEdit', { file_path: '/p/a.ts', edits: [{ old_string: 'y', new_string: 'p\nq' }] }),
       tool('Read', { file_path: '/p/c.ts' }),
       JSON.stringify({ type: 'assistant', message: { id: 'h1', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\\nISSUES: a' } }] } }),
     ].join('\n')}\n`,
@@ -4120,6 +4120,12 @@ const dated = (date, status = 'active') =>
   const [record] = (await scanProject(dir, {})).records;
   expect(record?.files_touched === 2, `proportion: a run counts the distinct files it wrote, not its edits or its reads — got ${record?.files_touched}`);
   expect(!JSON.stringify(record).includes('/p/a.ts'), 'proportion: and keeps the number, never the paths');
+  // And the lines it wrote there: a file's whole write, and each edit's new text — one, three and two.
+  expect(record?.lines_written === 6, `proportion: a run counts the lines it wrote through the edit tools — got ${record?.lines_written}`);
+  const unlined = { ...record };
+  delete unlined.lines_written;
+  const [lined] = (await scanProject(dir, { cursors: {}, records: [unlined] })).records;
+  expect(lined?.lines_written === 6, `proportion: a record from before lines were counted gets them on the next snapshot — got ${lined?.lines_written}`);
   expect(record?.tokens?.output === 600 && record.usage_model === 'claude-sonnet-5', `cost: the snapshot record carries the run's tokens and model — got ${JSON.stringify(record)}`);
   expect(record?.effort === 'high', `cost: and the effort level it ran at — got ${record?.effort}`);
   const unleveled = { ...record };
@@ -4465,12 +4471,15 @@ const dated = (date, status = 'active') =>
       line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 20, tokens: { read: 90_000_000 }, core: 'dev' }),
       // The same size under a release from before the limit is not over it.
       line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 40, tokens: { read: 1 }, core: '0.28.7' }),
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 3, lines_written: 2546, core: 'dev' }),
+      // Lines past the limit under a release from before it are not over it either.
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 3, lines_written: 9000, core: '0.54.0' }),
       line(flat(named), 'reviewer', 'REJECTED'),
     ].join('\n')}\n`,
   );
   await writeFile(join(snapshots, '-elsewhere.jsonl'), `${[line('-elsewhere', 'reviewer', 'APPROVED'), line('-elsewhere', 'qa', 'PASS')].join('\n')}\n`);
   const everywhere = run(['stats', '--snapshots', snapshots], { loud: true }).out;
-  expect(everywhere.includes('4 runs in 4 rounds · 1 project') && everywhere.includes('1 non-harness project hidden'), `stats: a project with a profile is a harness project at three dispatches — got ${everywhere}`);
+  expect(everywhere.includes('6 runs in 6 rounds · 1 project') && everywhere.includes('1 non-harness project hidden'), `stats: a project with a profile is a harness project at three dispatches — got ${everywhere}`);
 
   // Run inside a project, the report is that project's, and says so; `--all` is every project.
   const inside = (args) => {
@@ -4478,20 +4487,24 @@ const dated = (date, status = 'active') =>
     return `${r.stdout}${r.stderr}`;
   };
   const own = inside([]);
-  expect(own.includes('4 runs in 4 rounds · 1 project') && own.includes('(this project; --all for every project)'), `stats: inside a project it reports that project — got ${own}`);
+  expect(own.includes('6 runs in 6 rounds · 1 project') && own.includes('(this project; --all for every project)'), `stats: inside a project it reports that project — got ${own}`);
   // Each stage's runs as a bar of what went forward, back, or said nothing, with the key under the table;
   // and a history with nothing unread says so rather than "0% of finished rounds report no verdict".
   expect(
-    /reviewer\s+1\s+1\s+1\s+100%\s+100%\s+0%\s+—\s+▓{8}\n/.test(own) && own.includes('█ forward  ▓ sent back  ░ no verdict read') && own.includes("every finished round's verdict could be read.") && !own.includes('0% of finished rounds'),
+    /reviewer\s+1\s+1\s+1\s+100%\s+100%\s+0%\s+—\s+▓{4}\n/.test(own) && own.includes('█ forward  ▓ sent back  ░ no verdict read') && own.includes("every finished round's verdict could be read.") && !own.includes('0% of finished rounds'),
     `stats: each stage's runs drawn as a bar, and a clean history said as one — got ${own}`,
   );
-  expect(inside(['--all']).includes('6 runs in 6 rounds · 2 projects'), 'stats: and --all reports every project in the store');
+  expect(inside(['--all']).includes('8 runs in 8 rounds · 2 projects'), 'stats: and --all reports every project in the store');
 
   // One implementer run past the files one step may write is named, against the limit the project's
   // release states; a project that raises the limit is held to its own.
   expect(
     own.includes('1 implementer round(s) wrote more files than one step may (15); the largest wrote 20, 90M tokens read from cache'),
     `stats: an implementer run past the step limit is named — got ${own}`,
+  );
+  expect(
+    own.includes('1 implementer round(s) wrote more lines than one step may (400); the largest wrote 2546.'),
+    `stats: and one past the lines a step may write, under the file limit — got ${own}`,
   );
   // The limit is the rule the composed pipeline states: the architect splits past it, the implementer
   // refuses past it, and the orchestrator runs each step as its own pass.

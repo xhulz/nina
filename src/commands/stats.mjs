@@ -459,7 +459,7 @@ const CYCLE_ENDS = { qa: 'PASS', devops: 'DEPLOYED', secops: 'SECURE' };
  * was captured under (`core`) carries it: over every round, "0 of 16 loop-backs named their issues" read
  * reports written before the rule existed as breaking it. Releases are never rewritten, so neither is this.
  */
-const RULE_SINCE = { issues: '0.22.0', stepFiles: '0.28.8' };
+const RULE_SINCE = { issues: '0.22.0', stepFiles: '0.28.8', stepLines: '0.55.0' };
 
 /**
  * Whether a round ran under a release that carries a rule. One captured before rounds recorded their pin
@@ -558,8 +558,8 @@ export function cyclesOf(records) {
  *
  * @param {object[]} records - The runs in the window.
  */
-function proportionReport(records, stepLimit = () => null) {
-  const d = proportionData(records, stepLimit);
+function proportionReport(records, stepLimit = () => null, lineLimit = () => null) {
+  const d = proportionData(records, stepLimit, lineLimit);
   if (!d) return;
   console.log(
     heading(
@@ -584,6 +584,14 @@ function proportionReport(records, stepLimit = () => null) {
       ),
     );
   }
+  if (d.overLines) {
+    console.log(
+      note(
+        `${d.overLines.count} implementer round(s) wrote more lines than one step may (${d.overLines.limit}); the largest wrote ${d.overLines.largest}. The architect forecasts a step's lines and splits it past them.`,
+        'warn',
+      ),
+    );
+  }
 }
 
 /**
@@ -593,8 +601,9 @@ function proportionReport(records, stepLimit = () => null) {
  *
  * @param {object[]} records - The rounds in the window.
  * @param {(project: string) => number|null} [stepLimit] - The most files one implementer run may write, by project.
+ * @param {(project: string) => number|null} [lineLimit] - The most lines, by project.
  */
-export function proportionData(records, stepLimit = () => null) {
+export function proportionData(records, stepLimit = () => null, lineLimit = () => null) {
   const measured = records.filter((r) => WRITERS.has(r.role) && typeof r.files_touched === 'number');
   if (measured.length === 0) return null;
   const cycles = cyclesOf(records);
@@ -629,6 +638,14 @@ export function proportionData(records, stepLimit = () => null) {
     return limit !== null && r.files_touched > limit;
   });
   const largest = over.length ? over.reduce((a, b) => (b.files_touched > a.files_touched ? b : a)) : null;
+  // And its lines: a step forecast at about 640 lines came to 2,546 in three files, under the file limit, and every
+  // gate read each of its rounds.
+  const longer = records.filter((r) => {
+    if (r.role !== 'implementer' || typeof r.lines_written !== 'number' || !ranUnder(r, 'stepLines')) return false;
+    const limit = lineLimit(r.project);
+    return limit !== null && r.lines_written > limit;
+  });
+  const longest = longer.length ? longer.reduce((a, b) => (b.lines_written > a.lines_written ? b : a)) : null;
   return {
     rows: rows.map(({ label, cycles: n, designed }) => ({ label, cycles: n, designed })),
     built,
@@ -637,18 +654,20 @@ export function proportionData(records, stepLimit = () => null) {
     over: largest
       ? { count: over.length, limit: stepLimit(largest.project), largest: largest.files_touched, readM: typeof largest.tokens?.read === 'number' ? Math.round(largest.tokens.read / 1e6) : null }
       : null,
+    overLines: longest ? { count: longer.length, limit: lineLimit(longest.project), largest: longest.lines_written } : null,
   };
 }
 
 /**
  * The most files one implementer run may write in each measured project, as its pinned release states it
  * (`{{STEP_FILES}}`, which the project may declare to change), or null where the release has no such
- * limit or the project cannot be found.
+ * limit or the project cannot be found. With `STEP_LINES`, the most lines.
  *
  * @param {{root: string}} ctx - CLI context, for the releases.
+ * @param {'STEP_FILES'|'STEP_LINES'} [key] - Which limit.
  * @returns {(project: string) => number|null}
  */
-function stepLimitOf(ctx) {
+function stepLimitOf(ctx, key = 'STEP_FILES') {
   const known = new Map();
   return (project) => {
     if (!known.has(project)) {
@@ -657,7 +676,7 @@ function stepLimitOf(ctx) {
         const found = decodeProjectDir(project);
         const profile = found ? JSON.parse(readFileSync(join(found, HARNESS, 'profile.json'), 'utf8')) : null;
         const layers = profile ? layerRootFor(ctx.root, profile.core) : null;
-        const value = profile?.vocabulary?.STEP_FILES ?? (layers?.dir ? defaultVocabulary(layers.dir).STEP_FILES : undefined);
+        const value = profile?.vocabulary?.[key] ?? (layers?.dir ? defaultVocabulary(layers.dir)[key] : undefined);
         const n = Number(value);
         limit = value !== undefined && value !== null && value !== '' && Number.isFinite(n) && n > 0 ? n : null;
       } catch {
@@ -735,7 +754,7 @@ export function statsData(records, ctx) {
     stages: stageData(records),
     cost: costData(ran),
     context: contextData(ran),
-    proportion: proportionData(ran, stepLimitOf(ctx)),
+    proportion: proportionData(ran, stepLimitOf(ctx), stepLimitOf(ctx, 'STEP_LINES')),
   };
 }
 
@@ -939,7 +958,7 @@ export async function stats(argv, ctx) {
   costReport(records.filter((r) => r.status !== 'denied'));
   contextReport(records.filter((r) => r.status !== 'denied'));
   modelReport(records.filter((r) => r.status !== 'denied'));
-  proportionReport(records.filter((r) => r.status !== 'denied'), stepLimitOf(ctx));
+  proportionReport(records.filter((r) => r.status !== 'denied'), stepLimitOf(ctx), stepLimitOf(ctx, 'STEP_LINES'));
 
   // What the pipeline learned, against what it had to learn from. A loop-back is the raw
   // material and a pill is the product, so the two numbers belong on the same screen: the

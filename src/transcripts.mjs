@@ -120,6 +120,9 @@ export function classifyVerdict(result, role) {
 /** The tools that write a file, and where each names it. */
 const WRITES = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' };
 
+/** How many lines a text written through an edit tool holds: none for an empty one, a last newline ending one. */
+const linesIn = (text) => (typeof text === 'string' && text.length > 0 ? text.replace(/\n$/, '').split('\n').length : 0);
+
 /** The line under a declared verdict that names what the report sends back. */
 const ISSUES = /^\s*ISSUES:(.*)$/;
 
@@ -642,7 +645,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       if (
         run.agent_read_bytes === size &&
         !('resumes' in run) &&
-        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r)
+        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'lines_written' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r)
       ) {
         continue;
       }
@@ -670,6 +673,11 @@ async function attachAgentDetail(projectDir, dispatches) {
         usage: new Map(),
         /** The files the round wrote through the edit tools. Only their number is kept. */
         written: new Set(),
+        /**
+         * The lines it wrote there, by file: a file's last whole write, and each edit's new text after it. Through
+         * the edit tools only, so a file a shell command changed is missed and the count is a floor, as the files'.
+         */
+        lines: new Map(),
         /** The tool calls the round made, by id: over its turns, how many calls each turn sent at once. */
         calls: new Set(),
         /** How long the prompt that opened the round was, in characters; never the prompt. */
@@ -708,7 +716,10 @@ async function attachAgentDetail(projectDir, dispatches) {
           try {
             for (const block of JSON.parse(line)?.message?.content ?? []) {
               const path = block?.type === 'tool_use' ? block.input?.[WRITES[block.name]] : null;
-              if (typeof path === 'string') round.written.add(path);
+              if (typeof path !== 'string') continue;
+              round.written.add(path);
+              const added = { Edit: () => linesIn(block.input.new_string), MultiEdit: () => (Array.isArray(block.input.edits) ? block.input.edits : []).reduce((n, e) => n + linesIn(e?.new_string), 0), NotebookEdit: () => linesIn(block.input.new_source) }[block.name];
+              round.lines.set(path, block.name === 'Write' ? linesIn(block.input.content) : (round.lines.get(path) ?? 0) + (added?.() ?? 0));
             }
           } catch {
             // A torn line loses one edit, not the run's.
@@ -795,6 +806,7 @@ async function attachAgentDetail(projectDir, dispatches) {
           record.usage_model = spent.model;
           record.effort = spent.effort;
           record.files_touched = round.written.size;
+          record.lines_written = [...round.lines.values()].reduce((a, b) => a + b, 0);
           record.skills = [...round.skills];
           record.lessons_read = round.lessonsRead.size;
           record.lessons_listed = round.lessonsListed;
