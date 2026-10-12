@@ -59,7 +59,7 @@
  * drawn here, in pixels, on a small canvas scaled up; nothing is fetched from anywhere else. The view starts close
  * enough to read and follows the work around the floor; dragging, the wheel and the buttons take it over.
  */
-const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'implementer', 'reviewer', 'qa', 'dba', 'integration-tester', 'devops', 'secops'], many: ['architect', 'implementer', 'reviewer'], owner: 'you', replay: false };
+const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'design-reviewer', 'implementer', 'reviewer', 'qa', 'dba', 'integration-tester', 'devops', 'secops'], many: ['architect', 'implementer', 'reviewer'], owner: 'you', replay: false };
 
 // ─── palette and sprites ──────────────────────────────────────────────────────────────────────
 const C = {
@@ -163,7 +163,7 @@ const GARDEN = 52;
 
 /** The rooms, by phase, in the order the work moves through them. A stage not named here works in build. */
 const PHASES = [
-  { key: 'design', name: 'design', side: 'left', roles: ['planner', 'architect'] },
+  { key: 'design', name: 'design', side: 'left', roles: ['planner', 'architect', 'design-reviewer'] },
   { key: 'build', name: 'build', side: 'left', roles: ['implementer', 'solidity-dev'] },
   { key: 'review', name: 'review & gates', side: 'right', roles: ['reviewer', 'dba', 'integration-tester', 'solidity-auditor'] },
   { key: 'lab', name: 'test lab', side: 'right', roles: ['qa'] },

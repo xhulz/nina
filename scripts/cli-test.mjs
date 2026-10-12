@@ -4511,7 +4511,7 @@ const dated = (date, status = 'active') =>
   const spec = async (rel) => readFile(join(young, '.claude', rel), 'utf8');
   expect(
     (await spec('agents/architect.md')).includes('One implementer run writes at most 15 files') &&
-      (await spec('agents/implementer.md')).includes('**Write at most 15 files in one run.**') &&
+      (await spec('agents/implementer.md')).includes('**Write at most 15 files, and about 400 lines, in one run.**') &&
       (await spec('router.md')).includes("### A spec's steps are passes of their own"),
     'compose: the step limit is stated where the spec is written, where it is implemented, and where it is dispatched',
   );
@@ -4520,7 +4520,30 @@ const dated = (date, status = 'active') =>
   await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, STEP_FILES: '25' } }));
   expect(!inside([]).includes('wrote more files than one step may'), 'stats: a project that declares a larger step is held to it');
   run(['compose', '--project', young]);
-  expect((await spec('agents/implementer.md')).includes('**Write at most 25 files in one run.**'), 'compose: and its own limit is the one its pipeline is told');
+  expect((await spec('agents/implementer.md')).includes('**Write at most 25 files, and about 400 lines, in one run.**'), 'compose: and its own limit is the one its pipeline is told');
+  // A spec whose design is the question is read before any code: a stage of its own between the architect and the
+  // implementer, whose loop back to the architect is counted apart from the reviewer's.
+  const composedGraph = parseGraph(await spec('graph.md'));
+  const designShape = shapeOf(composedGraph);
+  expect(
+    designShape.gates.some((g) => g.from === 'architect' && g.gate === 'design-reviewer' && g.to === 'implementer') &&
+      composedGraph.edges.some((e) => e.from === 'design-reviewer' && e.to === 'architect' && e.token === 'REJECTED' && e.max === 2) &&
+      (await spec('agents/architect.md')).includes('`Design review:` line') &&
+      (await spec('router.md')).includes('`Design review: needed`'),
+    `pipeline: a spec whose design is the question goes to the design-reviewer before the implementer — got ${JSON.stringify(designShape.gates)}`,
+  );
+  // A check sends work back only for what blocks it; the rest rides with the work as notes.
+  expect(
+    (await readFile(join(young, 'CLAUDE.md'), 'utf8')).includes('20. **Send work back only for what blocks it.**') &&
+      (await spec('agents/reviewer.md')).includes('`REJECTED` only for an issue that blocks (Hard Rule #20)') &&
+      (await spec('router.md')).includes('### Notes ride with the work'),
+    'compose: a check sends work back only for what blocks it, and its notes ride with the work',
+  );
+  // Each named mutation from one script: every call is a turn that re-reads the whole context.
+  expect(
+    (await spec('agents/implementer.md')).includes('Run them all from one script') && (await spec('agents/qa.md')).includes('every mutation from one script'),
+    'compose: the implementer and qa run their mutations from one script, not one turn each',
+  );
 
   // More pills than loop-backs: a share over 100% says nothing, so it is not printed.
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));

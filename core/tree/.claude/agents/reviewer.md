@@ -141,6 +141,7 @@ When in doubt about the diff's correctness independent of tests, do the audit yo
 - **Tests:** for every test added or changed, the mutation it names and whether that mutation turns it red; for every test deleted, the surviving test that covers it. A test with no working mutation is reported as such rather than counted.
 - **Artifacts checked:** what you verified against the tree rather than taking on trust, and any divergence, with the stage that produced it (Hard Rule #17).
 - **If REJECTED:** list each issue with `path:line` + required action. No length cap.
+- **Notes:** what does not block (Hard Rule #20), each with `path:line`, whatever the verdict.
 
 ## Loop-back rules
 - Design flaw found → send back to **architect**.
@@ -167,6 +168,8 @@ second line then names each issue by an id:
 VERDICT: REJECTED
 ISSUES: missing-null-check, wrong-error-status
 ```
+
+`REJECTED` only for an issue that blocks (Hard Rule #20): a note goes under **Notes**, never on the `ISSUES` line.
 
 An id is lowercase words joined by hyphens, at most 40 characters, and it names the defect rather than
 where it was found or which round this is: `missing-null-check`, not `issue-1`. When your dispatch carries the

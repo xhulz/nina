@@ -22,6 +22,7 @@ The pipeline separates thinking from execution, execution from verification, and
 |---|---|---|
 | **planner** | Decompose ambiguous work into concrete, ordered subtasks | `.claude/agents/planner.md` |
 | **architect** | Design the technical approach before code is written; cite `node_modules:<line>` premises for every external-library behavior the spec depends on | `.claude/agents/architect.md` |
+| **design-reviewer** | Read the spec before any code when the design is the question; try its rules against its rows | `.claude/agents/design-reviewer.md` |
 | **implementer** | Write code following the architect's spec, honoring every cited premise | `.claude/agents/implementer.md` |
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.2 -->
