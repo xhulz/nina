@@ -14,6 +14,7 @@ a cap.
 
 - `planner` — decomposes ambiguous or multi-step work into ordered steps
 - `architect` — designs the approach and writes the spec, with cited premises
+- `design-reviewer` — reads the spec before any code, when the design is the question
 - `implementer` — writes code and tests to the spec; never runs the tests
 <!-- nina:slot db.1 -->
 <!-- nina:slot integrations.1 -->
@@ -39,10 +40,13 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 - `planner` → `architect` on `PLAN-READY`
 - `planner` → `human` on `BLOCKED` — the work cannot be decomposed without an answer
 - `architect` → `implementer` on `SPEC-READY`
+- `architect` → `design-reviewer` on `SPEC-READY` — the design is the question: it builds a check, scanner, parser or filter, or picks a mechanism nothing here has run
 - `architect` → `human` on `BLOCKED` — an unverifiable premise or a missing decision
 - `architect` → `planner` on `BLOCKED` — the plan itself is wrong, not the design · max 1
+- `design-reviewer` → `implementer` on `APPROVED`
+- `design-reviewer` → `architect` on `REJECTED` — a design flaw, found before any code · max 2
 - `implementer` → `reviewer` on `DIFF-READY`
-- `implementer` → `architect` on `BLOCKED` — the spec is wrong, needs a file it does not list, or asks one run for more files than a step may write · max 2
+- `implementer` → `architect` on `BLOCKED` — the spec is wrong, needs a file it does not list, or asks one run for more files or lines than a step may write · max 2
 - `implementer` → `planner` on `BLOCKED` — the spec is too large for one step · max 1
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.2 -->

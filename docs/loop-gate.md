@@ -24,6 +24,16 @@ orchestrator did not send is still caught. `nina pipeline` draws such a gate rej
 beside the reviewer. The contract gate is the exception: `solidity-auditor` stands before the reviewer,
 since a contract cannot be patched once it is live.
 
+The `design-reviewer` stands before code. When the architect's report says the design is the question — the change
+builds a check, scanner, parser or filter, or picks a mechanism nothing in the project has run — the spec goes to it
+before the implementer, and its `REJECTED` goes back to the architect with a cap of its own. In the first project to
+run this pipeline, 15 of the 36 rounds a gate sent back after code went to the architect: the design was wrong, and
+each was found only once the implementer had built it and every gate had read it. One step went round twice that way
+in an afternoon, 14 of its first round's 27 issues born in the spec, with the implementer, by the reviewers' own
+account, building it faithfully. It is a stage of its own rather than the reviewer reading the spec first: the
+reviewer's edges into and out of the implementer would make a forward cycle, and a loop is its source's verdict, so
+any pass of the reviewer's would close the other's loops.
+
 Every loop-back edge carries a **cap**: how many times the same issue may travel it before the
 orchestrator stops and hands the owner every round's report. Before the cap there was no rule anywhere
 that could end a loop.
@@ -93,6 +103,11 @@ source — reached a cap eight times, and seven were different issues on the sam
   the rest of that loop until it closes, because that round advanced no issue's count, and going back to
   counting by issue would buy the loop a silent round. A late sibling's issues are counted in the round it
   belongs to, like its rejection.
+
+A rejection carries only what blocks (Hard Rule #20): a defect, a test that cannot fail, a false claim a later stage
+will act on. Wording, style and an evasion the spec ruled out in writing are notes, listed under **Notes** and
+carried into the next dispatch of the same work, never on the `ISSUES` line — the line the gate counts, so a note
+there spent a round of the cap too. In one step's second round, 7 to 9 of 19 issues were of that kind.
 
 The one real repeat in that history still reaches its cap. Reading "the stage that owns the fix" off a
 report's second line was tried and removed: in real reports it named the wrong stage, and a named owner

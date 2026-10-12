@@ -99,7 +99,7 @@ Each layer mirrors the project's file tree, and `nina compose` merges them:
   the slot, so its agents never read a word about migrations, and one whose database is not reached
   through Prisma never reads a word about Prisma.
 - `<!-- nina:requires db -->` on a file's first line makes the whole file conditional. That's why a
-  frontend-only project gets seven agent specs instead of eleven.
+  frontend-only project gets eight agent specs instead of twelve.
 - `{{PLACEHOLDERS}}` get filled from the project's profile, so the core can state a rule without naming one
   project's provider, packages or models. A release can answer a name itself, like the typecheck and test
   commands, and a project declares it only to change it.

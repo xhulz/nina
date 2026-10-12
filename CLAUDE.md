@@ -38,7 +38,7 @@ These mechanisms connect the layers:
   not declare is dropped, so a project with no database never reads a word about Prisma.
 - **`<!-- nina:requires <surface> -->`** on a core file's first line makes the whole file
   conditional. `dba` exists because there is a database, `integration-tester` because there
-  is an external service, `solidity-dev` and `solidity-auditor` because code ships immutable — a frontend-only profile composes seven agent specs, not nine.
+  is an external service, `solidity-dev` and `solidity-auditor` because code ships immutable — a frontend-only profile composes eight agent specs, not ten.
 - **A slot can also end a line** — `tools: Read, Grep, Glob, Bash<!-- nina:slot frontend.1 -->` — for what
   a surface *adds* to a line rather than a line it supplies whole. The one that needed it is a `tools:`
   allowlist: when the whole line lived in the frontend surface, every profile without a frontend

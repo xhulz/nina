@@ -75,6 +75,7 @@ const VERDICTS = [
 export const ROLE_TOKENS = {
   planner: ['PLAN-READY', 'BLOCKED'],
   architect: ['SPEC-READY', 'BLOCKED'],
+  'design-reviewer': ['APPROVED', 'REJECTED'],
   implementer: ['DIFF-READY', 'BLOCKED'],
   'solidity-dev': ['DIFF-READY', 'BLOCKED'],
   reviewer: ['APPROVED', 'REJECTED'],

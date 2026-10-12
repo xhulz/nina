@@ -90,6 +90,13 @@ orchestrator runs each step as its own pass from the implementer on, and an impl
 returns `BLOCKED`. `stats` names every implementer run past the limit its project's release states, with
 the largest and what it read, and says nothing for a release that states none.
 
+Files were not enough. A step of three files that its parent spec put at about 640 lines came to 2,546 in its
+first round and 3,560 in its second; under the file limit, it was the step every gate read in full, twice. So a
+step is also held to about `{{STEP_LINES}}` lines (400 by default), tests and fixtures included: the architect
+forecasts both for each step and splits past either, and the snapshot keeps each round's `lines_written` — a file's
+last whole write and each edit's new text after it, through the edit tools, a floor as the files are. `stats` names
+the runs past the line limit the same way, asked only of a project whose release states it.
+
 Each step names the steps it builds on, and those whose turn comes together and share no file go out at
 once. That buys time and not tokens: each run builds its own context, and the one project that ran two at
 once paid no less per file than its serial runs that week. The first version sent them out only one per
@@ -209,6 +216,11 @@ the pipeline read; so the router sends a round of real work to a fresh run, disp
 findings and the files they name, and resumes a run only for something short. And turns sent 1.00 to 1.05
 tool calls each, while runs re-read files they had just written 534 times; so Hard Rule #19 asks that
 independent calls go out together and each thing be taken in once. Both are measured by the same columns.
+
+The rule did not move the number. The third project's implementers sent 1.15 calls a turn; one step's two rounds
+took 92 and 106 turns, every one a single call, and the model's own time between calls was 37 of 40 minutes and 35
+of 63 — the commands ran for the rest. Their named mutations were run one call each. The implementer and qa now run
+every mutation from one script that prints a line each, which makes the largest run of single calls one turn.
 
 ### What a piece of work cost: `nina runs`
 

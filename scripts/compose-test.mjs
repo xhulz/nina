@@ -242,46 +242,55 @@ const BUDGETS = {
   // And for two more from the same project: a check covers every form the rule it enforces names, read from the
   // library, a case built to fail calls the function its real case calls, and a sentence the spec dictates about a
   // dependency cites what says it. And for a dependency of a dependency, which no package links: cited through its
-  // parent's link, since its only other path was the store directory a peer renames.
-  '.claude/agents/architect.md': 17850,
+  // parent's link, since its only other path was the store directory a peer renames. And for a step's size in lines,
+  // forecast in the spec, and the Design review line that sends a spec to the design-reviewer before any code.
+  '.claude/agents/architect.md': 18400,
+  // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
+  '.claude/agents/design-reviewer.md': 4600,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
-  '.claude/agents/dba.md': 13100,
+  // And for Hard Rule #20's line: a rejection holds only what blocks.
+  '.claude/agents/dba.md': 13200,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
   // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle — and again
   // when the implementer began running each test's named mutation itself, in a mirror, before handing off; and
   // again for three lessons the same project learned three times each: a test's own judging code is under test, the
-  // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it.
-  '.claude/agents/implementer.md': 20050,
+  // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it; and again
+  // for the lines a step may write, and the mutations run from one script rather than one turn each.
+  '.claude/agents/implementer.md': 20400,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
-  // overwrite-and-restore.
-  '.claude/agents/qa.md': 13600,
+  // overwrite-and-restore. And for running every mutation from one script.
+  '.claude/agents/qa.md': 13800,
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
   // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path —
-  // and a case that skips the code that judges, and a citation that resolves without saying the sentence.
-  '.claude/agents/reviewer.md': 21100,
+  // and a case that skips the code that judges, and a citation that resolves without saying the sentence. And for
+  // Hard Rule #20: notes kept apart from what blocks.
+  '.claude/agents/reviewer.md': 21250,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
   '.claude/frontend.md': 3000,
-  '.claude/graph.md': 6500,
+  // Raised for the design-reviewer's stage and edges.
+  '.claude/graph.md': 6950,
   // Raised for a D1 project's findings that hold for every project: a schema generator never writes the
   // tracked schema, and an integration may be of more than one kind.
   '.claude/patterns.md': 20700,
   '.claude/pills/README.md': 10000,
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,
-  // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs.
-  '.claude/router.md': 17000,
+  // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs. And for the design
+  // review before code, and the notes that ride with the work instead of sending it back.
+  '.claude/router.md': 17650,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
-  // dependency of a dependency its citation form, through its parent's link.
-  'CLAUDE.md': 25450,
+  // dependency of a dependency its citation form, through its parent's link. And for Hard Rule #20, a rejection only
+  // for what blocks, the design-reviewer's line, and a step's lines.
+  'CLAUDE.md': 26150,
 };
 
 /**

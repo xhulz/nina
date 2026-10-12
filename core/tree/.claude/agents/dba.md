@@ -99,6 +99,8 @@ VERDICT: REJECTED
 ISSUES: missing-unique-index, unbounded-scan
 ```
 
+`REJECTED` only for an issue that blocks (Hard Rule #20): a note goes under **Notes**, never on the `ISSUES` line.
+
 An id is lowercase words joined by hyphens, at most 40 characters, and it names the defect rather than
 where it was found or which round this is: `missing-unique-index`, not `issue-1`. When your dispatch carries the
 `ISSUES` line of an earlier round, an issue that is still open keeps its id exactly as written there, and
