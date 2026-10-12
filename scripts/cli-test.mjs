@@ -2112,6 +2112,20 @@ source: the 2026-09-01 review
   await plant(dir, 'reviewer/ahead.md', recurring('reviewer-ahead', 'reviewer', 1).replace(/^---\n/, '---\nlast_seen: 2999-01-01\n'));
   expect(run(['pills', '--project', dir], { loud: true }).out.includes('reviewer/ahead.md was last seen 2999-01-01, which is in the future'), 'pills: a last_seen in the future is a problem');
   await rm(join(dir, '.claude', 'pills', 'reviewer', 'ahead.md'));
+  // One clock: the day where the machine is, which the capture detector counts by. Read in UTC, a lesson dated today an
+  // hour after midnight at UTC+1 was in the future. UTC+14 is a day ahead of UTC from 10:00 UTC, UTC-12 a day behind
+  // before 12:00, so one of them always tells the two clocks apart.
+  const ahead = new Date().getUTCHours() >= 10;
+  const zone = ahead ? 'Etc/GMT-14' : 'Etc/GMT+12';
+  const there = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const seen = ahead ? there : new Date().toISOString().slice(0, 10);
+  await plant(dir, 'reviewer/clock.md', recurring('reviewer-clock', 'reviewer', 1).replace(/^---\n/, `---\nlast_seen: ${seen}\n`));
+  const clocked = run(['pills', '--project', dir], { loud: true, env: { TZ: zone } }).out;
+  expect(
+    clocked.includes(`reviewer/clock.md was last seen ${seen}, which is in the future`) !== ahead,
+    `pills: a day is read where the machine is, as the capture detector reads it — ${seen} in ${zone} (local ${there}) — got ${clocked}`,
+  );
+  await rm(join(dir, '.claude', 'pills', 'reviewer', 'clock.md'));
 }
 
 

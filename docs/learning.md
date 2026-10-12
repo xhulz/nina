@@ -66,7 +66,10 @@ model each side ran on, rather than print a number that measures the model:
   days since its newest lesson — not on a rate: a ratio that moves over weeks, reported every turn,
   is the noise the detectors exist to remove. Relearning counts as capture: bumping `occurrences`
   sets `last_seen`, and that settles it too. It also snapshots its own project first, so a project
-  observes itself instead of depending on one global hook pointed at a checkout of this repo.
+  observes itself instead of depending on one global hook pointed at a checkout of this repo. A day is the
+  day where the machine is, for the detector, the requests it names and `nina pills` alike: `pills` read
+  UTC, and for an hour after midnight at UTC+1 it refused a lesson dated today as in the future, while the
+  loop-backs it answered, dated today, went on being reported — a morning long at UTC+9.
 - **Where a lesson graduates is the project's call, asked for until it is made.** A lesson learned a third
   time is a rule nobody wrote down, and it goes one of two ways. A convention of one codebase becomes a rule
   in that project — its own layer under `.nina/project/tree/`, or a file it owns — and `nina learn --graduate
