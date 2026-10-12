@@ -12,6 +12,7 @@
 
 import { mkdir, readFile, readdir, rename } from 'node:fs/promises';
 import { HARNESS, readProfile } from '../paths.mjs';
+import { localDay } from '../store.mjs';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -350,7 +351,10 @@ export async function pillsData(target, ctx) {
     .filter((f) => f.endsWith('.md'))
     .map((f) => f.replace(/\.md$/, ''))
     .sort();
-  const today = new Date().toISOString().slice(0, 10);
+  // The day where this machine is, the one the capture detector counts loop-backs by and names its requests with: read
+  // in UTC, for an hour after midnight at UTC+1 a lesson dated today was refused as in the future, and the loop-backs
+  // it answered, dated today, went on being reported.
+  const today = localDay(new Date().toISOString());
   const files = existsSync(pillsDir) ? await pillFiles(pillsDir) : [];
 
   if (files.length === 0) return { files: 0, active: 0, retired: 0, problems: [], notes: [], pills: [] };
