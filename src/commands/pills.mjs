@@ -124,7 +124,7 @@ export function list(value) {
  * @param {string} citation - `path` or `path:line`.
  * @returns {{state: 'ok'|'gone'|'truncated', path: string, line: number|null, lines?: number}}
  */
-function resolveCitation(target, citation) {
+export function resolveCitation(target, citation) {
   const at = /^(.*):(\d+)$/.exec(citation);
   const path = at ? at[1] : citation;
   const line = at ? Number(at[2]) : null;

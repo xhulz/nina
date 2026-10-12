@@ -14,11 +14,12 @@ import { expectedUnfilled } from '../expected.mjs';
 import { parseGraph, validateGraph } from '../graph.mjs';
 import { frontmatterFindings, installedSkills, modelFindings, toolFindings } from '../tools.mjs';
 import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { SLOT, closedGate, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
 import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
 import { missingNeeds } from '../surfaces.mjs';
+import { resolveCitation } from './pills.mjs';
 
 /** Fields every declared integration must carry, and why each one matters. */
 const INTEGRATION_FIELDS = {
@@ -261,6 +262,31 @@ function liveStoreDirs(target) {
 }
 
 /**
+ * A text with its fenced blocks blanked. What a command printed, quoted as evidence, cites nothing: re-citing a path
+ * in it would falsify the evidence, and a note that cannot be cleared trains its reader to skip the check, the
+ * citations it is right about included. One project's `readlink` transcript held a store directory a peer change
+ * had since renamed. A fence left open runs to the end, as Markdown reads it.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function outsideFences(text) {
+  let fence = null;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (fence) {
+        const close = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line)?.[1];
+        if (close && close[0] === fence[0] && close.length >= fence.length) fence = null;
+        return '';
+      }
+      fence = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1] ?? null;
+      return fence ? '' : line;
+    })
+    .join('\n');
+}
+
+/**
  * The paths into the package manager's store that a text cites and the install no longer uses. Only the store: its
  * directory names carry a suffix per peer, renamed when an unrelated dependency changes one, and the old directory
  * stays on disk, linked by nothing — so a citation still opens on the machine that wrote it. A store path is stale
@@ -269,7 +295,8 @@ function liveStoreDirs(target) {
  * package's own link, or one written from some package's directory, cannot be told stale from here. A line number
  * after a path is not part of it; an elision (`...`, `…`), a template and a URL are not citations. Each occurrence of
  * the store is read outwards, and the next is looked for past it, so the text is read once. A directory that is not
- * `<name>@<version>` is a mention of the store, not a citation, except its hoisting `node_modules`.
+ * `<name>@<version>` is a mention of the store, not a citation, except its hoisting `node_modules`. A path in a fenced
+ * block is quoted output, not a citation (`outsideFences`).
  *
  * @param {string} text
  * @param {string} target - The project directory.
@@ -277,7 +304,8 @@ function liveStoreDirs(target) {
  *   the docs of one run so the store is walked once.
  * @returns {string[]} Each stale path once, in the order cited.
  */
-export function unresolvedCitations(text, target, reached = new Map()) {
+export function unresolvedCitations(written, target, reached = new Map()) {
+  const text = outsideFences(written);
   const cited = new Set();
   let at = text.indexOf(STORE);
   while (at !== -1) {
@@ -319,6 +347,69 @@ export function unresolvedCitations(text, target, reached = new Map()) {
     return Boolean(used) && !used.has(dir);
   };
   return [...cited].filter(stale);
+}
+
+/**
+ * `<package dir>/node_modules/<parent> → <lib>@<version>/<file>[:<line>]`: a library no package of the project links,
+ * cited through the package that depends on it.
+ */
+const TRANSITIVE = /(\/?(?:[\w.@+-]+\/)*node_modules\/(?:@[\w.-]+\/)?[\w.-]+)\s*(?:→|->)\s*((?:@[\w.-]+\/)?[\w.-]+)@(\d[\w.+-]*)\/([^\s:`|),;]+)(?::(\d+))?/g;
+
+/**
+ * Where Node finds a library from a directory: the `node_modules` beside each directory up from it, one that is a
+ * `node_modules` itself skipped. From a package's real path in the store, that is the directory its dependencies are
+ * linked in.
+ *
+ * @param {string} from - A real path.
+ * @param {string} lib - The library's name, scoped or not.
+ * @returns {string|null} The library's real path.
+ */
+function resolveFrom(from, lib) {
+  for (let dir = from; ; dir = dirname(dir)) {
+    const candidate = join(dir, 'node_modules', lib);
+    if (basename(dir) !== 'node_modules' && existsSync(join(candidate, 'package.json'))) return realpathSync(candidate);
+    if (dirname(dir) === dir) return null;
+  }
+}
+
+/**
+ * The citations of a library through its parent's link that do not resolve as written. A dependency of a dependency
+ * has no link of its own in any package — the emulator one project's every database premise was about is a dependency
+ * of its CLI, not of the project — and its only other path is a store directory a peer change renames. So it is cited
+ * through the parent's link, and resolved from where that link really leads, as Node resolves it: the parent there,
+ * the library found from it at the version written, the file in it, and the line within it.
+ *
+ * @param {string} text
+ * @param {string} target - The project directory the package directories are relative to.
+ * @returns {string[]} Each citation that does not resolve, with why, once.
+ */
+export function transitiveCitations(text, target) {
+  const wrong = new Map();
+  for (const [cited, parent, lib, version, file, line] of outsideFences(text).matchAll(TRANSITIVE)) {
+    if (wrong.has(cited)) continue;
+    let real;
+    try {
+      real = realpathSync(isAbsolute(parent) ? parent : join(target, parent));
+    } catch {
+      wrong.set(cited, `${parent} is not there`);
+      continue;
+    }
+    const found = resolveFrom(real, lib);
+    let installed = null;
+    try {
+      installed = found ? JSON.parse(readFileSync(join(found, 'package.json'), 'utf8')).version ?? null : null;
+    } catch {
+      // A manifest that does not parse says no version.
+    }
+    if (!found) wrong.set(cited, `${lib} does not resolve from it`);
+    else if (installed !== version) wrong.set(cited, `${lib} resolves to ${installed ?? 'no version'} there`);
+    else {
+      const at = resolveCitation(found, line ? `${file}:${line}` : file);
+      if (at.state === 'gone') wrong.set(cited, `${file} is not in ${lib}@${version}`);
+      else if (at.state === 'truncated') wrong.set(cited, `${file} has ${at.lines} line(s)`);
+    }
+  }
+  return [...wrong].map(([cited, why]) => `${cited}: ${why}`);
 }
 
 /**
@@ -452,10 +543,17 @@ export async function check(argv, ctx) {
   const reached = new Map();
   for (const doc of docs.filter((name) => name.endsWith('.md')).sort()) {
     const key = `.claude/integrations/${doc}`;
-    const gone = unresolvedCitations(await readFile(join(target, key), 'utf8').catch(() => ''), target, reached);
+    const text = await readFile(join(target, key), 'utf8').catch(() => '');
+    const gone = unresolvedCitations(text, target, reached);
     if (gone.length > 0) {
       notes.push(
-        `${key} cites ${gone.length} path(s) in the package manager's store that the install no longer uses — ${gone[0]}${gone.length > 1 ? ', …' : ''}: a peer change renames those directories, and the old one stays on disk linked by nothing; re-cite each from the depending package's own node_modules link, with its version beside it`,
+        `${key} cites ${gone.length} path(s) in the package manager's store that the install no longer uses — ${gone[0]}${gone.length > 1 ? ', …' : ''}: a peer change renames those directories, and the old one stays on disk linked by nothing; re-cite each from the depending package's own node_modules link, with its version beside it — or, for a library no package links, through the one that depends on it: \`<package dir>/node_modules/<parent> → <lib>@<version>/<file>:<line>\``,
+      );
+    }
+    const wrong = transitiveCitations(text, target);
+    if (wrong.length > 0) {
+      notes.push(
+        `${key} cites ${wrong.length} librar${wrong.length > 1 ? 'ies' : 'y'} through a parent's link that ${wrong.length > 1 ? 'do' : 'does'} not resolve as written — ${wrong[0]}${wrong.length > 1 ? '; …' : ''}: read where the parent's link leads, and cite the version, file and line found there`,
       );
     }
   }
