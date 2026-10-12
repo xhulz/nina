@@ -675,8 +675,8 @@ async function attachAgentDetail(projectDir, dispatches) {
         /** The files the round wrote through the edit tools. Only their number is kept. */
         written: new Set(),
         /**
-         * The lines it wrote there, by file: a file's last whole write, and each edit's new text after it. Through
-         * the edit tools only, so a file a shell command changed is missed and the count is a floor, as the files'.
+         * The lines it wrote there, by file: a file's last whole write, and each edit's new text after it — what the
+         * run wrote, not its diff: an edit made twice counts twice, and a file a shell command changed not at all.
          */
         lines: new Map(),
         /** The tool calls the round made, by id: over its turns, how many calls each turn sent at once. */

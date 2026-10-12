@@ -249,7 +249,7 @@ const BUDGETS = {
   '.claude/agents/design-reviewer.md': 4600,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   // And for Hard Rule #20's line: a rejection holds only what blocks.
-  '.claude/agents/dba.md': 13200,
+  '.claude/agents/dba.md': 13250,
   '.claude/agents/devops.md': 11500,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
@@ -284,13 +284,13 @@ const BUDGETS = {
   '.claude/retrieval.md': 10500,
   // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs. And for the design
   // review before code, and the notes that ride with the work instead of sending it back.
-  '.claude/router.md': 17650,
+  '.claude/router.md': 17800,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
   // dependency of a dependency its citation form, through its parent's link. And for Hard Rule #20, a rejection only
   // for what blocks, the design-reviewer's line, and a step's lines.
-  'CLAUDE.md': 26150,
+  'CLAUDE.md': 26350,
 };
 
 /**
