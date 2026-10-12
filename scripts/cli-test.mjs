@@ -4529,12 +4529,12 @@ const dated = (date, status = 'active') =>
     designShape.gates.some((g) => g.from === 'architect' && g.gate === 'design-reviewer' && g.to === 'implementer') &&
       composedGraph.edges.some((e) => e.from === 'design-reviewer' && e.to === 'architect' && e.token === 'REJECTED' && e.max === 2) &&
       (await spec('agents/architect.md')).includes('`Design review:` line') &&
-      (await spec('router.md')).includes('`Design review: needed`'),
+      (await spec('router.md')).includes('`Design review: needed`, says nothing of it'),
     `pipeline: a spec whose design is the question goes to the design-reviewer before the implementer — got ${JSON.stringify(designShape.gates)}`,
   );
   // A check sends work back only for what blocks it; the rest rides with the work as notes.
   expect(
-    (await readFile(join(young, 'CLAUDE.md'), 'utf8')).includes('20. **Send work back only for what blocks it.**') &&
+    /20\. \*\*Send work back only for what blocks it\.\*\*[^\n]*never a hole in security, isolation or data, which blocks/.test(await readFile(join(young, 'CLAUDE.md'), 'utf8')) &&
       (await spec('agents/reviewer.md')).includes('`REJECTED` only for an issue that blocks (Hard Rule #20)') &&
       (await spec('router.md')).includes('### Notes ride with the work'),
     'compose: a check sends work back only for what blocks it, and its notes ride with the work',

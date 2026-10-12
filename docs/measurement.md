@@ -94,8 +94,10 @@ Files were not enough. A step of three files that its parent spec put at about 6
 first round and 3,560 in its second; under the file limit, it was the step every gate read in full, twice. So a
 step is also held to about `{{STEP_LINES}}` lines (400 by default), tests and fixtures included: the architect
 forecasts both for each step and splits past either, and the snapshot keeps each round's `lines_written` — a file's
-last whole write and each edit's new text after it, through the edit tools, a floor as the files are. `stats` names
-the runs past the line limit the same way, asked only of a project whose release states it.
+last whole write and each edit's new text after it, through the edit tools. That is what the run wrote, not its
+diff: an edit made twice counts twice, which is also what the run paid for, and a file a shell command wrote is not
+counted at all. `stats` names the runs past the line limit the same way, asked only of a project whose release
+states it.
 
 Each step names the steps it builds on, and those whose turn comes together and share no file go out at
 once. That buys time and not tokens: each run builds its own context, and the one project that ran two at

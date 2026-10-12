@@ -19,7 +19,7 @@ task into a chain over them.
 
 <!-- nina:slot project.3 track-flow-diagram -->
 
-The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated. Every gate the diff triggers runs beside the reviewer, and `qa` goes out once all of them approved. The reviewer's `Gates` line names the gates the diff triggers: send any you did not. When the architect's report says `Design review: needed`, send the spec to the `design-reviewer` before the implementer: a design flaw found in the spec costs one correction, found in the diff a whole round.
+The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated. Every gate the diff triggers runs beside the reviewer, and `qa` goes out once all of them approved. The reviewer's `Gates` line names the gates the diff triggers: send any you did not. When the architect's report says `Design review: needed`, says nothing of it, or the change builds a check, scanner, parser or filter, send the spec to the `design-reviewer` before the implementer, once per spec, before its first step: a design flaw found in the spec costs one correction, found in the diff a whole round.
 
 **Every loop has a cap.** Before dispatching a loop-back, count the rounds the SAME issue has already made on that edge. At the cap `.claude/graph.md` gives it, do not dispatch again: stop and hand {{OWNER}} the report from every round. A third attempt at a fix that failed twice is rarely different from the second, each round costs minutes to hours<!-- nina:why -->, and until this rule existed nothing in the pipeline could stop a loop at all<!-- /nina:why -->. A different issue on the same edge starts its own count. A stage that sends work back names each issue on the `ISSUES` line under its verdict; when you dispatch a round — the fix, and the check of the fix — copy that line into both dispatches, so the stage that checks can keep the id of an issue that is still open. That id is what your count is of.
 
@@ -100,7 +100,7 @@ in the tree. Nothing builds on its work until a verdict does.
 A resumed run is billed its whole history again on every turn. Resume one only for something short: its missing report, or a re-check of a few files. A fix, a revised spec or a re-run of flows goes to a new run of the stage, dispatched with what it needs: the spec's path, the findings with their `ISSUES` line, and the files they name.<!-- nina:why --> In the project this was learned in, a resumed fix began at a 526k-token context and re-read 60M tokens, twice a first round, and resumed rounds held three quarters of everything the pipeline read.<!-- /nina:why -->
 
 ### Notes ride with the work
-A report's **Notes** send nothing back (Hard Rule #20). Carry them into the next dispatch of the same work — the fix round when there is one, else the next step's spec — and list those still open when you report the step to {{OWNER}}. A rejection made only of notes is a pass: say so to the stage that gave it, rather than dispatching a round.
+A report's **Notes** send nothing back (Hard Rule #20). Carry them into the next dispatch of the same work — the fix round when there is one, else the next step's spec — and list those still open when you report the step to {{OWNER}}. A rejection whose every issue is a note goes back to the stage that gave it, to give its verdict again under that rule, not to a fix.
 
 ### A report that sends work two ways
 When one report names issues for the architect and for the implementer, the architect goes first, and the

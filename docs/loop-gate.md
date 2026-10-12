@@ -105,9 +105,12 @@ source — reached a cap eight times, and seven were different issues on the sam
   belongs to, like its rejection.
 
 A rejection carries only what blocks (Hard Rule #20): a defect, a test that cannot fail, a false claim a later stage
-will act on. Wording, style and an evasion the spec ruled out in writing are notes, listed under **Notes** and
-carried into the next dispatch of the same work, never on the `ISSUES` line — the line the gate counts, so a note
-there spent a round of the cap too. In one step's second round, 7 to 9 of 19 issues were of that kind.
+will act on. Wording, style and an evasion the spec ruled out in writing are notes — never a hole in security,
+isolation or data, which blocks however the spec scoped it — listed under **Notes** and carried into the next
+dispatch of the same work, never on the `ISSUES` line: the line the gate counts, so a note there spent a round of the
+cap too. In one step's second round, 7 to 9 of 19 issues were of that kind. A rejection made of notes alone goes back
+to its stage for a verdict again, not to a fix: the orchestrator does not overrule a gate, and the ledger keeps the
+rejection until a pass closes it.
 
 The one real repeat in that history still reaches its cap. Reading "the stage that owns the fix" off a
 report's second line was tried and removed: in real reports it named the wrong stage, and a named owner
