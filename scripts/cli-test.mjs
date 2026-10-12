@@ -1234,7 +1234,21 @@ async function sound(fixture, core) {
   const twoRoutes = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2], ['architect', 2]])]])]]);
   const late2 = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 5)];
   const soon = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 9.9)];
-  expect(sentBackTo(late2, twoRoutes).size === 0 && sentBackTo(soon, twoRoutes).get(soon[0]) === 'architect', 'learn: a loop-back is owned by a dispatch soon after it, not one days later');
+  expect(sentBackTo(late2, twoRoutes).size === 0 && sentBackTo(soon, twoRoutes).get(soon[0])?.to === 'architect', 'learn: a loop-back is owned by a dispatch soon after it, not one days later');
+  // A round sent back by three checkers beside each other was sent back once: counted by its loop-backs, one
+  // project's architect read 100% sent back on a day it ran 7 rounds and 5 went back.
+  const fanned = [
+    ...[15, 14, 13, 12, 11].flatMap((d) => [
+      reviewed('implementer', 'DIFF-READY', d),
+      ...([15, 13].includes(d) ? [0.1, 0.11, 0.12].map((after) => reviewed('reviewer', 'REJECTED', d - after)) : [reviewed('reviewer', 'APPROVED', d - 0.1)]),
+    ]),
+    ...[5, 4, 3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'APPROVED', d - 0.1)]),
+  ];
+  const [fan] = verified(fanned, [lesson(['implementer'], written10)], { owners: sentBackTo(fanned, graphLoops), targets: graph.targets });
+  expect(
+    fan?.comparable && fan.before.n === 5 && fan.before.loops === 2 && fan.before.span[1] < fan.date && fan.after.span[0] > fan.date,
+    `learn: verify counts the rounds sent back, not the loop-backs that sent them, and says the days each side covers — got ${JSON.stringify(fan)}`,
+  );
   // capture: the reviewer's rejections are the implementer's lessons to write.
   const rejected = [3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1)]);
   expect(
