@@ -101,7 +101,12 @@ model each side ran on, rather than print a number that measures the model:
   checker in its `applies_to` ever settled the count. Each loop-back is now the lesson of the stage it sent
   work to — the next one dispatched in its session among those the graph routes that verdict to, or the only
   one. Read that way, both projects' history named the architect as owing a lesson where the old count
-  named nobody.
+  named nobody. One the graph routes to two stages, before either is dispatched, went to no stage that can
+  be told yet, and fell back to the one that gave it: three re-reviews that rejected a change asked the
+  reviewer for a lesson every turn, though the lessons were the architect's and the implementer's and were
+  written. It is now charged to none until a stage takes it back. And a stage is counted by the times its
+  work was sent back, not the loop-backs that sent it, as verify counts it below: three reviewers beside each
+  other rejecting one diff sent it back once.
 - **Verify reads a stage by how often its work is still sent back.** It read a lesson's stage by its own
   verdicts — an implementer lesson by its BLOCKED rate — pooled the stages a lesson named, and compared
   all of history either side. It now reads each stage on its own, as the share of its rounds sent back to

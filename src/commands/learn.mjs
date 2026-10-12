@@ -38,7 +38,7 @@ import { deepLearn, transcriptsOf } from '../deep.mjs';
 import { autoExport } from './export.mjs';
 import { beforeModel } from '../detectors.mjs';
 
-/** Loop-backs from one role, since its newest lesson, that make a lesson overdue. */
+/** Times one stage's work was sent back, since its newest lesson, that make a lesson overdue. */
 export const CAPTURE_AT = 3;
 
 /**
@@ -111,12 +111,16 @@ const SENT_BACK_HOURS = 24;
 
 /**
  * The stage each loop-back sent work back to: the next one dispatched in its session, after it reported, among
- * the stages the project's graph routes that verdict of that stage to — or the only one it routes it to.
+ * the stages the project's graph routes that verdict of that stage to — or the only one it routes it to. One the
+ * graph routes to several, none of which has taken it back yet, went to no stage that can be told: it is charged to
+ * none, where it was charged to the stage that gave it — a gate that rejected work, doing its job, read as a stage
+ * sent back, and asked every turn for a lesson that was not its own.
  *
  * @param {object[]} records - Recorded dispatches.
  * @param {Map<string, Map<string, Map<string, number>>>|null} loops - The graph's capped loop-back edges.
- * @returns {Map<object, {to: string, fix: object|null}>} Loop-back record → the stage it sent work back to, where
- *   one can be told, and the dispatch of that stage that took the work back, where one was found.
+ * @returns {Map<object, {to: string|null, fix: object|null}>} Loop-back record → the stage it sent work back to, null
+ *   while that cannot be told, and the dispatch of that stage that took the work back, where one was found. A
+ *   loop-back the graph does not route is not in it.
  */
 export function sentBackTo(records, loops) {
   const out = new Map();
@@ -134,10 +138,31 @@ export function sentBackTo(records, loops) {
     const within = (x) => Date.parse(x.ts) - Date.parse(back) <= SENT_BACK_HOURS * 3_600_000;
     const next = (bySession.get(r.session) ?? []).find((x) => String(x.ts) > back && within(x) && targets.has(x.role));
     const to = next?.role ?? (targets.size === 1 ? [...targets.keys()][0] : null);
-    if (to) out.set(r, { to, fix: next ?? null });
+    out.set(r, { to, fix: next ?? null });
   }
   return out;
 }
+
+/**
+ * The stage a loop-back is charged to: where it sent work back (`sentBackTo`), none while that cannot be told, and
+ * the stage that gave it only where the graph routes it nowhere.
+ *
+ * @param {ReturnType<typeof sentBackTo>} owners
+ * @param {object} r - A loop-back record.
+ * @returns {string|null}
+ */
+const chargedTo = (owners, r) => (owners.has(r) ? owners.get(r).to : r.role);
+
+/**
+ * How many rounds some loop-backs sent back: those one dispatch took back are one, since the checkers that run beside
+ * each other each reject the same work. One no dispatch took back counts on its own, since nothing then says which
+ * work it rejected.
+ *
+ * @param {ReturnType<typeof sentBackTo>} owners
+ * @param {object[]} loops - Loop-back records.
+ * @returns {number}
+ */
+const sendings = (owners, loops) => new Set(loops.map((r) => owners.get(r)?.fix ?? r)).size;
 
 /**
  * Roles that looped back often enough, since their newest lesson, that one is overdue.
@@ -156,7 +181,7 @@ export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS, o
   // A loop-back is the lesson of the stage it sent work back to, where that is known (`sentBackTo`): charged
   // to the stage that gave the verdict, the reviewer owed the implementer's lessons, and only a pill naming
   // every checker in its applies_to ever settled the count.
-  const ownerOf = (r) => owners.get(r)?.to ?? r.role;
+  const ownerOf = (r) => chargedTo(owners, r);
   const roles = [...new Set(records.map(ownerOf).filter(Boolean))];
   const out = [];
   for (const role of roles) {
@@ -176,12 +201,14 @@ export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS, o
     const at = floor === newest ? taught?.at ?? null : null;
     const after = (r) => day(r.ts) > floor || (at !== null && day(r.ts) === floor && String(r.ts) > at);
     const loops = records.filter((r) => ownerOf(r) === role && readable(r.verdict) && isLoopBack(r.verdict) && after(r));
-    if (loops.length >= CAPTURE_AT) {
+    // Rounds sent back, not loop-backs: three reviewers beside each other rejecting one change sent it back once.
+    const count = sendings(owners, loops);
+    if (count >= CAPTURE_AT) {
       const recent = loops
         .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
         .slice(0, 3)
         .map((r) => ({ ts: day(r.ts), desc: r.desc ?? '', session: String(r.session ?? '').slice(0, 8) }));
-      out.push({ role, count: loops.length, since: newest, recent });
+      out.push({ role, count, since: newest, recent });
     }
   }
   return out.sort((a, b) => b.count - a.count);
@@ -264,14 +291,11 @@ function wilson(k, n) {
  */
 export function verified(records, known, { owners = new Map(), targets = null } = {}) {
   const out = [];
-  const ownerOf = (r) => owners.get(r)?.to ?? r.role;
+  const ownerOf = (r) => chargedTo(owners, r);
   const sentBack = records.filter((r) => readable(r.verdict) && isLoopBack(r.verdict));
-  // The rounds these loop-backs sent back: those one dispatch took back are one. One no dispatch took back counts on
-  // its own, since nothing then says which work it rejected.
-  const sendings = (backs) => new Set(backs.map((r) => owners.get(r)?.fix ?? r)).size;
   const sideOf = (these, backs) => {
     const days = these.map((r) => day(r.ts)).sort();
-    return { n: these.length, loops: Math.min(these.length, sendings(backs)), span: [days[0] ?? null, days.at(-1) ?? null] };
+    return { n: these.length, loops: Math.min(these.length, sendings(owners, backs)), span: [days[0] ?? null, days.at(-1) ?? null] };
   };
   const ranOn = (r) => (r.usage_model ? `${r.usage_model}${r.effort ? ` · ${r.effort}` : ''}` : null);
   for (const lesson of known.filter((l) => l.date)) {
@@ -309,7 +333,7 @@ export function verified(records, known, { owners = new Map(), targets = null } 
       const [bLo, bHi] = wilson(before.loops, before.n);
       const [aLo, aHi] = wilson(after.loops, after.n);
       const change = aHi < bLo ? 'lower' : aLo > bHi ? 'higher' : 'unclear';
-      const others = [...(targets ?? new Set(sentBack.map(ownerOf)))].filter((x) => x !== role);
+      const others = [...(targets ?? new Set(sentBack.map(ownerOf)))].filter((x) => x && x !== role);
       const theirs = records.filter((r) => others.includes(r.role) && readable(r.verdict));
       const otherBacks = sentBack.filter((r) => others.includes(ownerOf(r)));
       const control = (pick) => sideOf(theirs.filter(pick), otherBacks.filter(pick));
@@ -1057,7 +1081,7 @@ export async function learn(argv, ctx) {
     }
     for (const o of late) {
       console.log(
-        `  ${o.role}: ${o.count} loop-back(s) in the last ${days} days ` +
+        `  ${o.role}: sent back ${o.count} time(s) in the last ${days} days ` +
           (o.since ? `since its newest lesson (${o.since})` : 'and no lesson at all') +
           ' — the newest:',
       );
@@ -1119,10 +1143,10 @@ export async function learn(argv, ctx) {
       ? `  observe   ${learning.runs} run(s) in ${records.length} round(s) recorded, ${span}`
       : '  observe   ✗ nothing recorded — no transcripts found for this project, so no link below can be measured',
   );
-  if (late.length === 0) console.log(`  capture   ✓ no role has looped back ${CAPTURE_AT}+ times without a lesson in the last ${days} days`);
+  if (late.length === 0) console.log(`  capture   ✓ no role has been sent back ${CAPTURE_AT}+ times without a lesson in the last ${days} days`);
   late.forEach((o, i) => {
     console.log(
-      `  ${i === 0 ? 'capture ' : '        '}  ✗ ${o.role}: ${o.count} loop-back(s) ` +
+      `  ${i === 0 ? 'capture ' : '        '}  ✗ ${o.role}: sent back ${o.count} time(s) ` +
         (o.since ? `since its newest lesson (${o.since})` : 'and no lesson at all'),
     );
   });

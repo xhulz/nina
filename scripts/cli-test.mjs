@@ -1256,7 +1256,21 @@ async function sound(fixture, core) {
   const twoRoutes = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2], ['architect', 2]])]])]]);
   const late2 = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 5)];
   const soon = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 9.9)];
-  expect(sentBackTo(late2, twoRoutes).size === 0 && sentBackTo(soon, twoRoutes).get(soon[0])?.to === 'architect', 'learn: a loop-back is owned by a dispatch soon after it, not one days later');
+  expect(sentBackTo(late2, twoRoutes).get(late2[0])?.to === null && sentBackTo(soon, twoRoutes).get(soon[0])?.to === 'architect', 'learn: a loop-back is owned by a dispatch soon after it, not one days later');
+  // A gate's rejection the graph routes to two stages, none dispatched yet, sent work back to neither: charged to the gate
+  // itself, three re-reviews that rejected a change read as the reviewer owing a lesson, every turn, though the lessons
+  // were the architect's and the implementer's and had been written.
+  const untaken = [9.3, 9.2, 9.1].map((d) => reviewed('reviewer', 'REJECTED', d));
+  expect(
+    overdue(untaken, [], now, CAPTURE_DAYS, sentBackTo(untaken, twoRoutes)).length === 0,
+    `learn: a loop-back no stage has taken back yet is charged to none, not to the gate that gave it — got ${JSON.stringify(overdue(untaken, [], now, CAPTURE_DAYS, sentBackTo(untaken, twoRoutes)))}`,
+  );
+  // Capture counts the times a stage's work was sent back: three reviewers beside each other rejecting one diff are one.
+  const beside = [reviewed('implementer', 'DIFF-READY', 3), ...[2.9, 2.89, 2.88].map((d) => reviewed('reviewer', 'REJECTED', d)), reviewed('implementer', 'DIFF-READY', 2.5)];
+  expect(
+    overdue(beside, [], now, CAPTURE_DAYS, sentBackTo(beside, graphLoops)).length === 0,
+    'learn: three rejections of one diff are the implementer sent back once, not three times',
+  );
   // A round sent back by three checkers beside each other was sent back once: counted by its loop-backs, one
   // project's architect read 100% sent back on a day it ran 7 rounds and 5 went back.
   const fanned = [
@@ -1297,7 +1311,7 @@ async function sound(fixture, core) {
     `${loops('reviewer', 1, 2, 3).map((r) => JSON.stringify(r)).join('\n')}\n`,
   );
   const fired = run(['learn', '--check', '--project', dir]);
-  expect(fired.status === 1 && fired.out.includes('reviewer: 3 loop-back'), `learn: --check should fire — got ${fired.status}\n${fired.out}`);
+  expect(fired.status === 1 && fired.out.includes('reviewer: sent back 3 time(s)'), `learn: --check should fire — got ${fired.status}\n${fired.out}`);
   // Inside an upgrade the same history is not the move's fault: a version that ships this detector
   // for the first time would otherwise roll itself back for what it made visible.
   process.env.NINA_UPGRADE = '1';
