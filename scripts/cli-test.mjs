@@ -30,7 +30,7 @@ import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, loopState, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
 import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
-import { filledSlots, projectSlots, transitiveCitations, unwiredScripts } from '../src/commands/check.mjs';
+import { filledSlots, outsideFences, projectSlots, transitiveCitations, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
 import { NAME as VOCABULARY_NAME, defaultVocabulary } from '../src/vocabulary.mjs';
@@ -453,6 +453,12 @@ expect(
         'packages/api/node_modules/stripe → deep@2.0.0/gone.js: gone.js is not in deep@2.0.0',
       ]),
     `check: each one says why it does not resolve — got ${JSON.stringify(why)}`,
+  );
+  const fenced = outsideFences('- item\n    ```text\n    gone\n    ```\n```js``` stays\nkept');
+  const prose = transitiveCitations('It is read at packages/api/node_modules/stripe → deep@2.0.0/index.js.', dir);
+  expect(
+    fenced === '- item\n\n\n\n```js``` stays\nkept' && prose.length === 0,
+    `check: a fence in a list item is quoted output, a backtick run with code after it is no fence, and a sentence's full stop is not part of the file it cites — got ${JSON.stringify({ fenced, prose })}`,
   );
 }
 
@@ -1270,6 +1276,17 @@ async function sound(fixture, core) {
   expect(
     overdue(beside, [], now, CAPTURE_DAYS, sentBackTo(beside, graphLoops)).length === 0,
     'learn: three rejections of one diff are the implementer sent back once, not three times',
+  );
+  const thrice = [
+    ...[5, 4].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1, { desc: `review ${d}` })]),
+    reviewed('implementer', 'DIFF-READY', 3),
+    ...[2.9, 2.89, 2.88].map((d) => reviewed('reviewer', 'REJECTED', d, { desc: 'review 3' })),
+    reviewed('implementer', 'DIFF-READY', 2.5),
+  ];
+  const [three] = overdue(thrice, [], now, CAPTURE_DAYS, sentBackTo(thrice, graphLoops));
+  expect(
+    three?.count === 3 && three.recent.map((r) => r.desc).join() === 'review 3,review 4,review 5',
+    `learn: the newest it names are one per time sent back, as it counts them — got ${JSON.stringify(three)}`,
   );
   // A round sent back by three checkers beside each other was sent back once: counted by its loop-backs, one
   // project's architect read 100% sent back on a day it ran 7 rounds and 5 went back.

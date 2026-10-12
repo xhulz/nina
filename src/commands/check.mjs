@@ -276,11 +276,14 @@ export function outsideFences(text) {
     .split('\n')
     .map((line) => {
       if (fence) {
-        const close = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line)?.[1];
+        const close = /^\s*(`{3,}|~{3,})\s*$/.exec(line)?.[1];
         if (close && close[0] === fence[0] && close.length >= fence.length) fence = null;
         return '';
       }
-      fence = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1] ?? null;
+      // Indented any depth, since a list item's fence is indented past the marker; and a backtick run whose rest
+      // holds a backtick is code in a line, not a fence.
+      const [, open, info] = /^\s*(`{3,}|~{3,})(.*)$/.exec(line) ?? [];
+      fence = open && !(open[0] === '`' && info.includes('`')) ? open : null;
       return fence ? '' : line;
     })
     .join('\n');
@@ -353,7 +356,7 @@ export function unresolvedCitations(written, target, reached = new Map()) {
  * `<package dir>/node_modules/<parent> → <lib>@<version>/<file>[:<line>]`: a library no package of the project links,
  * cited through the package that depends on it.
  */
-const TRANSITIVE = /(\/?(?:[\w.@+-]+\/)*node_modules\/(?:@[\w.-]+\/)?[\w.-]+)\s*(?:→|->)\s*((?:@[\w.-]+\/)?[\w.-]+)@(\d[\w.+-]*)\/([^\s:`|),;]+)(?::(\d+))?/g;
+const TRANSITIVE = /(\/?(?:[\w.@+-]+\/)*node_modules\/(?:@[\w.-]+\/)?[\w.-]+)\s*(?:→|->)\s*((?:@[\w.-]+\/)?[\w.-]+)@(\d[\w.+-]*)\/([^\s:`|),;]*[^\s:`|),;.])(?::(\d+))?/g;
 
 /**
  * Where Node finds a library from a directory: the `node_modules` beside each directory up from it, one that is a
