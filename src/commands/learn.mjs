@@ -204,8 +204,11 @@ export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS, o
     // Rounds sent back, not loop-backs: three reviewers beside each other rejecting one change sent it back once.
     const count = sendings(owners, loops);
     if (count >= CAPTURE_AT) {
+      // One per round sent back, as the count is: three reviewers beside each other are one entry, not three.
+      const listed = new Set();
       const recent = loops
         .sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
+        .filter((r) => !listed.has(owners.get(r)?.fix ?? r) && listed.add(owners.get(r)?.fix ?? r))
         .slice(0, 3)
         .map((r) => ({ ts: day(r.ts), desc: r.desc ?? '', session: String(r.session ?? '').slice(0, 8) }));
       out.push({ role, count, since: newest, recent });
