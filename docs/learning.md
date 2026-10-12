@@ -106,6 +106,11 @@ model each side ran on, rather than print a number that measures the model:
   calls a change only where the two 95% intervals part; and says why a lesson cannot be measured — too few
   rounds, a stage that changed model, or one nothing sends work back to — instead of dropping it. It is
   still not proof: the work changes too.
+- **A round sent back by several checkers was sent back once.** Verify counted loop-backs, and the checkers
+  that run beside each other each reject the same work: one project's architect had 14 loop-backs on a day it
+  ran 7 rounds, and the share, capped at the rounds, read 100% sent back where 5 of the 7 were — five lessons
+  shown as making the architect worse. A round now counts once, by the dispatch that took it back, and each
+  side says the days it covers, since a project younger than fourteen days has fewer to show.
 - **A rule that did not hold goes back.** A retired pill's count was read by nothing: one lesson graduated
   twice and came back a third time, and two retired pills went from 3 to 8 and from 5 to 11 with nobody
   told. A pill counted more times since its request closed reopens it. Since the close, not the filing: a

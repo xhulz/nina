@@ -39,7 +39,7 @@ import { autoExport } from './export.mjs';
 import { beforeModel } from '../detectors.mjs';
 
 /** Loop-backs from one role, since its newest lesson, that make a lesson overdue. */
-const CAPTURE_AT = 3;
+export const CAPTURE_AT = 3;
 
 /**
  * How far back a loop-back still counts. Older ones are history nobody remembers well enough to
@@ -115,7 +115,8 @@ const SENT_BACK_HOURS = 24;
  *
  * @param {object[]} records - Recorded dispatches.
  * @param {Map<string, Map<string, Map<string, number>>>|null} loops - The graph's capped loop-back edges.
- * @returns {Map<object, string>} Loop-back record → the stage it sent work back to, where one can be told.
+ * @returns {Map<object, {to: string, fix: object|null}>} Loop-back record → the stage it sent work back to, where
+ *   one can be told, and the dispatch of that stage that took the work back, where one was found.
  */
 export function sentBackTo(records, loops) {
   const out = new Map();
@@ -133,7 +134,7 @@ export function sentBackTo(records, loops) {
     const within = (x) => Date.parse(x.ts) - Date.parse(back) <= SENT_BACK_HOURS * 3_600_000;
     const next = (bySession.get(r.session) ?? []).find((x) => String(x.ts) > back && within(x) && targets.has(x.role));
     const to = next?.role ?? (targets.size === 1 ? [...targets.keys()][0] : null);
-    if (to) out.set(r, to);
+    if (to) out.set(r, { to, fix: next ?? null });
   }
   return out;
 }
@@ -155,7 +156,7 @@ export function overdue(records, known, now = new Date(), days = CAPTURE_DAYS, o
   // A loop-back is the lesson of the stage it sent work back to, where that is known (`sentBackTo`): charged
   // to the stage that gave the verdict, the reviewer owed the implementer's lessons, and only a pill naming
   // every checker in its applies_to ever settled the count.
-  const ownerOf = (r) => owners.get(r) ?? r.role;
+  const ownerOf = (r) => owners.get(r)?.to ?? r.role;
   const roles = [...new Set(records.map(ownerOf).filter(Boolean))];
   const out = [];
   for (const role of roles) {
@@ -214,7 +215,7 @@ export function applied(records, known) {
 }
 
 /** How many days either side of a lesson's date its role is measured over: the same on both sides. */
-const VERIFY_DAYS = 14;
+export const VERIFY_DAYS = 14;
 
 /** A day as `YYYY-MM-DD`, moved by some days. */
 const shift = (date, days) => new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
@@ -248,18 +249,30 @@ function wilson(k, n) {
  * graph sends work back to. A change is called only where the two intervals do not overlap. Not proof — the
  * work changes too — but a number where one can be had, and the reason where it cannot.
  *
+ * A round is counted sent back once, however many loop-backs sent it: the checkers that run beside each other
+ * each reject the same work, and one project's architect had 14 loop-backs on a day it ran 7 rounds, which the
+ * share read as 100% sent back where 5 of the 7 were. Loop-backs that the same dispatch took back are one.
+ *
  * @param {object[]} records - Recorded dispatches.
  * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills.
- * @param {{owners?: Map<object, string>, targets?: Set<string>|null}} [graph] - Who each loop-back sent work
- *   back to, and the stages the graph sends work back to at all.
+ * @param {{owners?: ReturnType<typeof sentBackTo>, targets?: Set<string>|null}} [graph] - Who each loop-back sent
+ *   work back to, and the stages the graph sends work back to at all.
  * @returns {{rel: string, date: string, role: string, comparable: boolean, why?: string, on?: string|null,
- *   was?: string, before?: {n: number, loops: number}, after?: {n: number, loops: number},
- *   change?: 'lower'|'higher'|'unclear', control?: {before: {n: number, loops: number}, after: {n: number, loops: number}}}[]}
+ *   was?: string, before?: Side, after?: Side, change?: 'lower'|'higher'|'unclear', control?: {before: Side, after: Side}}[]}
+ *   A `Side` is `{n, loops, span}`: the stage's rounds, how many were sent back, and the first and last day a round
+ *   of it was recorded on, since a project younger than the window has fewer days than fourteen to show.
  */
 export function verified(records, known, { owners = new Map(), targets = null } = {}) {
   const out = [];
-  const ownerOf = (r) => owners.get(r) ?? r.role;
+  const ownerOf = (r) => owners.get(r)?.to ?? r.role;
   const sentBack = records.filter((r) => readable(r.verdict) && isLoopBack(r.verdict));
+  // The rounds these loop-backs sent back: those one dispatch took back are one. One no dispatch took back counts on
+  // its own, since nothing then says which work it rejected.
+  const sendings = (backs) => new Set(backs.map((r) => owners.get(r)?.fix ?? r)).size;
+  const sideOf = (these, backs) => {
+    const days = these.map((r) => day(r.ts)).sort();
+    return { n: these.length, loops: Math.min(these.length, sendings(backs)), span: [days[0] ?? null, days.at(-1) ?? null] };
+  };
   const ranOn = (r) => (r.usage_model ? `${r.usage_model}${r.effort ? ` · ${r.effort}` : ''}` : null);
   for (const lesson of known.filter((l) => l.date)) {
     const from = shift(lesson.date, -VERIFY_DAYS);
@@ -274,10 +287,7 @@ export function verified(records, known, { owners = new Map(), targets = null } 
       }
       const rounds = records.filter((r) => r.role === role && readable(r.verdict));
       const backs = sentBack.filter((r) => ownerOf(r) === role);
-      const side = (pick, mine) => {
-        const n = mine.filter(pick).length;
-        return { n, loops: Math.min(n, backs.filter(pick).length) };
-      };
+      const side = (pick, mine) => sideOf(mine.filter(pick), backs.filter(pick));
       if (side(pre, rounds).n < VERIFY_MIN || side(post, rounds).n < VERIFY_MIN) {
         const [b, a] = [side(pre, rounds).n, side(post, rounds).n];
         out.push({ ...base, comparable: false, why: `too few rounds of ${role} either side (${b} before, ${a} after, in ${VERIFY_DAYS} days each)` });
@@ -302,7 +312,7 @@ export function verified(records, known, { owners = new Map(), targets = null } 
       const others = [...(targets ?? new Set(sentBack.map(ownerOf)))].filter((x) => x !== role);
       const theirs = records.filter((r) => others.includes(r.role) && readable(r.verdict));
       const otherBacks = sentBack.filter((r) => others.includes(ownerOf(r)));
-      const control = (pick) => ({ n: theirs.filter(pick).length, loops: Math.min(theirs.filter(pick).length, otherBacks.filter(pick).length) });
+      const control = (pick) => sideOf(theirs.filter(pick), otherBacks.filter(pick));
       out.push({ ...base, comparable: true, on, before, after, change, control: { before: control(pre), after: control(post) } });
     }
   }
