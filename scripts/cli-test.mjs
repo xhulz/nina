@@ -30,7 +30,7 @@ import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, loopState, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
 import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
-import { filledSlots, projectSlots, unwiredScripts } from '../src/commands/check.mjs';
+import { filledSlots, projectSlots, transitiveCitations, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
 import { NAME as VOCABULARY_NAME, defaultVocabulary } from '../src/vocabulary.mjs';
@@ -408,7 +408,8 @@ expect(
   const deep = (root, version) => join(root, 'node_modules', '.pnpm', `deep@${version}`, 'node_modules', 'deep');
   for (const [root, version] of [[dir, '2.0.0'], [dir, '3.0.0'], [spike, '2.0.0']]) {
     await mkdir(deep(root, version), { recursive: true });
-    await writeFile(join(deep(root, version), 'index.js'), '');
+    await writeFile(join(deep(root, version), 'index.js'), 'one\ntwo\nthree\n');
+    await writeFile(join(deep(root, version), 'package.json'), JSON.stringify({ name: 'deep', version }));
   }
   await symlink(deep(dir, '2.0.0'), join(dir, 'node_modules', '.pnpm', 'stripe@17.1.0_@types+node@22', 'node_modules', 'deep'));
   await symlink(deep(dir, '3.0.0'), join(dir, 'packages', 'api', 'node_modules', 'deep'));
@@ -424,13 +425,34 @@ expect(
       '| P7 | `spikes/s/node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js:9` |\n| P8 | `/…/node_modules/.pnpm/y@1.0.0/node_modules/y/a.js` |\n' +
       '| P9 | `node_modules/.pnpm/deep@2.0.0/node_modules/deep/index.js:1` |\n| P10 | a row reads `node_modules/.pnpm/gone@9.9.9/node_modules/<lib>/x.js` |\n' +
       '| P11 | hoisted: `node_modules/.pnpm/node_modules/deep/index.js` |\n| P12 | `node_modules/.pnpm/gone@9.9.9_.../dist/x.js` |\n| P13 | `node_modules/.pnpm/resend@*` does not exist |\n' +
-      '| P14 | hoisted once: `node_modules/.pnpm/node_modules/ghost/index.js` |\n| P15 | `node_modules/.pnpm/local@file+..+local/node_modules/local/index.js` |\n',
+      '| P14 | hoisted once: `node_modules/.pnpm/node_modules/ghost/index.js` |\n| P15 | `node_modules/.pnpm/local@file+..+local/node_modules/local/index.js` |\n' +
+      // Quoted output cites nothing: re-citing it would falsify the evidence.
+      '\n```text\n$ readlink packages/api/node_modules/stripe\n../../../node_modules/.pnpm/stripe@16.0.0/node_modules/stripe\n```\n\n' +
+      // A library no package links, cited through the one that depends on it: stripe's deep is 2.0.0.
+      '| P16 | `packages/api/node_modules/stripe → deep@2.0.0/index.js:3` |\n| P17 | `packages/api/node_modules/stripe → deep@3.0.0/index.js:1` |\n' +
+      '| P18 | `packages/api/node_modules/stripe → deep@2.0.0/index.js:9` |\n| P19 | `packages/web/node_modules/stripe → deep@2.0.0/index.js` |\n' +
+      '| P20 | `packages/api/node_modules/stripe → deep@2.0.0/gone.js` |\n',
   );
   const cited = run(['check', '--project', dir]).out;
   expect(
     cited.includes(".claude/integrations/stripe.md cites 4 path(s) in the package manager's store that the install no longer uses — node_modules/.pnpm/stripe@17.1.0/node_modules/stripe/index.js, …") &&
-      !/drizzle-kit|example\.com|y@1\.0\.0|deep@|\.pnpm\/node_modules|resend|old-pay\.md cites/.test(cited),
-    `check: a store path the install no longer links, or that is gone, is noted; the live one, a spike's own, a package's link, a template, a URL and an elision are not — got ${cited}`,
+      !/drizzle-kit|example\.com|y@1\.0\.0|deep@|\.pnpm\/node_modules|resend|old-pay\.md cites/.test(cited.replace(/ — packages\/api\/node_modules\/stripe → .*/, '')),
+    `check: a store path the install no longer links, or that is gone, is noted; the live one, a spike's own, a package's link, a template, a URL, an elision and quoted output are not — got ${cited}`,
+  );
+  expect(
+    cited.includes(".claude/integrations/stripe.md cites 4 libraries through a parent's link that do not resolve as written — packages/api/node_modules/stripe → deep@3.0.0/index.js:1: deep resolves to 2.0.0 there; …"),
+    `check: a library cited through its parent's link resolves as Node finds it from there — its version, its file and its line — got ${cited}`,
+  );
+  const why = transitiveCitations(await readFile(join(dir, '.claude', 'integrations', 'stripe.md'), 'utf8'), dir);
+  expect(
+    JSON.stringify(why) ===
+      JSON.stringify([
+        'packages/api/node_modules/stripe → deep@3.0.0/index.js:1: deep resolves to 2.0.0 there',
+        'packages/api/node_modules/stripe → deep@2.0.0/index.js:9: index.js has 3 line(s)',
+        'packages/web/node_modules/stripe → deep@2.0.0/index.js: packages/web/node_modules/stripe is not there',
+        'packages/api/node_modules/stripe → deep@2.0.0/gone.js: gone.js is not in deep@2.0.0',
+      ]),
+    `check: each one says why it does not resolve — got ${JSON.stringify(why)}`,
   );
 }
 

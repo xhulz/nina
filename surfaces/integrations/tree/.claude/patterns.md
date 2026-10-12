@@ -14,7 +14,7 @@ An **integration** is a dependency whose behavior this project does not define. 
 
 | kind | what it is | a premise is settled by |
 |---|---|---|
-| `installed-library` | code on disk under `node_modules` | `<package dir>/node_modules/<lib>/<file>:<line>`, the version beside it |
+| `installed-library` | code on disk under `node_modules` | `<package dir>/node_modules/<lib>/<file>:<line>`, the version beside it; one no package links, through the one that depends on it: `<package dir>/node_modules/<parent> → <lib>@<version>/<file>:<line>` |
 | `live-api` | a third-party HTTP API | a contract-test case, or a response observed against the service and captured verbatim |
 | `platform-binding` | a runtime the host provides | behavior observed under the local emulator, plus the platform's installed types |
 

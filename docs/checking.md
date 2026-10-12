@@ -55,6 +55,17 @@ from here, and a template, an elision, a URL and a mention that names no `<name>
 does not exist) are not citations; the store's own hoisting `node_modules` is judged by the file alone. On the
 first two projects it ran in, every path it named was a version or a hash the install had moved past. A premise now cites the package's own link
 (`<package dir>/node_modules/<lib>/<file>:<line>`, the version beside it), which a peer change does not rename.
+A path in a fenced block is not read: it is what a command printed, quoted as evidence, and one project's
+`readlink` transcript held a store directory renamed since — a note that could be cleared only by falsifying
+the evidence, on every run, which trains its reader to skip the notes that are right.
+
+A library no package links has no such link: with a store that links each package's direct dependencies only,
+the emulator every database premise of one project was about is a dependency of the CLI and of the test plugin,
+and the only path to its files was the store directory a peer change renames. It is cited through the link of
+the one that depends on it — `<package dir>/node_modules/<parent> → <lib>@<version>/<file>:<line>` — and `check`
+resolves it as Node does, from where the parent's link really leads: the library found from there, at the
+version written, with the file in it and the line within it (the line read as `nina pills` reads a pill's
+citation). One that does not is a note, with why.
 
 `where` answers the question that comes before all of them: **an agent has something to write — does
 it go here at all?** The composed tree carries no provenance, because `nina:slot` and `nina:requires`

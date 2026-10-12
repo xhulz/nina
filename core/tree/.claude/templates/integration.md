@@ -28,7 +28,9 @@ Read this table and the sections your task actually cites. Not the whole file.
 
 - `installed-library` — `<package dir>/node_modules/<lib>/<file>:<line>`, with the lines that prove it
   quoted and the version beside it. From the version actually installed here, not the latest release,
-  and through the package's own link: the store directory behind it is renamed by a peer change.
+  and through the package's own link: the store directory behind it is renamed by a peer change. A library
+  no package links, a dependency of a dependency, has no link of its own: cite it through the one that depends
+  on it, `<package dir>/node_modules/<parent> → <lib>@<version>/<file>:<line>`, which `nina check` resolves from where that link leads.
 - `live-api` — the request sent and the response received, verbatim, or the contract-test case that
   pins it. The vendor's documentation is not evidence: it describes what they intend, and you are
   depending on what they do.

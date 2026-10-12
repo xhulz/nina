@@ -241,8 +241,9 @@ const BUDGETS = {
   // And for the integrations surface's citation form: the package's own link, not a store directory a peer renames.
   // And for two more from the same project: a check covers every form the rule it enforces names, read from the
   // library, a case built to fail calls the function its real case calls, and a sentence the spec dictates about a
-  // dependency cites what says it.
-  '.claude/agents/architect.md': 17750,
+  // dependency cites what says it. And for a dependency of a dependency, which no package links: cited through its
+  // parent's link, since its only other path was the store directory a peer renames.
+  '.claude/agents/architect.md': 17850,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   '.claude/agents/dba.md': 13100,
   '.claude/agents/devops.md': 11500,
@@ -278,8 +279,9 @@ const BUDGETS = {
   '.claude/router.md': 17000,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
-  // local whose value is a function — and the three it does not cover.
-  'CLAUDE.md': 25300,
+  // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
+  // dependency of a dependency its citation form, through its parent's link.
+  'CLAUDE.md': 25450,
 };
 
 /**
