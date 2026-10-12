@@ -61,7 +61,21 @@
   .stage { display: grid; grid-template-columns: 170px 1fr; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid #2a2838; }
   .empty { color: var(--faint); padding: 30px 0; text-align: center; }
   .note { margin: 4px 0; font-size: 13px; }
-  @media (max-width: 640px) { .stage { grid-template-columns: 1fr; } nav { margin-left: 0; } }
+  .answer { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--faint); border-radius: 6px; padding: 12px 16px; margin: 0 0 14px; }
+  .answer[data-tone="ok"] { border-left-color: var(--green); } .answer[data-tone="bad"] { border-left-color: var(--red); } .answer[data-tone="warn"] { border-left-color: var(--amber); }
+  .answer .q { color: var(--faint); font-size: 12px; }
+  .answer .head { font: 600 18px var(--sans); margin: 2px 0 4px; }
+  .answer p { margin: 2px 0; color: var(--soft); font-size: 13px; }
+  .cmp { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 0 0 10px; }
+  .cmp .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 8px; }
+  .cmp .verdict { margin-left: auto; font: 600 13px var(--mono); }
+  .chip.wraps { white-space: normal; overflow-wrap: anywhere; }
+  .meter { display: grid; grid-template-columns: 48px minmax(60px, 1fr) 44px minmax(0, 230px); align-items: center; gap: 2px 10px; margin: 4px 0; font-size: 13px; }
+  .meter .pctv { text-align: right; }
+  @media (max-width: 640px) {
+    .stage { grid-template-columns: 1fr; } nav { margin-left: 0; }
+    .meter { grid-template-columns: 48px minmax(60px, 1fr) 44px; } .meter .detail { grid-column: 2 / -1; }
+  }
 </style>
 </head>
 <body>
@@ -210,34 +224,105 @@ const RENDER = {
 
   learning(d) {
     if (!d) return el('p', { class: 'empty' }, 'No profile here to read the learning cycle of.');
-    const measured = d.checks.filter((c) => c.before);
+    const name = (rel) => rel.replace(/^\.claude\/pills\//, '').replace(/^retired\//, '').replace(/\.md$/, '');
+    const graduated = (rel) => rel.startsWith('.claude/pills/retired/');
+    const dayOf = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const daysIn = ([a, b]) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000) + 1;
+    const lessonChip = (rel) => el('span', { class: 'chip wraps', title: rel }, name(rel), graduated(rel) ? el('span', { class: 'faint' }, ' · graduated') : null);
+    // Lessons written the same day for the same stage are read over the same rounds, so they are one comparison, not
+    // a row each repeating its numbers.
+    const groups = [];
+    for (const c of d.checks.filter((x) => x.before)) {
+      const same = groups.find((g) => g.role === c.role && g.date === c.date && g.on === c.on);
+      if (same) same.lessons.push(c.rel);
+      else groups.push({ ...c, lessons: [c.rel] });
+    }
+    const rank = { higher: 0, lower: 1, unclear: 2 };
+    groups.sort((a, b) => rank[a.change] - rank[b.change] || b.date.localeCompare(a.date) || a.role.localeCompare(b.role));
     const unmeasured = d.checks.filter((c) => !c.before);
+    const [less, more, unclear] = ['lower', 'higher', 'unclear'].map((k) => groups.filter((g) => g.change === k).length);
+    const lessonsRead = new Set(groups.flatMap((g) => g.lessons)).size;
+    const history = d.span ? daysIn(d.span) : 0;
+    const shortest = Math.min(...groups.flatMap((g) => [g.before, g.after]).map((side) => (side.span[0] ? daysIn(side.span) : 0)));
+    // The share is of work sent back, so up is worse. A move the rounds are too few to tell from chance still says
+    // which way it went: "could be chance" alone read, beside 33% → 67%, as if the larger number were the better one.
+    const share = (side) => (side.n ? Math.round((100 * side.loops) / side.n) : 0);
+    const verdict = (g) =>
+      g.change === 'lower' ? ['ok', '▼ better: sent back less']
+      : g.change === 'higher' ? ['bad', '▲ worse: sent back more']
+      : share(g.after) > share(g.before) ? ['faint', '▲ sent back more, but could be chance']
+      : share(g.after) < share(g.before) ? ['faint', '▼ sent back less, but could be chance']
+      : ['faint', '≈ no change'];
+
+    const answer = !groups.length
+      ? { tone: 'faint', head: 'Not measurable yet', body: unmeasured.length ? `None of the ${unmeasured.length} lesson-and-stage pairs has enough rounds of its stage on both sides of its date — the reasons are at the bottom.` : 'No lesson has been written yet.' }
+      : less && more
+        ? { tone: 'warn', head: 'Mixed', body: `${less} comparison(s) sent back less since their lessons, ${more} sent back more, ${unclear} with no clear change.` }
+        : more
+          ? { tone: 'bad', head: 'Sent back more since', body: `In ${more} of ${groups.length} comparison(s) the stage had more of its work sent back after its lessons than before; ${unclear ? `the other ${unclear} show no clear change` : 'none shows less'}.` }
+          : less
+            ? { tone: 'ok', head: 'Sent back less since', body: `In ${less} of ${groups.length} comparison(s) the stage had less of its work sent back after its lessons than before${unclear ? `; the other ${unclear} show no clear change` : ''}.` }
+            : { tone: 'faint', head: 'No clear change yet', body: `None of the ${groups.length} comparison(s) moved by more than chance moves a share at that many rounds.` };
+
+    const meter = (label, side) => el('div', { class: 'meter' },
+      el('span', { class: 'faint' }, label),
+      bar([[side.n ? side.loops / side.n : 0, 'var(--amber)']]),
+      el('span', { class: 'mono pctv' }, pct(side.loops, side.n)),
+      el('span', { class: 'faint detail' }, `${side.loops} of ${side.n} rounds · ${side.span[0] ? `${dayOf(side.span[0])}${side.span[1] !== side.span[0] ? ` – ${dayOf(side.span[1])}` : ''}` : 'no day'}`),
+    );
+    const comparison = (g) => el('div', { class: 'cmp' },
+      el('div', { class: 'top' },
+        el('span', { class: 'role' }, g.role),
+        el('span', { class: 'soft' }, `${g.lessons.length} lesson${g.lessons.length > 1 ? 's' : ''} written ${dayOf(g.date)}`),
+        g.on ? el('span', { class: 'faint mono' }, g.on) : null,
+        el('span', { class: `verdict ${verdict(g)[0]}` }, verdict(g)[1]),
+      ),
+      el('div', { class: 'faint', style: 'font-size:12px;margin:0 0 2px' }, `share of the ${g.role}'s rounds sent back to it · lower is better`),
+      meter('before', g.before),
+      meter('after', g.after),
+      el('div', { class: 'faint', style: 'margin:6px 0 8px' }, `for reference, the other stages over the same days: ${pct(g.control.before.loops, g.control.before.n)} → ${pct(g.control.after.loops, g.control.after.n)}`),
+      el('div', { class: 'chips' }, g.lessons.map(lessonChip)),
+    );
+    // What could not be measured, by its reason: the same reason, word for word, is one line.
+    const reasons = new Map();
+    for (const c of unmeasured) reasons.set(c.why, [...(reasons.get(c.why) ?? []), c.rel]);
+
     return el('div', {},
       el('h2', {}, 'Learning'),
       el('p', { class: 'sub' }, said('Whether the pipeline learns from its own runs, link by link, as `nina learn` reads it.')),
+      el('div', { class: 'answer', 'data-tone': answer.tone },
+        el('div', { class: 'q' }, 'Did the lessons help?'),
+        el('div', { class: 'head' }, answer.head),
+        el('p', {}, answer.body),
+        groups.length && history < 2 * d.window + 1
+          ? el('p', {}, `This project has ${history} day(s) of history, so a lesson is compared over fewer than the ${d.window} days either side the measure asks for: read it as an early sign.`)
+          : groups.length && shortest < d.window
+            ? el('p', {}, `The shortest comparison has rounds on ${shortest} day(s) of one side, of the ${d.window} the measure reads: read it as an early sign.`)
+            : null,
+      ),
       el('div', { class: 'cards' },
-        card('observe', d.rounds ? `${d.runs} runs` : '—', d.rounds ? `${d.rounds} rounds, ${d.span[0]} → ${d.span[1]}` : 'nothing recorded'),
-        card('capture', d.late.length ? `${d.late.length} owed` : '✓', d.late.length ? 'stages sent back with nothing written down' : `no stage sent back 3+ times without a lesson in ${d.days} days`),
-        card('apply', d.use.measured ? pct(d.use.read, d.use.measured) : '—', d.use.measured ? `of ${d.use.measured} runs read a lesson` : 'not measured yet'),
-        card('graduate', `${d.open.length} open`, `${d.ready.length} at 3+ · ${d.madeHere} made a rule here`),
+        card('observe · what ran', d.rounds ? `${d.runs} runs` : '—', d.rounds ? `${d.rounds} rounds, ${d.span[0]} → ${d.span[1]}` : 'nothing recorded'),
+        card('capture · written down?', d.late.length ? `${d.late.length} owed` : '✓', d.late.length ? 'stages sent back with nothing written down' : `no stage sent back ${d.at}+ times without a lesson in ${d.days} days`),
+        card('apply · read?', d.use.measured ? pct(d.use.read, d.use.measured) : '—', d.use.measured ? `of ${d.use.measured} runs read a lesson` : 'not measured yet'),
+        card('verify · helped?', !groups.length ? '—' : less && more ? 'mixed' : more ? '▲ more' : less ? '▼ less' : '≈ unclear', groups.length ? `${groups.length} comparison(s) of ${lessonsRead} lesson(s): ${less} sent back less, ${more} more` : 'nothing measurable yet'),
+        card('graduate · made rules?', `${d.open.length} open`, `${d.ready.length} at ${d.at}+ · ${d.madeHere} made a rule here${d.relapses.length ? ` · ${d.relapses.length} watched` : ''}`),
         card('loops', d.gated ? (d.activity ? String(d.activity.rounds) : '—') : 'no gate', d.activity ? `rounds on capped edges · ${d.activity.held} sent to you` : d.gated ? 'no ledger yet' : 'caps are instructions'),
       ),
       d.late.length ? [el('h3', {}, 'capture · sent back with nothing written down'), d.late.map((o) => el('div', { class: 'note' }, el('span', { class: 'role' }, o.role), ` ${o.count} loop-back(s) ${o.since ? `since its newest lesson (${o.since})` : 'and no lesson at all'}`, el('ul', { class: 'list soft' }, o.recent.map((r) => el('li', {}, `${when(r.ts)} · ${r.desc ?? '(no description)'}`)))))] : null,
+      el('h3', {}, 'verify · is each stage sent back less since its lessons?'),
+      el('p', { class: 'note soft', style: 'margin-bottom:12px' }, `For each lesson, the share of its stage's rounds that a later stage sent back, in the ${d.window} days before it was written and the ${d.window} after — lower is better. A change is called only when it is larger than chance moves a share at that many rounds. The other stages, over the same days, say whether everything moved at once: then it was the work that changed, not the lesson.`),
+      groups.length ? groups.map(comparison) : el('p', { class: 'note faint' }, 'No lesson could be measured yet.'),
       d.owed.length ? [el('h3', {}, 'to graduate · here or in the harness'), d.owed.map((o) => el('p', { class: 'note' }, el('span', { class: 'mono' }, o.rel), o.declined ? el('span', { class: 'soft' }, ` — declined by the harness${o.declined.in ? ` in ${o.declined.in}` : ''}: ${o.declined.why}`) : el('span', { class: 'soft' }, ` — recurred ${o.occurrences} times`)))] : null,
       d.open.length ? [el('h3', {}, 'requests open in the harness'), table(['since', 'pill', 'proposed for'], d.open.map((r) => [el('span', { class: 'mono soft' }, r.date), el('span', { class: 'mono' }, r.pill), r.target]))] : null,
-      d.relapses.length ? [el('h3', {}, 'came back after graduating'), d.relapses.map((r) => el('p', { class: `note ${r.due ? 'bad' : 'soft'}` }, `${r.due ? '✗' : '·'} ${r.rel} came back ${r.recurred} time(s) after ${r.target === 'project' ? `it became a rule here in ${r.rule_in}` : `its rule shipped in ${r.answered_in || 'a release'}`}${r.due ? ' — the rule did not hold' : ' — watched'}`))] : null,
-      el('h3', {}, 'verify · is each lesson sent back less since?'),
-      measured.length
-        ? table(['lesson', 'stage', 'before → after', 'n', 'change', 'other stages'], measured.map((c) => [
-            el('span', { class: 'mono' }, c.rel.replace(/^\.claude\/pills\//, '')),
-            el('span', { class: 'role' }, c.role),
-            `${pct(c.before.loops, c.before.n)} → ${pct(c.after.loops, c.after.n)}`,
-            `${c.before.n} → ${c.after.n}`,
-            el('span', { class: c.change === 'lower' ? 'ok' : c.change === 'higher' ? 'bad' : 'faint' }, { lower: 'sent back less', higher: 'sent back more', unclear: 'no clear change' }[c.change]),
-            el('span', { class: 'soft' }, `${pct(c.control.before.loops, c.control.before.n)} → ${pct(c.control.after.loops, c.control.after.n)}`),
-          ]), [3])
-        : el('p', { class: 'note faint' }, 'No lesson could be measured yet.'),
-      unmeasured.length ? el('p', { class: 'note faint' }, `${unmeasured.length} more could not be measured.`) : null,
+      d.relapses.length ? [el('h3', {}, 'graduated, then seen again'),
+        d.relapses.map((r) => el('p', { class: 'note' },
+          el('span', { class: r.due ? 'bad' : 'faint' }, r.due ? '✗ ' : '· '),
+          el('span', { class: 'mono', title: r.rel }, name(r.rel)),
+          el('span', { class: 'soft' }, ` — seen ${r.recurred} time(s) since its rule ${r.target === 'project' ? `was made here in ${r.rule_in}` : `shipped in ${r.answered_in || 'a release'}`}`),
+          r.due ? el('span', { class: 'bad' }, ': the rule did not hold') : el('span', { class: 'faint' }, `; watched, it reopens at ${d.at}`)))] : null,
+      unmeasured.length ? el('details', { style: 'margin-top:24px' },
+        el('summary', { class: 'soft', style: 'cursor:pointer' }, `${unmeasured.length} lesson-and-stage pair(s) could not be measured, and why`),
+        [...reasons].map(([why, rels]) => el('div', { class: 'note', style: 'margin:10px 0' }, el('div', { class: 'soft' }, why), el('div', { class: 'chips', style: 'margin-top:4px' }, rels.map(lessonChip))))) : null,
     );
   },
 

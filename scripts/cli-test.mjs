@@ -24,7 +24,7 @@ import { cyclesOf, decodeProjectDir, modelMatches, statsData } from '../src/comm
 import { asRead, projectRecords } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
-import { CAPTURE_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
+import { CAPTURE_AT, CAPTURE_DAYS, VERIFY_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
@@ -5244,6 +5244,10 @@ const dated = (date, status = 'active') =>
       learningTab.runs === 5 && typeof learningTab.active === 'number' && Array.isArray(learningTab.checks) &&
         !everything.includes('warm cache CI does not have') && !everything.includes('approve on CI, never on a local run'),
       'dashboard: the tabs are trimmed to what they draw — no pill, record or report text goes out',
+    );
+    expect(
+      learningTab.at === CAPTURE_AT && learningTab.window === VERIFY_DAYS,
+      `dashboard: the learning tab is handed the counts learn reads by, so the page keeps no copy of them — got ${JSON.stringify({ at: learningTab.at, window: learningTab.window })}`,
     );
     const office = await get('/office');
     const officePage = await get('/office/');

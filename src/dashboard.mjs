@@ -21,7 +21,7 @@ import { layerRootFor } from './commands/compose.mjs';
 import { taskList } from './commands/runs.mjs';
 import { pipelineData } from './commands/pipeline.mjs';
 import { pillsData } from './commands/pills.mjs';
-import { learningData } from './commands/learn.mjs';
+import { CAPTURE_AT, VERIFY_DAYS, learningData } from './commands/learn.mjs';
 import { statsData } from './commands/stats.mjs';
 
 /** The page: one self-contained file, nothing fetched from anywhere else. */
@@ -72,6 +72,10 @@ export function dashboardTabs(target, ctx) {
       const d = await learningData(target, layers.dir, profile, { records: roundsOf(target) });
       return {
         days: d.days,
+        // How many times makes an event: a stage sent back, a lesson recurring, a rule that came back. And the days
+        // either side of a lesson that verify reads, which a project younger than them cannot fill.
+        at: CAPTURE_AT,
+        window: VERIFY_DAYS,
         runs: d.runs,
         rounds: d.rounds,
         span: d.span,

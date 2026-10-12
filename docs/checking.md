@@ -203,8 +203,8 @@ The reports a person reads, a tab each, in a page on this machine, its address p
 office's is: **Office** (the office itself, mounted at `/office/`), **Tasks** (`runs`: each cycle with who worked on
 it, its length and cost), **Pipeline** (`pipeline`: the line, its gates, who sends work back and how many rounds per
 issue, each stage's model, skills and what it ran), **Pills** (`pills`: every pill with its stage, count and trigger,
-then the problems, and the notes folded), **Learning** (`learn`: the five links, the requests, what came back after
-graduating, the before and after of each lesson) and **Stats** (`stats`: the stages, the cost, the context and the
+then the problems, and the notes folded), **Learning** (`learn`: whether the lessons helped, in a line, then the
+links, the before and after of each lesson, the requests and what came back after graduating) and **Stats** (`stats`: the stages, the cost, the context and the
 size of each change against its chain). A tab is read again every fifteen seconds while it is open; the office
 streams on its own.
 
@@ -218,6 +218,10 @@ takes a snapshot first: the project's hooks take one every turn, and a snapshot 
 transcripts that often. A tab carries what its command prints — a pill's name, stage, count and trigger, the notes
 and problems `nina pills` lists, the words the orchestrator gave a dispatch, each stage's words and the task shapes
 `nina pipeline` draws — and never a pill's body, a report, a prompt or a whole record; nothing leaves the machine. Every text goes into the page as text, never as markup.
+The learning tab reads verify as comparisons, not lessons: lessons of one stage written the same day are measured over
+the same rounds, and a row each repeated one comparison's numbers — fifteen rows, five measurements, and whoever read
+them could not tell whether anything had got better. Each comparison is one card, its lessons under it, above it the
+answer in a line, and beside the before and after the days each side covers and the other stages over them.
 A tab that fails to read says why in the terminal running the dashboard, and the page gets only that it failed: the
 error's message carries the project's paths and its stack the code's (CodeQL's `js/stack-trace-exposure`).
 
