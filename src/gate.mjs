@@ -59,7 +59,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TERMINALS, declaredTokens, parseGraph } from './graph.mjs';
 import { gateDir, layerRootFor, readProfile, slugFor } from './paths.mjs';
@@ -215,7 +215,7 @@ export function loadProject(root) {
     const spec = join(root, '.claude', 'agents', `${stage}.md`);
     if (existsSync(spec)) tokens.set(stage, declaredTokens(readFileSync(spec, 'utf8')));
   }
-  return { graph, tokens, loops: loopEdges(graph), forward: forwardEdges(graph) };
+  return { root, graph, tokens, loops: loopEdges(graph), forward: forwardEdges(graph) };
 }
 
 /**
@@ -637,7 +637,138 @@ function onPost(input, project, path, at) {
   // The name an agent was launched with, if any: a later SendMessage may reach it by that name alone.
   const name = tool !== 'SendMessage' && typeof input.tool_input?.name === 'string' ? input.tool_input.name.slice(0, 80) : null;
   append(path, { k: 'dispatch', at, role, agent, via: tool, id: input.tool_use_id ?? null, ...describedAs(input), ...(name ? { name } : {}), ...(resumed === undefined ? {} : { resumed }) });
-  return null;
+  // A stage run in the foreground has finished by now, and its report is this call's result. One launched in the
+  // background, or sent a message, has not: its report arrives later, as a prompt.
+  if (tool === 'SendMessage' || response.isAsync === true || String(response.status ?? '').startsWith('async') || input.tool_input?.run_in_background === true) return null;
+  return leftBehind(input, project, path, at, agent, 'PostToolUse');
+}
+
+/** Where a tool call names a path: a shell command, or a file tool's path. A file's contents are not read, and a long
+ * run of characters with no space — a base64 blob a stage wrote — is what made the pattern below take seconds. */
+const PATH_KEYS = ['command', 'file_path', 'path', 'notebook_path'];
+
+/** A text as a pattern that matches it literally. */
+const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** How much of a stage's transcript is read for its commands: a run's commands are seldom near this, a stray never is. */
+const STRAY_TAIL = 32 * 1024 * 1024;
+
+/**
+ * What a stage left at the root of the session's scratchpad (Hard Rule #18): each entry its commands named there, made
+ * or changed since it was dispatched, that is not a stage's directory, `<role>-<step>-XXXX`. On the first night the rule
+ * held it was read and still missed twice — a reviewer's log, an integration-tester's pointer file — and only the
+ * orchestrator, by chance, saw either. The root is the one the stage's commands used, written out or held in a
+ * variable, so nothing here assumes where Claude Code keeps it; an entry no command of the stage named, or one it only
+ * read, is not laid at its door. A `cd` into the root and a bare name are not followed.
+ *
+ * @param {string} transcript - The stage's own transcript.
+ * @param {Set<string>} roles - The pipeline's stages, whose directories the root may hold.
+ * @param {{since?: number, project?: string}} [options] - When the stage was dispatched, in ms; and the project, inside
+ *   which a directory called `scratchpad` is the project's own, not the session's.
+ * @returns {string[]} The paths left there.
+ */
+export function strays(transcript, roles, { since = 0, project = null } = {}) {
+  let text = '';
+  try {
+    const size = statSync(transcript).size;
+    const length = Math.min(size, STRAY_TAIL);
+    const buffer = Buffer.alloc(length);
+    const fd = openSync(transcript, 'r');
+    try {
+      readSync(fd, buffer, 0, length, size - length);
+    } finally {
+      closeSync(fd);
+    }
+    for (const line of buffer.toString('utf8').split('\n')) {
+      if (!line.includes('"tool_use"') || !line.includes('scratchpad')) continue;
+      let row;
+      try {
+        row = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(row?.message?.content)) continue;
+      for (const block of row.message.content) {
+        if (block?.type !== 'tool_use' || !block.input || typeof block.input !== 'object') continue;
+        for (const key of PATH_KEYS) if (typeof block.input[key] === 'string') text += `${block.input[key]}\n`;
+      }
+    }
+  } catch {
+    return [];
+  }
+  if (!text.includes('/scratchpad')) return [];
+  const own = new RegExp(`^(${[...roles].map(literal).join('|')})-.+-[A-Za-z0-9]{4,}$`);
+  const inside = project ? `${realpathOr(project)}/` : null;
+  const out = [];
+  for (const root of new Set([...text.matchAll(/(\/[^\s"'`;|&<>()$\\]{0,400}\/scratchpad)(?![\w.-])/g)].map((m) => m[1]))) {
+    if (inside && `${realpathOr(root)}/`.startsWith(inside)) continue;
+    let entries;
+    try {
+      entries = readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    // The root as its commands wrote it, and every variable they set to it.
+    const ways = new Set([root]);
+    for (const m of text.matchAll(new RegExp(`\\b([A-Za-z_]\\w*)=["']?${literal(root)}["']?(?=[\\s;&|]|$)`, 'gm'))) ways.add(`$${m[1]}`).add(`\${${m[1]}}`);
+    const named = new RegExp(`(?:${[...ways].map(literal).join('|')})/([^\\s"'\`;|&<>()/\\\\]{1,200})`, 'g');
+    const touched = new Set([...text.matchAll(named)].map((m) => m[1]));
+    for (const entry of entries) {
+      if (entry.isDirectory() && own.test(entry.name)) continue;
+      if (!touched.has(entry.name)) continue;
+      // Read, not made: a file the orchestrator left there and a reviewer read is not the reviewer's.
+      let changed = 0;
+      try {
+        const stat = statSync(join(root, entry.name));
+        changed = Math.max(stat.mtimeMs, stat.birthtimeMs || 0);
+      } catch {
+        continue;
+      }
+      if (changed >= since) out.push(join(root, entry.name));
+    }
+  }
+  return out.sort();
+}
+
+/** A path with its links resolved, where it can be. */
+function realpathOr(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
+ * A stage's report reached the orchestrator: say what it left at the scratchpad's root, once each, for the
+ * orchestrator to move or remove before a stage beside it overwrites or deletes it.
+ *
+ * @param {string|null} named - The agent, by its id or the name it was launched with.
+ * @returns {object|null} The hook's answer, its text for the orchestrator.
+ */
+function leftBehind(input, project, path, at, named, event) {
+  if (!named || typeof input.transcript_path !== 'string' || typeof input.session_id !== 'string') return null;
+  const entries = readLedger(path);
+  const { agent, role } = recipient(entries, project, named);
+  if (!agent || !role || !project.graph.stages.has(role)) return null;
+  // From when it went out: a foreground dispatch is recorded as it comes back, so its start is its `pre`.
+  const launched = entries.findLast((e) => e.k === 'dispatch' && e.agent === agent);
+  const pre = launched?.id ? entries.find((e) => e.k === 'pre' && e.id === launched.id) : null;
+  const transcript = join(dirname(input.transcript_path), input.session_id, 'subagents', `agent-${agent}.jsonl`);
+  const told = new Set(entries.filter((e) => e.k === 'stray').flatMap((e) => e.paths ?? []));
+  const found = strays(transcript, project.graph.stages, { since: Date.parse(pre?.at ?? launched?.at ?? '') || 0, project: project.root }).filter((p) => !told.has(p));
+  if (found.length === 0) return null;
+  append(path, { k: 'stray', at, agent, role, paths: found });
+  const names = found.map((p) => `\`${basename(p)}\``).join(', ');
+  return {
+    hookSpecificOutput: {
+      hookEventName: event,
+      additionalContext:
+        `NINA, Hard Rule #18: the ${role} whose report this is worked in ${names} at the root of the session's scratchpad ` +
+        `(${dirname(found[0])}), outside any stage's \`<role>-<step>-XXXX\` directory, where a stage beside it can overwrite ` +
+        `or delete it. Move it into the directory of the stage that made it, or remove it, and say so in that stage's next dispatch.`,
+    },
+  };
 }
 
 /** How far a round is past what holds it: its issue's cap, or its edge's ceiling. Above zero asks. */
@@ -862,7 +993,10 @@ export function handle(input, { root, now = new Date(), pkg = PACKAGE }) {
     const at = now.toISOString();
     switch (input?.hook_event_name) {
       case 'UserPromptSubmit':
-        if (typeof input.prompt === 'string' && DELIVERED.test(input.prompt.slice(0, DELIVERY_HEAD))) return null;
+        if (typeof input.prompt === 'string' && DELIVERED.test(input.prompt.slice(0, DELIVERY_HEAD))) {
+          const from = /<agent-message from="([^"]+)"/.exec(input.prompt)?.[1] ?? /<task-id>([^<\s]+)<\/task-id>/.exec(input.prompt)?.[1];
+          return leftBehind(input, project, path, at, from, 'UserPromptSubmit');
+        }
         append(path, { k: 'reset', at, why: 'prompt' });
         prune(root, now);
         return null;

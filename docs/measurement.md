@@ -254,6 +254,27 @@ dispatch, the one name the record keeps. The first new project's newest six cost
 spike step at $79 whose reviewer sent back two rounds of three. A cycle is a shape, not a feature's
 boundary: work run side by side in one session can share one.
 
+### A step against its forecast: `nina sizes`
+
+The architect forecasts each step (`Size: ~N lines in M files`) and splits past the limit, and nothing compared a
+forecast with what landed. In the third project two steps landed about 1.5× theirs before a reviewer worked the
+factor out by hand, and a whole architect run — 28 minutes, 375k tokens — then re-derived the rates from
+`git diff --numstat` to forecast six steps again. `nina sizes` reads each step file
+(`.claude/plans/specs/<spec>.step-<n>.md`), finds its commits by their message — the spec and `step <n>`, as the
+router has a commit named — and sets the lines they added outside the harness's own files and the lockfiles beside the
+forecast the file carried before the first of them: the forecast it was built to. A forecast a fix round changed while
+the step was built is shown, not measured against, because measured against it a step always lands on forecast.
+
+The rate it gives a step still to land is the median over the newest landed steps forecast no earlier than that one
+was. Two of the third project's three landed steps were forecast before a re-forecast at their own rates; the steps
+still to land were forecast after it, and measured by all three they were corrected for the old error twice. When a
+forecast was written is the oldest commit of the newest run that carried its number, so an edit to the rest of a step
+file does not move it; a forecast changed in the working tree is newer than every commit.
+
+As a detector in every project's `harness:check` (`--check`), it speaks when the newest landed step came in more than
+a quarter over and steps forecast no later than it still carry those forecasts, and stops once each is forecast again.
+It runs every turn, so it asks git four times, not once per file: a version per process came to most of its second.
+
 ### While a run is still running: the cost watch
 
 `stats` says what a run cost after it ended, and by then the money is spent. Three quarters of the first

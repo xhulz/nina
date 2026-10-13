@@ -4735,6 +4735,17 @@ const dated = (date, status = 'active') =>
     ['plain node', 'It is plain `node`, not a test-runner file, runs its cases side by side (Hard Rule #19) and writes nothing in the tree'],
     ['the gate reads it', 'a gate reads it before it relies on it, and adds its own cases for what its step changed'],
   ]) expect((await spec('agents/architect.md')).includes(said), `compose: a check the gates make on every step is a script they call — keeps ${clause}`);
+  // Each step's commit measured against its forecast: the detector every project's harness:check runs, the router's
+  // re-forecast at the rate it gives, the architect forecasting at it, and the commit message a step is found by.
+  const detectors = await readFile(join(young, 'scripts', 'harness-check.mjs'), 'utf8');
+  const routed = await spec('router.md');
+  for (const [clause, held] of [
+    ['the detector', detectors.includes("args: ['sizes', '--check', '--quiet']") && detectors.includes('ignore: /^sizes: current$/')],
+    ['the re-forecast', /One that landed more than a quarter over says the steps forecast with it are short by as much:\s+before the next\s+goes out, forecast them again at the rate it gives/.test(routed)],
+    ['the architect only to split', /send the\s+architect only a step the new number puts past 400 lines, to be split/.test(routed)],
+    ['the commit names its step', /as its step file does \(`<spec> step <n>`\), which is how\s+`nina sizes` finds it/.test(routed)],
+    ['the architect forecasts at the rate', (await spec('agents/architect.md')).includes('at the rate `nina sizes` measured on the steps that landed')],
+  ]) expect(held, `compose: a step is measured against its forecast at each commit — keeps ${clause}`);
 
   // Two lessons the third project learned three and five times: a check over source code read with the language's lexer
   // and a grammar of what may stand there, and a check's battery generated from its code rather than from the rules.
@@ -4782,6 +4793,229 @@ const dated = (date, status = 'active') =>
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
   const learned = inside([]);
   expect(learned.includes('1 loop-back(s) in the window → 2 pill(s) written —') && !learned.includes('200%'), `stats: no share over 100% — got ${learned}`);
+}
+
+// ─── sizes: each step's forecast against what it landed ──────────────────────────────────
+// Two steps landed about 1.5× their forecasts before a reviewer worked the factor out by hand, and a whole architect run
+// then re-derived it from `--numstat`. The forecast a step was built to sits beside the code its commits added.
+{
+  const { forecastIn, names } = await import('../src/commands/sizes.mjs');
+  expect(
+    JSON.stringify(forecastIn('- **Size:** ~1,200 lines in 3 files, at [step 2](x.md)\'s rates')) === JSON.stringify({ lines: 1200, files: 3 }) &&
+      JSON.stringify(forecastIn('Size: ~300 lines.')) === JSON.stringify({ lines: 300, files: null }) &&
+      forecastIn('No size here; 40 lines in 2 files') === null,
+    'sizes: a forecast is read from the Size line, its files when it gives them, and nowhere else',
+  );
+  expect(
+    names('1.6 step 10e2b: x (1.6-spec-c step 10e2b)', '1.6-spec-c', '10e2b') &&
+      !names('x (1.6-spec-c step 10e2b1)', '1.6-spec-c', '10e2b') &&
+      !names('x (feat-spec step 10)', 'feat-spec', '1') &&
+      !names('x (feat-spec step 1-2)', 'feat-spec', '1') &&
+      names('feat step 1. (feat-spec)', 'feat-spec', '1') &&
+      !names('x (other-spec step 1)', 'feat-spec', '1') &&
+      !names('x (1.6-spec-c2 step 3)', '1.6-spec-c', '3') &&
+      !names('x (my1.6-spec-c step 3)', '1.6-spec-c', '3'),
+    'sizes: a commit names a step by its spec and its id, and step 1 is neither step 10 nor step 1-2, nor spec-c spec-c2',
+  );
+
+  const dir = await scratch();
+  // Each commit at its own time, in zones that order its ISO times as text against the order of the instants: the last
+  // re-forecast, at 14:00Z, reads as 09:00 — before the plan's 12:00.
+  const git = (...args) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+  const commit = (message, at) =>
+    spawnSync('git', ['-C', dir, 'commit', '-qm', message], { encoding: 'utf8', env: { ...process.env, GIT_COMMITTER_DATE: at, GIT_AUTHOR_DATE: at } });
+  const specs = join(dir, '.claude', 'plans', 'specs');
+  await mkdir(specs, { recursive: true });
+  await mkdir(join(dir, '.nina'), { recursive: true });
+  await mkdir(join(dir, 'src'), { recursive: true });
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const step = (n, lines) => writeFile(join(specs, `feat-spec.step-${n}.md`), `# Step ${n}\n\n- **Size:** ~${lines} lines in 2 files. File 1 ~${lines / 2}.\n`);
+  const lines = (n) => `${Array.from({ length: n }, (_, i) => `line ${i}`).join('\n')}\n`;
+  const sizes = (...more) => run(['sizes', '--project', dir, ...more], { loud: true });
+  git('init', '-q');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'test');
+  await step(1, 100);
+  await step(2, 200);
+  await step(3, 150);
+  await step(10, 50);
+  git('add', '-A');
+  commit('Plan the feature in steps (feat-spec)', '2026-03-01T12:00:00+02:00');
+  await writeFile(join(dir, 'src', 'z.ts'), lines(40));
+  git('add', '-A');
+  commit('feat step 10: the early piece (feat-spec step 10)', '2026-03-01T12:30:00+02:00');
+  // Step 1 lands 150 lines of code against ~100, with the harness's own files and a lockfile beside them, and its
+  // forecast revised while it was built.
+  await writeFile(join(dir, 'src', 'a.ts'), lines(100));
+  await writeFile(join(dir, 'src', 'b.ts'), lines(50));
+  await writeFile(join(dir, '.claude', 'notes.md'), lines(30));
+  await writeFile(join(dir, 'pnpm-lock.yaml'), lines(500));
+  await step(1, 140);
+  git('add', '-A');
+  commit('feat step 1: the thing (feat-spec step 1)', '2026-03-01T13:00:00+02:00');
+
+  const listed = sizes();
+  expect(
+    listed.status === 0 &&
+      /10\s+~50\s+→ 40\s+×0\.80/.test(listed.out) &&
+      /1\s+~100\s+→ 150\s+×1\.50\s+2 file\(s\) of 2, revised to ~140 while built/.test(listed.out),
+    `sizes: each landed step against the forecast it was built to, its code alone, step 10 not taken for step 1 — got ${listed.out}`,
+  );
+  // Both landed steps were forecast in the same commit as the two to land, so both measure them: the median of 0.8 and 1.5.
+  expect(
+    /2\s+~200\s+→ ~230\s+to land, at ×1\.15 over 2 step\(s\)/.test(listed.out) && /3\s+~150\s+→ ~173\s+to land/.test(listed.out),
+    `sizes: the steps to land, forecast again at the rate of the steps forecast as they were — got ${listed.out}`,
+  );
+  const fired = sizes('--check');
+  expect(
+    fired.status === 1 &&
+      fired.out.includes('step 1 of feat-spec landed 150 lines against ~100 (×1.50); 2 step(s) forecast when it was have not been forecast again — at ×1.15, over 2 landed step(s) forecast the same way: 2 ~200 → ~230, 3 ~150 → ~173'),
+    `sizes: the detector speaks when the newest step overran and the steps forecast with it were not forecast again — got ${fired.out}`,
+  );
+
+  // Forecast again, one in the working tree and one in a commit that writes no code: neither is stale, and a step
+  // forecast after every landing has no rate to be measured by — counting the old ones would correct twice.
+  await step(2, 300);
+  expect(sizes('--check').out.includes('1 step(s) forecast when it was'), 'sizes: a step forecast again in the working tree is no longer stale');
+  await step(3, 230);
+  git('add', '-A');
+  commit('Re-forecast at the measured rate (feat-spec step 3)', '2026-03-01T09:00:00-05:00');
+  const quiet = sizes('--check');
+  expect(quiet.status === 0 && quiet.out.includes('sizes: current'), `sizes: once every step forecast with it is forecast again, the detector is quiet — got ${quiet.out}`);
+  expect(
+    /3\s+~230\s+to land — forecast after every step that landed/.test(sizes().out),
+    'sizes: a step forecast after every landing is not corrected by the rate of the steps that taught it',
+  );
+
+  // A step that landed on its forecast says nothing, and neither does a directory with no commit.
+  const empty = await scratch();
+  await mkdir(join(empty, '.nina'), { recursive: true });
+  await writeFile(join(empty, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const none = run(['sizes', '--project', empty, '--check']);
+  expect(none.status === 0 && none.out.includes('sizes: current'), `sizes: outside a repository the detector is quiet — got ${none.out}`);
+}
+
+// ─── the gate: what a stage left at the scratchpad's root ─────────────────────────────────
+// Hard Rule #18 was read and still missed twice on its first night — a reviewer's log, an integration-tester's pointer
+// file at the root — and only the orchestrator, by chance, saw either. As a stage's report arrives, the gate lists the
+// root its commands used and names what they made or changed there, outside a stage's own directory.
+{
+  const { handle: gateHandle, strays } = await import('../src/gate.mjs');
+  const { utimes } = await import('node:fs/promises');
+  const data = await scratch();
+  const before = process.env.NINA_DATA;
+  process.env.NINA_DATA = data;
+  const project = await scratch();
+  await mkdir(join(project, '.claude', 'agents'), { recursive: true });
+  await mkdir(join(project, '.nina'), { recursive: true });
+  await writeFile(join(project, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  await writeFile(
+    join(project, '.claude', 'graph.md'),
+    '## Stages\n\n- `reviewer` — r\n- `implementer` — i\n\n## Edges\n\n- `implementer` → `reviewer` on `DIFF-READY`\n- `reviewer` → `done` on `APPROVED`\n- `reviewer` → `implementer` on `REJECTED` — a bug · max 2\n',
+  );
+  const spec = (...tokens) => `---\nname: x\ntools: Read\n---\n\nwhere \`<TOKEN>\` is one of ${tokens.map((t) => `\`${t}\``).join(' or ')}.\n`;
+  await writeFile(join(project, '.claude', 'agents', 'reviewer.md'), spec('APPROVED', 'REJECTED'));
+  await writeFile(join(project, '.claude', 'agents', 'implementer.md'), spec('DIFF-READY', 'BLOCKED'));
+  // A directory the project itself calls scratchpad is not the session's.
+  await mkdir(join(project, 'scratchpad'), { recursive: true });
+  await writeFile(join(project, 'scratchpad', 'fixture.txt'), 'x\n');
+
+  // The session's transcripts, and its scratchpad wherever the stages' commands put it.
+  const transcripts = await scratch();
+  const session = 's-strays';
+  await mkdir(join(transcripts, session, 'subagents'), { recursive: true });
+  const root = join(await scratch(), 'scratchpad');
+  await mkdir(join(root, 'reviewer-10e2b2-ab12'), { recursive: true });
+  await mkdir(join(root, 'pkg'), { recursive: true });
+  for (const name of ['rv-10e2b2-tc.log', 'it-10e2b2.path', 'orchestrator-notes.txt', 'reviewer-10e2b2-zz99', 'old.patch', 'fixer.log']) await writeFile(join(root, name), 'x\n');
+  // Left there before any stage went out, and only read by one.
+  const long = new Date(Date.now() - 2 * 3600_000);
+  await utimes(join(root, 'old.patch'), long, long);
+  const ran = (agent, ...commands) =>
+    writeFile(
+      join(transcripts, session, 'subagents', `agent-${agent}.jsonl`),
+      commands.map((command, i) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: `t${i}`, name: 'Bash', input: { command } }] } })).join('\n'),
+    );
+  const made = (...names) => Promise.all(names.map((n) => utimes(join(root, n), new Date(Date.now() + 1000), new Date(Date.now() + 1000))));
+  const at = (event, fields = {}, now = new Date()) =>
+    gateHandle({ hook_event_name: event, session_id: session, transcript_path: join(transcripts, `${session}.jsonl`), ...fields }, { root: project, now });
+  const stages = new Set(['reviewer', 'implementer']);
+  const reviewerRan = [
+    `mkdir ${root}/reviewer-10e2b2-ab12 && echo x > ${root}/rv-10e2b2-tc.log && cat ${root}/old.patch`,
+    `SP=${root}\necho p > $SP/it-10e2b2.path && echo q > "\${SP}/reviewer-10e2b2-zz99"`,
+    `mkdir -p "${root}/pkg" && cat ${root}/reviewer-10e2b2-ab12/report.md && echo y > ${project}/scratchpad/fixture.txt`,
+  ];
+  await ran('rv1', ...reviewerRan);
+  expect(
+    JSON.stringify(strays(join(transcripts, session, 'subagents', 'agent-rv1.jsonl'), stages, { project })) ===
+      JSON.stringify(['it-10e2b2.path', 'old.patch', 'pkg', 'reviewer-10e2b2-zz99', 'rv-10e2b2-tc.log'].map((n) => join(root, n))),
+    "gate: a stage left at the root what its commands named there, by path or through a variable, outside a stage's own directory — a file named like one included, the project's own scratchpad not — and not what it never named",
+  );
+  // A long run of characters with no space — a blob a command carried — is read in linear time.
+  await ran('blob', `echo ${'/aaaa'.repeat(60_000)}/scratchpad/x > /dev/null`, `printf %s ${'A'.repeat(300_000)} > ${root}/blob.b64`);
+  const slow = Date.now();
+  strays(join(transcripts, session, 'subagents', 'agent-blob.jsonl'), stages);
+  expect(Date.now() - slow < 1000, `gate: a blob in a stage's commands is read in linear time — took ${Date.now() - slow}ms`);
+
+  // A background stage: launched before it has run a command, then its report delivered as a prompt.
+  const async = { isAsync: true, status: 'async_launched' };
+  expect(
+    at('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: 't-rv2', tool_response: { ...async, agentId: 'rv2' } }) === null,
+    'gate: a stage launched in the background is not checked as it launches',
+  );
+  await ran('rv2', ...reviewerRan);
+  await made('it-10e2b2.path', 'pkg', 'reviewer-10e2b2-zz99', 'rv-10e2b2-tc.log');
+  // Sent a message, it has not reported yet either.
+  expect(at('PostToolUse', { tool_name: 'SendMessage', tool_input: { to: 'rv2' }, tool_use_id: 't-rv2b', tool_response: { resumedAgentId: 'rv2' } }) === null, 'gate: a message to a stage is not its report');
+  const told = at('UserPromptSubmit', { prompt: '<agent-message from="rv2">\n[Subagent hand-back] VERDICT: APPROVED' });
+  expect(
+    told?.hookSpecificOutput?.hookEventName === 'UserPromptSubmit' &&
+      told.hookSpecificOutput.additionalContext.includes(
+        "the reviewer whose report this is worked in `it-10e2b2.path`, `pkg`, `reviewer-10e2b2-zz99`, `rv-10e2b2-tc.log` at the root of the session's scratchpad",
+      ) &&
+      told.hookSpecificOutput.additionalContext.includes('Hard Rule #18'),
+    `gate: as a stage's report arrives, the orchestrator is told what it made at the scratchpad's root — not what it only read — got ${JSON.stringify(told)}`,
+  );
+  expect(at('UserPromptSubmit', { prompt: '<agent-message from="rv2">\nmore' }) === null, 'gate: each entry is told once');
+  // Launched in the background with a transcript already there — a stage taken up again — it has not reported yet.
+  await writeFile(join(root, 'late.log'), 'x\n');
+  await ran('rv4', `echo y > ${root}/late.log`);
+  await made('late.log');
+  expect(
+    at('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: 't-rv4', tool_response: { ...async, agentId: 'rv4' } }) === null,
+    'gate: a background launch is never taken for its report, whatever its transcript holds',
+  );
+  await ran('ghost', `echo y > ${root}/orchestrator-notes.txt`);
+  expect(at('UserPromptSubmit', { prompt: '<agent-message from="ghost">\nhi' }) === null, 'gate: an agent the pipeline did not dispatch is not a stage');
+  // A stage reached by the name it was launched with.
+  at('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer', name: 'fixer' }, tool_use_id: 't-fx1', tool_response: { ...async, agentId: 'fx1' } });
+  await ran('fx1', `echo z > ${root}/fixer.log`);
+  await made('fixer.log');
+  expect(
+    at('UserPromptSubmit', { prompt: '<agent-message from="fixer">\nreport' })?.hookSpecificOutput?.additionalContext?.includes('the implementer whose report this is worked in `fixer.log`'),
+    'gate: a report from a stage named as it was launched is checked as its own',
+  );
+  // A stage run in the foreground: it goes out, works, and its report is the dispatch's own result — what it made is
+  // older than the result, and newer than when it went out.
+  const later = Date.now() + 60_000;
+  at('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer' }, tool_use_id: 't-im1' }, new Date(later));
+  await ran('im1', `echo y > ${root}/orchestrator-notes.txt`);
+  await utimes(join(root, 'orchestrator-notes.txt'), new Date(later + 5000), new Date(later + 5000));
+  const foreground = at('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer' }, tool_use_id: 't-im1', tool_response: { agentId: 'im1' } }, new Date(later + 10_000));
+  expect(
+    foreground?.hookSpecificOutput?.hookEventName === 'PostToolUse' && foreground.hookSpecificOutput.additionalContext.includes('the implementer whose report this is worked in `orchestrator-notes.txt`'),
+    `gate: a stage run in the foreground is checked as its result comes back, from when it went out — got ${JSON.stringify(foreground)}`,
+  );
+  // A report delivered as a task's notification names its agent by the task's id.
+  await writeFile(join(root, 'im2.log'), 'x\n');
+  at('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'implementer' }, tool_use_id: 't-im2', tool_response: { ...async, agentId: 'im2' } });
+  await ran('im2', `echo y > ${root}/im2.log`);
+  await made('im2.log');
+  expect(
+    at('UserPromptSubmit', { prompt: '<task-notification>\n<task-id>im2</task-id>\n<status>completed</status>' })?.hookSpecificOutput?.additionalContext?.includes('`im2.log`'),
+    'gate: a report delivered as a task notification is checked by its task id',
+  );
+  process.env.NINA_DATA = before;
 }
 
 // ─── upgrade: a release the install does not carry ──────────────────────────────────────
