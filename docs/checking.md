@@ -151,12 +151,16 @@ report is in gets up as the work moves on, so the room holds the work in hand an
 The title says who is at work, or that the room waits for the next dispatch: between dispatches, little moves. A verdict is a check or a cross over their head; a verdict
 the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
 asking at a cap, the reception's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
-down for a dispatch the owner refused, or for a run that never reported within three hours (the longest of 227
-measured took 108 minutes), gets up and leaves; neither keeps the work from ending. A pass is a party when nothing since the last dispatch was sent back,
+down for a dispatch the owner refused, for a run the orchestrator stopped (`TaskStop`, which the gate writes to the
+ledger), or for a run that never reported within three hours (the longest of 227 measured took 108 minutes), gets up
+and leaves; none keeps the work from ending. The stop was read first by the three hours alone, and one project paused
+for an upgrade had an implementer it stopped sit at its desk for the rest of the afternoon, holding off the party of
+the step another implementer finished. A pass is a party when nothing since the last dispatch was sent back,
 something since then could route to `done`, nobody is still at work and no dispatch follows within twenty seconds
 — at once when the pass routes only to a terminal. The quiet is there because qa's pass may still go on to devops,
 and the orchestrator commits before it dispatches; without the rest, a reviewer approving beside a dba that was
-about to reject threw a party.
+about to reject threw a party. Once the cheering ends, everyone whose report is in goes home: the work is done, and
+a room left holding the last to report read as someone still at work.
 
 Beside the room, a timeline of the session's tasks, newest first — the visibility the owner asked for, without the
 detail: each task's name, who worked on it (each stage in the order it first did, and how many times it was

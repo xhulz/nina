@@ -3433,6 +3433,31 @@ const dated = (date, status = 'active') =>
     'gate: a project pinned to a version with no gate is left alone, whatever is on disk',
   );
 
+  // A run the orchestrator stopped goes on the ledger, by its agent id or the name it was launched with, for the office;
+  // a shell it stops, or a stop made inside a subagent, does not.
+  const launch = (agent, name) =>
+    handle({ hook_event_name: 'PostToolUse', session_id: 's-stop', tool_name: 'Agent', tool_use_id: `toolu_${agent}`, tool_input: { subagent_type: 'implementer', description: 'Implement', ...(name ? { name } : {}) }, tool_response: { agentId: agent } }, { root: project });
+  const stopTask = (task, extra = {}) =>
+    handle({ hook_event_name: 'PostToolUse', session_id: 's-stop', tool_name: 'TaskStop', tool_input: { task_id: task }, tool_response: { message: `Successfully stopped task: ${task}` }, ...extra }, { root: project });
+  launch('a-stop1');
+  launch('a-stop2', 'impl-two');
+  stopTask('a-stop1');
+  stopTask('impl-two');
+  stopTask('bkgshell9');
+  stopTask('a-stop1', { agent_id: 'a-inner', agent_type: 'implementer' });
+  const stops = readLedger(ledgerPath(project, 's-stop')).filter((e) => e.k === 'stop');
+  expect(
+    stops.map((e) => `${e.agent}:${e.role}`).join() === 'a-stop1:implementer,a-stop2:implementer',
+    `gate: a stopped run is on the ledger by its agent, reached by id or by name; a shell or a subagent's stop is not — got ${JSON.stringify(stops)}`,
+  );
+
+  // And only if the gate's hook sees TaskStop: wired without it, the stop never reaches the ledger.
+  const postGate = JSON.parse(settingsFile()).hooks.PostToolUse.filter((g) => g.hooks.some((h) => h.command.includes(GATE)));
+  expect(
+    postGate.length === 1 && matcherReaches(postGate[0].matcher, 'TaskStop') && matcherReaches(postGate[0].matcher, 'SubagentHandback'),
+    `wire: the gate's PostToolUse hook reaches TaskStop — got ${JSON.stringify(postGate.map((g) => g.matcher))}`,
+  );
+
   // The ids a report gave its issues go into the ledger with its verdict; a pass records none.
   const named = (agent, report) =>
     handle({ hook_event_name: 'PostToolUse', session_id: 's-issues', tool_name: 'SubagentHandback', agent_id: agent, agent_type: 'reviewer', tool_input: { message: report } }, { root: project });
@@ -6674,6 +6699,26 @@ await release();
   expect(
     stale.some((b) => b.type === 'stale' && b.work.startsWith('pre:')) && stale.some((b) => b.type === 'party') && beatsOf([ran(0, 'implementer'), ran(60, 'qa', 'PASS')]).every((b) => b.type !== 'party'),
     `office: a run that never reported holds the party off only until it goes stale — got ${stale.map((b) => b.type)}`,
+  );
+  // A run the orchestrator stopped ends where it was stopped: said so, no longer at work, and the work it was part of
+  // still ends. Read only by its verdict, one sat at its desk for three hours after its session had moved on.
+  const halted = ran(0, 'implementer');
+  const haltedAgent = halted[1].agent;
+  const stoppedRun = [halted, { k: 'stop', at: at(30), agent: haltedAgent, role: 'implementer' }, ran(60, 'implementer', 'DIFF-READY'), ran(80, 'qa', 'PASS')];
+  const stoppedBeats = beatsOf(stoppedRun, t0 + 200_000);
+  expect(
+    stoppedBeats.some((b) => b.type === 'stale' && b.at === t0 + 30_000 && b.agent === haltedAgent) && stoppedBeats.some((b) => b.type === 'party'),
+    `office: a stopped run ends where it was stopped, and does not hold the party off — got ${JSON.stringify(stoppedBeats.map((b) => [b.type, b.at - t0]))}`,
+  );
+  const stoppedTask = officeTimeline(stoppedRun.flat(), t0 + 200_000);
+  expect(stoppedTask.length === 1 && stoppedTask[0].how !== null && stoppedTask[0].end === t0 + 85_000, `office: and its task closes at the qa's pass — got ${JSON.stringify(stoppedTask)}`);
+  // Sent another message after the stop, it runs again: a run of its own, not a message to one still running.
+  const again = ran(0, 'implementer');
+  const againAgent = again[1].agent;
+  const resumedAfterStop = beatsOf([again, { k: 'stop', at: at(30), agent: againAgent, role: 'implementer' }, { k: 'pre', at: at(40), role: 'implementer', id: 'toolu_rs', via: 'SendMessage', agent: againAgent }], t0 + 50_000);
+  expect(
+    resumedAfterStop.some((b) => b.type === 'work' && b.at === t0 + 40_000 && !b.message),
+    `office: an agent resumed after it was stopped starts a run, not a message to a running one — got ${JSON.stringify(resumedAfterStop.map((b) => [b.type, b.at - t0, b.message]))}`,
   );
   // A message to an agent still running, seen before its `dispatch` entry is written: the `pre` says so.
   const running = [ran(0, 'implementer'), { k: 'pre', at: at(3), role: 'implementer', id: 'toolu_sm', via: 'SendMessage', agent: 'implementer-' + n }];

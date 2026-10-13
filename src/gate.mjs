@@ -18,6 +18,7 @@
  *   PreToolUse / PostToolUse on Agent, Task, SendMessage
  *                                     a dispatch launched, and the agent it launched
  *   UserPromptSubmit (human text only) the owner spoke, and every open loop gets one round more
+ *   PostToolUse on TaskStop           the orchestrator stopped a run, which will report nothing: for the office
  *   PreToolUse / PostToolUse on AskUserQuestion
  *                                     the orchestrator asked the owner, and was answered: when, for the office
  *   PreToolUse on Agent, Task, SendMessage
@@ -610,6 +611,13 @@ function onPost(input, project, path, at) {
   if (input.agent_id) return null;
   if (tool === 'AskUserQuestion') {
     append(path, { k: 'answered', at });
+    return null;
+  }
+  if (tool === 'TaskStop') {
+    // By its agent id, or the name it was launched with; anything else it stops — a shell — is not a stage's run.
+    const named = input.tool_input?.task_id;
+    const launched = readLedger(path).findLast((e) => e.k === 'dispatch' && e.agent && (e.agent === named || e.name === named));
+    if (launched) append(path, { k: 'stop', at, agent: launched.agent, role: launched.role });
     return null;
   }
   if (!DISPATCH.has(tool)) return null;
