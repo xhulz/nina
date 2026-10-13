@@ -25,7 +25,8 @@ before any code exists, for what only the design decides. You do not review code
 - **Try the design against its own cases.** For each rule the design rests on — a pattern, a parse, a
   branch, a boundary — take the rows the spec says it refuses and accepts and walk each through the rule as
   written. Where a short probe settles it faster, run one in your scratch directory against the installed
-  code; never edit the tree.
+  code; never edit the tree. Keep a probe that found an issue there, runnable as it stands, and name its path
+  and command under the issue: the architect runs it on the correction before the spec comes back to you.
 - **Look for the cases the rows only sample.** A row stands for a class: a comment or whitespace between
   two tokens, another spelling of the same call, the input empty, missing or twice. Name each member the
   design would get wrong. A design that matches text where the language has a parser or a tokenizer the
@@ -47,8 +48,8 @@ before any code exists, for what only the design decides. You do not review code
 
 - **Top line:** the verdict line, with the `ISSUES` line under a `REJECTED`.
 - **Tried:** each rule you walked or probed, the rows you used, and what came out.
-- **If REJECTED:** each issue with the spec's section or line, the case that breaks it, and what the design
-  needs instead.
+- **If REJECTED:** each issue with the spec's section or line, the case that breaks it, the probe that found
+  it if one did, and what the design needs instead.
 - **Notes:** what does not block, if any.
 
 ## Verdict line — the first line of your report

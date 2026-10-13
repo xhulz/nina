@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { describeMove, HARNESS, interruptedMove, movedFrom, moveJournal, readProfile, surfacesIn } from '../paths.mjs';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { REMOVED, composeProject, composedPaths, defaultedSlots, layerRootFor, walk } from './compose.mjs';
 import { detected, missingNeeds } from '../surfaces.mjs';
 import { filledSlots, projectSlots, referencedVocabulary } from './check.mjs';
@@ -22,6 +22,7 @@ import { closeAnswered } from './learn.mjs';
 import { tidyRetired } from './pills.mjs';
 import { lacksPackage, missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
+import { granted } from '../tools.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 
 /** What stops a move from outside it: Ctrl-C, a `kill`, the terminal closing. */
@@ -640,6 +641,27 @@ export async function upgrade(argv, ctx) {
     if (newVocab.length > 0) {
       console.log(`\n  ${newVocab.length} vocabulary name(s) ${to} asks for and this profile does not answer — fill each, or defer it with why:`);
       console.log(`      ${newVocab.join(', ')}`);
+    }
+    // Claude Code reads which agents exist, and each one's tools, when a session starts, and an agent's body on every
+    // dispatch. A session left open runs the new specs with the old tools, and a rule that asks for a tool its stage was
+    // only now given goes unfollowed without a word.
+    const restaged = [];
+    for (const p of [...pathsAfter].sort()) {
+      const rel = p.split(sep).join('/');
+      if (!/^\.claude\/agents\/[^/]+\.md$/.test(rel) || !entryAt(p)) continue;
+      const role = rel.slice('.claude/agents/'.length, -'.md'.length);
+      if (!pathsBefore.has(p) || !saved.has(p)) {
+        restaged.push(`${role}: a new stage`);
+        continue;
+      }
+      const was = granted(saved.get(p).toString('utf8'));
+      const now = granted(readFileSync(join(target, p), 'utf8'));
+      const change = [...now.filter((t) => !was.includes(t)).map((t) => `+${t}`), ...was.filter((t) => !now.includes(t)).map((t) => `-${t}`)];
+      if (change.length > 0) restaged.push(`${role}: ${change.join(', ')}`);
+    }
+    if (restaged.length > 0) {
+      console.log(`\n  ${restaged.length} stage(s) a session already open does not have as ${to} composes them — Claude Code reads which agents exist, and their tools, when a session starts. Open a new one before the next dispatch:`);
+      for (const r of restaged) console.log(`      ${r}`);
     }
     console.log('');
     return 0;

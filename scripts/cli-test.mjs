@@ -852,6 +852,10 @@ async function sound(fixture, core) {
     await release([version], { root: nina });
     console.log = log;
   };
+  const agent = (role, tools) => writeFile(join(nina, 'core', 'tree', '.claude', 'agents', `${role}.md`), `---\nname: ${role}\ndescription: The bed's ${role}.\ntools: ${tools}\n---\n\nWorks.\n`);
+  await mkdir(join(nina, 'core', 'tree', '.claude', 'agents'), { recursive: true });
+  await agent('scout', 'Read, Grep, Glob');
+  await agent('keeper', 'Read, Grep');
   await quiet('1.0.0');
   // The move that introduces a slot the project cannot possibly have filled yet.
   await writeFile(
@@ -861,6 +865,10 @@ async function sound(fixture, core) {
   // And one the release writes itself until the project does, which the move does not ask for.
   await mkdir(join(nina, 'core', 'defaults', 'tree'), { recursive: true });
   await writeFile(join(nina, 'core', 'defaults', 'tree', 'CLAUDE.md'), '<!-- nina:slot project.3 -->\nThe release says this until the project does.\n');
+  // And a stage given a tool, one with a tool taken away, and a stage of its own: none of which a session already open has.
+  await agent('scout', 'Read, Grep, Bash, Glob');
+  await agent('keeper', 'Read');
+  await agent('sentry', 'Read');
   await quiet('1.1.0');
 
   const dir = await scratch();
@@ -916,6 +924,10 @@ async function sound(fixture, core) {
     'deadlock: the pin should have moved',
   );
   expect(moved.out.includes('CLAUDE.md project.2'), 'deadlock: the move should name what is still owed');
+  expect(
+    /3 stage\(s\) a session already open does not have as 1\.1\.0 composes them[^\n]*Open a new one before the next dispatch:\n\s+keeper: -Grep\n\s+scout: \+Bash\n\s+sentry: a new stage\n/.test(moved.out),
+    `upgrade: a stage whose tools changed, or that is new, is named for a new session — got ${moved.out}`,
+  );
   // A name only the new release uses is the same case as its new slot: the preview listed it as needed, and
   // `check` then rolled the move back for it — an order the move could never complete in.
   expect(
@@ -950,6 +962,7 @@ async function sound(fixture, core) {
     inherited.status === 0,
     `deadlock: a move must not roll back for a failure it inherited — got ${inherited.status}\n${inherited.out}`,
   );
+  expect(!inherited.out.includes('a session already open'), `upgrade: a move that changes no stage's tools asks for no new session — got ${inherited.out}`);
   expect(
     /detectors — still failing, as it was before the upgrade/.test(inherited.out),
     `deadlock: and must say the detectors were already failing, not that they passed\n${inherited.out}`,
@@ -4721,6 +4734,24 @@ const dated = (date, status = 'active') =>
     ['the equivalents', 'or is reported equivalent with why'],
     ['the schema left light', 'A schema or a bounds check gets a case per constraint, not a mutant per operand.'],
   ]) expect(implementer.includes(said), `compose: the implementer's generated-battery rule keeps ${clause}`);
+
+  // The architect runs what its spec claims a probe settles, and a correction runs the probe that found the issue: each of
+  // one day's three design re-checks found a new issue in the text the correction had just written, by a probe the
+  // architect, with no shell, could not run.
+  const designReviewer = await spec('agents/design-reviewer.md');
+  for (const [clause, said, text] of [
+    ['the shell', /^tools:[^\n]*\bBash\b/m, architect],
+    ['its probes', '**Run each claim of your spec a probe can settle before `SPEC-READY`:**', architect],
+    ['the unobserved kept apart', 'a claim no probe reaches is marked unobserved, never written as observed', architect],
+    ["the reviewer's probe rerun", 'run the probe each issue names on your correction before you hand it back', architect],
+    ["the correction's own claims", 'probe each claim the correction adds', architect],
+    ["the shell's bounds", 'your `Bash` to the probes above, in your scratch directory: never writing the tree or running the suite, and never moving the checkout', architect],
+    ['no test runner', "from a script of your own, never the project's test runner", architect],
+    ['the probe kept', 'Keep a probe that found an issue there, runnable as it stands', designReviewer],
+    ['the probe named', 'the architect runs it on the correction before the spec comes back to you.', designReviewer],
+    ['the probe in the report', /the probe that found\s+it if one did/, designReviewer],
+    ['the probe dispatched', 'the findings with their `ISSUES` line, and the files and probes they name.', await spec('router.md')],
+  ]) expect(typeof said === 'string' ? text.includes(said) : said.test(text), `compose: a design correction is probed before it goes back — keeps ${clause}`);
 
   // More pills than loop-backs: a share over 100% says nothing, so it is not printed.
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));

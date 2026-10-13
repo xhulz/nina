@@ -245,9 +245,12 @@ const BUDGETS = {
   // parent's link, since its only other path was the store directory a peer renames. And for a step's size in lines,
   // forecast in the spec, and the Design review line that sends a spec to the design-reviewer before any code. And for a
   // check over source code read with the language's lexer, learned five times in two days by one step's source test.
-  '.claude/agents/architect.md': 19700,
+  // And for the probes it runs on its own claims, and on a correction the design-reviewer sent back: each of one day's
+  // three design re-checks found a new issue in the text the correction had just written, unrun.
+  '.claude/agents/architect.md': 20500,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
-  '.claude/agents/design-reviewer.md': 4600,
+  // Raised for the probe that found an issue, kept and named for the architect's correction to run.
+  '.claude/agents/design-reviewer.md': 4900,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   // And for Hard Rule #20's line: a rejection holds only what blocks.
   '.claude/agents/dba.md': 13250,
