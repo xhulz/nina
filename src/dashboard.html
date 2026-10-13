@@ -232,7 +232,8 @@ const RENDER = {
     // Lessons written the same day for the same stage are read over the same rounds, so they are one comparison, not
     // a row each repeating its numbers.
     const groups = [];
-    for (const c of d.checks.filter((x) => x.before)) {
+    // A payload from before first attempts were read: its rounds stand in for them, and none is marked a fix.
+    for (const c of d.checks.filter((x) => x.before).map((x) => ({ fixes: { before: { n: 0, loops: 0, span: [null, null] }, after: { n: 0, loops: 0, span: [null, null] } }, first: { before: x.before, after: x.after }, ...x }))) {
       const same = groups.find((g) => g.role === c.role && g.date === c.date && g.on === c.on);
       if (same) same.lessons.push(c.rel);
       else groups.push({ ...c, lessons: [c.rel] });

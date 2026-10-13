@@ -1297,6 +1297,22 @@ async function sound(fixture, core) {
     few?.comparable && few.thin && few.change === 'unclear' && few.first.after.n === 3 && few.after.n === 9,
     `learn: too few first attempts after a lesson is said, not read as a change — got ${JSON.stringify(few)}`,
   );
+  // A loop-back the graph routes nowhere is charged to its own stage, and is its own round sent back; and a round whose
+  // verdict cannot be read is not passed over for an older first attempt.
+  // Each one reported a while after it began, as a real round does.
+  const qaRuns = [13, 12.5, 12, 11.8, 11.6, 11.4, 5, 4.5, 4, 3.5, 3, 2.5].map((d, i) =>
+    reviewed('qa', i < 6 && i % 2 ? 'FAIL' : 'PASS', d, { session: `s-qa${i}`, result_ts: new Date(midday - (d - 0.01) * 86_400_000).toISOString() }),
+  );
+  const [ungraphed] = verified(qaRuns, [lesson(['qa'], written10)], { owners: new Map(), targets: null });
+  expect(ungraphed?.comparable && ungraphed.first.before.loops === 3 && ungraphed.first.after.loops === 0, `learn: a loop-back the graph routes nowhere counts against its own round — got ${JSON.stringify(ungraphed)}`);
+  const unreadSource = [
+    ...[16, 15, 14, 13, 12].flatMap((d) => [imp(d), app(d - 0.05)]),
+    reviewed('implementer', 'UNCLEAR', 11.9),
+    rej(11.85),
+    ...[5, 4, 3, 2, 1].flatMap((d) => [imp(d), app(d - 0.05)]),
+  ];
+  const [unread] = verified(unreadSource, [lesson(['implementer'], written10)], { owners: sentBackTo(unreadSource, graphLoops), targets: graph.targets });
+  expect(unread?.comparable && unread.first.before.loops === 0 && unread.before.loops === 0, `learn: a rejection of a round whose verdict cannot be read is not charged to an older one — got ${JSON.stringify(unread)}`);
   // A dispatch days after the report is no telling of where the loop-back went; with two routes, it has no owner.
   const twoRoutes = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2], ['architect', 2]])]])]]);
   const late2 = [reviewed('reviewer', 'REJECTED', 10), reviewed('architect', 'SPEC-READY', 5)];

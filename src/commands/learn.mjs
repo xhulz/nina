@@ -328,7 +328,15 @@ export function verified(records, known, { owners = new Map(), targets = null } 
       }
       const rounds = records.filter((r) => r.role === role && readable(r.verdict)).sort(byTime);
       const backs = sentBack.filter((r) => ownerOf(r) === role);
-      const sentRounds = new Set(backs.map((b) => rounds.findLast((r) => r.session === b.session && byTime(r, b) < 0)).filter(Boolean));
+      // The round a loop-back sent back: its own record, where the graph routes it nowhere and it is charged to the stage
+      // that gave it; else the stage's round that had finished, in its session, when the loop-back's stage began — read
+      // over every round of it, so one whose verdict cannot be read takes the charge, uncounted, rather than an older one.
+      const all = records.filter((r) => r.role === role).sort(byTime);
+      const sourceOf = (b) => {
+        if (!owners.has(b)) return b;
+        return all.findLast((r) => r.session && r.session === b.session && String(r.result_ts ?? r.ts) <= String(b.ts)) ?? null;
+      };
+      const sentRounds = new Set(backs.map(sourceOf).filter(Boolean));
       const counted = (these) => {
         const days = these.map((r) => day(r.ts)).sort();
         return { n: these.length, loops: these.filter((r) => sentRounds.has(r)).length, span: [days[0] ?? null, days.at(-1) ?? null] };
