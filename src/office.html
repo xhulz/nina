@@ -497,8 +497,8 @@ function leave(p, instant = false) {
  * Those whose report is in get up once the work moves on, one after another, so the room shows the work in hand
  * rather than everyone who ever sat in it — restored, they are simply gone. A resumed one stays.
  */
-function dismissReported(keep, instant, after = 400) {
-  let delay = after;
+function dismissReported(keep, instant) {
+  let delay = 400;
   for (const q of [...people.values()]) {
     // A report still on its way to the desk counts: the leaving is queued behind it.
     if (keep.includes(q) || !(q.reported || q.reporting) || q.leaving) continue;
@@ -645,9 +645,13 @@ function onBeat(b) {
   }
   if (b.type === 'party') {
     // The work is done: once the cheering ends, everyone whose report is in goes home, so a room with nothing in hand
-    // is empty rather than holding the last to report.
-    dismissReported([], b.instant, 3200);
-    if (b.instant) return;
+    // is empty rather than holding the last to report. Decided then, not queued now: one sent back to work meanwhile
+    // has nothing waiting in its queue.
+    if (b.instant) {
+      dismissReported([], true);
+      return;
+    }
+    setTimeout(() => dismissReported([], false), 3200);
     note(b.at, `${b.role} ${b.verdict} — done`);
     banner = { text: `${b.role} ${b.verdict}`, until: performance.now() + 3500 };
     const now = performance.now();
