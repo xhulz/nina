@@ -25,6 +25,7 @@ import { asRead, projectRecords } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
 import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf, writesThroughShell } from '../src/transcripts.mjs';
 import { CAPTURE_AT, CAPTURE_DAYS, VERIFY_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
+import { readStatus } from '../src/commands/langfuse.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
@@ -6411,8 +6412,11 @@ await release();
   const traces = () => got.filter((g) => g.url === '/api/public/otel/v1/traces');
   const sentIds = () => traces().flatMap((g) => JSON.parse(g.body).resourceSpans[0].scopeSpans[0].spans.map((s) => s.spanId));
   const statusFile = join(process.env.NINA_DATA, 'exports', 'langfuse', `${slug}.status.json`);
-  const status = async () => JSON.parse(await readFile(statusFile, 'utf8').catch(() => 'null'));
+  const status = () => readStatus(slug);
 
+  // A status file caught half-written reads as nothing sent: the detector reads it on every turn.
+  await mkdir(dirname(statusFile), { recursive: true });
+  await writeFile(statusFile, '');
   const turn = run(['learn', '--check', '--project', bed], { loud: true });
   const arrived = await until(async () => (await status())?.spans === 1);
   expect(turn.status === 0 && arrived, `langfuse: the lessons detector sends a project's runs after a turn, with nobody running an export — got ${turn.out}`);

@@ -39,6 +39,35 @@ const SHORT = { full: 'with context', prompts: 'with prompts and reports', none:
 export const statusPath = (slug) => join(exportsDir(), 'langfuse', `${slug}.status.json`);
 
 /**
+ * What the background export last did for a project, or null. The export writes it while each turn's detector reads
+ * it, and a plain write empties the file before it fills it: read in between, it threw in the hook. It is written by
+ * rename now (`writeStatus`); one left unreadable some other way reads as nothing sent.
+ *
+ * @param {string} slug
+ * @returns {Promise<object|null>}
+ */
+export async function readStatus(slug) {
+  try {
+    return JSON.parse(await readFile(statusPath(slug), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes it by rename, so a reader finds the last one whole or this one whole.
+ *
+ * @param {string} slug
+ * @param {object} status
+ */
+export async function writeStatus(slug, status) {
+  await mkdir(join(exportsDir(), 'langfuse'), { recursive: true });
+  const tmp = `${statusPath(slug)}.${process.pid}.tmp`;
+  await writeFile(tmp, JSON.stringify(status));
+  await rename(tmp, statusPath(slug));
+}
+
+/**
  * The configuration on disk: keys, host, and the projects that are on.
  *
  * @returns {Promise<{publicKey?: string, secretKey?: string, host?: string, projects: Record<string, {content: boolean|'prompts', since: string}>}>}
@@ -163,7 +192,7 @@ export async function langfuse(argv, ctx = {}) {
     const on = Object.entries(config.projects);
     if (on.length === 0) console.log('  no project sends its runs — `nina langfuse on` in one');
     for (const [name, setting] of on) {
-      const last = JSON.parse(await readFile(statusPath(name), 'utf8').catch(() => 'null'));
+      const last = await readStatus(name);
       const said = !last ? 'nothing sent yet' : last.error ? `✗ ${last.at}: ${last.error}` : `last sent ${last.at}: ${last.spans} trace(s), ${last.scores} score(s)`;
       console.log(`  ${projectName(name)}: ${SHORT[contextMode(setting) ?? 'none']}, since ${setting.since.slice(0, 10)} — ${said}`);
     }

@@ -29,7 +29,7 @@ import { BATCH, SETTLE_MINUTES, contextMode, postScore, postScores, postSpans, s
 import { runOf, transcriptsOf } from '../transcripts.mjs';
 import { exportsDir, snapshotsDir } from '../paths.mjs';
 import { readStoreFile } from '../store.mjs';
-import { readConfig, statusPath, targetOf } from './langfuse.mjs';
+import { readConfig, readStatus, targetOf, writeStatus } from './langfuse.mjs';
 import { projectName } from './stats.mjs';
 import { handsToModel } from '../detectors.mjs';
 import { takeLock } from '../lock.mjs';
@@ -137,11 +137,11 @@ export async function autoExport(slug, records, now = new Date()) {
   const setting = (await readConfig()).projects[slug];
   if (!setting) return null;
   let finding = null;
-  const last = JSON.parse(await readFile(statusPath(slug), 'utf8').catch(() => 'null'));
+  const last = await readStatus(slug);
   if (last?.error && !last.reported) {
     finding = `the export to Langfuse failed (${last.at}) — ${last.error}; \`nina langfuse status\` says where it stands`;
     // Said on every run until the prompt hook hands it to the model, and not after (`handsToModel`).
-    if (handsToModel()) await writeFile(statusPath(slug), JSON.stringify({ ...last, reported: true }));
+    if (handsToModel()) await writeStatus(slug, { ...last, reported: true });
   }
   const sent = await sentOf(slug);
   if (typeof sent === 'string') return finding ?? sent;
@@ -180,9 +180,9 @@ export async function exportCommand(argv, ctx = {}) {
       if (result.spans > 0 || result.scores > 0 || result.error) {
         // The same failure again is not news: it was reported once, and repeating it every turn it is
         // retried would be the noise the detectors exist to remove.
-        const before = JSON.parse(await readFile(statusPath(only), 'utf8').catch(() => 'null'));
+        const before = await readStatus(only);
         const reported = Boolean(result.error && before?.error === result.error && before.reported);
-        await writeFile(statusPath(only), JSON.stringify({ at: new Date().toISOString(), spans: result.spans, scores: result.scores, error: result.error, reported }));
+        await writeStatus(only, { at: new Date().toISOString(), spans: result.spans, scores: result.scores, error: result.error, reported });
       }
       return result.error ? 1 : 0;
     } finally {
