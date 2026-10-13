@@ -64,5 +64,11 @@
   },
   "2026-10-11-shared__doc-claims-match-the-recorded-premises": {
     "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-13-architect__source-scanners-match-lexer-tokens": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-10-13-implementer__batteries-drop-each-guard-conjunct": {
+    "in": "core/tree/.claude/agents/implementer.md"
   }
 }

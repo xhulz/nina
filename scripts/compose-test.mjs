@@ -243,8 +243,9 @@ const BUDGETS = {
   // library, a case built to fail calls the function its real case calls, and a sentence the spec dictates about a
   // dependency cites what says it. And for a dependency of a dependency, which no package links: cited through its
   // parent's link, since its only other path was the store directory a peer renames. And for a step's size in lines,
-  // forecast in the spec, and the Design review line that sends a spec to the design-reviewer before any code.
-  '.claude/agents/architect.md': 18400,
+  // forecast in the spec, and the Design review line that sends a spec to the design-reviewer before any code. And for a
+  // check over source code read with the language's lexer, learned five times in two days by one step's source test.
+  '.claude/agents/architect.md': 19700,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   '.claude/agents/design-reviewer.md': 4600,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
@@ -257,8 +258,9 @@ const BUDGETS = {
   // when the implementer began running each test's named mutation itself, in a mirror, before handing off; and
   // again for three lessons the same project learned three times each: a test's own judging code is under test, the
   // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it; and again
-  // for the lines a step may write, and the mutations run from one script rather than one turn each.
-  '.claude/agents/implementer.md': 20600,
+  // for the lines a step may write, and the mutations run from one script rather than one turn each; and for a check's
+  // battery generated from its code, after nine loosened guards survived batteries written from the spec's rules.
+  '.claude/agents/implementer.md': 21500,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.

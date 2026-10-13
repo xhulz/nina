@@ -4619,6 +4619,30 @@ const dated = (date, status = 'active') =>
     "compose: Hard Rule #19 sends every stage's light battery side by side, narrower for a gate, a runtime and the suite alone; the implementer follows it and qa's suite runs stay one at a time",
   );
 
+  // Two lessons the third project learned three and five times: a check over source code read with the language's lexer
+  // and a grammar of what may stand there, and a check's battery generated from its code rather than from the rules.
+  // Each clause was a failure of its own, so each is pinned on its own.
+  const architect = await spec('agents/architect.md');
+  for (const [clause, said] of [
+    ['the lexer', "**A check over source code reads it with the language's own lexer**"],
+    ['the raw-text word rule apart', 'A pattern over the raw text is only for a word that comments and strings must not mask'],
+    ['the positive grammar', 'the rule is a positive grammar of what may stand there'],
+    ['each member spelling', '(`.x`, `?.x`, `[\'x\']`, `.x.call`)'],
+    ['the keyword as a property name', 'never as a property name'],
+    ['the rescan past a type', 'rescanned in one context only (`>` fused into `>=` or `>>` past a type\'s close)'],
+    ['the line terminators', 'a line is ended by every terminator the language counts'],
+    ['the binding by block', 'binds where the language binds it, block by block, with a row against the nearest wrong binding'],
+    ['the fuzzed table', 'specify that it is fuzzed differentially against the compiler'],
+  ]) expect(architect.includes(said), `compose: the architect's source-check rule keeps ${clause}`);
+  for (const [clause, said] of [
+    ['its scope', "**For a check whose refusing is the feature — a scanner, classifier, parser or gate, the kind the architect sends to design review — generate the battery from the code, not from the rules.**"],
+    ['the walk', 'Walk each refusing function condition by condition, one mutant per entry'],
+    ['the strings', 'literal collection and string a comparison tests'],
+    ['the siblings', "sibling branches that differ by a condition each get the other's"],
+    ['the equivalents', 'or is reported equivalent with why'],
+    ['the schema left light', 'A schema or a bounds check gets a case per constraint, not a mutant per operand.'],
+  ]) expect(implementer.includes(said), `compose: the implementer's generated-battery rule keeps ${clause}`);
+
   // More pills than loop-backs: a share over 100% says nothing, so it is not printed.
   for (const id of ['a', 'b']) await plant(young, `reviewer/${id}.md`, dated('2026-09-25').replace('id: reviewer-never-approve-on-a-local-run', `id: reviewer-${id}`));
   const learned = inside([]);
