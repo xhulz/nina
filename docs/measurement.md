@@ -231,17 +231,17 @@ of 63 — the commands ran for the rest. Their named mutations were run one call
 every mutation from one script that prints a line each, which makes the largest run of single calls one turn.
 
 One script was not the end of it. The first round under that rule generated 2,536 mutants from the code, as a
-lesson of that project asks of a check, and ran them one at a time, near a second each; the round spent 32 of its 50
+lesson of that project asks of a check, and ran them one at a time, near a second each; the round spent 66 of its 92
 minutes polling the battery with `sleep`, on a machine with ten cores. The implementer's mirrors are plain `node`, so
 a battery that large now runs side by side, a worker per core less two, each on its own copy, and the run waits for
 it in one call. qa's mutations stay one at a time: each runs the suite, at about 2 GB a process.
 
-The implementer was not the only one. Over the same step, finished in 4h37, the round before that rule spent 66 of its
-92 minutes in `sleep`; the integration-tester the spec sent to repeat the fuzz spent 43 of its 81 minutes in fuzz
-commands of nine and ten minutes, run one case at a time; and the three reviewers, who had rejected the change by
-then, waited an hour on it before the fix could go out. So the rule moved into Hard Rule #19, which every stage reads:
-a battery, a fuzz or a differential check of many cases goes side by side, waited for in one call, and only the suite
-runs alone.
+The implementer was not the only one. That step took 4h37 to close: after that round, the integration-tester the spec
+sent to repeat the fuzz spent 43 of its 81 minutes in fuzz commands of nine and ten minutes, run one case at a time,
+and the three reviewers, who had rejected the change by 11:02, waited on it until 12:10 before the fix could go out.
+So the rule moved into Hard Rule #19, which every stage reads: a battery, a fuzz or a differential check of many light
+cases goes side by side, a quarter as wide for a gate, since the gates run together, and waited for in one call. A
+case that boots a runtime, a database or a browser runs alone, as the suite does: each holds about 2 GB.
 
 ### What a piece of work cost: `nina runs`
 

@@ -4604,10 +4604,19 @@ const dated = (date, status = 'active') =>
   // Every stage's battery, fuzz or differential check side by side, waited for in one call: three stages of one step ran
   // theirs one case at a time, and the gates waited an hour on the slowest. The suite stays alone.
   const rules = await readFile(join(young, 'CLAUDE.md'), 'utf8');
+  const nineteen = rules.split('\n').find((line) => line.startsWith('19. ')) ?? '';
+  const implementer = await spec('agents/implementer.md');
   expect(
-    /19\. \*\*Every turn re-reads the whole context[^\n]*A battery, a fuzz or a differential check of many cases[^\n]*a worker per core less two \(`os\.availableParallelism\(\) - 2`\)[^\n]*Never the suite, which runs alone\.[^\n]*never with a `sleep` a turn/.test(rules) &&
-      (await spec('agents/implementer.md')).includes('run them side by side and wait for them as Hard Rule #19 says'),
-    "compose: Hard Rule #19 sends every stage's battery side by side and the suite alone, and the implementer's mutations follow it",
+    [
+      'A battery, a fuzz or a differential check of many light cases',
+      'a worker per core less two (`os.availableParallelism() - 2`), a quarter of that when you are one of the gates that run together',
+      'each worker on its own scratch copy of what it changes and in its own process group, killed when it ends or times out',
+      'A case that boots a runtime, a database or a browser runs alone, and so does the suite.',
+      'never with a `sleep` a turn',
+    ].every((said) => nineteen.includes(said)) &&
+      implementer.includes('run them side by side and wait for them as Hard Rule #19 says: these mirrors are plain `node`, light enough to run together, as the suite is not.') &&
+      !(await spec('agents/qa.md')).includes('a worker per core'),
+    "compose: Hard Rule #19 sends every stage's light battery side by side, narrower for a gate, a runtime and the suite alone; the implementer follows it and qa's suite runs stay one at a time",
   );
 
   // More pills than loop-backs: a share over 100% says nothing, so it is not printed.
