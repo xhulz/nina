@@ -296,8 +296,9 @@ const BUDGETS = {
   // dependency of a dependency its citation form, through its parent's link. And for Hard Rule #20, a rejection only
   // for what blocks, the design-reviewer's line, and a step's lines. And when Hard Rule #19 sent every stage's
   // battery, fuzz and differential check side by side — light cases only, a gate's share narrower, a runtime alone: three
-  // stages of one step had each run theirs one at a time.
-  'CLAUDE.md': 27000,
+  // stages of one step had each run theirs one at a time. And when Hard Rule #18 made each stage's scratch directories its
+  // own: in one shared scratchpad a reviewer set up in another stage's, overwrote its files and removed the dba's harness.
+  'CLAUDE.md': 27600,
 };
 
 /**

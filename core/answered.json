@@ -70,5 +70,8 @@
   },
   "2026-10-13-implementer__batteries-drop-each-guard-conjunct": {
     "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-13-shared__scratch-dirs-are-named-for-your-stage": {
+    "in": "core/tree/CLAUDE.md"
   }
 }

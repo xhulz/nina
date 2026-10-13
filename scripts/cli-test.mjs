@@ -4710,6 +4710,19 @@ const dated = (date, status = 'active') =>
       !(await spec('agents/qa.md')).includes('a worker per core'),
     "compose: Hard Rule #19 sends every stage's light battery side by side, narrower for a gate, a runtime and the suite alone; the implementer follows it and qa's suite runs stay one at a time",
   );
+  // Each stage's scratch directories are its own: in one shared scratchpad a reviewer set up in another stage's, overwrote
+  // its files, left a link inside the repository and removed the dba's harness; another wrote a probe into the tree.
+  const eighteen = rules.split('\n').find((line) => line.startsWith('18. ')) ?? '';
+  for (const [clause, said] of [
+    ['its own', 'Its scratch directories are its own as well'],
+    ['named and made fresh', "each in the session's scratchpad, named for its stage and step and made so that an existing path fails"],
+    ['the command', '`mktemp -d "<scratchpad>/<role>-<step>-XXXX"`'],
+    ['only inside', 'Its scratch work creates, links and deletes only paths inside those, checked before each `ln -s`, `cp` or `rm -rf`'],
+    ["another's probe copied", 'runs a probe another stage named from a copy in one of them'],
+    ['removed, but a named probe', 'removes them when it ends, except a probe its report names for a later stage'],
+    ['named in the report', 'The report names every directory it made.'],
+    ['never in the tree', "A probe that needs a package's module resolution runs in a scratch copy of the package, never in the tree."],
+  ]) expect(eighteen.includes(said), `compose: Hard Rule #18 keeps each stage's scratch directories its own — keeps ${clause}`);
 
   // Two lessons the third project learned three and five times: a check over source code read with the language's lexer
   // and a grammar of what may stand there, and a check's battery generated from its code rather than from the rules.
