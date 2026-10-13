@@ -110,6 +110,9 @@ function readStarts(ledger) {
   // What launched a start: its `dispatch` entry, or — until that is written — what its `pre` says of a message.
   const launchOf = (e) => (e.k === 'pre' ? (dispatches.get(e.id) ?? (e.via ? { via: e.via, agent: e.agent ?? null } : undefined)) : e);
   const verdicts = entries.filter((e) => e.k === 'verdict' && e.declared && e.agent && e.role);
+  // A run the orchestrator stopped (`TaskStop`) reports nothing; read only by its verdict, it sat at its desk for
+  // hours after the session had moved on, and kept the work it was part of from ending.
+  const stops = entries.filter((e) => e.k === 'stop' && e.agent);
 
   // Each start, and how it ends: by a verdict from its agent, or from its stage while its agent is not known yet —
   // the page binds them the same way; refused, when the gate asked, no dispatch was written, and the orchestrator
@@ -121,7 +124,8 @@ function readStarts(ledger) {
     const at = time(e);
     const ranBefore = (agent) => {
       const last = starts.findLast((s) => s.agent === agent && !s.message);
-      return last && !verdicts.some((v) => v.agent === agent && time(v) >= last.at && time(v) <= at);
+      const ended = (x) => x.agent === agent && time(x) >= last.at && time(x) <= at;
+      return last && !verdicts.some(ended) && !stops.some(ended);
     };
     // A message to an agent still running adds to its run; known for certain from the dispatch, before that from
     // whether the agent it names had reported since it last started.
@@ -130,7 +134,12 @@ function readStarts(ledger) {
     starts.push({ i, at, role: e.role, agent: launched?.agent ?? null, message, refusedAt: after ? time(after) : null });
   });
   const verdictOf = (s) => verdicts.find((x) => time(x) >= s.at && (s.agent ? x.agent === s.agent : x.role === s.role)) ?? null;
-  for (const s of starts) s.end = s.message ? s.at : verdictOf(s) ? time(verdictOf(s)) : null;
+  for (const s of starts) {
+    const verdict = verdictOf(s);
+    const stop = !s.message && s.agent ? stops.find((x) => x.agent === s.agent && time(x) >= s.at) : null;
+    s.stopped = stop && (!verdict || time(stop) < time(verdict)) ? time(stop) : null;
+    s.end = s.message ? s.at : (s.stopped ?? (verdict ? time(verdict) : null));
+  }
   return { entries, time, startsWork, launchOf, starts, verdictOf };
 }
 
@@ -183,6 +192,7 @@ export function officeBeats(ledger, graph, now = Date.now()) {
       const work = start.message ? `${id}:message` : id;
       beats.push({ id: work, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
       if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work });
+      else if (start.stopped !== null) beats.push({ id: `stale:${id}`, at: start.stopped, type: 'stale', role: e.role, agent: start.agent, work: id });
       else if (!start.message && (start.end === null || start.end - start.at >= STALE_MS) && now >= start.at + STALE_MS) {
         beats.push({ id: `stale:${id}`, at: start.at + STALE_MS, type: 'stale', role: e.role, agent: start.agent, work: id });
       }

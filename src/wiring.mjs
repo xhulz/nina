@@ -130,7 +130,7 @@ const HOOKS = [
     event: 'PreToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion', script: GATE, timeout: 10, why: 'the caps in .claude/graph.md stay instructions nothing holds, and the office never sees a question asked',
     crash: (cannot) => ({ systemMessage: `NINA: the loop gate could not start, so the caps in .claude/graph.md are not held — ${cannot}` }),
   },
-  { event: 'PostToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion|SubagentHandback', script: GATE, timeout: 10, why: 'the gate never learns which rounds went out, or that the owner answered' },
+  { event: 'PostToolUse', matcher: 'Agent|Task|SendMessage|AskUserQuestion|SubagentHandback|TaskStop', script: GATE, timeout: 10, why: 'the gate never learns which rounds went out, that the owner answered, or that a run was stopped' },
   { event: 'SubagentStop', script: GATE, timeout: 10, why: 'the gate misses the verdict of a stage that wrote its report as its last message' },
   { event: 'SubagentStart', script: GATE, timeout: 10, why: 'a stage is not handed its lessons, and opens every shared pill to find them, or none' },
   { event: 'SessionStart', matcher: 'compact', script: GATE, timeout: 10, why: 'after a compaction the orchestrator has lost the graph, the router and its open loops, and nothing gives them back' },
