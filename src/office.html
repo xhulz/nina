@@ -373,7 +373,9 @@ background.height = LH;
       for (let i = 0; i < 4; i += 1) box(g, room.x + 58 + i * 30, room.y + FACE + 8, 10, 9, C.seatRed);
     }
     plant(g, far, room.laneY - 18, true);
-    if (room.key === 'design') shelf(g, room.x + room.w - 30, room.y + FACE + 2);
+    // The shelf stands in a room's far corner, where only a fourth desk reaches: in design, the design-reviewer's desk
+    // was the fourth and stood under it. Release seats devops and secops, a fourth only if both ran as several agents.
+    if (room.key === 'release') shelf(g, room.x + room.w - 30, room.y + FACE + 2);
     if (room.key === 'lab') {
       box(g, room.x + room.w - 24, room.y + FACE + 2, 16, 30, C.rack);
       for (let i = 0; i < 6; i += 1) rect(g, room.x + room.w - 21, room.y + FACE + 5 + i * 4, 2, 1, i % 3 ? C.ledG : C.ledR);
