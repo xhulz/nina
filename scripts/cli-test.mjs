@@ -4601,10 +4601,13 @@ const dated = (date, status = 'active') =>
     (await spec('agents/implementer.md')).includes('Run them all from one script') && (await spec('agents/qa.md')).includes('every mutation from one script'),
     'compose: the implementer and qa run their mutations from one script, not one turn each',
   );
-  // And a battery of them side by side, waited for in one call: one at a time, one round spent 32 of 50 minutes on it.
+  // Every stage's battery, fuzz or differential check side by side, waited for in one call: three stages of one step ran
+  // theirs one case at a time, and the gates waited an hour on the slowest. The suite stays alone.
+  const rules = await readFile(join(young, 'CLAUDE.md'), 'utf8');
   expect(
-    (await spec('agents/implementer.md')).includes('a worker per core less two (`os.availableParallelism() - 2`)') && !(await spec('agents/qa.md')).includes('a worker per core'),
-    "compose: the implementer runs a large battery side by side, and qa's suite-running mutations stay one at a time",
+    /19\. \*\*Every turn re-reads the whole context[^\n]*A battery, a fuzz or a differential check of many cases[^\n]*a worker per core less two \(`os\.availableParallelism\(\) - 2`\)[^\n]*Never the suite, which runs alone\.[^\n]*never with a `sleep` a turn/.test(rules) &&
+      (await spec('agents/implementer.md')).includes('run them side by side and wait for them as Hard Rule #19 says'),
+    "compose: Hard Rule #19 sends every stage's battery side by side and the suite alone, and the implementer's mutations follow it",
   );
 
   // More pills than loop-backs: a share over 100% says nothing, so it is not printed.

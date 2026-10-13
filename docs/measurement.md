@@ -236,6 +236,13 @@ minutes polling the battery with `sleep`, on a machine with ten cores. The imple
 a battery that large now runs side by side, a worker per core less two, each on its own copy, and the run waits for
 it in one call. qa's mutations stay one at a time: each runs the suite, at about 2 GB a process.
 
+The implementer was not the only one. Over the same step, finished in 4h37, the round before that rule spent 66 of its
+92 minutes in `sleep`; the integration-tester the spec sent to repeat the fuzz spent 43 of its 81 minutes in fuzz
+commands of nine and ten minutes, run one case at a time; and the three reviewers, who had rejected the change by
+then, waited an hour on it before the fix could go out. So the rule moved into Hard Rule #19, which every stage reads:
+a battery, a fuzz or a differential check of many cases goes side by side, waited for in one call, and only the suite
+runs alone.
+
 ### What a piece of work cost: `nina runs`
 
 `stats` answers per stage over a window, which is the question for a gate and not the owner's, which is
