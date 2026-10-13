@@ -290,8 +290,9 @@ const BUDGETS = {
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
   // dependency of a dependency its citation form, through its parent's link. And for Hard Rule #20, a rejection only
   // for what blocks, the design-reviewer's line, and a step's lines. And when Hard Rule #19 sent every stage's
-  // battery, fuzz and differential check side by side: three stages of one step had each run theirs one at a time.
-  'CLAUDE.md': 26800,
+  // battery, fuzz and differential check side by side — light cases only, a gate's share narrower, a runtime alone: three
+  // stages of one step had each run theirs one at a time.
+  'CLAUDE.md': 27000,
 };
 
 /**
