@@ -246,8 +246,9 @@ const BUDGETS = {
   // forecast in the spec, and the Design review line that sends a spec to the design-reviewer before any code. And for a
   // check over source code read with the language's lexer, learned five times in two days by one step's source test.
   // And for the probes it runs on its own claims, and on a correction the design-reviewer sent back: each of one day's
-  // three design re-checks found a new issue in the text the correction had just written, unrun.
-  '.claude/agents/architect.md': 20500,
+  // three design re-checks found a new issue in the text the correction had just written, unrun. And for a check the
+  // gates make on every step, a script they call: one step set's were paragraphs, rebuilt in each of six runs in a day.
+  '.claude/agents/architect.md': 21200,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 4900,
@@ -298,7 +299,8 @@ const BUDGETS = {
   // battery, fuzz and differential check side by side — light cases only, a gate's share narrower, a runtime alone: three
   // stages of one step had each run theirs one at a time. And when Hard Rule #18 made each stage's scratch directories its
   // own: in one shared scratchpad a reviewer set up in another stage's, overwrote its files and removed the dba's harness.
-  'CLAUDE.md': 27600,
+  // And for the harness a gate keeps for the re-check of its fix, which one gate had rebuilt from nothing in each of six runs.
+  'CLAUDE.md': 27900,
 };
 
 /**
