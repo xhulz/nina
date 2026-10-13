@@ -27,6 +27,7 @@ import { exportCommand } from '../src/commands/export.mjs';
 import { langfuse } from '../src/commands/langfuse.mjs';
 import { pipeline } from '../src/commands/pipeline.mjs';
 import { runs } from '../src/commands/runs.mjs';
+import { sizes } from '../src/commands/sizes.mjs';
 import { status } from '../src/commands/status.mjs';
 import { dashboard } from '../src/commands/dashboard.mjs';
 
@@ -92,6 +93,12 @@ const COMMANDS = {
     run: runs,
     help: 'what each piece of work cost: its cycles, their stages and rounds, what was sent back, time and cost',
     options: { ...PROJECT, '--since <date>': 'from this day on, YYYY-MM-DD', '--last <n>': 'how many cycles (default: 10)' },
+  },
+  sizes: {
+    daily: true,
+    run: sizes,
+    help: "each step's forecast against the lines it landed, the rate that measures, and the steps to land forecast at it",
+    options: { ...PROJECT, '--check': 'as a detector: say only when the newest step overran and the steps after it were not forecast again' },
   },
   check: {
     daily: true,
