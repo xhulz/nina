@@ -34,6 +34,14 @@ account, building it faithfully. It is a stage of its own rather than the review
 reviewer's edges into and out of the implementer would make a forward cycle, and a loop is its source's verdict, so
 any pass of the reviewer's would close the other's loops.
 
+Its cap counts an issue, and a re-check that finds a new one starts a count of its own, so the cap does not stop a
+chain of them. On the third project's first day with the stage, it sent two specs back five times: each
+re-check closed every issue of the round before and found a new one in the text the correction had just written,
+by running `tsc` — which the architect, given no shell, could not. So the architect runs a probe on each claim of
+its spec that one settles, and the design-reviewer keeps the probe that found an issue and names it, for the
+correction to run before the spec comes back. The architect's shell is bounded in writing, as every stage's is: the
+edit guard refuses a move of the checkout from it, not a write.
+
 Every loop-back edge carries a **cap**: how many times the same issue may travel it before the
 orchestrator stops and hands the owner every round's report. Before the cap there was no rule anywhere
 that could end a loop.

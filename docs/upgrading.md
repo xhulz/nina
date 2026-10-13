@@ -90,6 +90,12 @@ the same list, written `{{NAME}}`, and are named again once the move succeeds. A
 used and the profile left empty is not excused: that failure was there before the move, and is measured as
 one.
 
+A move that gives a stage a tool, takes one away, or adds a stage names each once it succeeds, and asks for a
+new session; a stage it removes is not named, since an open session holding one more costs nothing. Claude Code reads which agents exist, and each one's `tools:`, when a session starts, and an
+agent's body on every dispatch; so a session left open runs the new spec with the old tools. When the architect
+was given a shell to probe its own claims, a session kept open would have read the rule and had nothing to run
+it with — and the design-reviewer, new in 0.55.0, existed only in sessions opened after that move.
+
 ## Releases — why work here does not move a project that is shipping
 
 A project pins a frozen version of the harness in its profile (`"core": "0.1.0"`), and
