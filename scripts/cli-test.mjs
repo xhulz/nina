@@ -4719,10 +4719,22 @@ const dated = (date, status = 'active') =>
     ['the command', '`mktemp -d "<scratchpad>/<role>-<step>-XXXX"`'],
     ['only inside', 'Its scratch work creates, links and deletes only paths inside those, checked before each `ln -s`, `cp` or `rm -rf`'],
     ["another's probe copied", 'runs a probe another stage named from a copy in one of them'],
-    ['removed, but a named probe', 'removes them when it ends, except a probe its report names for a later stage'],
+    ['removed, but what the report names', 'removes them when it ends, except what its report names for a later run'],
+    ['the harness kept', 'A gate keeps the harness it built — its generators, fuzz and differential drivers — and names each with the command that runs it'],
+    ['the re-check starts from it', 'the re-check of the fix runs them first, rebuilds any no longer there and says so, and writes only what the fix added'],
     ['named in the report', 'The report names every directory it made.'],
     ['never in the tree', "A probe that needs a package's module resolution runs in a scratch copy of the package, never in the tree."],
   ]) expect(eighteen.includes(said), `compose: Hard Rule #18 keeps each stage's scratch directories its own — keeps ${clause}`);
+  // A check asked of a gate on every step is a script it calls: one step set's were paragraphs, and the integration-tester
+  // rebuilt the same fuzz and differential in each of six runs in a day, its re-checks included.
+  for (const [clause, said] of [
+    ['its rule', '**A check the gates make on every step of a set is a script in the tree.**'],
+    ['who writes it', "specify it as a script the first step's implementer writes beside the tests it checks, gated as that step's code"],
+    ['each run calls it', "which each later run calls with its step's rows and cases"],
+    ['never prose', 'never a paragraph each run rebuilds its own probe from'],
+    ['plain node', 'It is plain `node`, not a test-runner file, runs its cases side by side (Hard Rule #19) and writes nothing in the tree'],
+    ['the gate reads it', 'a gate reads it before it relies on it, and adds its own cases for what its step changed'],
+  ]) expect((await spec('agents/architect.md')).includes(said), `compose: a check the gates make on every step is a script they call — keeps ${clause}`);
 
   // Two lessons the third project learned three and five times: a check over source code read with the language's lexer
   // and a grammar of what may stand there, and a check's battery generated from its code rather than from the rules.
