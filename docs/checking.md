@@ -140,7 +140,7 @@ nina pipeline --view --open                         # the system's browser opene
 
 The same graph as an office seen from above, in pixels: a floor plan with a room for each phase — design, build,
 review and the gates, the test lab, release — off one corridor, a desk for each stage in its room (two for a stage
-that runs as several agents), the orchestrator — NINA, drawn as a woman facing the room — at the reception, the owner
+that runs as several agents), the orchestrator — NINA, drawn as a woman facing the room — at the reception, its counter labelled orchestrator, the owner
 as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger, so it shows what the ledger holds — who worked, what they answered, the ids of the issues

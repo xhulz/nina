@@ -247,11 +247,14 @@ const RENDER = {
     // The share is of work sent back, so up is worse. A move the rounds are too few to tell from chance still says
     // which way it went: "could be chance" alone read, beside 33% → 67%, as if the larger number were the better one.
     const share = (side) => (side.n ? Math.round((100 * side.loops) / side.n) : 0);
+    // Read on first attempts: a fix is sent back more often than new work, and a week of fixes after a week of first
+    // specs read as a lesson making its stage worse.
     const verdict = (g) =>
-      g.change === 'lower' ? ['ok', '▼ better: sent back less']
+      g.thin ? ['faint', '≈ too few first attempts to tell']
+      : g.change === 'lower' ? ['ok', '▼ better: sent back less']
       : g.change === 'higher' ? ['bad', '▲ worse: sent back more']
-      : share(g.after) > share(g.before) ? ['faint', '▲ sent back more, but could be chance']
-      : share(g.after) < share(g.before) ? ['faint', '▼ sent back less, but could be chance']
+      : share(g.first.after) > share(g.first.before) ? ['faint', '▲ sent back more, but could be chance']
+      : share(g.first.after) < share(g.first.before) ? ['faint', '▼ sent back less, but could be chance']
       : ['faint', '≈ no change'];
 
     const answer = !groups.length
@@ -277,9 +280,12 @@ const RENDER = {
         g.on ? el('span', { class: 'faint mono' }, g.on) : null,
         el('span', { class: `verdict ${verdict(g)[0]}` }, verdict(g)[1]),
       ),
-      el('div', { class: 'faint', style: 'font-size:12px;margin:0 0 2px' }, `share of the ${g.role}'s rounds sent back to it · lower is better`),
-      meter('before', g.before),
-      meter('after', g.after),
+      el('div', { class: 'faint', style: 'font-size:12px;margin:0 0 2px' }, `share of the ${g.role}'s first attempts sent back to it · lower is better`),
+      // Too few to tell is drawn faint, so a 100% of one round does not read as a result.
+      el('div', { style: g.thin ? 'opacity:.45' : '' }, meter('before', g.first.before), meter('after', g.first.after)),
+      el('div', { class: 'faint', style: 'font-size:12px;margin:6px 0 0' },
+        `its fixes of work sent back, shown, not judged: ${pct(g.fixes.before.loops, g.fixes.before.n)} of ${g.fixes.before.n} → ${pct(g.fixes.after.loops, g.fixes.after.n)} of ${g.fixes.after.n}. ` +
+          'A fix is sent back more often than new work, and a lesson that works leaves fewer of them.'),
       el('div', { class: 'faint', style: 'margin:6px 0 8px' }, `for reference, the other stages over the same days: ${pct(g.control.before.loops, g.control.before.n)} → ${pct(g.control.after.loops, g.control.after.n)}`),
       el('div', { class: 'chips' }, g.lessons.map(lessonChip)),
     );
@@ -310,7 +316,7 @@ const RENDER = {
       ),
       d.late.length ? [el('h3', {}, 'capture · sent back with nothing written down'), d.late.map((o) => el('div', { class: 'note' }, el('span', { class: 'role' }, o.role), ` sent back ${o.count} time(s) ${o.since ? `since its newest lesson (${o.since})` : 'and no lesson at all'}`, el('ul', { class: 'list soft' }, o.recent.map((r) => el('li', {}, `${when(r.ts)} · ${r.desc ?? '(no description)'}`)))))] : null,
       el('h3', {}, 'verify · is each stage sent back less since its lessons?'),
-      el('p', { class: 'note soft', style: 'margin-bottom:12px' }, `For each lesson, the share of its stage's rounds that a later stage sent back, in the ${d.window} days before it was written and the ${d.window} after — lower is better. A change is called only when it is larger than chance moves a share at that many rounds. The other stages, over the same days, say whether everything moved at once: then it was the work that changed, not the lesson.`),
+      el('p', { class: 'note soft', style: 'margin-bottom:12px' }, `For each lesson, the share of its stage's first attempts that a later stage sent back, in the ${d.window} days before it was written and the ${d.window} after — lower is better. First attempts, because a fix of work already sent back is sent back more often, and a week of fixes after a week of new work would read as the lesson making things worse. A change is called only when it is larger than chance moves a share at that many rounds. The other stages, over the same days, say whether everything moved at once: then it was the work that changed, not the lesson.`),
       groups.length ? groups.map(comparison) : el('p', { class: 'note faint' }, 'No lesson could be measured yet.'),
       d.owed.length ? [el('h3', {}, 'to graduate · here or in the harness'), d.owed.map((o) => el('p', { class: 'note' }, el('span', { class: 'mono' }, o.rel), o.declined ? el('span', { class: 'soft' }, ` — declined by the harness${o.declined.in ? ` in ${o.declined.in}` : ''}: ${o.declined.why}`) : el('span', { class: 'soft' }, ` — recurred ${o.occurrences} times`)))] : null,
       d.open.length ? [el('h3', {}, 'requests open in the harness'), table(['since', 'pill', 'proposed for'], d.open.map((r) => [el('span', { class: 'mono soft' }, r.date), el('span', { class: 'mono' }, r.pill), r.target]))] : null,

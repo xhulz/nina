@@ -87,7 +87,7 @@ export function dashboardTabs(target, ctx) {
         madeHere: d.madeHere,
         relapses: d.relapses.map(({ lesson, request, recurred, due }) => ({ rel: lesson.rel, recurred, due, target: request.target, rule_in: request.rule_in, answered_in: request.answered_in })),
         use: d.use,
-        checks: d.checks.map((c) => (c.comparable ? { rel: c.rel, role: c.role, date: c.date, on: c.on ?? null, before: c.before, after: c.after, change: c.change, control: c.control } : { rel: c.rel, role: c.role, why: c.why })),
+        checks: d.checks.map((c) => (c.comparable ? { rel: c.rel, role: c.role, date: c.date, on: c.on ?? null, before: c.before, after: c.after, first: c.first, fixes: c.fixes, thin: c.thin, change: c.change, control: c.control } : { rel: c.rel, role: c.role, why: c.why })),
         activity: d.activity,
         gated: d.gated,
       };
