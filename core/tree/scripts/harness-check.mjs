@@ -64,6 +64,15 @@ process.exit(
         hint: 'the caps in .claude/graph.md are not being held — `nina wire --apply` wires the gate; `nina gate --selftest` says what else is wrong',
         ignore: /^gate: current$/,
       },
+      // A step that landed well past its forecast says the steps forecast with it are short by as much, and it took
+      // a reviewer noticing, then a whole architect run, to work the rate out. It speaks while they are not forecast again.
+      {
+        name: 'step sizes',
+        bin: 'nina',
+        args: ['sizes', '--check', '--quiet'],
+        hint: 'forecast those steps again at that rate — a `Size:` line each, the numbers `nina sizes` lists — and send the architect only a step the new number puts past the limit, to split',
+        ignore: /^sizes: current$/,
+      },
 <!-- nina:slot project.1 detectors -->
     ],
     { root: ROOT, hook: process.argv.includes('--hook'), context: process.argv.includes('--context') },

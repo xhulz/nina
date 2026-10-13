@@ -173,10 +173,16 @@ than {{STEP_LINES}} lines with no steps: that spec goes back to the architect to
 its own sibling steps into one spec and one review; they never put two of an architect's steps in one
 implementer run.
 
+Each step's commit is measured against the forecast it was built to (`nina sizes`, and `harness:check` after every
+turn). One that landed more than a quarter over says the steps forecast with it are short by as much: before the next
+goes out, forecast them again at the rate it gives — a `Size:` line each, the numbers `nina sizes` prints — and send the
+architect only a step the new number puts past {{STEP_LINES}} lines, to be split.
+
 ### Commits
 
 When a pass closes — `qa` returns `PASS`, or the reviewer approves a chain that ends there — commit what
-it changed, with a message naming the step and its spec. Commit on a working branch: never on the
+it changed, with a message naming the step and its spec as its step file does (`<spec> step <n>`), which is how
+`nina sizes` finds it. Commit on a working branch: never on the
 project's default branch, so before a piece of work's first commit there, create a branch named for its
 spec. Never push, amend, rebase or force; {{OWNER}} merges. A pass sent back is not committed. You are
 the only one who commits (Hard Rule #18): a commit is what a worktree holds, what `secops` audits a

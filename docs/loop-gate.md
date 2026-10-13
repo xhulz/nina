@@ -143,6 +143,19 @@ on a fix; the latest dispatches; the branch and the last commit; and the instruc
 drops them with every report — the router had told the orchestrator to write each round's number into its
 dispatch so that it could see it after one, and after one it sees only a summary.
 
+And as a stage's report reaches the orchestrator — a delivered message, or a foreground dispatch's result; never a
+background launch or a message sent, which return before the stage has done anything — it lists the root of the
+session's scratchpad and names what the stage worked in there outside a stage's own `<role>-<step>-XXXX` directory
+(Hard Rule #18), once each. On the rule's first night it was read and still missed twice, a reviewer's log and an
+integration-tester's pointer file left at the root, and only the orchestrator, by chance, saw either. The root is the one
+the stage's commands used, written out or held in a variable, so the check assumes nothing about where Claude Code keeps
+it, and a directory of the project's own called `scratchpad` is not it. An entry is laid at a stage's door only when its
+commands named it and it was made or changed since the stage went out: a file the orchestrator left there and a reviewer
+read is not the reviewer's. Only the commands and the paths a stage named are read, not what it wrote into a file: a
+blob with no space in it made the first version of this take seconds. A `cd` into the root and a bare name are not
+followed. It names, it does not block: holding a stage at its stop to clean up would run it again after its report was
+already delivered.
+
 A review that saw the fix and passed closes its loop at the next dispatch the loop could act on, not when it
 reports, so a loop in that gap is still counted — and its rounds are said to be settled, and which dispatch
 will drop them; when the work is done, none ever comes, and none needs to. Listed as open, three loops

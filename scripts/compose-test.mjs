@@ -289,8 +289,9 @@ const BUDGETS = {
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,
   // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs. And for the design
-  // review before code, and the notes that ride with the work instead of sending it back.
-  '.claude/router.md': 17800,
+  // review before code, and the notes that ride with the work instead of sending it back. And for a step measured
+  // against its forecast at each commit: two steps landed 1.5× theirs before a reviewer worked the rate out by hand.
+  '.claude/router.md': 18400,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
