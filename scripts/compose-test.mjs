@@ -257,8 +257,9 @@ const BUDGETS = {
   // when the implementer began running each test's named mutation itself, in a mirror, before handing off; and
   // again for three lessons the same project learned three times each: a test's own judging code is under test, the
   // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it; and again
-  // for the lines a step may write, and the mutations run from one script rather than one turn each.
-  '.claude/agents/implementer.md': 20400,
+  // for the lines a step may write, and the mutations run from one script rather than one turn each; and again for a
+  // battery run side by side, which one round had spent 32 of its 50 minutes waiting on one mutant at a time.
+  '.claude/agents/implementer.md': 21000,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.

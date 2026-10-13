@@ -96,8 +96,14 @@ step is also held to about `{{STEP_LINES}}` lines (400 by default), tests and fi
 forecasts both for each step and splits past either, and the snapshot keeps each round's `lines_written` — a file's
 last whole write and each edit's new text after it, through the edit tools. That is what the run wrote, not its
 diff: an edit made twice counts twice, which is also what the run paid for, and a file a shell command wrote is not
-counted at all. `stats` names the runs past the line limit the same way, asked only of a project whose release
-states it.
+counted at all. That last was most of them in the project the rule came from: its implementers edited through
+`python3` heredocs, to keep escapes the edit tools decode, in 55 of 61 rounds, and 9 of those made no edit-tool call,
+reading as 0 lines. So the snapshot also keeps `shell_writes`, how many of a round's shell commands wrote a file
+outside a temporary directory (`writesThroughShell` in `src/transcripts.mjs`): each simple command placed where it
+lands — the redirect's file, a `cp`'s destination, where the command stands after its `cd`s, a variable it bound — and
+one whose place it cannot know left out. It is a sign, not a count: a script run from a file is missed. `stats` names
+the runs past the line limit the same way, asked only of a project whose release states it, and calls a round under
+it that wrote through the shell not measured rather than small.
 
 Each step names the steps it builds on, and those whose turn comes together and share no file go out at
 once. That buys time and not tokens: each run builds its own context, and the one project that ran two at
@@ -223,6 +229,12 @@ The rule did not move the number. The third project's implementers sent 1.15 cal
 took 92 and 106 turns, every one a single call, and the model's own time between calls was 37 of 40 minutes and 35
 of 63 — the commands ran for the rest. Their named mutations were run one call each. The implementer and qa now run
 every mutation from one script that prints a line each, which makes the largest run of single calls one turn.
+
+One script was not the end of it. The first round under that rule generated 2,536 mutants from the code, as a
+lesson of that project asks of a check, and ran them one at a time, near a second each; the round spent 32 of its 50
+minutes polling the battery with `sleep`, on a machine with ten cores. The implementer's mirrors are plain `node`, so
+a battery that large now runs side by side, a worker per core less two, each on its own copy, and the run waits for
+it in one call. qa's mutations stay one at a time: each runs the suite, at about 2 GB a process.
 
 ### What a piece of work cost: `nina runs`
 

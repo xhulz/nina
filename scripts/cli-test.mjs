@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cyclesOf, decodeProjectDir, modelMatches, statsData } from '../src/commands/stats.mjs';
 import { asRead, projectRecords } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
-import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf } from '../src/transcripts.mjs';
+import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf, writesThroughShell } from '../src/transcripts.mjs';
 import { CAPTURE_AT, CAPTURE_DAYS, VERIFY_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
@@ -4082,6 +4082,49 @@ const dated = (date, status = 'active') =>
   // The stages that do the work run on it by default: a model missing here costs every such round as unpriced.
   expect(Math.abs(costOf({ input: 1e6, output: 1e6, write_5m: 1e6, write_1h: 1e6, read: 1e6 }, 'claude-sonnet-5-5') - (2 + 10 + 2.5 + 4 + 0.2)) < 1e-9, 'cost: Sonnet 5.5 is priced');
 
+  // A shell command that writes the tree, told from one that writes scratch, each as one project's stages wrote them.
+  const writes = [
+    "cd /repo/packages/db/test/node && python3 - <<'PYEOF'\np='x.test.ts'\ns=open(p).read()\nopen(p,'w').write(s)\nPYEOF",
+    'cd /repo/packages/db && pnpm exec biome format --write test/a.ts 2>&1 | tail -3',
+    "cat > src/http/envelope.ts <<'EOF'\nexport const big = (x) => x > 1;\nEOF",
+    "sed -i '' 's/P16-P19/P16-P18/' .claude/integrations/x.md",
+    'cp $IT3/new.md .claude/integrations/x.md',
+    'S=/private/tmp/s && cp $S/fixed.ts /repo/src/x.ts',
+    "cd /repo/pkg && python3 - <<'EOF'\nopen('a.ts', 'w').write('x')\nEOF\nD=/private/tmp/s; cd $D && node run.ts",
+    'echo done >> notes.md',
+    "if true; then sed -i '' 's/a/b/' src/x.ts; fi",
+    "m() { cd /private/tmp/s; }; sed -i '' 's/a/b/' x.ts",
+    "python3 - <<'EOF'\n# reads /tmp/s/x\nopen('src/a.ts', 'w').write(open('/tmp/s/x').read())\nEOF",
+    'eslint --fix src',
+    'echo $((1<<n))\necho x > f.ts',
+  ];
+  const scratchOnly = [
+    "D=/private/tmp/s/impl; cd $D && python3 - <<'PYEOF'\nopen('gen.mjs', 'w').write('x')\nPYEOF",
+    'pnpm exec tsc --noEmit -p test/node/tsconfig.json 2>&1 | head -30',
+    'node -e "const f = (a) => a > 1; console.log(f(2))"',
+    "cat > /private/tmp/s/probe.mjs <<'EOF'\nfs.writeFileSync('x', y)\nEOF",
+    'R=/private/tmp/rv && cd "$R" && cp -R tpl base2 && cd base2 && sed -i \'\' "s/a/b/" src/d1/schema.ts',
+    'S=/private/tmp/s; cd $S/dba4 && (cd /repo && git status --short > $S/dba4/before.txt) && cp $S/dba3/a.mjs .',
+    "m() { sed -i '' 's/x/y/' \"$1\"; }",
+    "m() { node -e 'require(\"fs\").writeFileSync(process.argv[1], \"\")' \"$1\"; }",
+    'cp a.ts "$1"',
+    'cp a /tmp/s/ 2>&1',
+    'curl --write-out "%{http_code}" -s x',
+    "cat <<\\EOF\nx > y\nEOF",
+    "cat <<'END-DATA'\nx > y\nEND-DATA",
+    'echo $((1>2))',
+    'cp a \\\n  /tmp/x/b',
+    'cp v-addcol/src/schema.ts /dev/null',
+    'grep -n "writeFileSync(" src/a.ts > /dev/null',
+    '# cat > notes.md\nls',
+    "echo it\\'s; sed 's/a > b//' f.txt",
+    "python3 - <<'EOF'\nif a > b: print(1)\nEOF",
+  ];
+  const missed = writes.filter((c) => !writesThroughShell(c));
+  const claimed = scratchOnly.filter((c) => writesThroughShell(c));
+  expect(missed.length === 0, `proportion: a shell command that writes the tree is told — missed ${JSON.stringify(missed)}`);
+  expect(claimed.length === 0, `proportion: and one that writes only scratch, /dev/null or a place it cannot know is not — claimed ${JSON.stringify(claimed)}`);
+
   // End to end: a dispatch, its launch naming the agent, and the agent's own transcript.
   const dir = await scratch();
   await writeFile(
@@ -4114,6 +4157,9 @@ const dated = (date, status = 'active') =>
       tool('Write', { file_path: '/p/b.ts', content: 'one\ntwo\nthree\n' }),
       tool('MultiEdit', { file_path: '/p/a.ts', edits: [{ old_string: 'y', new_string: 'p\nq' }] }),
       tool('Read', { file_path: '/p/c.ts' }),
+      // One shell command writes the tree, and one writes only its scratch directory.
+      tool('Bash', { command: "cd src && python3 - <<'EOF'\nopen('a.ts', 'w').write('x')\nEOF" }),
+      tool('Bash', { command: "D=/tmp/x && cd $D && python3 - <<'EOF'\nopen('a.ts', 'w').write('x')\nEOF" }),
       JSON.stringify({ type: 'assistant', message: { id: 'h1', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\\nISSUES: a' } }] } }),
     ].join('\n')}\n`,
   );
@@ -4126,6 +4172,11 @@ const dated = (date, status = 'active') =>
   delete unlined.lines_written;
   const [lined] = (await scanProject(dir, { cursors: {}, records: [unlined] })).records;
   expect(lined?.lines_written === 6, `proportion: a record from before lines were counted gets them on the next snapshot — got ${lined?.lines_written}`);
+  expect(record?.shell_writes === 1, `proportion: a run counts its shell commands that wrote outside a temporary directory — got ${record?.shell_writes}`);
+  const unshelled = { ...record };
+  delete unshelled.shell_writes;
+  const [shelled] = (await scanProject(dir, { cursors: {}, records: [unshelled] })).records;
+  expect(shelled?.shell_writes === 1, `proportion: and a record from before they were counted gets them on the next snapshot — got ${shelled?.shell_writes}`);
   expect(record?.tokens?.output === 600 && record.usage_model === 'claude-sonnet-5', `cost: the snapshot record carries the run's tokens and model — got ${JSON.stringify(record)}`);
   expect(record?.effort === 'high', `cost: and the effort level it ran at — got ${record?.effort}`);
   const unleveled = { ...record };
@@ -4148,7 +4199,7 @@ const dated = (date, status = 'active') =>
   // Each turn is billed the whole context again, so a round is kept with its turns, the calls they sent,
   // and the context at its start and at its largest.
   expect(
-    record.turns === 2 && record.tool_calls === 4 && record.context_start === 1210 && record.context_peak === 1210 && record.prompt_chars === 'Review the change.'.length,
+    record.turns === 2 && record.tool_calls === 6 && record.context_start === 1210 && record.context_peak === 1210 && record.prompt_chars === 'Review the change.'.length,
     `context: a round keeps its turns, tool calls, context size and the length of its prompt — got ${JSON.stringify(record)}`,
   );
   const shape = contextOf(new Map([['a', { usage: { input_tokens: 5, cache_read_input_tokens: 100 } }], ['b', { usage: { cache_read_input_tokens: 300, cache_creation_input_tokens: 20 } }]]));
@@ -4468,12 +4519,12 @@ const dated = (date, status = 'active') =>
     join(snapshots, `${flat(named)}.jsonl`),
     `${[
       line(flat(named), 'architect', 'SPEC-READY'),
-      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 20, tokens: { read: 90_000_000 }, core: 'dev' }),
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 20, tokens: { read: 90_000_000 }, core: 'dev', shell_writes: 2 }),
       // The same size under a release from before the limit is not over it.
       line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 40, tokens: { read: 1 }, core: '0.28.7' }),
-      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 3, lines_written: 2546, core: 'dev' }),
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 3, lines_written: 2546, core: 'dev', shell_writes: 1 }),
       // Lines past the limit under a release from before it are not over it either.
-      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 3, lines_written: 9000, core: '0.54.0' }),
+      line(flat(named), 'implementer', 'DIFF-READY', { files_touched: 3, lines_written: 9000, core: '0.54.0', shell_writes: 5 }),
       line(flat(named), 'reviewer', 'REJECTED'),
     ].join('\n')}\n`,
   );
@@ -4505,6 +4556,11 @@ const dated = (date, status = 'active') =>
   expect(
     own.includes('1 implementer round(s) wrote more lines than one step may (400); the largest wrote 2546.'),
     `stats: and one past the lines a step may write, under the file limit — got ${own}`,
+  );
+  // A round that wrote through the shell is not measured, not small; one from before the line rule is not judged.
+  expect(
+    own.includes('1 implementer round(s) also wrote files through the shell, where no count of lines reaches: their size is not measured.'),
+    `stats: a round under the line limit that wrote through the shell is called not measured — got ${own}`,
   );
   // The limit is the rule the composed pipeline states: the architect splits past it, the implementer
   // refuses past it, and the orchestrator runs each step as its own pass.
@@ -4543,6 +4599,11 @@ const dated = (date, status = 'active') =>
   expect(
     (await spec('agents/implementer.md')).includes('Run them all from one script') && (await spec('agents/qa.md')).includes('every mutation from one script'),
     'compose: the implementer and qa run their mutations from one script, not one turn each',
+  );
+  // And a battery of them side by side, waited for in one call: one at a time, one round spent 32 of 50 minutes on it.
+  expect(
+    (await spec('agents/implementer.md')).includes('a worker per core less two (`os.availableParallelism() - 2`)') && !(await spec('agents/qa.md')).includes('a worker per core'),
+    "compose: the implementer runs a large battery side by side, and qa's suite-running mutations stay one at a time",
   );
 
   // More pills than loop-backs: a share over 100% says nothing, so it is not printed.

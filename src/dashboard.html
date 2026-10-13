@@ -359,7 +359,8 @@ const RENDER = {
       d.proportion ? [el('h3', {}, 'proportion · the size of a change against its chain'),
         table(['largest write', 'cycles', 'with a planner or architect', ''], d.proportion.rows.map((r) => [r.label, String(r.cycles), r.cycles ? `${r.designed} (${pct(r.designed, r.cycles)})` : '—', bar([[r.cycles ? r.designed / r.cycles : 0, 'var(--pink)']])]), [1, 2]),
         d.proportion.over ? el('p', { class: 'note warn' }, `${d.proportion.over.count} implementer round(s) wrote more files than one step may (${d.proportion.over.limit}); the largest wrote ${d.proportion.over.largest}.`) : null,
-        d.proportion.overLines ? el('p', { class: 'note warn' }, `${d.proportion.overLines.count} implementer round(s) wrote more lines than one step may (${d.proportion.overLines.limit}); the largest wrote ${d.proportion.overLines.largest}.`) : null] : null,
+        d.proportion.overLines ? el('p', { class: 'note warn' }, `${d.proportion.overLines.count} implementer round(s) wrote more lines than one step may (${d.proportion.overLines.limit}); the largest wrote ${d.proportion.overLines.largest}.`) : null,
+        d.proportion.unmeasured ? el('p', { class: 'note faint' }, `${d.proportion.unmeasured} implementer round(s) also wrote files through the shell, where no count of lines reaches: their size is not measured.`) : null] : null,
     );
   },
 };

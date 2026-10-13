@@ -124,6 +124,220 @@ const WRITES = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', 
 /** How many lines a text written through an edit tool holds: none for an empty one, a last newline ending one. */
 const linesIn = (text) => (typeof text === 'string' && text.length > 0 ? text.replace(/\n$/, '').split('\n').length : 0);
 
+/** A temporary directory named in a command: what it writes there is scratch, not the tree. */
+const TEMP = /(?:^|[^\w.-])(?:\/private)?\/tmp\/|\/var\/folders\/|\$\{?TMPDIR\b|\bmktemp\b|\/scratchpad\b/;
+
+/** A script, in a heredoc or a quoted `-e`, that opens a file to write it. */
+const SCRIPT_WRITES = /\bopen\([^)\n]*,\s*(?:mode\s*=\s*)?['"](?:w|a|x|r\+)[bt+]?['"]|\.write_(?:text|bytes)\(|\b(?:writeFileSync|appendFileSync|writeFile|appendFile|createWriteStream)\(/;
+
+/** A script's write to a file it names as a literal: the path, judged as the shell's own writes are. */
+const LITERAL_WRITES = [
+  /\bopen\(\s*(['"])([^'"\n]+)\1\s*,\s*(?:mode\s*=\s*)?['"](?:w|a|x|r\+)/g,
+  /\bPath\(\s*(['"])([^'"\n]+)\1\s*\)\.write_(?:text|bytes)\(/g,
+  /\b(?:writeFileSync|appendFileSync|writeFile|appendFile|createWriteStream)\(\s*(['"`])([^'"`\n]+)\1/g,
+];
+
+/** A redirect's own words, which are not a command's last argument. */
+const REDIRECTS = /(?:^|\s)(?:\d?[<>]{1,2}\|?|&>>?)(?:&\d+|\s*\S+)/g;
+
+/** What may stand before a simple command's own name: a function it opens, `do`, `then`, a group, `nohup`. */
+const LEADS = String.raw`^\s*(?:[A-Za-z_][\w-]*\(\)\s*)?(?:(?:do|then|else|time|nohup|\{|\(|!)\s*)*`;
+
+/** A simple command that opens a function's body. */
+const FUNCTION = /^\s*(?:function\s+[A-Za-z_][\w-]*\s*(?:\(\))?|[A-Za-z_][\w-]*\s*\(\))\s*\{/;
+
+/** A `cd` or `pushd`, and where it goes. */
+const CD = new RegExp(String.raw`${LEADS}(?:cd|pushd)\b(?:\s+(\S+))?`);
+
+/**
+ * The shell's own ways to write a file, read in a simple command's words, each with where it writes: the redirect's
+ * or `tee`'s file, the last word of an in-place `sed` or `perl`, of a `cp` or a `mv`; a formatter's `--write` or
+ * `--fix`, `git apply` and `patch` write where the command stands.
+ */
+const SHELL_WRITES = [
+  [/(?:^|[\s;&|(){}])\d?>>?\|?\s*(?!&)(?!\/dev\/(?:null|stdout|stderr)\b)([^\s;&|<>()]+)/, 1],
+  [/(?:^|[\s;&|(])tee\s+(?:-a\s+)?(?!\/dev\/null\b)([^\s;&|<>()-][^\s;&|<>()]*)/, 1],
+  [new RegExp(String.raw`${LEADS}(?:sed|perl)\s+(?:-\S*\s+)*(?:-[a-zA-Z]*i\b|--in-place)`), 'last'],
+  [new RegExp(String.raw`${LEADS}(?:cp|mv)\s`), 'last'],
+  [/\s--(?:write|fix)(?=\s|=|$)/, null],
+  [new RegExp(String.raw`${LEADS}(?:git\s+apply|patch)\b`), null],
+];
+
+/** A simple command that runs an interpreter, whose script — a heredoc, a `-e` or `-c` — may open a file to write. */
+const INTERPRETER = new RegExp(String.raw`${LEADS}(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:pnpm|npx)\s+(?:exec\s+)?)?(?:python3?|node|deno|bun|perl|ruby|tsx)\b`);
+
+/** A quoted word that is only a path or a variable, kept as a word rather than emptied as a string. */
+const PLAIN = /^[\w$./{}~@:+,=-]*$/;
+
+/**
+ * A command's simple commands, in order, as the shell splits them at `&&`, `||`, `;`, `|`, `&` and line ends outside
+ * quotes: each with its text as written, a heredoc's body joined to the command that opened it, and its words — a
+ * quoted path kept, any other quoted string emptied, no body — so that `a > b` in a script, or an arrow function in
+ * `node -e "…"`, is no redirect.
+ *
+ * @param {string} command
+ * @returns {{raw: string, words: string}[]}
+ */
+function simpleCommands(command) {
+  const out = [];
+  let raw = '';
+  let words = '';
+  let quote = null;
+  let opened = 0;
+  const bodies = [];
+  const end = () => {
+    if (raw.trim()) out.push({ raw, words });
+    raw = '';
+    words = '';
+  };
+  for (let i = 0; i < command.length; i += 1) {
+    const c = command[i];
+    const prev = command[i - 1];
+    const next = command[i + 1];
+    if (quote) {
+      raw += c;
+      if (c === '\\' && quote === '"' && next !== undefined) {
+        raw += next;
+        i += 1;
+      } else if (c === quote) {
+        const inside = raw.slice(opened, -1);
+        words += PLAIN.test(inside) ? inside : '""';
+        quote = null;
+      }
+      continue;
+    }
+    if (c === '\\' && next !== undefined) {
+      // A backslash before a line end joins the lines; before anything else, it keeps that character as it is.
+      raw += next === '\n' ? ' ' : c + next;
+      words += next === '\n' ? ' ' : c + next;
+      i += 1;
+      continue;
+    }
+    if (c === '$' && next === '(' && command[i + 2] === '(') {
+      // Arithmetic, `$((1 << n))` or `$((a > b))`: neither a heredoc nor a redirect.
+      let depth = 0;
+      let j = i + 1;
+      for (; j < command.length; j += 1) {
+        if (command[j] === '(') depth += 1;
+        else if (command[j] === ')' && (depth -= 1) === 0) break;
+      }
+      raw += command.slice(i, j + 1);
+      words += '0';
+      i = j;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c;
+      raw += c;
+      opened = raw.length;
+      continue;
+    }
+    // A comment runs to the line's end: what it says is not run.
+    if (c === '#' && (prev === undefined || /[\s;&|(]/.test(prev))) {
+      while (i + 1 < command.length && command[i + 1] !== '\n') i += 1;
+      continue;
+    }
+    const heredoc = c === '<' && prev !== '<' ? /^<<(-?)\s*\\?(['"]?)([A-Za-z_][\w.-]*)\2/.exec(command.slice(i)) : null;
+    if (heredoc) {
+      bodies.push({ delimiter: heredoc[3], tabs: heredoc[1] === '-' });
+      raw += heredoc[0];
+      words += '<<';
+      i += heredoc[0].length - 1;
+      continue;
+    }
+    if (c === '\n') {
+      // Each heredoc opened on the line: the lines up to its delimiter, kept with the command that opened it.
+      let at = i + 1;
+      for (const { delimiter, tabs } of bodies.splice(0)) {
+        while (at < command.length) {
+          const stop = command.indexOf('\n', at);
+          const line = command.slice(at, stop === -1 ? command.length : stop);
+          raw += `\n${line}`;
+          at = stop === -1 ? command.length : stop + 1;
+          if ((tabs ? line.replace(/^\t+/, '') : line) === delimiter) break;
+        }
+      }
+      i = at - 1;
+      end();
+      continue;
+    }
+    const pair = (c === '&' || c === '|') && next === c;
+    const pipe = c === '|' && prev !== '>';
+    const background = c === '&' && prev !== '>' && prev !== '<' && next !== '>';
+    if (c === ';' || pair || pipe || background) {
+      end();
+      if (pair || (c === '|' && next === '&')) i += 1;
+      continue;
+    }
+    raw += c;
+    words += c;
+  }
+  end();
+  return out;
+}
+
+/**
+ * Whether a shell command writes a file outside a temporary directory: a redirect into a file, `tee`, `sed -i` or
+ * `perl -i`, `cp` or `mv`, a formatter's `--write` or `--fix`, `git apply` or `patch`, or an interpreter's script that
+ * opens a file to write it. Each write is placed where it lands: a path, a variable the command bound — to a temporary
+ * directory or not — or, for a relative one, where the command stands after its `cd`s, which starts in the project
+ * and keeps its place through a relative `cd`. A variable the command did not bind, a function's `$1`, is nowhere
+ * known, and not counted. One project's implementers wrote their files so, through a script that kept an escape the
+ * edit tools decode, and the count of the edit tools read those rounds as having written nothing. Read from the
+ * command alone, it is a sign, not a count: a script run from a file is missed, and so is one that writes the tree
+ * through a variable while it names a temporary directory.
+ *
+ * @param {string} command - A Bash tool call's command.
+ * @returns {boolean}
+ */
+export function writesThroughShell(command) {
+  if (typeof command !== 'string') return false;
+  const vars = new Map();
+  let here = 'tree';
+  // Where each open subshell's `(` found the command standing: its `cd`s end with it.
+  const outside = [];
+  // A function's body runs where it is called, on what it is given: nowhere this command says.
+  let functions = 0;
+  let standing = here;
+  const place = (target) => {
+    if (typeof target !== 'string' || target === '') return standing;
+    const name = /^\$\{?(\w+|[@*#?$!-])/.exec(target);
+    if (name) return /^\$\{?TMPDIR\b/.test(target) ? 'scratch' : (vars.get(name[1]) ?? 'unknown');
+    if (TEMP.test(target) || target.startsWith('/dev/')) return 'scratch';
+    if (target.startsWith('~') || target.includes('""')) return 'unknown';
+    return target.startsWith('/') ? 'tree' : standing;
+  };
+  for (const { raw, words } of simpleCommands(command)) {
+    const groups = words.replace(/\$\([^()]*\)/g, '');
+    for (let n = /^\s*(\(*)/.exec(groups)[1].length; n > 0; n -= 1) outside.push(here);
+    for (let n = (groups.match(/\)/g) ?? []).length - (groups.match(/\(/g) ?? []).length; n > 0 && outside.length; n -= 1) here = outside.pop();
+    if (FUNCTION.test(words)) functions += 1;
+    standing = functions > 0 ? 'unknown' : here;
+    for (const [, name, value] of words.matchAll(/(?:^|\s)(?:export\s+)?([A-Za-z_]\w*)=(\S*)/g)) vars.set(name, place(value));
+    const cd = CD.exec(words);
+    if (cd) {
+      if (functions === 0) here = cd[1] === undefined ? 'unknown' : place(cd[1]);
+    } else {
+      for (const [rule, at] of SHELL_WRITES) {
+        const found = rule.exec(words);
+        if (!found) continue;
+        const target = at === 'last' ? words.replace(REDIRECTS, ' ').trim().split(/\s+/).at(-1) : at === null ? undefined : found[at];
+        if (place(target) === 'tree') return true;
+      }
+      if (INTERPRETER.test(raw) && SCRIPT_WRITES.test(raw)) {
+        // A script names its files inside it: a literal one is placed; with none, a script that names a temporary
+        // directory is taken to write there.
+        const literal = LITERAL_WRITES.flatMap((re) => [...raw.matchAll(re)].map((m) => m[2]));
+        if (literal.some((path) => place(path) === 'tree')) return true;
+        const names = TEMP.test(raw) || [...vars].some(([v, p]) => p !== 'tree' && new RegExp(`\\$\\{?${v}\\b`).test(raw));
+        if (literal.length === 0 && standing === 'tree' && !names) return true;
+      }
+    }
+    if (functions > 0 && /(?:^|[\s;])\}\s*$/.test(words)) functions -= 1;
+  }
+  return false;
+}
+
 /** The line under a declared verdict that names what the report sends back. */
 const ISSUES = /^\s*ISSUES:(.*)$/;
 
@@ -646,7 +860,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       if (
         run.agent_read_bytes === size &&
         !('resumes' in run) &&
-        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'lines_written' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r)
+        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'lines_written' in r && 'shell_writes' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r)
       ) {
         continue;
       }
@@ -679,6 +893,8 @@ async function attachAgentDetail(projectDir, dispatches) {
          * run wrote, not its diff: an edit made twice counts twice, and a file a shell command changed not at all.
          */
         lines: new Map(),
+        /** Its shell commands that wrote a file outside a temporary directory, which no count of lines reaches. */
+        shellWrites: 0,
         /** The tool calls the round made, by id: over its turns, how many calls each turn sent at once. */
         calls: new Set(),
         /** How long the prompt that opened the round was, in characters; never the prompt. */
@@ -724,6 +940,15 @@ async function attachAgentDetail(projectDir, dispatches) {
             }
           } catch {
             // A torn line loses one edit, not the run's.
+          }
+        }
+        if (line.includes('"name":"Bash"')) {
+          try {
+            for (const block of JSON.parse(line)?.message?.content ?? []) {
+              if (block?.type === 'tool_use' && block.name === 'Bash' && writesThroughShell(block.input?.command)) round.shellWrites += 1;
+            }
+          } catch {
+            // A torn line loses one command, not the run's.
           }
         }
         if (line.includes('"usage"')) {
@@ -808,6 +1033,7 @@ async function attachAgentDetail(projectDir, dispatches) {
           record.effort = spent.effort;
           record.files_touched = round.written.size;
           record.lines_written = [...round.lines.values()].reduce((a, b) => a + b, 0);
+          record.shell_writes = round.shellWrites;
           record.skills = [...round.skills];
           record.lessons_read = round.lessonsRead.size;
           record.lessons_listed = round.lessonsListed;
