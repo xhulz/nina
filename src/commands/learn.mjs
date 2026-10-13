@@ -281,14 +281,26 @@ function wilson(k, n) {
  *
  * A round is counted sent back once, however many loop-backs sent it: the checkers that run beside each other
  * each reject the same work, and one project's architect had 14 loop-backs on a day it ran 7 rounds, which the
- * share read as 100% sent back where 5 of the 7 were. Loop-backs that the same dispatch took back are one.
+ * share read as 100% sent back where 5 of the 7 were. Each loop-back is charged to the round its work came from:
+ * the stage's newest round before it, in its session.
+ *
+ * The change is read on first attempts: the rounds that did not take back work sent back to the stage. A fix is
+ * sent back far more often than new work, and how many of a stage's rounds are fixes moves with the work — one
+ * project's architect wrote first specs the week before its lessons and corrected hard ones the week after, 22 of
+ * 23 rounds, and its share went from 14% to 84%, read as the lessons making it worse, while its corrections were
+ * sent back as often as before (60% and 55%). Nor can the two be read side by side: a fix exists because a round
+ * before it failed, so a lesson that works leaves fewer of them, and a comparison that waited on both read the
+ * lessons that worked as unclear. The fixes are shown, not judged.
  *
  * @param {object[]} records - Recorded dispatches.
  * @param {Awaited<ReturnType<typeof lessons>>} known - The project's pills.
  * @param {{owners?: ReturnType<typeof sentBackTo>, targets?: Set<string>|null}} [graph] - Who each loop-back sent
  *   work back to, and the stages the graph sends work back to at all.
  * @returns {{rel: string, date: string, role: string, comparable: boolean, why?: string, on?: string|null,
- *   was?: string, before?: Side, after?: Side, change?: 'lower'|'higher'|'unclear', control?: {before: Side, after: Side}}[]}
+ *   was?: string, before?: Side, after?: Side, first?: {before: Side, after: Side}, fixes?: {before: Side, after: Side},
+ *   thin?: boolean, change?: 'lower'|'higher'|'unclear', control?: {before: Side, after: Side}}[]}
+ *   `before` and `after` are all its rounds, `first` its first attempts, `fixes` the rounds that took back its work;
+ *   `thin` says the first attempts were too few either side to read a change, which is then `unclear`.
  *   A `Side` is `{n, loops, span}`: the stage's rounds, how many were sent back, and the first and last day a round
  *   of it was recorded on, since a project younger than the window has fewer days than fourteen to show.
  */
@@ -296,6 +308,8 @@ export function verified(records, known, { owners = new Map(), targets = null } 
   const out = [];
   const ownerOf = (r) => chargedTo(owners, r);
   const sentBack = records.filter((r) => readable(r.verdict) && isLoopBack(r.verdict));
+  const fixes = new Set([...owners.values()].map((o) => o.fix).filter(Boolean));
+  const byTime = (a, b) => String(a.ts).localeCompare(String(b.ts));
   const sideOf = (these, backs) => {
     const days = these.map((r) => day(r.ts)).sort();
     return { n: these.length, loops: Math.min(these.length, sendings(owners, backs)), span: [days[0] ?? null, days.at(-1) ?? null] };
@@ -312,8 +326,13 @@ export function verified(records, known, { owners = new Map(), targets = null } 
         out.push({ ...base, comparable: false, why: `nothing in the graph sends work back to ${role}` });
         continue;
       }
-      const rounds = records.filter((r) => r.role === role && readable(r.verdict));
+      const rounds = records.filter((r) => r.role === role && readable(r.verdict)).sort(byTime);
       const backs = sentBack.filter((r) => ownerOf(r) === role);
+      const sentRounds = new Set(backs.map((b) => rounds.findLast((r) => r.session === b.session && byTime(r, b) < 0)).filter(Boolean));
+      const counted = (these) => {
+        const days = these.map((r) => day(r.ts)).sort();
+        return { n: these.length, loops: these.filter((r) => sentRounds.has(r)).length, span: [days[0] ?? null, days.at(-1) ?? null] };
+      };
       const side = (pick, mine) => sideOf(mine.filter(pick), backs.filter(pick));
       if (side(pre, rounds).n < VERIFY_MIN || side(post, rounds).n < VERIFY_MIN) {
         const [b, a] = [side(pre, rounds).n, side(post, rounds).n];
@@ -326,21 +345,24 @@ export function verified(records, known, { owners = new Map(), targets = null } 
       for (const r of rounds.filter(post)) if (ranOn(r)) tally.set(ranOn(r), (tally.get(ranOn(r)) ?? 0) + 1);
       const on = [...tally].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
       const mine = on ? rounds.filter((r) => ranOn(r) === on) : rounds;
-      const before = side(pre, mine);
-      const after = side(post, mine);
+      const before = counted(mine.filter(pre));
+      const after = counted(mine.filter(post));
       if (before.n < VERIFY_MIN || after.n < VERIFY_MIN) {
         const was = [...new Set(rounds.filter(pre).map(ranOn).filter(Boolean))].join(', ') || 'no recorded model';
         out.push({ ...base, on, was, comparable: false, why: `${role} ran on ${on} after it, and before it on ${was}` });
         continue;
       }
-      const [bLo, bHi] = wilson(before.loops, before.n);
-      const [aLo, aHi] = wilson(after.loops, after.n);
-      const change = aHi < bLo ? 'lower' : aLo > bHi ? 'higher' : 'unclear';
+      const first = { before: counted(mine.filter((r) => pre(r) && !fixes.has(r))), after: counted(mine.filter((r) => post(r) && !fixes.has(r))) };
+      const fixed = { before: counted(mine.filter((r) => pre(r) && fixes.has(r))), after: counted(mine.filter((r) => post(r) && fixes.has(r))) };
+      const thin = first.before.n < VERIFY_MIN || first.after.n < VERIFY_MIN;
+      const [bLo, bHi] = wilson(first.before.loops, first.before.n);
+      const [aLo, aHi] = wilson(first.after.loops, first.after.n);
+      const change = thin ? 'unclear' : aHi < bLo ? 'lower' : aLo > bHi ? 'higher' : 'unclear';
       const others = [...(targets ?? new Set(sentBack.map(ownerOf)))].filter((x) => x && x !== role);
       const theirs = records.filter((r) => others.includes(r.role) && readable(r.verdict));
       const otherBacks = sentBack.filter((r) => others.includes(ownerOf(r)));
       const control = (pick) => sideOf(theirs.filter(pick), otherBacks.filter(pick));
-      out.push({ ...base, comparable: true, on, before, after, change, control: { before: control(pre), after: control(post) } });
+      out.push({ ...base, comparable: true, on, before, after, first, fixes: fixed, thin, change, control: { before: control(pre), after: control(post) } });
     }
   }
   return out;
@@ -1184,10 +1206,11 @@ export async function learn(argv, ctx) {
   const unmeasured = checks.filter((c) => !c.comparable);
   if (measured.length === 0) console.log(`  verify    no lesson could be measured yet — ${VERIFY_MIN}+ rounds of its stage on the same model are needed in the ${VERIFY_DAYS} days either side of its date`);
   measured.forEach((c, i) => {
-    const said = { lower: 'sent back less since', higher: 'sent back more since', unclear: 'no clear change' }[c.change];
+    const said = c.thin ? 'too few first attempts to tell' : { lower: 'sent back less since', higher: 'sent back more since', unclear: 'no clear change' }[c.change];
     console.log(
       `  ${i === 0 ? 'verify  ' : '        '}  ${c.rel.replace(/^\.claude\/pills\//, '')} (${c.date}) · ${c.role}${c.on ? `, on ${c.on}` : ''}: ` +
-        `${pct(c.before.loops, c.before.n)} → ${pct(c.after.loops, c.after.n)} of its rounds sent back (n ${c.before.n} → ${c.after.n}) — ${said}; ` +
+        `${pct(c.first.before.loops, c.first.before.n)} → ${pct(c.first.after.loops, c.first.after.n)} of its first attempts sent back (n ${c.first.before.n} → ${c.first.after.n}) — ${said}; ` +
+        `its fixes ${pct(c.fixes.before.loops, c.fixes.before.n)} → ${pct(c.fixes.after.loops, c.fixes.after.n)}; ` +
         `the other stages ${pct(c.control.before.loops, c.control.before.n)} → ${pct(c.control.after.loops, c.control.after.n)}`,
     );
   });

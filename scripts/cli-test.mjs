@@ -1232,8 +1232,14 @@ async function sound(fixture, core) {
   // fell on the lesson's own day after 21:36 UTC, and the suite failed every night for two and a half hours.
   const midday = Math.min(now.getTime(), Date.parse(`${today}T12:00:00.000Z`));
   const reviewed = (role, verdict, d, extra = {}) => ({ role, verdict, ts: new Date(midday - d * 86_400_000).toISOString(), session: 's-v', ...extra });
+  // Before the lesson, each day's first attempt is sent back and its fix passes; after it, each first attempt passes.
   const trial = [
-    ...[15, 14, 13, 12, 11].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'REJECTED', d - 0.1)]),
+    ...[15, 14, 13, 12, 11].flatMap((d) => [
+      reviewed('implementer', 'DIFF-READY', d),
+      reviewed('reviewer', 'REJECTED', d - 0.1),
+      reviewed('implementer', 'DIFF-READY', d - 0.2),
+      reviewed('reviewer', 'APPROVED', d - 0.3),
+    ]),
     ...[5, 4, 3, 2, 1].flatMap((d) => [reviewed('implementer', 'DIFF-READY', d), reviewed('reviewer', 'APPROVED', d - 0.1)]),
   ];
   const owners = sentBackTo(trial, graphLoops);
@@ -1241,7 +1247,8 @@ async function sound(fixture, core) {
   const written10 = ago(10).slice(0, 10);
   const [fixed, reviewerSide] = verified(trial, [lesson(['implementer', 'reviewer'], written10)], graph);
   expect(
-    fixed?.role === 'implementer' && fixed.comparable && fixed.before.loops === 5 && fixed.after.loops === 0 && fixed.change === 'lower' && 'control' in fixed,
+    fixed?.role === 'implementer' && fixed.comparable && fixed.before.loops === 5 && fixed.after.loops === 0 && fixed.change === 'lower' && 'control' in fixed &&
+      fixed.first.before.loops === 5 && fixed.first.before.n === 5 && fixed.fixes.before.n === 5 && fixed.fixes.before.loops === 0,
     `learn: verify reads a lesson's stage by how often its work was sent back, before and after — got ${JSON.stringify(fixed)}`,
   );
   expect(
@@ -1258,6 +1265,37 @@ async function sound(fixture, core) {
   expect(
     confounded && !confounded.comparable && confounded.on === 'claude-opus-5 · xhigh' && confounded.was === 'claude-sonnet-5 · xhigh',
     `learn: a lesson whose stage changed model across its date is not compared — got ${JSON.stringify(confounded)}`,
+  );
+  // Read on first attempts: a stage whose first attempts are sent back as often after its lesson as before, but whose
+  // week after was mostly fixes of hard work, is not read as made worse — one project's architect went from 14% to 84%
+  // of all its rounds when 22 of its 23 rounds after its lessons were corrections.
+  const imp = (d) => reviewed('implementer', 'DIFF-READY', d);
+  const rej = (d) => reviewed('reviewer', 'REJECTED', d);
+  const app = (d) => reviewed('reviewer', 'APPROVED', d);
+  const twiceADay = (days) => days.flatMap((d) => [d, d - 0.5]);
+  const mixed = [
+    ...twiceADay([16, 15, 14, 13, 12]).flatMap((d) => (d === 16 ? [imp(d), rej(d - 0.05), imp(d - 0.1), app(d - 0.15)] : [imp(d), app(d - 0.05)])),
+    ...twiceADay([5, 4, 3, 2, 1]).flatMap((d) =>
+      d === 5
+        ? [imp(d), rej(d - 0.02), ...[1, 2, 3, 4, 5, 6].flatMap((k) => [imp(d - 0.02 - 0.03 * k), rej(d - 0.03 - 0.03 * k)]), imp(d - 0.25), app(d - 0.26)]
+        : [imp(d), app(d - 0.05)],
+    ),
+  ];
+  const [mix] = verified(mixed, [lesson(['implementer'], written10)], { owners: sentBackTo(mixed, graphLoops), targets: graph.targets });
+  expect(
+    mix?.comparable && !mix.thin && mix.change === 'unclear' && mix.first.before.loops === 1 && mix.first.before.n === 10 && mix.first.after.loops === 1 && mix.first.after.n === 10 &&
+      mix.fixes.after.n === 7 && mix.fixes.after.loops === 6 && mix.after.loops / mix.after.n > 0.4 && mix.before.loops / mix.before.n < 0.1,
+    `learn: verify reads a lesson by its stage's first attempts, not by how many of its rounds were fixes — got ${JSON.stringify(mix)}`,
+  );
+  // Too few first attempts either side is said as such, however many rounds the fixes add.
+  const fewFirst = [
+    ...[15, 14, 13, 12, 11].flatMap((d) => [imp(d), app(d - 0.05)]),
+    ...[5, 4, 3].flatMap((d) => [imp(d), rej(d - 0.05), imp(d - 0.1), rej(d - 0.15), imp(d - 0.2), app(d - 0.25)]),
+  ];
+  const [few] = verified(fewFirst, [lesson(['implementer'], written10)], { owners: sentBackTo(fewFirst, graphLoops), targets: graph.targets });
+  expect(
+    few?.comparable && few.thin && few.change === 'unclear' && few.first.after.n === 3 && few.after.n === 9,
+    `learn: too few first attempts after a lesson is said, not read as a change — got ${JSON.stringify(few)}`,
   );
   // A dispatch days after the report is no telling of where the loop-back went; with two routes, it has no owner.
   const twoRoutes = new Map([['reviewer', new Map([['REJECTED', new Map([['implementer', 2], ['architect', 2]])]])]]);

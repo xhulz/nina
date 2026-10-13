@@ -119,6 +119,14 @@ model each side ran on, rather than print a number that measures the model:
   ran 7 rounds, and the share, capped at the rounds, read 100% sent back where 5 of the 7 were — five lessons
   shown as making the architect worse. A round now counts once, by the dispatch that took it back, and each
   side says the days it covers, since a project younger than fourteen days has fewer to show.
+- **Verify reads first attempts.** A fix of work already sent back is sent back far more often than new work,
+  and how many of a stage's rounds are fixes moves with the work. One project's architect wrote first specs the
+  week before its lessons and corrected hard ones the week after, 22 of its 23 rounds, and its share went from 14%
+  to 84%, shown as "worse: sent back more" while its corrections were sent back as often as before (60% and 55%).
+  Each loop-back is now charged to the round its work came from, the stage's newest before it, and the change is
+  read on the rounds that were not a fix; with too few of them either side, verify says so. The fixes are shown
+  beside, not judged with them: a fix exists because the round before it failed, so a lesson that works leaves
+  fewer, and a comparison that waited on both kinds read the lessons that worked as unclear.
 - **A rule that did not hold goes back.** A retired pill's count was read by nothing: one lesson graduated
   twice and came back a third time, and two retired pills went from 3 to 8 and from 5 to 11 with nobody
   told. A pill counted more times since its request closed reopens it. Since the close, not the filing: a
