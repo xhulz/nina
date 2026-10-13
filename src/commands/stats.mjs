@@ -592,6 +592,9 @@ function proportionReport(records, stepLimit = () => null, lineLimit = () => nul
       ),
     );
   }
+  if (d.unmeasured) {
+    console.log(note(`${d.unmeasured} implementer round(s) also wrote files through the shell, where no count of lines reaches: their size is not measured.`));
+  }
 }
 
 /**
@@ -646,6 +649,9 @@ export function proportionData(records, stepLimit = () => null, lineLimit = () =
     return limit !== null && r.lines_written > limit;
   });
   const longest = longer.length ? longer.reduce((a, b) => (b.lines_written > a.lines_written ? b : a)) : null;
+  // A round that also wrote through the shell holds only what its edit tools wrote: under the limit, its size is not
+  // measured, not small. One project's implementers wrote most of their files so, and every such round read as 0 lines.
+  const unmeasured = records.filter((r) => r.role === 'implementer' && ranUnder(r, 'stepLines') && r.shell_writes > 0 && !longer.includes(r)).length;
   return {
     rows: rows.map(({ label, cycles: n, designed }) => ({ label, cycles: n, designed })),
     built,
@@ -655,6 +661,7 @@ export function proportionData(records, stepLimit = () => null, lineLimit = () =
       ? { count: over.length, limit: stepLimit(largest.project), largest: largest.files_touched, readM: typeof largest.tokens?.read === 'number' ? Math.round(largest.tokens.read / 1e6) : null }
       : null,
     overLines: longest ? { count: longer.length, limit: lineLimit(longest.project), largest: longest.lines_written } : null,
+    unmeasured,
   };
 }
 
