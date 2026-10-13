@@ -6712,6 +6712,19 @@ await release();
   );
   const stoppedTask = officeTimeline(stoppedRun.flat(), t0 + 200_000);
   expect(stoppedTask.length === 1 && stoppedTask[0].how !== null && stoppedTask[0].end === t0 + 85_000, `office: and its task closes at the qa's pass — got ${JSON.stringify(stoppedTask)}`);
+  // A stop ends the run it fell in, not an earlier one of the same agent that never reported; and a stop after a
+  // verdict leaves that verdict standing.
+  const twice = ran(0, 'implementer');
+  const twiceAgent = twice[1].agent;
+  const secondRun = [{ k: 'pre', at: at(40), role: 'implementer', id: 'toolu_tw2' }, { k: 'dispatch', at: at(40), role: 'implementer', agent: twiceAgent, via: 'Agent', id: 'toolu_tw2' }];
+  const stoppedSecond = beatsOf([twice, secondRun, { k: 'stop', at: at(50), agent: twiceAgent, role: 'implementer' }], t0 + 60_000);
+  expect(
+    stoppedSecond.filter((b) => b.type === 'stale').map((b) => [b.at - t0, b.work]).join('|') === '50000,pre:toolu_tw2',
+    `office: a stop ends the run it fell in, not an earlier one of the same agent — got ${JSON.stringify(stoppedSecond.map((b) => [b.type, b.at - t0, b.work]))}`,
+  );
+  const late = ran(0, 'implementer', 'DIFF-READY');
+  const lateBeats = beatsOf([late, { k: 'stop', at: at(30), agent: late[1].agent, role: 'implementer' }], t0 + 60_000);
+  expect(!lateBeats.some((b) => b.type === 'stale'), `office: a stop after a verdict leaves the verdict standing — got ${JSON.stringify(lateBeats.map((b) => b.type))}`);
   // Sent another message after the stop, it runs again: a run of its own, not a message to one still running.
   const again = ran(0, 'implementer');
   const againAgent = again[1].agent;

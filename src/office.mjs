@@ -136,7 +136,9 @@ function readStarts(ledger) {
   const verdictOf = (s) => verdicts.find((x) => time(x) >= s.at && (s.agent ? x.agent === s.agent : x.role === s.role)) ?? null;
   for (const s of starts) {
     const verdict = verdictOf(s);
-    const stop = !s.message && s.agent ? stops.find((x) => x.agent === s.agent && time(x) >= s.at) : null;
+    // A stop ends the run it fell in: an agent run again after it is a run of its own, which a later stop ends.
+    const next = s.agent ? starts.find((x) => x.at > s.at && x.agent === s.agent && !x.message) : null;
+    const stop = !s.message && s.agent ? stops.find((x) => x.agent === s.agent && time(x) >= s.at && (!next || time(x) < next.at)) : null;
     s.stopped = stop && (!verdict || time(stop) < time(verdict)) ? time(stop) : null;
     s.end = s.message ? s.at : (s.stopped ?? (verdict ? time(verdict) : null));
   }
