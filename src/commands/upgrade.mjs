@@ -631,6 +631,11 @@ export async function upgrade(argv, ctx) {
       console.log('\n  the learning cycle has something to act on — not caused by this move, now visible:');
       for (const line of lessons.out.trim().split('\n')) console.log(`    ${line}`);
     }
+    const forecasts = nina(ctx, target, ['sizes', '--project', target, '--check']);
+    if (!forecasts.ok && forecasts.out.trim()) {
+      console.log('\n  a step landed past its forecast — not caused by this move, now visible:');
+      for (const line of forecasts.out.trim().split('\n')) console.log(`    ${line}`);
+    }
     // The move is done and the tree is sound, but it is not finished: until these are written
     // the composed text is quietly missing what they carry, which is the failure this harness
     // exists to remove. A success line that did not say so would be the same silence.
