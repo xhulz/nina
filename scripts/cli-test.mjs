@@ -956,8 +956,34 @@ async function sound(fixture, core) {
   // than rolled back for. That rule was written for the validations and the detector step was
   // left out of it, so `check` was excused while the detectors, reading the very same fact
   // through a different command, put the whole move back.
+  // And a release that ships the step sizes detector, to a project whose newest step overran: a finding about its
+  // history, set aside for the move and said after it. The release that first shipped it rolled itself back in the
+  // project that asked for it.
+  const shipped = await readFile(join(nina, 'core', 'tree', 'scripts', 'harness-check.mjs'), 'utf8');
+  const withSizes = shipped.replace(
+    "ignore: /^compose: current$/ }],",
+    "ignore: /^compose: current$/ },\n     { name: 'step sizes', bin: 'nina', args: ['sizes', '--check', '--quiet'], ignore: /^sizes: current$/ }],",
+  );
+  expect(withSizes !== shipped, 'upgrade: the bed ships the step sizes detector in its next release');
+  await writeFile(join(nina, 'core', 'tree', 'scripts', 'harness-check.mjs'), withSizes);
+  const repo = (...args) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+  await mkdir(join(dir, '.claude', 'plans', 'specs'), { recursive: true });
+  await mkdir(join(dir, 'src'), { recursive: true });
+  for (const n of [1, 2]) await writeFile(join(dir, '.claude', 'plans', 'specs', `feat-spec.step-${n}.md`), '- **Size:** ~100 lines in 1 file.\n');
+  repo('init', '-q');
+  repo('config', 'user.email', 'test@example.com');
+  repo('config', 'user.name', 'test');
+  repo('add', '.claude/plans');
+  repo('commit', '-qm', 'Plan (feat-spec)');
+  await writeFile(join(dir, 'src', 'one.ts'), `${Array.from({ length: 200 }, (_, i) => `// ${i}`).join('\n')}\n`);
+  repo('add', 'src');
+  repo('commit', '-qm', 'feat step 1 (feat-spec step 1)');
   await quiet('1.2.0');
   const inherited = bed(['upgrade', '--project', dir, '--to', '1.2.0', '--apply']);
+  expect(
+    inherited.out.includes('a step landed past its forecast — not caused by this move, now visible:') && inherited.out.includes('step 1 of feat-spec landed 200 lines against ~100'),
+    `upgrade: a step that overran is set aside for the move and said after it — got ${inherited.out}`,
+  );
   expect(
     inherited.status === 0,
     `deadlock: a move must not roll back for a failure it inherited — got ${inherited.status}\n${inherited.out}`,

@@ -274,6 +274,9 @@ file does not move it; a forecast changed in the working tree is newer than ever
 As a detector in every project's `harness:check` (`--check`), it speaks when the newest landed step came in more than
 a quarter over and steps forecast no later than it still carry those forecasts, and stops once each is forecast again.
 It runs every turn, so it asks git four times, not once per file: a version per process came to most of its second.
+During `nina upgrade --apply` it stands aside, as the lessons detector does, and the move says what it found once it is
+done: an overrun is the project's history, not the move's doing, and the release that first shipped the detector read
+it as breakage and rolled itself back in the project that had asked for it.
 
 ### While a run is still running: the cost watch
 

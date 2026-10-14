@@ -90,6 +90,12 @@ the same list, written `{{NAME}}`, and are named again once the move succeeds. A
 used and the profile left empty is not excused: that failure was there before the move, and is measured as
 one.
 
+Two detectors stand aside for the move and speak after it, because what they find is the project's history rather
+than anything the move did: a lesson owed (`nina learn --check`) and a step that landed past its forecast
+(`nina sizes --check`). Each runs with `NINA_UPGRADE` set and says it is current; a release that shipped either for the
+first time would otherwise read the history as breakage and roll itself back — 0.63.0 did, in the project that had
+asked for the second.
+
 A move that gives a stage a tool, takes one away, or adds a stage names each once it succeeds, and asks for a
 new session; a stage it removes is not named, since an open session holding one more costs nothing. Claude Code reads which agents exist, and each one's `tools:`, when a session starts, and an
 agent's body on every dispatch; so a session left open runs the new spec with the old tools. When the architect

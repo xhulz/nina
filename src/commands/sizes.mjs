@@ -301,6 +301,12 @@ export async function sizes(argv) {
   }
   const { steps, limit } = measured;
   if (check) {
+    // During `nina upgrade --apply`: a step that overran is the project's history, not the move — and the release that
+    // first shipped this detector rolled itself back in the project that asked for it. The move says it after.
+    if (process.env.NINA_UPGRADE) {
+      console.log('sizes: current');
+      return 0;
+    }
     const found = overrun(measured);
     if (!found) {
       console.log('sizes: current');
