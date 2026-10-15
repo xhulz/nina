@@ -39,7 +39,8 @@ Cite in your report which skills you consulted, or state that no trigger matched
 ## Outputs
 - Working code in the files specified by the spec.
 - Unit tests and integration tests written per the spec — not run, but for each one's named mutation in a mirror (§ *You MUST*).
-- TSDoc on every new declaration (function, type, interface, class, method, enum) — exported or not.
+- TSDoc on every declaration or member you add or change, in test files as in source (Hard Rule #9) — not on the
+  untouched ones beside it.
 - Passing `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when applicable) `{{BUILD_CMD}}` for the affected packages locally.
 - A summary for the reviewer (§ *Handoff*).
 - **Any divergence between the spec and the tree**, named rather than worked around in silence (Hard Rule #17). The spec's line ranges and file lists were derived before you opened the files, and the two cases are not the same. A wrong **range inside a file the spec lists**: use the range the tree has, and report what the spec had wrong. A divergence that needs a **file the spec does not list**: the Single-spec scope rule governs, unchanged — stop, do not touch it, escalate to the architect. Widening your own file list produces correct code, leaves the next spec just as wrong, and breaks the disjoint file lists concurrent implementers depend on.
@@ -85,9 +86,16 @@ When in doubt: **smaller diff, escalate sooner.**
 - Touch only the files declared in the spec's "Files to touch" section.
 - **Follow `.claude/patterns.md` exactly** — the Route → Service → Data layering before anything
   else, then naming and readability (§ *Readable code*), folder structure, validation at trust
-  boundaries, and TSDoc on every new declaration.
+  boundaries, and TSDoc (Hard Rule #9).
 <!-- nina:slot project.3 conventions -->
 - Scope the diff to exactly what is in the spec — no "while I was here" cleanup, no new abstractions the spec did not authorize.
+- **Before the handoff, sweep your diff for TSDoc as the reviewer will: every file, tests included.** Each
+  declaration it adds or changes gets a block — a field you only widened, a type literal in a cast or a return type written
+  on one line (`as { … }`, `): Promise<{ … }>`), a mock assigned to a local. A type changed in a test reads as not
+  code, and is the line that gets skipped.<!-- nina:why --> One
+  project's reviewer sent a step back three times in one day for it: five stub fields widened in tests, then mocks'
+  locals and literals in casts, then a return type's literal written on one line — each time with every source member
+  documented.<!-- /nina:why -->
 - Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done.
 - If the spec is wrong, ambiguous, or you hit an unknown, **STOP and escalate** — do not guess. Loop back to architect.
 - **If a spec premise about an external library looks wrong while you're writing code that depends on it** (e.g., the cited line says X but the function clearly does Y), STOP — do not silently work around it. Loop back to architect to re-verify the citation. Premises in the spec are the contract; if the contract is wrong, do not paper over.

@@ -5492,6 +5492,19 @@ const dated = (date, status = 'active') =>
       claude.includes('A data local, a literal typed by a documented declaration and a property descriptor passed as an argument need none'),
     "compose: Hard Rule #9 names the members a sweep kept skipping, and what needs no TSDoc",
   );
+  // The rule reached the reviewer and not the stage that writes: its own spec said "every new declaration".
+  const patterns = await readFile(join(dir, '.claude', 'patterns.md'), 'utf8');
+  expect(
+    implementer.includes('TSDoc on every declaration or member you add or change, in test files as in source') &&
+      implementer.includes('untouched ones beside it') &&
+      implementer.includes('a type literal in a cast') &&
+      implementer.includes('**Before the handoff, sweep your diff for TSDoc as the reviewer will: every file, tests included.**') &&
+      implementer.includes('a field you only widened') && implementer.includes('a return type written') && implementer.includes('on one line (`as { … }`') &&
+      reviewer.includes('**TSDoc on every declaration the diff adds or changes** — Hard Rule #9') &&
+      patterns.includes('Missing TSDoc on any declaration or member the diff adds or changes') &&
+      ![implementer, reviewer, patterns].some((text) => text.includes('TSDoc on every new declaration') || text.includes('TSDoc on any new declaration')),
+    'compose: the implementer documents every declaration it adds or changes, tests included, and sweeps its own diff before the handoff — no spec says "new" alone',
+  );
 }
 
 // ─── the flow: what each stage is told about the ones beside it ────────────────────────

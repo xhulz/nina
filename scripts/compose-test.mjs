@@ -263,8 +263,9 @@ const BUDGETS = {
   // again for three lessons the same project learned three times each: a test's own judging code is under test, the
   // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it; and again
   // for the lines a step may write, and the mutations run from one script rather than one turn each; and for a check's
-  // battery generated from its code, after nine loosened guards survived batteries written from the spec's rules.
-  '.claude/agents/implementer.md': 21500,
+  // battery generated from its code, after nine loosened guards survived batteries written from the spec's rules; and
+  // for a lesson learned three times in a day: the TSDoc sweep before the handoff covers test files and changed members.
+  '.claude/agents/implementer.md': 21900,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -274,8 +275,8 @@ const BUDGETS = {
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
   // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path —
   // and a case that skips the code that judges, and a citation that resolves without saying the sentence. And for
-  // Hard Rule #20: notes kept apart from what blocks.
-  '.claude/agents/reviewer.md': 21400,
+  // Hard Rule #20: notes kept apart from what blocks. And for TSDoc on what a diff changes, not only what it adds.
+  '.claude/agents/reviewer.md': 21450,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,

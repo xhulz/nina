@@ -73,5 +73,8 @@
   },
   "2026-10-13-shared__scratch-dirs-are-named-for-your-stage": {
     "in": "core/tree/CLAUDE.md"
+  },
+  "2026-10-15-implementer__tsdoc-sweep-includes-edited-test-stub-members": {
+    "in": "core/tree/.claude/agents/implementer.md"
   }
 }
