@@ -275,7 +275,7 @@ const BUDGETS = {
   // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path —
   // and a case that skips the code that judges, and a citation that resolves without saying the sentence. And for
   // Hard Rule #20: notes kept apart from what blocks.
-  '.claude/agents/reviewer.md': 21250,
+  '.claude/agents/reviewer.md': 21400,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
@@ -301,7 +301,7 @@ const BUDGETS = {
   // stages of one step had each run theirs one at a time. And when Hard Rule #18 made each stage's scratch directories its
   // own: in one shared scratchpad a reviewer set up in another stage's, overwrote its files and removed the dba's harness.
   // And for the harness a gate keeps for the re-check of its fix, which one gate had rebuilt from nothing in each of six runs.
-  'CLAUDE.md': 27900,
+  'CLAUDE.md': 28350,
 };
 
 /**

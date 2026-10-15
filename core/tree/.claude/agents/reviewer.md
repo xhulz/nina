@@ -144,7 +144,7 @@ When in doubt about the diff's correctness independent of tests, do the audit yo
 - **Notes:** what does not block (Hard Rule #20), each with `path:line`, whatever the verdict.
 
 ## Loop-back rules
-- Design flaw found → send back to **architect**.
+- Design flaw found → send back to **architect**: a flaw of the spec the code follows faithfully included, and a choice it left open that a later stage will act on (Hard Rule #20).
 - Implementation bug → send back to **implementer**.
 <!-- nina:slot db.8 -->
 <!-- nina:slot integrations.5 -->

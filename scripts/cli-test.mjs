@@ -4714,6 +4714,18 @@ const dated = (date, status = 'active') =>
       (await spec('router.md')).includes('### Notes ride with the work'),
     'compose: a check sends work back only for what blocks it, and its notes ride with the work',
   );
+  // A question for the design blocks and goes to the architect: in two steps replayed without the full pipeline, its
+  // reviewers saw both design flaws the pipeline had caught and wrote them as notes. Each clause was one of the ways out.
+  const twenty = (await readFile(join(young, 'CLAUDE.md'), 'utf8')).split('\n').find((line) => line.startsWith('20. ')) ?? '';
+  for (const [clause, held] of [
+    ['a design question is no note', twenty.includes('Nor is a question for the design a note')],
+    ['a form the design would refuse', twenty.includes("a form a check, guard or scanner accepts that its design's intent refuses without saying so")],
+    ['what the spec ruled out stays a note', twenty.includes('what the spec ruled out in writing stays a note')],
+    ['a choice the spec left open', twenty.includes('or a choice the spec left open that a later stage will act on, blocks and goes to the architect')],
+    ['even when the code follows its spec', twenty.includes('even when the code does what its spec says')],
+    ['failing closed at a size no one chose', twenty.includes('A failure that fails closed is not safe for the change when it fails at a size the design did not choose and no test reaches')],
+    ['the reviewer routes it', (await spec('agents/reviewer.md')).includes('a flaw of the spec the code follows faithfully included, and a choice it left open that a later stage will act on (Hard Rule #20)')],
+  ]) expect(held, `compose: a question for the design blocks and goes to the architect — keeps ${clause}`);
   // Each named mutation from one script: every call is a turn that re-reads the whole context.
   expect(
     (await spec('agents/implementer.md')).includes('Run them all from one script') && (await spec('agents/qa.md')).includes('every mutation from one script'),
