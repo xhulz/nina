@@ -452,7 +452,7 @@ function modelReport(records) {
 }
 
 /** The verdicts that close a pipeline cycle: the change passed its tests, reached preview, or cleared the audit. */
-const CYCLE_ENDS = { qa: 'PASS', devops: 'DEPLOYED', secops: 'SECURE' };
+export const CYCLE_ENDS = { qa: 'PASS', devops: 'DEPLOYED', secops: 'SECURE' };
 
 /**
  * The release each rule this report judges first shipped in. A round is judged on a rule only when the pin it

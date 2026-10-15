@@ -173,7 +173,9 @@ const PHASES = [
 const rooms = new Map(PHASES.map((ph) => [ph.key, { ...ph, stages: [] }]));
 ROOM.stages.forEach((role, i) => {
   const phase = PHASES.find((ph) => ph.roles.includes(role))?.key ?? 'build';
-  rooms.get(phase).stages.push({ role, index: i, seats: ROOM.many.includes(role) ? 2 : 1 });
+  // As many desks as the project ever had of the stage at work at once, measured by the server; two for one the graph
+  // declares `× many` in a page served before it was.
+  rooms.get(phase).stages.push({ role, index: i, seats: ROOM.seats?.[role] ?? (ROOM.many.includes(role) ? 2 : 1) });
 });
 const lobby = { key: 'lobby', name: 'reception', side: 'left', stages: [] };
 const columns = {
@@ -373,10 +375,11 @@ background.height = LH;
       for (let i = 0; i < 4; i += 1) box(g, room.x + 58 + i * 30, room.y + FACE + 8, 10, 9, C.seatRed);
     }
     plant(g, far, room.laneY - 18, true);
-    // The shelf stands in a room's far corner, where only a fourth desk reaches: in design, the design-reviewer's desk
-    // was the fourth and stood under it. Release seats devops and secops, a fourth only if both ran as several agents.
-    if (room.key === 'release') shelf(g, room.x + room.w - 30, room.y + FACE + 2);
-    if (room.key === 'lab') {
+    // The shelf and the rack stand in a room's far corner, where only a fourth desk reaches — in design, the
+    // design-reviewer's desk was the fourth and stood under the shelf — so a room with four desks has neither.
+    const corner = room.deskCount < 4;
+    if (room.key === 'release' && corner) shelf(g, room.x + room.w - 30, room.y + FACE + 2);
+    if (room.key === 'lab' && corner) {
       box(g, room.x + room.w - 24, room.y + FACE + 2, 16, 30, C.rack);
       for (let i = 0; i < 6; i += 1) rect(g, room.x + room.w - 21, room.y + FACE + 5 + i * 4, 2, 1, i % 3 ? C.ledG : C.ledR);
     }

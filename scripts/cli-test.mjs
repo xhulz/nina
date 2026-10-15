@@ -39,7 +39,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
-import { PARTY_QUIET_MS, STALE_MS, busyFor, officeBeats, officeTimeline, serveOffice, storeNames } from '../src/office.mjs';
+import { PARTY_QUIET_MS, SEATS_MAX, STALE_MS, busiest, busyFor, officeBeats, officeTimeline, serveOffice, storeNames } from '../src/office.mjs';
 import { serveDashboard } from '../src/dashboard.mjs';
 import { taskList } from '../src/commands/runs.mjs';
 import { pipelineData } from '../src/commands/pipeline.mjs';
@@ -6948,6 +6948,10 @@ await release();
     '- `qa` → `done` on `PASS`',
     '- `qa` → `implementer` on `FAIL` — a test fails · max 2',
     '',
+    '## Concurrency',
+    '',
+    '- `implementer` × many — work that shares no file',
+    '',
   ].join('\n');
   const graph = parseGraph(graphText);
   const t0 = Date.parse('2026-10-09T10:00:00.000Z');
@@ -7064,6 +7068,10 @@ await release();
     `office: a task a resumed agent begins takes its message's summary, else the agent's launch name — got ${lastName(resumedRun('Re-check the import spec'))} / ${lastName(resumedRun(null))}`,
   );
   expect(busyFor([{ at: 0, end: 7_200_000 }, { at: 50_400_000, end: 54_000_000 }]) === 10_800_000, 'office: a night between two runs is not time at work');
+  // The desks a stage gets: the most of its runs at work at once, over every ledger. One that never reported is not
+  // counted, and one that reports as another sits down was not beside it — the lines of a ledger out of order too.
+  const most = busiest([[ran(0, 'reviewer', 'APPROVED'), ran(1, 'reviewer', 'APPROVED'), ran(2, 'reviewer'), ran(9, 'reviewer', 'APPROVED')].flat(), [ran(5, 'qa', 'PASS'), ran(0, 'qa', 'PASS')].flat()]);
+  expect(most.get('reviewer') === 2 && most.get('qa') === 1 && !most.has('architect'), `office: a stage's desks are the most of it at work at once — got ${JSON.stringify([...most])}`);
   // The store is read for names again only when it changed: a dispatch it never names would otherwise have it read
   // whole every few seconds for as long as the office runs.
   {
@@ -7109,20 +7117,33 @@ await release();
   expect(parties(beside).length === 0, 'office: no party while a stage that went out beside it is still at work');
   expect(parties([...beside, { k: 'verdict', at: at(8), agent: 'db', role: 'dba', verdict: 'REJECTED', declared: true }]).length === 0, 'office: and none when one beside it sent the work back');
   expect(parties([...beside, { k: 'verdict', at: at(8), agent: 'db', role: 'dba', verdict: 'APPROVED', declared: true }]).length === 1, 'office: when the last of them passes, the pass that could end the work makes it a party');
+  // A pass that closes a task is a party at once, whoever else is at work on another: held to an empty office, a day
+  // of tasks side by side in worktrees closed 25 and had one party.
+  const sideTask = [ran(0, 'implementer'), ran(1, 'implementer', 'DIFF-READY'), ran(10, 'reviewer', 'APPROVED'), ran(20, 'qa', 'PASS')];
+  const sideParties = parties(sideTask, t0 + 30_000);
+  expect(
+    sideParties.length === 1 && sideParties[0].at === t0 + 25_000 && sideParties[0].role === 'qa',
+    `office: a pass that closes a task is a party at once, while another task is still at work — got ${JSON.stringify(sideParties.map((b) => [b.role, b.at - t0]))}`,
+  );
+  // Its party had, it ends nothing for a pass that reports beside it and routes on: one party, not two.
+  const besideQa = [{ k: 'pre', at: at(0), role: 'dba', id: 'd2' }, { k: 'dispatch', at: at(0), role: 'dba', agent: 'db2', via: 'Agent', id: 'd2' }, { k: 'pre', at: at(0), role: 'qa', id: 'q2' }, { k: 'dispatch', at: at(0), role: 'qa', agent: 'qa2', via: 'Agent', id: 'q2' }, { k: 'verdict', at: at(5), agent: 'qa2', role: 'qa', verdict: 'PASS', declared: true }, { k: 'verdict', at: at(8), agent: 'db2', role: 'dba', verdict: 'APPROVED', declared: true }];
+  expect(parties(besideQa).length === 1, `office: a pass beside the one that closed the task throws no second party — got ${JSON.stringify(parties(besideQa).map((b) => [b.role, b.at - t0]))}`);
 
   // A dispatch the owner refused writes `pre` and the gate's `ask`, and no `dispatch`: once the orchestrator launches
   // something else it is refused — whoever sat down for it gets up, and it keeps no party away.
-  const refusedRun = [{ k: 'pre', at: at(0), role: 'implementer', id: 'toolu_no' }, { k: 'ask', at: at(0), role: 'implementer', source: 'reviewer', token: 'REJECTED', round: 3, max: 2, id: 'toolu_no' }, ran(20, 'qa', 'PASS')];
+  // These hold the party of a pass that closes no task — a spike's approval — since one that closes a task has its party
+  // whoever is at work.
+  const refusedRun = [{ k: 'pre', at: at(0), role: 'implementer', id: 'toolu_no' }, { k: 'ask', at: at(0), role: 'implementer', source: 'reviewer', token: 'REJECTED', round: 3, max: 2, id: 'toolu_no' }, ran(20, 'reviewer', 'APPROVED')];
   const afterRefusal = beatsOf(refusedRun);
   expect(
     afterRefusal.some((b) => b.type === 'refused' && b.work === 'pre:toolu_no') && afterRefusal.some((b) => b.type === 'party'),
     `office: a refused dispatch is said, and does not hold the party off — got ${afterRefusal.map((b) => b.type)}`,
   );
   // A run that never reported stops counting as at work after STALE_MS, and is said to have stopped.
-  const stuck = [ran(0, 'implementer'), ran(STALE_MS / 1000 + 60, 'qa', 'PASS')];
+  const stuck = [ran(0, 'implementer'), ran(STALE_MS / 1000 + 60, 'reviewer', 'APPROVED')];
   const stale = beatsOf(stuck);
   expect(
-    stale.some((b) => b.type === 'stale' && b.work.startsWith('pre:')) && stale.some((b) => b.type === 'party') && beatsOf([ran(0, 'implementer'), ran(60, 'qa', 'PASS')]).every((b) => b.type !== 'party'),
+    stale.some((b) => b.type === 'stale' && b.work.startsWith('pre:')) && stale.some((b) => b.type === 'party') && beatsOf([ran(0, 'implementer'), ran(60, 'reviewer', 'APPROVED')]).every((b) => b.type !== 'party'),
     `office: a run that never reported holds the party off only until it goes stale — got ${stale.map((b) => b.type)}`,
   );
   // A run the orchestrator stopped ends where it was stopped: said so, no longer at work, and the work it was part of
@@ -7130,7 +7151,7 @@ await release();
   const halted = ran(0, 'implementer');
   const haltedAgent = halted[1].agent;
   const stoppedRun = [halted, { k: 'stop', at: at(30), agent: haltedAgent, role: 'implementer' }, ran(60, 'implementer', 'DIFF-READY'), ran(80, 'qa', 'PASS')];
-  const stoppedBeats = beatsOf(stoppedRun, t0 + 200_000);
+  const stoppedBeats = beatsOf([...stoppedRun.slice(0, 3), ran(80, 'reviewer', 'APPROVED')], t0 + 200_000);
   expect(
     stoppedBeats.some((b) => b.type === 'stale' && b.at === t0 + 30_000 && b.agent === haltedAgent) && stoppedBeats.some((b) => b.type === 'party'),
     `office: a stopped run ends where it was stopped, and does not hold the party off — got ${JSON.stringify(stoppedBeats.map((b) => [b.type, b.at - t0]))}`,
@@ -7202,6 +7223,11 @@ await release();
   const ledger = ledgerPath(project, 'office-session-1');
   await mkdir(dirname(ledger), { recursive: true });
   await writeFile(ledger, `${flow.flat().map((e) => JSON.stringify(e)).join('\n')}\n`);
+  // An older session ran two reviewers side by side, and once more architects than the room holds.
+  const older = ledgerPath(project, 'office-session-0');
+  const crowd = Array.from({ length: SEATS_MAX + 1 }, () => ran(0, 'architect', 'SPEC-READY'));
+  await writeFile(older, `${[ran(0, 'reviewer', 'APPROVED'), ran(1, 'reviewer', 'APPROVED'), ...crowd].flat().map((e) => JSON.stringify(e)).join('\n')}\n`);
+  await utimes(older, new Date(Date.now() - 3_600_000), new Date(Date.now() - 3_600_000));
   /** Reads a server-sent stream until `until` says so, calling `during` after each event. */
   const stream = async (url, until, during = () => {}, ms = 6000) => {
     const events = [];
@@ -7240,6 +7266,11 @@ await release();
     expect(
       page.includes('<title>NINA office</title>') && page.includes(`"owner":"Ana $& $' \\u003c/script>"`) && page.includes('"stages":["architect","implementer","reviewer"') && !page.includes('/*NINA_ROOM*/null'),
       "office: the page is served with the room filled in, stages in the order the line takes them, and an owner's name stays text — got " + page.slice(page.indexOf('const ROOM'), page.indexOf('const ROOM') + 200),
+    );
+    const seats = JSON.parse(/"seats":(\{[^}]*\})/.exec(page)?.[1] ?? 'null');
+    expect(
+      seats?.reviewer === 2 && seats.architect === SEATS_MAX && seats.qa === 1 && seats.implementer === 2,
+      `office: each stage gets the desks its most agents at once took, in any session of the project, two for one declared × many, up to the most a room holds — got ${JSON.stringify(seats)}`,
     );
     const port = new URL(office.url).port;
     const statusAs = (host) =>
