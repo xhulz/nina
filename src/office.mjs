@@ -264,7 +264,10 @@ export function officeTimeline(ledger, now = Date.now(), names = new Map()) {
     const first = cycle.runs[0];
     const who = new Map();
     for (const r of cycle.runs) who.set(r.role, (who.get(r.role) ?? 0) + 1);
-    const open = cycle.end === 'open';
+    // A task its closing verdict ended while one of its runs is still at work stays open until that run reports: work
+    // planned side by side — three architects sent together, one of whose specs went on to qa — fell inside the task
+    // the first one's qa closed, and the room showed two architects at work beside a list with no task open.
+    const open = cycle.end === 'open' || cycle.runs.some((r) => r.verdict === IN_FLIGHT && r.start.end == null);
     return {
       key: first.key,
       name: first.desc ? String(first.desc) : null,
