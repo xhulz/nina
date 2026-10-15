@@ -116,9 +116,16 @@ A rejection carries only what blocks (Hard Rule #20): a defect, a test that cann
 will act on. Wording, style and an evasion the spec ruled out in writing are notes — never a hole in security,
 isolation or data, which blocks however the spec scoped it — listed under **Notes** and carried into the next
 dispatch of the same work, never on the `ISSUES` line: the line the gate counts, so a note there spent a round of the
-cap too. In one step's second round, 7 to 9 of 19 issues were of that kind. A rejection made of notes alone goes back
-to its stage for a verdict again, not to a fix: the orchestrator does not overrule a gate, and the ledger keeps the
-rejection until a pass closes it.
+cap too. In one step's second round, 7 to 9 of 19 issues were of that kind. A question for the design is not a note
+either: a form a check accepts that the design's intent refuses without saying so (what the spec ruled out in writing
+stays a note), or a choice the spec left open that a later stage will act on, blocks and goes to the architect even
+when the code does what its spec says; and a failure that fails closed at a size the design did not choose and no test
+reaches is a failure in production. Two steps replayed without the full pipeline showed why: their reviewers saw both
+design flaws the pipeline had caught and wrote them as notes more often than they blocked them — one, blocked in 2 of
+5 reviews, was a note in another ("the architect might refuse the form"); the other was a note in 4 of 5 and blocked
+in none ("it throws before any query") — and a note reaches no one who can decide it. A rejection made of notes
+alone goes back to its stage for a verdict again, not to a fix: the orchestrator does not overrule a gate, and the
+ledger keeps the rejection until a pass closes it.
 
 The one real repeat in that history still reaches its cap. Reading "the stage that owns the fix" off a
 report's second line was tried and removed: in real reports it named the wrong stage, and a named owner
