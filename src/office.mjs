@@ -249,12 +249,16 @@ export function officeBeats(ledger, graph, now = Date.now()) {
  */
 export function officeTimeline(ledger, now = Date.now(), names = new Map()) {
   const { entries, starts, verdictOf } = readStarts(ledger);
+  // A run a message started — an agent resumed after it had reported — is named by the message's summary, or, in a
+  // ledger from before the gate kept one, by the words the agent was launched with: it goes on with that work.
+  const launched = new Map();
+  for (const e of entries) if (e.k === 'dispatch' && e.via !== 'SendMessage' && e.agent && e.desc && !launched.has(e.agent)) launched.set(e.agent, e.desc);
   const runs = starts
     .filter((s) => !s.message && s.refusedAt === null)
     .map((s) => {
       const e = entries[s.i];
       const v = verdictOf(s);
-      return { ts: e.at, role: s.role, verdict: v ? v.verdict : now < s.at + STALE_MS ? IN_FLIGHT : null, desc: e.desc ?? names.get(e.id) ?? null, start: s, key: e.id ?? `at${s.i}` };
+      return { ts: e.at, role: s.role, verdict: v ? v.verdict : now < s.at + STALE_MS ? IN_FLIGHT : null, desc: e.desc ?? names.get(e.id) ?? (s.agent ? launched.get(s.agent) : undefined) ?? null, start: s, key: e.id ?? `at${s.i}` };
     });
   return cyclesOf(runs).map((cycle) => {
     const first = cycle.runs[0];
