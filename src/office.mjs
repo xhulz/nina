@@ -30,7 +30,7 @@ import { TERMINALS, parseGraph } from './graph.mjs';
 import { readLedger, sessionLedgers } from './gate.mjs';
 import { readProfile } from './paths.mjs';
 import { projectStoreFile, readStoreFile } from './store.mjs';
-import { IN_FLIGHT, cyclesOf } from './commands/stats.mjs';
+import { CYCLE_ENDS, IN_FLIGHT, cyclesOf } from './commands/stats.mjs';
 import { isLoopBack } from './transcripts.mjs';
 import { shapeOf } from './commands/pipeline.mjs';
 import { listenHere, openInBrowser, refuseElsewhere, untilStopped } from './serve.mjs';
@@ -42,9 +42,9 @@ const PAGE = join(dirname(fileURLToPath(import.meta.url)), 'office.html');
 export const OFFICE_PORT = 6462;
 
 /**
- * How long after a pass that could end the work the office waits for another dispatch before it celebrates. A pass
- * from qa may go on to devops or secops, and the orchestrator commits before it dispatches either; a pass the graph
- * sends nowhere but `done` is celebrated at once.
+ * How long after a pass that could end the work, without closing a task, the office waits for another dispatch
+ * before it celebrates: a reviewer's approval of a spike may still go on to qa. A pass the graph sends nowhere but
+ * `done` is celebrated at once.
  */
 export const PARTY_QUIET_MS = 20_000;
 
@@ -150,10 +150,11 @@ function readStarts(ledger) {
  *
  * A foreground dispatch's `dispatch` entry is written when the agent has finished, after its own verdict, so work
  * starts where its `pre` entry stands, joined to the agent by the tool_use id; until that entry is written, the
- * agent is not known yet, and the page binds the next verdict from that desk to it. The work ends — a party — on a
- * pass when nothing since the last dispatch was sent back, something since then could route to `done`, nobody is
- * still at work, and no dispatch follows within `PARTY_QUIET_MS`; at once when the pass routes only to a terminal.
- * A party that waits on the quiet is only beaten once `now` has passed it.
+ * agent is not known yet, and the page binds the next verdict from that desk to it. A pass that closes a task — the
+ * verdict that ends a cycle of the timeline, qa's `PASS` — is a party at once, whoever else is at work. Any other pass
+ * ends the work — a party — when nothing since the last dispatch was sent back, something since then could route to
+ * `done`, nobody is still at work, and no dispatch follows within `PARTY_QUIET_MS`; at once when the pass routes only
+ * to a terminal. A party that waits on the quiet is only beaten once `now` has passed it.
  *
  * @param {object[]} entries - The ledger, oldest first.
  * @param {{edges: {from: string, to: string, token: string}[]}} graph - The project's parsed graph.
@@ -205,6 +206,13 @@ export function officeBeats(ledger, graph, now = Date.now()) {
       const back = isLoopBack(e.verdict);
       beats.push({ id, at, type: 'verdict', role: e.role, agent: e.agent, verdict: e.verdict, back, asks: routes.some((r) => r.to === 'human'), issues: e.issues ?? [] });
       reported = { role: e.role, agent: e.agent, verdict: e.verdict, back };
+      // A task closed is the work done, whoever else is still at work on another: held to an empty office, a day of
+      // work side by side in worktrees closed 25 tasks and had one party. Its party had, so it ends nothing more for
+      // what reports beside it.
+      if (CYCLE_ENDS[e.role] === e.verdict) {
+        beats.push({ id: `party:${id}`, at, type: 'party', role: e.role, verdict: e.verdict });
+        return;
+      }
       batch.push({ back, ends: routes.some((r) => r.to === 'done') });
       // The work ends here when nothing sent back since the last dispatch, something since then could end it, and
       // nobody is still at work: at once when this verdict goes nowhere but a terminal, or once the quiet passes.
@@ -307,19 +315,63 @@ export function storeNames(target) {
   };
 }
 
+/** The most desks a stage is given, two rows of a room: one project's busiest day ran eight implementers at once. */
+export const SEATS_MAX = 8;
+
+/**
+ * The most runs of each stage the ledgers had at work at once: from each run's start to its verdict or its stop. A run
+ * that never reported is left out — it would size the room for a run nobody is waiting on.
+ *
+ * @param {object[][]} ledgers - Ledgers, each oldest first.
+ * @returns {Map<string, number>}
+ */
+export function busiest(ledgers) {
+  const most = new Map();
+  for (const ledger of ledgers) {
+    const marks = readStarts(ledger)
+      .starts.filter((s) => !s.message && s.refusedAt === null && s.end !== null)
+      .flatMap((s) => [
+        { at: s.at, role: s.role, d: 1 },
+        { at: s.end, role: s.role, d: -1 },
+      ])
+      // One that reported as another sat down was not at work beside it.
+      .sort((a, b) => a.at - b.at || a.d - b.d);
+    const now = new Map();
+    for (const m of marks) {
+      now.set(m.role, (now.get(m.role) ?? 0) + m.d);
+      most.set(m.role, Math.max(most.get(m.role) ?? 0, now.get(m.role)));
+    }
+  }
+  return most;
+}
+
 /**
  * What the page is told about the room: the project, its stages in the order the line takes them, the stages that
- * run as several agents at once, and what to call the owner.
+ * run as several agents at once, the desks each stage gets, and what to call the owner. A stage gets as many desks
+ * as the gate's ledgers — thirty days of them — ever had its agents at work at once, two for a stage the graph
+ * declares `× many`, one at least, `SEATS_MAX` at most: two desks for a reviewer split by axis of risk, one for a qa
+ * that a day of worktrees ran four of, and the rest worked standing beside a desk.
  *
  * @param {string} target - The project directory.
- * @returns {{project: string, stages: string[], many: string[], owner: string}}
+ * @returns {{project: string, stages: string[], many: string[], seats: Record<string, number>, owner: string}}
  */
 export function officeRoom(target) {
   const graph = parseGraph(readFileSync(join(target, '.claude', 'graph.md'), 'utf8'));
   const { line, gates } = shapeOf(graph);
   const stages = [...new Set([...line, ...gates.map((g) => g.gate), ...graph.stages])];
+  const many = [...(graph.many ?? new Map()).keys()];
+  // A ledger pruned by another session between the listing and the read sizes nothing, and the office still opens.
+  const read = (path) => {
+    try {
+      return [readLedger(path)];
+    } catch {
+      return [];
+    }
+  };
+  const most = busiest(sessionLedgers(target).ledgers.flatMap((l) => read(l.path)));
+  const seats = Object.fromEntries(stages.map((s) => [s, Math.min(SEATS_MAX, Math.max(many.includes(s) ? 2 : 1, most.get(s) ?? 0))]));
   const owner = readProfile(target).profile?.vocabulary?.OWNER;
-  return { project: basename(target), stages, many: [...(graph.many ?? new Map()).keys()], owner: typeof owner === 'string' && owner.trim() ? owner.trim() : 'you' };
+  return { project: basename(target), stages, many, seats, owner: typeof owner === 'string' && owner.trim() ? owner.trim() : 'you' };
 }
 
 /** One server-sent event. */

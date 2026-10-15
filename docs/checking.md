@@ -139,8 +139,7 @@ nina pipeline --view --open                         # the system's browser opene
 ```
 
 The same graph as an office seen from above, in pixels: a floor plan with a room for each phase — design, build,
-review and the gates, the test lab, release — off one corridor, a desk for each stage in its room (two for a stage
-that runs as several agents), the orchestrator — NINA, drawn as a woman facing the room — at the reception, its counter labelled orchestrator, the owner
+review and the gates, the test lab, release — off one corridor, desks for each stage in its room, the orchestrator — NINA, drawn as a woman facing the room — at the reception, its counter labelled orchestrator, the owner
 as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger, so it shows what the ledger holds — who worked, what they answered, the ids of the issues
@@ -155,12 +154,24 @@ down for a dispatch the owner refused, for a run the orchestrator stopped (`Task
 ledger), or for a run that never reported within three hours (the longest of 227 measured took 108 minutes), gets up
 and leaves; none keeps the work from ending. The stop was read first by the three hours alone, and one project paused
 for an upgrade had an implementer it stopped sit at its desk for the rest of the afternoon, holding off the party of
-the step another implementer finished. A pass is a party when nothing since the last dispatch was sent back,
-something since then could route to `done`, nobody is still at work and no dispatch follows within twenty seconds
-— at once when the pass routes only to a terminal. The quiet is there because qa's pass may still go on to devops,
-and the orchestrator commits before it dispatches; without the rest, a reviewer approving beside a dba that was
-about to reject threw a party. Once the cheering ends, everyone whose report is in goes home: the work is done, and
-a room left holding the last to report read as someone still at work.
+the step another implementer finished. A pass that closes a task — the verdict that ends a cycle of the timeline
+below, qa's `PASS`, devops' `DEPLOYED`, secops' `SECURE` — is a party at once, whoever else is at work: held to an
+empty office, a day of tasks side by side in worktrees closed 25 and had one party. A change that goes on to devops
+has two, since the timeline closes a task at its qa and another at its deploy; a pass reported beside the one that
+closed a task throws no second. Any other pass is a party when
+nothing since the last dispatch was sent back, something since then could route to `done`, nobody is still at work
+and no dispatch follows within twenty seconds — at once when the pass routes only to a terminal. The quiet is there
+because a pass the graph lets end the work may still go on, as a spike's approval may to qa; without the rest, a reviewer approving beside a dba that was about
+to reject threw a party. Once the cheering ends, everyone whose report is in goes home, and whoever is still at work
+stays: a room left holding the last to report read as someone still at work.
+
+A stage gets as many desks as the gate's ledgers — the thirty days it keeps — ever had its agents at work at once,
+from each run's start to its verdict or stop: two for a stage the graph declares `× many`, one at least, eight at
+most. One desk each, and two for `× many`, came first; the ledgers then held reviewers split by axis of risk three and
+five at once, and a day of worktrees four qa runs and eight implementers, and whoever found every desk of their stage
+taken worked standing beside it. A run that never reported is not counted. The room is measured when the office
+starts, so a busier day than any before still stands until the next start. The test lab's rack and release's shelf
+stand in the far corner, where only a fourth desk reaches, and a room with four desks has neither.
 
 Beside the room, a timeline of the session's tasks, newest first — the visibility the owner asked for, without the
 detail: each task's name, who worked on it (each stage in the order it first did, and how many times it was
