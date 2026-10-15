@@ -804,14 +804,15 @@ function confirmation(r) {
 
 /**
  * The few words the orchestrator gave a dispatch — the `description` the measurement store keeps as `desc` — which
- * the office names a piece of work by. A message to an agent carries none: it adds to work already named.
+ * the office names a piece of work by. A message to an agent gives them as its `summary`: one that resumes an agent
+ * that had reported starts a run of its own, and a task can begin with it — the office named such a task nothing.
  *
  * @param {object} input - The hook's input.
  * @returns {{desc?: string}}
  */
 const describedAs = (input) => {
-  const desc = input.tool_name === 'SendMessage' ? null : input.tool_input?.description;
-  return typeof desc === 'string' && desc.trim() ? { desc: desc.trim().slice(0, 200) } : {};
+  const said = input.tool_name === 'SendMessage' ? input.tool_input?.summary : input.tool_input?.description;
+  return typeof said === 'string' && said.trim() ? { desc: said.trim().slice(0, 200) } : {};
 };
 
 /** A dispatch is about to go out: note when, and send the round past its edge's cap to the owner to confirm. */

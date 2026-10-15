@@ -169,6 +169,9 @@ and stops at the last thing that happened while nobody is. A task is a cycle, cu
 (`cyclesOf`, one function for both): a session's dispatches up to the verdict that closes them, named by the words
 the orchestrator gave the first. The gate keeps those words on each dispatch's entries; a ledger written before it
 did takes them from the measurement store, by the dispatch's id, read again only when the store has changed. A task
+can begin with a message — an agent resumed after it had reported, a design-reviewer sent to re-check a corrected
+spec after qa closed the last task — and a message has no description: it is named by its `summary`, which the gate
+keeps the same way, else by the words its agent was launched with. Before, such a task was named nothing. A task
 that waited — overnight, on the owner — also says how long anyone was at work on it: its runs' spans joined, so runs
 side by side count once. The list is cut again as the ledger grows and sent whole whenever it changes, and the page
 replaces what it has: the cut moves — a review still at work lets nothing through until its verdict, a refused

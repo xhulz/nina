@@ -3511,6 +3511,14 @@ const dated = (date, status = 'active') =>
     described.length === 2 && described.every((e) => e.desc === 'Review the export') && messagePres.every((e) => !('desc' in e)),
     `gate: a dispatch's description is kept on its pre and its dispatch, and a message carries none — got ${JSON.stringify(described)}`,
   );
+  // A message gives its words as a summary: one that resumes an agent that had reported starts a task of its own.
+  asking('PreToolUse', { tool_name: 'SendMessage', tool_input: { to: 'rq5', summary: ' Re-check the export fix ', message: 'fixed' }, tool_use_id: 'toolu_q6' });
+  asking('PostToolUse', { tool_name: 'SendMessage', tool_input: { to: 'rq5', summary: ' Re-check the export fix ', message: 'fixed' }, tool_use_id: 'toolu_q6', tool_response: { success: true, resumedAgentId: 'rq5' } });
+  const summarized = readLedger(ledgerPath(project, 's-gate-question')).filter((e) => e.id === 'toolu_q6');
+  expect(
+    summarized.map((e) => e.k).join() === 'pre,dispatch' && summarized.every((e) => e.desc === 'Re-check the export fix') && summarized[1].resumed === true,
+    `gate: a message's summary is kept as its description — got ${JSON.stringify(summarized)}`,
+  );
   const questionLedger = readLedger(ledgerPath(project, 's-gate-question')).filter((e) => e.k === 'question' || e.k === 'answered');
   expect(
     asked2 === null && questionLedger.map((e) => e.k).join() === 'question,answered' && !JSON.stringify(questionLedger).includes('which way') && !JSON.stringify(questionLedger).includes('left'),
@@ -7019,6 +7027,20 @@ await release();
     officeTimeline(unnamed, Number.POSITIVE_INFINITY)[0]?.name === null &&
       officeTimeline(unnamed, Number.POSITIVE_INFINITY, new Map([[unnamed[0].id, 'Implement from the store']]))[0]?.name === 'Implement from the store',
     'office: a dispatch the ledger names nothing for takes the store\'s name',
+  );
+  // A task that begins with a message — a design-reviewer resumed to re-check a corrected spec, after qa closed the
+  // last task — is named by the message's summary, else by the words its agent was launched with; never nothing.
+  const reviewed2 = [...described(0, 'design-reviewer', 'REJECTED', 'Design review the import'), ...described(10, 'qa', 'PASS', 'QA the export')];
+  const reviewer2 = reviewed2.find((e) => e.k === 'dispatch').agent;
+  const resumedRun = (summary) => [
+    ...reviewed2,
+    { k: 'pre', at: at(30), role: 'design-reviewer', id: 'toolu_resume', via: 'SendMessage', agent: reviewer2, ...(summary ? { desc: summary } : {}) },
+    { k: 'dispatch', at: at(31), role: 'design-reviewer', agent: reviewer2, via: 'SendMessage', id: 'toolu_resume', resumed: true, ...(summary ? { desc: summary } : {}) },
+  ];
+  const lastName = (ledger) => officeTimeline(ledger, t0 + 32_000).at(-1)?.name;
+  expect(
+    lastName(resumedRun('Re-check the import spec')) === 'Re-check the import spec' && lastName(resumedRun(null)) === 'Design review the import',
+    `office: a task a resumed agent begins takes its message's summary, else the agent's launch name — got ${lastName(resumedRun('Re-check the import spec'))} / ${lastName(resumedRun(null))}`,
   );
   expect(busyFor([{ at: 0, end: 7_200_000 }, { at: 50_400_000, end: 54_000_000 }]) === 10_800_000, 'office: a night between two runs is not time at work');
   // The store is read for names again only when it changed: a dispatch it never names would otherwise have it read
