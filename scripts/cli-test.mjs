@@ -7028,6 +7028,27 @@ await release();
       officeTimeline(unnamed, Number.POSITIVE_INFINITY, new Map([[unnamed[0].id, 'Implement from the store']]))[0]?.name === 'Implement from the store',
     'office: a dispatch the ledger names nothing for takes the store\'s name',
   );
+  // A task closed by its qa while a run of it is still at work stays open until that run reports: three architects sent
+  // together, one of whose specs went on through code and qa, and the list showed no task open beside two at work.
+  const sideBySide = [
+    described(0, 'architect', 'SPEC-READY', 'Spec the rules'),
+    described(1, 'architect', undefined, 'Spec the entries'),
+    described(10, 'implementer', 'DIFF-READY', 'Implement the rules'),
+    described(20, 'reviewer', 'APPROVED', 'Review the rules'),
+    described(30, 'qa', 'PASS', 'QA the rules'),
+  ].flat();
+  const stillAtWork = officeTimeline(sideBySide, t0 + 40_000);
+  const reported = officeTimeline([...sideBySide, { k: 'verdict', at: at(50), agent: sideBySide.find((e) => e.k === 'dispatch' && e.desc === 'Spec the entries').agent, role: 'architect', verdict: 'SPEC-READY', declared: true }], t0 + 60_000);
+  expect(
+    stillAtWork.length === 1 && stillAtWork[0].end === null && stillAtWork[0].how === null &&
+      reported.length === 1 && reported[0].how === 'closed' && reported[0].end === t0 + 50_000,
+    `office: a task its qa closed stays open while one of its runs is at work, and closes when it reports — got ${JSON.stringify([stillAtWork, reported])}`,
+  );
+  const goneStale = officeTimeline(sideBySide, t0 + STALE_MS + 60_000);
+  expect(
+    goneStale.length === 1 && goneStale[0].how === 'closed' && goneStale[0].end !== null,
+    `office: and a run gone stale holds it open no longer — got ${JSON.stringify(goneStale)}`,
+  );
   // A task that begins with a message — a design-reviewer resumed to re-check a corrected spec, after qa closed the
   // last task — is named by the message's summary, else by the words its agent was launched with; never nothing.
   const reviewed2 = [...described(0, 'design-reviewer', 'REJECTED', 'Design review the import'), ...described(10, 'qa', 'PASS', 'QA the export')];

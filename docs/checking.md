@@ -172,6 +172,9 @@ did takes them from the measurement store, by the dispatch's id, read again only
 can begin with a message — an agent resumed after it had reported, a design-reviewer sent to re-check a corrected
 spec after qa closed the last task — and a message has no description: it is named by its `summary`, which the gate
 keeps the same way, else by the words its agent was launched with. Before, such a task was named nothing. A task
+its closing verdict ended stays open while one of its runs is still at work: work planned side by side — three
+architects sent together, one of whose specs went on through code and qa — fell inside the task that qa closed, and
+the room showed two architects at work beside a list with no task open. A run stopped or gone stale holds nothing. A task
 that waited — overnight, on the owner — also says how long anyone was at work on it: its runs' spans joined, so runs
 side by side count once. The list is cut again as the ledger grows and sent whole whenever it changes, and the page
 replaces what it has: the cut moves — a review still at work lets nothing through until its verdict, a refused
