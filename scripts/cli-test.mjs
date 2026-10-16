@@ -7287,7 +7287,9 @@ await release();
   try {
     const page = await (await fetch(`${office.url}/`)).text();
     expect(
-      page.includes('<title>NINA office</title>') && page.includes(`"owner":"Ana $& $' \\u003c/script>"`) && page.includes('"stages":["architect","implementer","reviewer"') && !page.includes('/*NINA_ROOM*/null'),
+      page.includes('<title>NINA office</title>') && page.includes(`"owner":"Ana $& $' \\u003c/script>"`) && page.includes('"stages":["architect","implementer","reviewer"') && !page.includes('/*NINA_ROOM*/null') &&
+        // The whole office opens whole when it fits at 0.7 of the readable zoom: at 0.85, a room sized by its desks opened close.
+        page.includes('const WHOLE = 0.7;') && page.includes('whole >= READABLE * WHOLE'),
       "office: the page is served with the room filled in, stages in the order the line takes them, and an owner's name stays text — got " + page.slice(page.indexOf('const ROOM'), page.indexOf('const ROOM') + 200),
     );
     const seats = JSON.parse(/"seats":(\{[^}]*\})/.exec(page)?.[1] ?? 'null');
