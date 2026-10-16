@@ -818,9 +818,12 @@ const cg = crisp.getContext('2d');
 // ─── the view ─────────────────────────────────────────────────────────────────────────────────
 // Sizes are in office pixels; `scale` is screen pixels for each. Fitted whole into a window beside the conversation
 // the office drew a person under twenty screen pixels tall, so the view starts at READABLE screen points an office
-// pixel — the whole office when that is nearly what fits — and follows the work; the viewer's own zoom is kept. The
-// title and the zoom keep a band of their own above the office, so neither covers a room's name.
+// pixel — the whole office when it fits at WHOLE of that or more — and follows the work; the viewer's own zoom is
+// kept. The title and the zoom keep a band of their own above the office, so neither covers a room's name. WHOLE was
+// 0.85 until rooms took as many desks as their stages ran at once: a project's office grew from 376 pixels tall to
+// 468, and on a window that had shown it whole the view opened close, following the work across a room it had seen.
 const READABLE = 2.5;
+const WHOLE = 0.7;
 const CLOSEST = 8;
 const BAND = 48;
 const HANDS_OFF_MS = 12000;
@@ -843,7 +846,7 @@ try {
 }
 function level() {
   const whole = fit / dpr;
-  if (chosen === 'fit' || (chosen === null && whole >= READABLE * 0.85)) return whole;
+  if (chosen === 'fit' || (chosen === null && whole >= READABLE * WHOLE)) return whole;
   return Math.max(whole, Math.min(CLOSEST, chosen ?? READABLE));
 }
 /** The middle of the part of the screen the office is drawn in. */

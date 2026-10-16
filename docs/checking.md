@@ -204,8 +204,11 @@ was probed before a line of this was written: in the editor's chat panel Claude 
 session reports no surface to draw on and no drawing is ever asked for — a mod draws in the terminal and the
 desktop app only.
 
-The view starts at two and a half screen points an office pixel, closer than the whole office when the window is
-smaller than that: fitted whole into a window beside the conversation, a person came out under twenty pixels tall.
+The view starts at two and a half screen points an office pixel, closer than the whole office unless the whole fits
+at seven tenths of that or more: fitted whole into a window beside the conversation, a person came out under twenty
+pixels tall. At the old 85%, a room with the desks its
+stages ran at once grew a project's office from 376 pixels tall to 468, and a window that had shown it whole opened
+close, following the work, so that it read as a page to scroll.
 Closer than the whole, it follows the work — the folder as it is carried, the desk of whoever reports, the
 reception for a question. Dragging, the wheel and a pinch take it over until the viewer has left it alone for
 twelve seconds, or double-clicks; `+`, `−`, `0` and the buttons zoom without taking it, around what it follows. The
