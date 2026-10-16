@@ -66,7 +66,9 @@ Architect produces a TS spec; implementer consumes the spec; they do not re-read
 When a chain starts at the implementer, your dispatch is its spec: the goal, the files it may touch and
 what must hold when it is done. The reviewer reviews against it and asks none of what only an architect's
 spec carries — an Obsolescence list, a preview-deploy plan, a skill citation, integration premises. A
-change that needs one of those needs an architect.
+change that needs one of those needs an architect. Say in it whether the change touches a critical path
+(`CLAUDE.md` § *Critical paths*): one that touches none, and builds no check whose refusing is the feature, is a
+simple change, and the implementer leaves its tests' mutations to qa rather than running each twice.
 
 ### A spec is corrected in place
 A spec sent back is corrected where it is wrong; new work comes as a new step file or spec. Never ask for

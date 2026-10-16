@@ -264,8 +264,9 @@ const BUDGETS = {
   // mutation log is read and run on the final bytes, and a sentence about a dependency cites what says it; and again
   // for the lines a step may write, and the mutations run from one script rather than one turn each; and for a check's
   // battery generated from its code, after nine loosened guards survived batteries written from the spec's rules; and
-  // for a lesson learned three times in a day: the TSDoc sweep before the handoff covers test files and changed members.
-  '.claude/agents/implementer.md': 21900,
+  // for a lesson learned three times in a day: the TSDoc sweep before the handoff covers test files and changed members;
+  // and for a simple change, which leaves its mutations to qa rather than building a mirror to run them twice.
+  '.claude/agents/implementer.md': 22550,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -292,7 +293,8 @@ const BUDGETS = {
   // Raised for spikes run side by side: how a loop closes, and how a spike plan in steps runs. And for the design
   // review before code, and the notes that ride with the work instead of sending it back. And for a step measured
   // against its forecast at each commit: two steps landed 1.5× theirs before a reviewer worked the rate out by hand.
-  '.claude/router.md': 18400,
+  // And for the simple change: the dispatch says whether a critical path is touched, and its mutations go to qa alone.
+  '.claude/router.md': 18550,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a

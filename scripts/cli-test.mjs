@@ -5450,8 +5450,8 @@ const dated = (date, status = 'active') =>
   // walked and run by qa, the lesson still came back — and a filter that mirrors another program's parse is premised
   // on that program's whole input path. The reviewer holds both; the history behind them is not composed.
   expect(
-    implementer.includes('**So run it first, before `DIFF-READY`:**') && implementer.includes('goes red row by row') && implementer.includes('**Mutations run:**') &&
-      implementer.includes("Run each test's named mutation on a scratch copy in plain `node`") && implementer.includes('is not the suite, and is yours to run') &&
+    implementer.includes('run it first, before `DIFF-READY`:**') && implementer.includes('goes red row by row') && implementer.includes('**Mutations run:**') &&
+      implementer.includes("run each test's named mutation on a scratch copy in plain `node`") && implementer.includes('is not the suite, and is yours to run') &&
       reviewer.includes("the implementer's **Mutations run** does not show red") &&
       !implementer.includes('The fourth time this lesson came back'),
     'compose: the implementer runs each mutation it names on a copy before handing off and lists them, and the reviewer starts from the list',
@@ -5504,6 +5504,16 @@ const dated = (date, status = 'active') =>
       patterns.includes('Missing TSDoc on any declaration or member the diff adds or changes') &&
       ![implementer, reviewer, patterns].some((text) => text.includes('TSDoc on every new declaration') || text.includes('TSDoc on any new declaration')),
     'compose: the implementer documents every declaration it adds or changes, tests included, and sweeps its own diff before the handoff — no spec says "new" alone',
+  );
+  // A simple change runs its mutations once, in qa: the implementer's mirror ran them twice on a screen's labels.
+  expect(
+    implementer.includes('- **A simple change leaves its mutations to qa:** a dispatch that is your spec and says the change touches no critical') &&
+      implementer.includes('for a change that builds no check whose refusing is the feature') &&
+      implementer.includes('Except on a simple change, run each test') && implementer.includes('**So, except on a simple change (below), run it first') &&
+      implementer.includes('"left to qa" on a simple change') &&
+      router.includes('Say in it whether the change touches a critical path') &&
+      router.includes('the implementer leaves its tests\' mutations to qa rather than running each twice'),
+    'compose: a simple change — no architect, no critical path — leaves its mutations to qa, and the dispatch says whether a critical path is touched',
   );
 }
 
