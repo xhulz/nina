@@ -139,7 +139,7 @@ nina pipeline --view --open                         # the system's browser opene
 ```
 
 The same graph as an office seen from above, in pixels: a floor plan with a room for each phase — design, build,
-review and the gates, the test lab, release — off one corridor, desks for each stage in its room, the orchestrator — NINA, drawn as a woman facing the room — at the reception, its counter labelled orchestrator, the owner
+review and the gates above one corridor, the reception, the test lab and release below it — desks for each stage in its room, the orchestrator — NINA, drawn as a woman facing the room — at the reception, its counter labelled orchestrator, the owner
 as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger, so it shows what the ledger holds — who worked, what they answered, the ids of the issues
@@ -171,7 +171,15 @@ most. One desk each, and two for `× many`, came first; the ledgers then held re
 five at once, and a day of worktrees four qa runs and eight implementers, and whoever found every desk of their stage
 taken worked standing beside it. A run that never reported is not counted. The room is measured when the office
 starts, so a busier day than any before still stands until the next start. The test lab's rack and release's shelf
-stand in the far corner, where only a fourth desk reaches, and a room with four desks has neither.
+stand in a column of their own past the last desk: in the room's far corner, a fourth desk stood under them.
+
+The floor is laid out for the window it is drawn in. Each row of rooms puts its desks in as many rows as make the
+whole office come out largest there — a wide window gets long rooms side by side, a narrow one deeper rooms — and lays
+itself out again when the window, or the timeline beside it, changes that; whoever sits, stands or walks keeps their
+place in it. The rooms stood in two columns, three deep, off a corridor down the middle, four desks a row: once
+stages got the desks they ran at once, a project's office came out taller than wide, and fitted whole it stood small
+in the middle of a wide window — people watching it asked whether it was working, not seeing the agents. Side by side,
+the same desks on a window 1440 points wide, beside the timeline, came out 2.13 points an office pixel rather than 1.82.
 
 Beside the room, a timeline of the session's tasks, newest first — the visibility the owner asked for, without the
 detail: each task's name, who worked on it (each stage in the order it first did, and how many times it was
