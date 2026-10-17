@@ -39,6 +39,30 @@ const RATE_OVER = 5;
 const NOT_CODE = /^(\.claude\/|\.nina\/|CLAUDE\.md$)|(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?)$/;
 
 /**
+ * What a step's implementer wrote in its first round, from the `First round:` line the orchestrator writes in its step
+ * file when the step took more than one: the fix rounds after it are the review's, not the forecast's.
+ *
+ * @param {string} text - A step file.
+ * @returns {number|null}
+ */
+export function firstRoundIn(text) {
+  const m = /^[\s>*_-]*First round:[*_ \t]*~?[ \t]*(\d[\d,]*)[ \t]*lines?\b/im.exec(text);
+  return m ? Number(m[1].replace(/,/g, '')) : null;
+}
+
+/**
+ * The kind a step file says it is, from its `Kind:` line — `new`, `extends`, `tests`, or any one word a project uses:
+ * a step is measured by the steps of its kind, where any has landed.
+ *
+ * @param {string} text - A step file.
+ * @returns {string|null}
+ */
+export function kindIn(text) {
+  const m = /^[\s>*_-]*Kind:[*_ \t]*([A-Za-z][\w-]*)/m.exec(text);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/**
  * The forecast a step file states, from its `Size:` line.
  *
  * @param {string} text - A step file.
@@ -204,13 +228,15 @@ export function measure(dir) {
   };
   const steps = [];
   for (const file of files) {
-    const now = forecastIn(readFileSync(join(dir, file.path), 'utf8'));
+    const current = readFileSync(join(dir, file.path), 'utf8');
+    const now = forecastIn(current);
+    const kind = kindIn(current);
     const landings = named.get(file.path).filter((c) => code.get(c.hash)?.size > 0);
     if (landings.length === 0) {
       if (!now) continue;
       // Forecast again in the working tree, it is newer than every commit.
       const since = at('HEAD', file.path)?.lines === now.lines ? writtenAt(file.path, Infinity, now.lines) : Infinity;
-      steps.push({ ...file, landed: false, forecast: now, since });
+      steps.push({ ...file, kind, landed: false, forecast: now, since });
       continue;
     }
     // The forecast the step was built to: its file before its first commit, or as that commit wrote it.
@@ -225,15 +251,22 @@ export function measure(dir) {
     const last = landings.at(-1);
     // A forecast changed while the step was built — a fix round's spec — is shown, and the step measured against the first.
     const revised = at(last.hash, file.path);
+    const firstRound = firstRoundIn(current);
+    const ratio = total / forecast.lines;
     steps.push({
       ...file,
+      kind,
       landed: true,
       forecast,
       revised: revised && revised.lines !== forecast.lines ? revised : null,
       since,
       lines: total,
       files: lines.size,
-      ratio: total / forecast.lines,
+      ratio,
+      first: firstRound,
+      // What the forecast missed by: its first round where the step file says it, so fix rounds do not compound into
+      // the rate one correction-heavy step at a time.
+      measured: firstRound === null ? ratio : firstRound / forecast.lines,
       t: last.t,
       at: last.at,
       hash: last.hash,
@@ -243,37 +276,41 @@ export function measure(dir) {
 }
 
 /**
- * The rate to forecast a step again at: the median actual over forecast of its spec's newest landed steps forecast no
- * earlier than it was. A step forecast before the last re-forecast was measured against the old rates, which that
- * re-forecast already corrected for, and counting it would correct for them twice.
+ * The rate to forecast a step again at: the median of what its spec's newest landed steps forecast no earlier than it
+ * missed by (`measured`), over the steps of its kind where any has landed. A step forecast before the last re-forecast
+ * was measured against the old rates, which that re-forecast already corrected for, and counting it would correct for
+ * them twice; and a new module's rate put on steps that extend an existing file asked one project for six splits.
  *
  * @param {object[]} steps
- * @param {{spec: string, since?: string}} step - Its spec, and when its own forecast was written.
- * @returns {{rate: number, over: number}|null}
+ * @param {{spec: string, since?: string, kind?: string|null}} step - Its spec, when its own forecast was written, its kind.
+ * @returns {{rate: number, over: number, kind: string|null}|null}
  */
-export function rateOf(steps, { spec, since }) {
+export function rateOf(steps, { spec, since, kind = null }) {
   // A forecast not known to be written when is measured by nothing, rather than by everything.
   if (since === null || since === undefined) return null;
-  const landed = steps
-    .filter((s) => s.landed && s.spec === spec && s.since >= since)
-    .sort((a, b) => a.t - b.t)
-    .slice(-RATE_OVER);
-  return landed.length ? { rate: median(landed.map((s) => s.ratio)), over: landed.length } : null;
+  const landed = steps.filter((s) => s.landed && s.spec === spec && s.since >= since).sort((a, b) => a.t - b.t);
+  const mine = kind ? landed.filter((s) => s.kind === kind) : [];
+  const over = (mine.length ? mine : landed).slice(-RATE_OVER);
+  return over.length ? { rate: median(over.map((s) => s.measured ?? s.ratio)), over: over.length, kind: mine.length ? kind : null } : null;
 }
 
 /**
  * What the detector says: the newest landed step, when it overran, and the steps of its spec still forecast as they
- * were when it landed.
+ * were when it landed — until one of them is forecast again. The next step to go out is forecast again at its turn, and
+ * the rest at theirs: asked for every one at once, one project was asked for twenty splits of steps three or more
+ * steps away, which later steps would each have measured again.
  *
- * @param {string} dir
- * @param {{steps: object[], limit: number}} measured
- * @returns {{step: object, rate: {rate: number, over: number}, stale: object[]}|null}
+ * @param {{steps: object[]}} measured
+ * @returns {{step: object, rate: {rate: number, over: number, kind: string|null}, stale: object[]}|null}
  */
 export function overrun({ steps }) {
   const newest = steps.filter((s) => s.landed).sort((a, b) => a.t - b.t).at(-1);
-  if (!newest || newest.ratio <= OVERRUN) return null;
+  if (!newest || newest.measured <= OVERRUN) return null;
+  const mine = steps.filter((s) => !s.landed && s.spec === newest.spec && s.since !== null);
+  // A step forecast since it landed is the one about to go out, forecast at its turn: the overrun was acted on.
+  if (mine.some((s) => s.since > newest.t)) return null;
   // Forecast no later than the overrun step was, so its rate measures them: forecast again since, they are not stale.
-  const stale = steps.filter((s) => !s.landed && s.spec === newest.spec && s.since !== null && s.since <= newest.since);
+  const stale = mine.filter((s) => s.since <= newest.since);
   return stale.length ? { step: newest, rate: rateOf(steps, stale[0]), stale } : null;
 }
 
@@ -312,15 +349,17 @@ export async function sizes(argv) {
       console.log('sizes: current');
       return 0;
     }
-    const { step, rate, stale } = found;
+    const { step, stale } = found;
     const again = stale.slice(0, 4).map((s) => {
-      const next = Math.round(s.forecast.lines * rate.rate);
-      return `${s.step} ~${s.forecast.lines} → ~${next}${next > limit ? ` (past ${limit}: split)` : ''}`;
+      const rate = rateOf(steps, s);
+      const next = Math.round(s.forecast.lines * (rate?.rate ?? 1));
+      return `${s.step} ~${s.forecast.lines} → ~${next}${rate?.kind ? ` (${rate.kind})` : ''}${next > limit ? ` past ${limit}` : ''}`;
     });
+    const first = step.first === null ? '' : `, ${step.first} in its first round (${times(step.measured)})`;
     console.log(
-      `step ${step.step} of ${step.spec} landed ${step.lines} lines against ~${step.forecast.lines} (${times(step.ratio)}); ` +
-        `${stale.length} step(s) forecast when it was have not been forecast again — at ${times(rate.rate)}, over ${rate.over} landed step(s) forecast the same way: ` +
-        `${again.join(', ')}${stale.length > again.length ? ', …' : ''}`,
+      `step ${step.step} of ${step.spec} landed ${step.lines} lines against ~${step.forecast.lines} (${times(step.ratio)}${first}); ` +
+        `before the next of its ${stale.length} step(s) forecast when it was goes out, forecast that one again — a \`Size:\` line at the rate \`nina sizes\` gives it — ` +
+        `and split it if that puts it past ${limit}; the rest at their turn: ${again.join(', ')}${stale.length > again.length ? ', …' : ''}`,
     );
     return 1;
   }
@@ -332,10 +371,13 @@ export async function sizes(argv) {
     const mine = steps.filter((s) => s.spec === spec);
     console.log(`\n  ${bold(pink(spec))}${dim(`  landed against the forecast it was built to; limit ${limit} lines`)}`);
     for (const s of mine.filter((x) => x.landed).sort((a, b) => a.t - b.t)) {
-      const mark = s.ratio > OVERRUN ? amber(times(s.ratio)) : times(s.ratio);
+      const mark = s.measured > OVERRUN ? amber(times(s.ratio)) : times(s.ratio);
       const files = s.forecast.files === null ? `${s.files} file(s)` : `${s.files} file(s) of ${s.forecast.files}`;
-      const revised = s.revised ? `, revised to ~${s.revised.lines} while built` : '';
-      console.log(`    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} → ${String(s.lines).padEnd(5)} ${mark}  ${dim(`${files}${revised} · ${s.hash.slice(0, 7)} ${s.at.slice(0, 10)}`)}`);
+      // Against a forecast revised while it was built too, so a project can tell a forecasting miss from correction rounds.
+      const revised = s.revised ? `, revised to ~${s.revised.lines} while built: ${times(s.lines / s.revised.lines)} against it` : '';
+      const first = s.first === null ? '' : `, first round ${s.first} ${times(s.measured)}`;
+      const kind = s.kind ? `${s.kind} · ` : '';
+      console.log(`    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} → ${String(s.lines).padEnd(5)} ${mark}  ${dim(`${kind}${files}${first}${revised} · ${s.hash.slice(0, 7)} ${s.at.slice(0, 10)}`)}`);
     }
     for (const s of mine.filter((x) => !x.landed)) {
       const rate = rateOf(steps, s);
@@ -346,7 +388,7 @@ export async function sizes(argv) {
       const next = Math.round(s.forecast.lines * rate.rate);
       console.log(
         `    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} → ~${String(next).padEnd(5)} ` +
-          dim(`to land, at ${times(rate.rate)} over ${rate.over} step(s) forecast as it was`) +
+          dim(`to land, at ${times(rate.rate)} over ${rate.over} ${rate.kind ? `${rate.kind} ` : ''}step(s) forecast as it was`) +
           (next > limit ? amber(`  past ${limit}: split`) : ''),
       );
     }

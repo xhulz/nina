@@ -100,7 +100,8 @@ const REPLAY_MIN_GAP_MS = 500;
  * @param {object[]} ledger - The ledger, oldest first.
  */
 function readStarts(ledger) {
-  const entries = ledger.filter((e) => Number.isFinite(Date.parse(e?.at)));
+  // What a session carried over from the one before it is that session's work, drawn there.
+  const entries = ledger.filter((e) => Number.isFinite(Date.parse(e?.at)) && !e.inherited);
   const time = (e) => Date.parse(e.at);
   const dispatches = new Map();
   for (const e of entries) if (e.k === 'dispatch' && e.id && !dispatches.has(e.id)) dispatches.set(e.id, e);

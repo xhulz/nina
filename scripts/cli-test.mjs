@@ -4734,6 +4734,8 @@ const dated = (date, status = 'active') =>
     ['failing closed at a size no one chose', twenty.includes('A failure that fails closed is not safe for the change when it fails at a size the design did not choose and no test reaches')],
     ['the reviewer routes it', (await spec('agents/reviewer.md')).includes('a flaw of the spec the code follows faithfully included, and a choice it left open that a later stage will act on (Hard Rule #20)')],
   ]) expect(held, `compose: a question for the design blocks and goes to the architect — keeps ${clause}`);
+  // A step past its forecast is the forecast's to correct, not the diff's to answer for: one implementer trimmed TSDoc to fit.
+  expect(twenty.includes('an improvement, a step longer than its forecast, an evasion the spec ruled out in writing'), 'compose: a step longer than its forecast is a note, never a reason to send it back');
   // Each named mutation from one script: every call is a turn that re-reads the whole context.
   expect(
     (await spec('agents/implementer.md')).includes('Run them all from one script') && (await spec('agents/qa.md')).includes('every mutation from one script'),
@@ -4793,8 +4795,11 @@ const dated = (date, status = 'active') =>
   const routed = await spec('router.md');
   for (const [clause, held] of [
     ['the detector', detectors.includes("args: ['sizes', '--check', '--quiet']") && detectors.includes('ignore: /^sizes: current$/')],
-    ['the re-forecast', /One that landed more than a quarter over says the steps forecast with it are short by as much:\s+before the next\s+goes out, forecast them again at the rate it gives/.test(routed)],
-    ['the architect only to split', /send the\s+architect only a step the new number puts past 400 lines, to be split/.test(routed)],
+    ['the re-forecast at its turn', /One that landed more than a quarter over says the steps forecast with it are short\s+by as much: forecast each again at its turn, before it goes out/.test(routed)],
+    ['the first round', /write `First round: ~N lines` in its step file with its\s+commit, the count its implementer's first report gave/.test(routed)],
+    ['the kind', /from the steps of its `Kind:` where any landed/.test(routed) && (await spec('agents/architect.md')).includes('and say its kind (`Kind: new` for a module of its own, `extends` for a file that exists, `tests` for tests alone)')],
+    ['no trimming to fit', (await spec('agents/implementer.md')).includes('finish the step rather than stop mid-way, and never trim documentation or tests to meet the count')],
+    ['the architect only to split', /send the\s+architect only a step the new number puts past\s+400 lines, to be split/.test(routed)],
     ['the commit names its step', /as its step file does \(`<spec> step <n>`\), which is how\s+`nina sizes` finds it/.test(routed)],
     ['the architect forecasts at the rate', (await spec('agents/architect.md')).includes('at the rate `nina sizes` measured on the steps that landed')],
   ]) expect(held, `compose: a step is measured against its forecast at each commit — keeps ${clause}`);
@@ -4910,7 +4915,7 @@ const dated = (date, status = 'active') =>
   expect(
     listed.status === 0 &&
       /10\s+~50\s+→ 40\s+×0\.80/.test(listed.out) &&
-      /1\s+~100\s+→ 150\s+×1\.50\s+2 file\(s\) of 2, revised to ~140 while built/.test(listed.out),
+      /1\s+~100\s+→ 150\s+×1\.50\s+2 file\(s\) of 2, revised to ~140 while built: ×1\.07 against it/.test(listed.out),
     `sizes: each landed step against the forecast it was built to, its code alone, step 10 not taken for step 1 — got ${listed.out}`,
   );
   // Both landed steps were forecast in the same commit as the two to land, so both measure them: the median of 0.8 and 1.5.
@@ -4921,14 +4926,18 @@ const dated = (date, status = 'active') =>
   const fired = sizes('--check');
   expect(
     fired.status === 1 &&
-      fired.out.includes('step 1 of feat-spec landed 150 lines against ~100 (×1.50); 2 step(s) forecast when it was have not been forecast again — at ×1.15, over 2 landed step(s) forecast the same way: 2 ~200 → ~230, 3 ~150 → ~173'),
+      fired.out.includes(
+        'step 1 of feat-spec landed 150 lines against ~100 (×1.50); before the next of its 2 step(s) forecast when it was goes out, forecast that one again — a `Size:` line at the rate `nina sizes` gives it — and split it if that puts it past 400; the rest at their turn: 2 ~200 → ~230, 3 ~150 → ~173',
+      ),
     `sizes: the detector speaks when the newest step overran and the steps forecast with it were not forecast again — got ${fired.out}`,
   );
 
   // Forecast again, one in the working tree and one in a commit that writes no code: neither is stale, and a step
-  // forecast after every landing has no rate to be measured by — counting the old ones would correct twice.
+  // forecast after every landing has no rate to be measured by — counting the old ones would correct twice. The next
+  // step forecast again is the overrun acted on: the rest wait for their turn, when later steps will have measured.
   await step(2, 300);
-  expect(sizes('--check').out.includes('1 step(s) forecast when it was'), 'sizes: a step forecast again in the working tree is no longer stale');
+  const acted = sizes('--check');
+  expect(acted.status === 0 && acted.out.includes('sizes: current'), `sizes: one step forecast again since the overrun quiets the detector, the rest at their turn — got ${acted.out}`);
   await step(3, 230);
   git('add', '-A');
   commit('Re-forecast at the measured rate (feat-spec step 3)', '2026-03-01T09:00:00-05:00');
@@ -4945,6 +4954,121 @@ const dated = (date, status = 'active') =>
   await writeFile(join(empty, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
   const none = run(['sizes', '--project', empty, '--check']);
   expect(none.status === 0 && none.out.includes('sizes: current'), `sizes: outside a repository the detector is quiet — got ${none.out}`);
+
+  // A step is measured by its first round where its step file says it, and by the steps of its kind: a new script's
+  // fix rounds, put on steps that only extend a file, compounded one project's forecasts to ×3.24 of their count.
+  const kinds = await scratch();
+  const kgit = (...args) => spawnSync('git', ['-C', kinds, ...args], { encoding: 'utf8' });
+  const kcommit = (message, at) =>
+    spawnSync('git', ['-C', kinds, 'commit', '-qm', message], { encoding: 'utf8', env: { ...process.env, GIT_COMMITTER_DATE: at, GIT_AUTHOR_DATE: at } });
+  const kspecs = join(kinds, '.claude', 'plans', 'specs');
+  await mkdir(kspecs, { recursive: true });
+  await mkdir(join(kinds, '.nina'), { recursive: true });
+  await mkdir(join(kinds, 'src'), { recursive: true });
+  await writeFile(join(kinds, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const kstep = (n, kind, more = '') => writeFile(join(kspecs, `k-spec.step-${n}.md`), `# Step ${n}\n\nKind: ${kind}\n- **Size:** ~100 lines in 1 file.\n${more}`);
+  kgit('init', '-q');
+  kgit('config', 'user.email', 'test@example.com');
+  kgit('config', 'user.name', 'test');
+  await kstep('a', 'new');
+  await kstep('b', 'extends');
+  await kstep('c', 'extends');
+  await kstep('d', 'new');
+  kgit('add', '-A');
+  kcommit('Plan in steps (k-spec)', '2026-03-02T10:00:00Z');
+  await writeFile(join(kinds, 'src', 'b.ts'), lines(100));
+  kgit('add', '-A');
+  kcommit('k step b (k-spec step b)', '2026-03-02T11:00:00Z');
+  await writeFile(join(kinds, 'src', 'a.ts'), lines(160));
+  await kstep('a', 'new', 'First round: ~110 lines\n');
+  kgit('add', '-A');
+  kcommit('k step a (k-spec step a)', '2026-03-02T12:00:00Z');
+  const klisted = run(['sizes', '--project', kinds], { loud: true }).out;
+  const kcheck = run(['sizes', '--project', kinds, '--check'], { loud: true });
+  expect(
+    /a\s+~100\s+→ 160\s+×1\.60\s+new · 1 file\(s\) of 1, first round 110 ×1\.10/.test(klisted) && kcheck.status === 0 && kcheck.out.includes('sizes: current'),
+    `sizes: a step that overran in its fix rounds alone is measured by its first round, and sets nothing off — got ${klisted} / ${kcheck.out}`,
+  );
+  expect(
+    /c\s+~100\s+→ ~100\s+to land, at ×1\.00 over 1 extends step\(s\)/.test(klisted) && /d\s+~100\s+→ ~110\s+to land, at ×1\.10 over 1 new step\(s\)/.test(klisted),
+    `sizes: a step to land is forecast again at the rate of the landed steps of its kind — got ${klisted}`,
+  );
+}
+
+// ─── the gate across sessions: a loop open when its session ended is open in the next ─────────────────────
+// The ledger is a session's, so a pause carried across sessions with a handoff note reset every cap: the next session's
+// gate would have let a design loop paused at round 1 of 2 make two more rounds.
+{
+  const { handle: gateHandle } = await import('../src/gate.mjs');
+  const data = await scratch();
+  const before = process.env.NINA_DATA;
+  process.env.NINA_DATA = data;
+  const project = await scratch();
+  await mkdir(join(project, '.claude', 'agents'), { recursive: true });
+  await mkdir(join(project, '.nina'), { recursive: true });
+  await writeFile(join(project, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  await writeFile(
+    join(project, '.claude', 'graph.md'),
+    '## Stages\n\n- `reviewer` — r\n- `implementer` — i\n\n## Edges\n\n- `implementer` → `reviewer` on `DIFF-READY`\n- `reviewer` → `done` on `APPROVED`\n- `reviewer` → `implementer` on `REJECTED` — a bug · max 2\n',
+  );
+  const spec = (...tokens) => `---\nname: x\ntools: Read\n---\n\nwhere \`<TOKEN>\` is one of ${tokens.map((t) => `\`${t}\``).join(' or ')}.\n`;
+  await writeFile(join(project, '.claude', 'agents', 'reviewer.md'), spec('APPROVED', 'REJECTED'));
+  await writeFile(join(project, '.claude', 'agents', 'implementer.md'), spec('DIFF-READY', 'BLOCKED'));
+  const t = Date.now();
+  const in_ = (session, ms) => (event, fields = {}) => gateHandle({ hook_event_name: event, session_id: session, ...fields }, { root: project, now: new Date(ms) });
+  const send = (hook, role, agent) => {
+    const asked = hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: role }, tool_use_id: `toolu_${agent}` });
+    hook('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: role }, tool_use_id: `toolu_${agent}`, tool_response: { agentId: agent } });
+    return asked;
+  };
+  const reject = (hook, agent) => hook('PostToolUse', { tool_name: 'SubagentHandback', agent_id: agent, agent_type: 'reviewer', tool_input: { message: 'VERDICT: REJECTED\nISSUES: a' } });
+  // A foreground review, as Claude Code runs one: its `pre`, its verdict from inside it, and only then its `dispatch`.
+  // Cut at the dispatch, the rejection that began the loop stayed behind.
+  const review = (hook, agent) => {
+    hook('PreToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: `toolu_${agent}` });
+    reject(hook, agent);
+    hook('PostToolUse', { tool_name: 'Agent', tool_input: { subagent_type: 'reviewer' }, tool_use_id: `toolu_${agent}`, tool_response: { agentId: agent } });
+  };
+  // Paused with the loop at round 1 of 2 and its second rejection waiting on a fix.
+  const paused = in_('s-paused', t - 600_000);
+  paused('UserPromptSubmit', { prompt: 'build step 3' });
+  review(paused, 'p1');
+  send(paused, 'implementer', 'p2');
+  review(paused, 'p3');
+  await utimes(ledgerPath(project, 's-paused'), new Date(t - 600_000), new Date(t - 600_000));
+  const resumed = in_('s-resumed', t);
+  const said = resumed('UserPromptSubmit', { prompt: 'pick up from the handoff note' })?.hookSpecificOutput?.additionalContext ?? '';
+  const second = send(resumed, 'implementer', 'r2');
+  send(resumed, 'reviewer', 'r3');
+  reject(resumed, 'r3');
+  const third = send(resumed, 'implementer', 'r4');
+  expect(
+    said.includes('carried over what session s-paused left open') && said.includes('reviewer REJECTED') && second === null && third?.hookSpecificOutput?.permissionDecision === 'ask',
+    `gate: a new session carries over the loops the one before it left open, says so on its first prompt, and holds their caps — got ${JSON.stringify([said, second, third])}`,
+  );
+  const carried = readLedger(ledgerPath(project, 's-resumed'));
+  expect(
+    carried[0]?.k === 'inherit' && carried[0].from === 's-paused' && carried.some((e) => e.agent === 'p1' && e.inherited === 's-paused') && !carried.some((e) => e.k === 'ask' && e.inherited) &&
+      !officeBeats(carried, parseGraph(await readFile(join(project, '.claude', 'graph.md'), 'utf8')), Infinity).some((b) => b.agent === 'p1' || b.agent === 'p3'),
+    `gate: what is carried over is marked with the session it came from, and the office leaves it to that session — got ${JSON.stringify(carried.slice(0, 3))}`,
+  );
+  // Begun by another event than a prompt, the session still owes its first prompt the carry-over, and no grace round.
+  await utimes(ledgerPath(project, 's-resumed'), new Date(t - 300_000), new Date(t - 300_000));
+  const other = in_('s-other', t + 1000);
+  other('SubagentStart', { agent_type: 'reviewer', agent_id: 'x0' });
+  const owed = other('UserPromptSubmit', { prompt: 'go on' })?.hookSpecificOutput?.additionalContext ?? '';
+  const otherLedger = readLedger(ledgerPath(project, 's-other'));
+  expect(
+    otherLedger[0]?.k === 'inherit' && owed.includes(`carried over what session ${'s-resumed'.slice(0, 8)} left open`) && owed.includes('reviewer REJECTED') && otherLedger.some((e) => e.k === 'reset' && e.why === 'resume' && !e.inherited) &&
+      other('UserPromptSubmit', { prompt: 'and again' }) === null,
+    `gate: a session begun by another event still tells its first prompt what was carried, and only that prompt — got ${owed}`,
+  );
+  // A session begun while the latest was still being written runs beside it: it carries nothing over.
+  const beside = in_('s-beside', Date.now() + 10_000);
+  beside('UserPromptSubmit', { prompt: 'something else' });
+  expect(readLedger(ledgerPath(project, 's-beside'))[0]?.k !== 'inherit', 'gate: a session begun within a minute of the latest one written carries nothing over');
+  if (before === undefined) delete process.env.NINA_DATA;
+  else process.env.NINA_DATA = before;
 }
 
 // ─── the gate: what a stage left at the scratchpad's root ─────────────────────────────────

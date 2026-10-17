@@ -40,7 +40,8 @@ still goes to {{OWNER}} once it has gone round more than twice its cap with no a
 not see a fix you make without a subagent — so keep your own count as well, gate or no gate. When you
 dispatch a second round on an edge, say "round 2 of max 2 on <edge>" in the dispatch itself, so the
 count is in the transcript for whoever reads it next. After a compaction the gate hands you its open loops
-and the documents to read again; `nina gate --status` lists them, and what closes each, at any time.
+and the documents to read again, and a new session begins with the loops the one before it left open, said on
+its first prompt; `nina gate --status` lists them, and what closes each, at any time.
 
 ### Milestone gate
 
@@ -176,9 +177,13 @@ its own sibling steps into one spec and one review; they never put two of an arc
 implementer run.
 
 Each step's commit is measured against the forecast it was built to (`nina sizes`, and `harness:check` after every
-turn). One that landed more than a quarter over says the steps forecast with it are short by as much: before the next
-goes out, forecast them again at the rate it gives — a `Size:` line each, the numbers `nina sizes` prints — and send the
-architect only a step the new number puts past {{STEP_LINES}} lines, to be split.
+turn). When a step took more than one implementer round, write `First round: ~N lines` in its step file with its
+commit, the count its implementer's first report gave: the rounds after it are the review's, not the forecast's, and
+the rate is measured by the first. One that landed more than a quarter over says the steps forecast with it are short
+by as much: forecast each again at its turn, before it goes out — a `Size:` line at the rate `nina sizes` prints for
+it, from the steps of its `Kind:` where any landed — and send the architect only a step the new number puts past
+{{STEP_LINES}} lines, to be split. The rest wait for their turn, when the steps before them will have measured the
+rate again.
 
 ### Commits
 
