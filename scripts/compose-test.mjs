@@ -248,7 +248,8 @@ const BUDGETS = {
   // And for the probes it runs on its own claims, and on a correction the design-reviewer sent back: each of one day's
   // three design re-checks found a new issue in the text the correction had just written, unrun. And for a check the
   // gates make on every step, a script they call: one step set's were paragraphs, rebuilt in each of six runs in a day.
-  '.claude/agents/architect.md': 21200,
+  // And for a timeout the spec lets each case set: cases of one battery waited out a real minute each.
+  '.claude/agents/architect.md': 21400,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 4900,
@@ -304,7 +305,9 @@ const BUDGETS = {
   // stages of one step had each run theirs one at a time. And when Hard Rule #18 made each stage's scratch directories its
   // own: in one shared scratchpad a reviewer set up in another stage's, overwrote its files and removed the dba's harness.
   // And for the harness a gate keeps for the re-check of its fix, which one gate had rebuilt from nothing in each of six runs.
-  'CLAUDE.md': 28350,
+  // And for a battery's pool held to what one case's memory allows, and no case waiting out a real timeout: a task's
+  // implementer rounds had waited three quarters of nine hours on batteries run one case at a time.
+  'CLAUDE.md': 28900,
 };
 
 /**
