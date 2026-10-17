@@ -151,10 +151,15 @@ The title says who is at work, or that the room waits for the next dispatch: bet
 the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
 asking at a cap, the reception's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
 down for a dispatch the owner refused, for a run the orchestrator stopped (`TaskStop`, which the gate writes to the
-ledger), or for a run that never reported within three hours (the longest of 227 measured took 108 minutes), gets up
-and leaves; none keeps the work from ending. The stop was read first by the three hours alone, and one project paused
-for an upgrade had an implementer it stopped sit at its desk for the rest of the afternoon, holding off the party of
-the step another implementer finished. A pass that closes a task — the verdict that ends a cycle of the timeline
+ledger), or for a run that never reported and has gone quiet, gets up and leaves; none keeps the work from ending.
+The stop was read first by the clock alone, and one project paused for an upgrade had an implementer it stopped sit at
+its desk for the rest of the afternoon, holding off the party of the step another implementer finished. A run is quiet
+when its own transcript — found by its agent, or before the gate knows that, by the launch its `.meta.json` names —
+has not been written for 45 minutes: the longest silence inside a run, in 299,030 measured across three projects, was
+20. A run whose transcript cannot be read goes by the clock, three hours from its start (the longest of 227 measured
+took 108 minutes). The clock came first, and an implementer three hours into a step, still writing, got up and left
+the office until the orchestrator sent it a message. Time the machine spent asleep is no silence: a look at the ledger
+a minute or more after the last counts a run's quiet from then. A replay reads the transcripts as they are now. A pass that closes a task — the verdict that ends a cycle of the timeline
 below, qa's `PASS`, devops' `DEPLOYED`, secops' `SECURE` — is a party at once, whoever else is at work: held to an
 empty office, a day of tasks side by side in worktrees closed 25 and had one party. A change that goes on to devops
 has two, since the timeline closes a task at its qa and another at its deploy; a pass reported beside the one that

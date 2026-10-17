@@ -40,7 +40,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
-import { PARTY_QUIET_MS, SEATS_MAX, STALE_MS, busiest, busyFor, officeBeats, officeTimeline, serveOffice, storeNames } from '../src/office.mjs';
+import { PARTY_QUIET_MS, SEATS_MAX, SILENT_MS, STALE_MS, busiest, busyFor, officeBeats, officeTimeline, runClock, serveOffice, storeNames, wakeClock } from '../src/office.mjs';
 import { serveDashboard } from '../src/dashboard.mjs';
 import { taskList } from '../src/commands/runs.mjs';
 import { pipelineData } from '../src/commands/pipeline.mjs';
@@ -7207,6 +7207,8 @@ await release();
     goneStale.length === 1 && goneStale[0].how === 'closed' && goneStale[0].end !== null,
     `office: and a run gone stale holds it open no longer — got ${JSON.stringify(goneStale)}`,
   );
+  const stillWriting = officeTimeline(sideBySide, t0 + STALE_MS + 60_000, new Map(), (s) => (s.end === null ? t0 + STALE_MS : null));
+  expect(stillWriting.length === 1 && stillWriting[0].end === null, `office: a run still writing its transcript holds its task open past ${STALE_MS / 3_600_000} hours — got ${JSON.stringify(stillWriting)}`);
   // A task that begins with a message — a design-reviewer resumed to re-check a corrected spec, after qa closed the
   // last task — is named by the message's summary, else by the words its agent was launched with; never nothing.
   const reviewed2 = [...described(0, 'design-reviewer', 'REJECTED', 'Design review the import'), ...described(10, 'qa', 'PASS', 'QA the export')];
@@ -7300,6 +7302,68 @@ await release();
     stale.some((b) => b.type === 'stale' && b.work.startsWith('pre:')) && stale.some((b) => b.type === 'party') && beatsOf([ran(0, 'implementer'), ran(60, 'reviewer', 'APPROVED')]).every((b) => b.type !== 'party'),
     `office: a run that never reported holds the party off only until it goes stale — got ${stale.map((b) => b.type)}`,
   );
+  // A run still writing its transcript is at work however long it takes: three hours into a step, an implementer still
+  // writing got up and left. One whose transcript went quiet for SILENT_MS has stopped, said so where it went quiet.
+  const writing = (s) => (s.role === 'implementer' ? t0 + STALE_MS + 30_000 : null);
+  const longBeats = officeBeats(stuck.flat(), graph, t0 + STALE_MS + 120_000, writing);
+  const quietBeats = officeBeats(stuck.flat(), graph, Number.POSITIVE_INFINITY, (s) => (s.role === 'implementer' ? t0 + 60_000 : null));
+  expect(
+    !longBeats.some((b) => b.type === 'stale' || b.type === 'party') && quietBeats.some((b) => b.type === 'stale' && b.at === t0 + 60_000 + SILENT_MS),
+    `office: a run still writing its transcript stays at work past ${STALE_MS / 3_600_000} hours, and one gone quiet stops where it did — got ${JSON.stringify([longBeats.map((b) => b.type), quietBeats.filter((b) => b.type === 'stale').map((b) => b.at - t0)])}`,
+  );
+  // The transcript is found by the run's agent, or — a foreground run the gate has no agent for yet — by the launch its
+  // `.meta.json` names; under the project's real path, as the gate names its ledgers, so a link to it finds the same.
+  {
+    const saved = process.env.NINA_TRANSCRIPTS;
+    try {
+      process.env.NINA_TRANSCRIPTS = await scratch();
+      const target = await scratch();
+      const link = join(await scratch(), 'linked');
+      await symlink(target, link);
+      const dir = join(process.env.NINA_TRANSCRIPTS, slugFor(realpathSync(target)), 's-clock', 'subagents');
+      await mkdir(dir, { recursive: true });
+      const when = new Date('2026-10-17T22:59:13.000Z');
+      const write = async (name, text) => {
+        await writeFile(join(dir, name), text);
+        await utimes(join(dir, name), when, when);
+      };
+      await write('agent-abc.meta.json', JSON.stringify({ agentType: 'implementer', toolUseId: 'toolu_fg' }));
+      await write('agent-abc.jsonl', '{}\n');
+      await write('agent-bare.jsonl', '{}\n');
+      await write('agent-half.meta.json', '{"agentType":"qa","toolU');
+      await write('agent-half.jsonl', '{}\n');
+      const clock = runClock(link);
+      const heard = clock('s-clock');
+      const found = [
+        heard({ agent: 'abc', id: null }),
+        heard({ agent: null, id: 'toolu_fg' }),
+        heard({ agent: 'bare', id: null }),
+        heard({ agent: null, id: 'toolu_half' }),
+        heard({ agent: 'zzz', id: 'toolu_other' }),
+        clock('s-none')({ agent: 'abc', id: null }),
+        clock(null)({ agent: 'abc', id: null }),
+      ];
+      // A meta read half written is read again at the next look.
+      await write('agent-half.meta.json', JSON.stringify({ agentType: 'qa', toolUseId: 'toolu_half' }));
+      const later = clock('s-clock')({ agent: null, id: 'toolu_half' });
+      expect(
+        found.slice(0, 3).every((x) => x === when.getTime()) && found.slice(3).every((x) => x === null) && later === when.getTime(),
+        `office: a run's transcript is found by its agent, or by the launch its meta names once the meta is whole, through a link too, and when it was last written read — got ${JSON.stringify([...found, later])}`,
+      );
+    } finally {
+      if (saved === undefined) delete process.env.NINA_TRANSCRIPTS;
+      else process.env.NINA_TRANSCRIPTS = saved;
+    }
+  }
+  // A look long after the last is the machine having slept: a transcript's silence across it is not the run's.
+  {
+    const wake = wakeClock(t0);
+    const woke = [wake(t0 + 700), wake(t0 + 1400), wake(t0 + 3_600_000), wake(t0 + 3_600_700)];
+    expect(
+      woke[0] === Number.NEGATIVE_INFINITY && woke[1] === Number.NEGATIVE_INFINITY && woke[2] === t0 + 3_600_000 && woke[3] === t0 + 3_600_000,
+      `office: a look an hour after the last is a wake, and looks at their pace are not — got ${JSON.stringify(woke)}`,
+    );
+  }
   // A run the orchestrator stopped ends where it was stopped: said so, no longer at work, and the work it was part of
   // still ends. Read only by its verdict, one sat at its desk for three hours after its session had moved on.
   const halted = ran(0, 'implementer');
@@ -7414,7 +7478,25 @@ await release();
     }
     return events;
   };
-  const office = await serveOffice({ target: project, port: 0 });
+  // The run left unfinished is still writing its transcript: the live office keeps it at work, however old the ledger.
+  const savedTranscripts = process.env.NINA_TRANSCRIPTS;
+  const restoreTranscripts = () => {
+    if (savedTranscripts === undefined) delete process.env.NINA_TRANSCRIPTS;
+    else process.env.NINA_TRANSCRIPTS = savedTranscripts;
+  };
+  const unfinished = flow[4][1].agent;
+  let office;
+  try {
+    process.env.NINA_TRANSCRIPTS = await scratch();
+    const writingDir = join(process.env.NINA_TRANSCRIPTS, slugFor(realpathSync(project)), 'office-session-1', 'subagents');
+    await mkdir(writingDir, { recursive: true });
+    await writeFile(join(writingDir, `agent-${unfinished}.meta.json`), JSON.stringify({ agentType: 'implementer' }));
+    await writeFile(join(writingDir, `agent-${unfinished}.jsonl`), '{}\n');
+    office = await serveOffice({ target: project, port: 0 });
+  } catch (error) {
+    restoreTranscripts();
+    throw error;
+  }
   try {
     const page = await (await fetch(`${office.url}/`)).text();
     expect(
@@ -7560,7 +7642,7 @@ await release();
         if (!appended && events.filter((e) => e.event === 'beat').length >= works.length) {
           appended = true;
           const closing = [
-            { k: 'verdict', at: at(45), agent: 'implementer-5', role: 'implementer', verdict: 'DIFF-READY', declared: true },
+            { k: 'verdict', at: at(45), agent: unfinished, role: 'implementer', verdict: 'DIFF-READY', declared: true },
             { k: 'pre', at: at(50), role: 'reviewer', id: 'toolu_live_rv' },
             { k: 'verdict', at: at(55), agent: 'reviewer-live', role: 'reviewer', verdict: 'APPROVED', declared: true },
             { k: 'dispatch', at: at(56), role: 'reviewer', agent: 'reviewer-live', via: 'Agent', id: 'toolu_live_rv' },
@@ -7581,12 +7663,15 @@ await release();
     const restored = live.filter((e) => e.event === 'beat' && e.data.instant);
     const fresh = live.find((e) => e.event === 'beat' && !e.data.instant);
     expect(
-      live[0]?.event === 'hello' && live[0].data.session === 'office-session-1' && restored.length === beatsOf(flow).length && fresh?.data.type === 'verdict' && fresh.data.agent === 'implementer-5',
+      live[0]?.event === 'hello' && live[0].data.session === 'office-session-1' && fresh?.data.type === 'verdict' && fresh.data.agent === unfinished &&
+        // Every beat the ledger makes but the one that would say the run still writing had stopped.
+        restored.length === beatsOf(flow).length - 1 && !restored.some((e) => e.data.type === 'stale' && e.data.agent === unfinished),
       `office: a client gets the session, what came before at once, then each new beat as the gate writes it — got ${JSON.stringify(live.map((e) => [e.event, e.data?.type, e.data?.instant]))}`,
     );
     expect((await fetch(`${office.url}/nothing`)).status === 404, 'office: nothing else is served');
   } finally {
     await office.close();
+    restoreTranscripts();
   }
   const replayed = await serveOffice({ target: project, port: 0, replay: true });
   try {
@@ -7608,6 +7693,41 @@ await release();
     );
   } finally {
     await replayed.close();
+  }
+  // Asleep is no silence: an office that looks again two hours after its last look counts a run's quiet from then,
+  // rather than sending home an implementer whose transcript went quiet only because the machine slept.
+  {
+    const slept = await scratch();
+    await mkdir(join(slept, '.claude'), { recursive: true });
+    await writeFile(join(slept, '.claude', 'graph.md'), graphText);
+    const realNow = Date.now();
+    const begun = new Date(realNow - 3 * 3_600_000).toISOString();
+    const sleptLedger = ledgerPath(slept, 'slept-session');
+    await mkdir(dirname(sleptLedger), { recursive: true });
+    await writeFile(sleptLedger, `${[{ k: 'pre', at: begun, role: 'implementer', id: 'toolu_sl' }, { k: 'dispatch', at: begun, role: 'implementer', agent: 'sleeper', via: 'Agent', id: 'toolu_sl' }].map((e) => JSON.stringify(e)).join('\n')}\n`);
+    const savedRoot = process.env.NINA_TRANSCRIPTS;
+    const realDateNow = Date.now;
+    let sleptOffice;
+    try {
+      process.env.NINA_TRANSCRIPTS = await scratch();
+      const dir = join(process.env.NINA_TRANSCRIPTS, slugFor(realpathSync(slept)), 'slept-session', 'subagents');
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'agent-sleeper.jsonl'), '{}\n');
+      const lastWrite = new Date(realNow - 50 * 60_000);
+      await utimes(join(dir, 'agent-sleeper.jsonl'), lastWrite, lastWrite);
+      sleptOffice = await serveOffice({ target: slept, port: 0 });
+      // The lid closed for two hours, then a look at the ledger after the wake.
+      Date.now = () => realDateNow() + 2 * 3_600_000;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
+      const events = await stream(`${sleptOffice.url}/events`, (got) => got.some((e) => e.event === 'timeline'));
+      const kinds = events.filter((e) => e.event === 'beat').map((e) => e.data.type);
+      expect(kinds.includes('work') && !kinds.includes('stale'), `office: the machine asleep is no silence of a run's — got ${JSON.stringify(kinds)}`);
+    } finally {
+      Date.now = realDateNow;
+      await sleptOffice?.close();
+      if (savedRoot === undefined) delete process.env.NINA_TRANSCRIPTS;
+      else process.env.NINA_TRANSCRIPTS = savedRoot;
+    }
   }
   const missing = run(['pipeline', '--view', '--session', 'nope', '--project', project]);
   const empty = await scratch();

@@ -22,16 +22,16 @@
  * a click on a link, beside the conversation once `workbench.browser.openLocalhostLinks` is on (1.140).
  */
 
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TERMINALS, parseGraph } from './graph.mjs';
 import { readLedger, sessionLedgers } from './gate.mjs';
-import { readProfile } from './paths.mjs';
+import { readProfile, slugFor } from './paths.mjs';
 import { projectStoreFile, readStoreFile } from './store.mjs';
 import { CYCLE_ENDS, IN_FLIGHT, cyclesOf } from './commands/stats.mjs';
-import { isLoopBack } from './transcripts.mjs';
+import { isLoopBack, transcriptsOf } from './transcripts.mjs';
 import { shapeOf } from './commands/pipeline.mjs';
 import { listenHere, openInBrowser, refuseElsewhere, untilStopped } from './serve.mjs';
 
@@ -52,11 +52,112 @@ export const PARTY_QUIET_MS = 20_000;
 const SWITCH_GRACE_MS = 10_000;
 
 /**
- * How long a run may go without reporting before the office stops counting it as at work: the longest of 227 runs
- * measured across three projects took 108 minutes, and the 99th percentile 73. A run that stopped without a verdict
- * kept every later party away for the rest of its session.
+ * How long a run whose own transcript cannot be read may go without reporting before the office stops counting it as
+ * at work: the longest of 227 runs measured across three projects took 108 minutes, and the 99th percentile 73. A run
+ * that stopped without a verdict kept every later party away for the rest of its session.
  */
 export const STALE_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * How long a run whose transcript can be read may go without writing to it before the office stops counting it as at
+ * work. Runs grew past `STALE_MS`: an implementer three hours into a step, still writing, got up from its desk and
+ * left the office, and sat down again only when the orchestrator sent it a message. The longest silence inside a run,
+ * in 299,030 measured across three projects, was 20 minutes — a battery waited on, a long thought.
+ */
+export const SILENT_MS = 45 * 60 * 1000;
+
+/**
+ * When a run with no verdict stops counting as at work: once its transcript has been quiet `SILENT_MS`, or `STALE_MS`
+ * after it started when there is none to read.
+ *
+ * @param {{at: number}} start - The run.
+ * @param {number|null} heard - When its transcript was last written, or null.
+ * @returns {number}
+ */
+const staleAt = (start, heard) => (heard === null ? start.at + STALE_MS : Math.max(start.at, heard) + SILENT_MS);
+
+/**
+ * When each run of a session last wrote its own transcript, so that a run still writing is at work however long it
+ * takes. A run is found by its agent's id once the gate knows it, and before that — a foreground run still going — by
+ * the tool_use id that launched it, which its transcript's `.meta.json` keeps.
+ *
+ * @param {string} target - The project directory.
+ * @returns {(session: string|null) => (start: {agent: string|null, id: string|null}) => number|null}
+ */
+export function runClock(target) {
+  // Named as the gate names the project's ledgers, by where it really is: reached through a link, it is the same one.
+  let real = target;
+  try {
+    real = realpathSync(target);
+  } catch {
+    // A project that does not exist has no transcripts either way.
+  }
+  /** The tool_use id each `.meta.json` names, read once: it never changes. */
+  const launchedBy = new Map();
+  return (session) => {
+    if (!session) return () => null;
+    const dir = join(transcriptsOf(slugFor(real)), session, 'subagents');
+    let names;
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return () => null;
+    }
+    const byAgent = new Map();
+    const byLaunch = new Map();
+    for (const name of names) {
+      if (!name.startsWith('agent-')) continue;
+      if (name.endsWith('.jsonl')) byAgent.set(name.slice('agent-'.length, -'.jsonl'.length), join(dir, name));
+      if (!name.endsWith('.meta.json')) continue;
+      const file = join(dir, `${name.slice(0, -'.meta.json'.length)}.jsonl`);
+      const meta = join(dir, name);
+      if (!launchedBy.has(meta)) {
+        try {
+          const id = JSON.parse(readFileSync(meta, 'utf8')).toolUseId;
+          if (typeof id === 'string') launchedBy.set(meta, id);
+        } catch {
+          // Half written: read again at the next look.
+        }
+      }
+      if (launchedBy.has(meta)) byLaunch.set(launchedBy.get(meta), file);
+    }
+    const written = new Map();
+    return (start) => {
+      const file = (start.agent && byAgent.get(start.agent)) || (start.id && byLaunch.get(start.id)) || null;
+      if (!file) return null;
+      if (!written.has(file)) {
+        try {
+          written.set(file, statSync(file).mtimeMs);
+        } catch {
+          written.set(file, null);
+        }
+      }
+      return written.get(file);
+    };
+  };
+}
+
+/** A wait between two of the office's looks this much longer than it asks for is the machine having slept. */
+const SLEPT_MS = 60_000;
+
+/**
+ * When the machine last woke, told by the office's own looks at the ledger: one that comes long after the last, the
+ * process was not running between them, and neither was any run, so a transcript's silence across it is not a run's.
+ * A laptop closed for an hour with an implementer at work woke to an office that sent the implementer home before it
+ * had written again.
+ *
+ * @param {number} [first] - The first look.
+ * @returns {(now: number) => number} Given each look, the moment the machine last woke, or `-Infinity`.
+ */
+export function wakeClock(first = Date.now()) {
+  let last = first;
+  let woke = Number.NEGATIVE_INFINITY;
+  return (now) => {
+    if (now - last > SLEPT_MS) woke = now;
+    last = now;
+    return woke;
+  };
+}
 
 /**
  * A dispatch the gate asked about that wrote no `dispatch` entry is taken as refused once the orchestrator launched
@@ -117,7 +218,7 @@ function readStarts(ledger) {
 
   // Each start, and how it ends: by a verdict from its agent, or from its stage while its agent is not known yet —
   // the page binds them the same way; refused, when the gate asked, no dispatch was written, and the orchestrator
-  // went on to something else; or stale, a run that never reported within `STALE_MS`.
+  // went on to something else; or stale, a run that never reported and has gone quiet (`staleAt`).
   const starts = [];
   entries.forEach((e, i) => {
     if (!startsWork(e)) return;
@@ -132,7 +233,7 @@ function readStarts(ledger) {
     // whether the agent it names had reported since it last started.
     const message = launched?.via === 'SendMessage' && (launched.resumed === undefined ? Boolean(launched.agent) && Boolean(ranBefore(launched.agent)) : !launched.resumed);
     const after = e.k === 'pre' && e.id && asked.has(e.id) && !dispatches.has(e.id) ? entries.slice(i + 1).find((x) => x.k === 'pre' && time(x) > at + REFUSED_AFTER_MS) : null;
-    starts.push({ i, at, role: e.role, agent: launched?.agent ?? null, message, refusedAt: after ? time(after) : null });
+    starts.push({ i, at, id: e.id ?? null, role: e.role, agent: launched?.agent ?? null, message, refusedAt: after ? time(after) : null });
   });
   const verdictOf = (s) => verdicts.find((x) => time(x) >= s.at && (s.agent ? x.agent === s.agent : x.role === s.role)) ?? null;
   for (const s of starts) {
@@ -160,12 +261,19 @@ function readStarts(ledger) {
  * @param {object[]} entries - The ledger, oldest first.
  * @param {{edges: {from: string, to: string, token: string}[]}} graph - The project's parsed graph.
  * @param {number} [now] - The time a waiting party is judged against; `Infinity` for a session that has ended.
+ * @param {(start: object) => number|null} [heard] - When a run last wrote its transcript (`runClock`), or null.
  * @returns {object[]} Beats, each `{id, at, type, ...}`; the id is stable as the ledger grows.
  */
-export function officeBeats(ledger, graph, now = Date.now()) {
+export function officeBeats(ledger, graph, now = Date.now(), heard = () => null) {
   const { entries, time, startsWork, launchOf, starts } = readStarts(ledger);
+  // A run's transcript is looked at only for a run that may still be at work.
+  const quietMoments = new Map();
+  const quietAt = (s) => {
+    if (!quietMoments.has(s)) quietMoments.set(s, staleAt(s, heard(s)));
+    return quietMoments.get(s);
+  };
   const busyAt = (moment) =>
-    starts.some((s) => !s.message && s.at <= moment && moment - s.at < STALE_MS && !(s.refusedAt !== null && s.refusedAt <= moment) && !(s.end !== null && s.end <= moment));
+    starts.some((s) => !s.message && s.at <= moment && !(s.refusedAt !== null && s.refusedAt <= moment) && !(s.end !== null && s.end <= moment) && moment < quietAt(s));
 
   const beats = [];
   const seen = new Map();
@@ -197,8 +305,8 @@ export function officeBeats(ledger, graph, now = Date.now()) {
       beats.push({ id: work, at, type: 'work', role: e.role, agent: start.agent, resumed: launched?.via === 'SendMessage' && !start.message, message: start.message, from: handed ? reported : null });
       if (start.refusedAt !== null) beats.push({ id: `refused:${id}`, at: start.refusedAt, type: 'refused', role: e.role, work });
       else if (start.stopped !== null) beats.push({ id: `stale:${id}`, at: start.stopped, type: 'stale', role: e.role, agent: start.agent, work: id });
-      else if (!start.message && (start.end === null || start.end - start.at >= STALE_MS) && now >= start.at + STALE_MS) {
-        beats.push({ id: `stale:${id}`, at: start.at + STALE_MS, type: 'stale', role: e.role, agent: start.agent, work: id });
+      else if (!start.message && (start.end === null || (start.end - start.at >= SILENT_MS && start.end >= quietAt(start))) && now >= quietAt(start)) {
+        beats.push({ id: `stale:${id}`, at: quietAt(start), type: 'stale', role: e.role, agent: start.agent, work: id });
       }
       return;
     }
@@ -252,11 +360,12 @@ export function officeBeats(ledger, graph, now = Date.now()) {
  * — and sent piece by piece, a task that a later fact merged away stayed on the page for good.
  *
  * @param {object[]} ledger - The ledger, oldest first.
- * @param {number} [now] - The moment it is read at: a run younger than `STALE_MS` with no verdict is still at work.
+ * @param {number} [now] - The moment it is read at: a run with no verdict that has not gone quiet is still at work.
  * @param {Map<string, string>} [names] - Descriptions by dispatch id, for entries that carry none.
+ * @param {(start: object) => number|null} [heard] - When a run last wrote its transcript (`runClock`), or null.
  * @returns {{key: string, name: string|null, start: number, end: number|null, how: string|null, busy: number|null, who: [string, number][]}[]}
  */
-export function officeTimeline(ledger, now = Date.now(), names = new Map()) {
+export function officeTimeline(ledger, now = Date.now(), names = new Map(), heard = () => null) {
   const { entries, starts, verdictOf } = readStarts(ledger);
   // A run a message started — an agent resumed after it had reported — is named by the message's summary, or, in a
   // ledger from before the gate kept one, by the words the agent was launched with: it goes on with that work.
@@ -267,7 +376,7 @@ export function officeTimeline(ledger, now = Date.now(), names = new Map()) {
     .map((s) => {
       const e = entries[s.i];
       const v = verdictOf(s);
-      return { ts: e.at, role: s.role, verdict: v ? v.verdict : now < s.at + STALE_MS ? IN_FLIGHT : null, desc: e.desc ?? names.get(e.id) ?? (s.agent ? launched.get(s.agent) : undefined) ?? null, start: s, key: e.id ?? `at${s.i}` };
+      return { ts: e.at, role: s.role, verdict: v ? v.verdict : now < staleAt(s, heard(s)) ? IN_FLIGHT : null, desc: e.desc ?? names.get(e.id) ?? (s.agent ? launched.get(s.agent) : undefined) ?? null, start: s, key: e.id ?? `at${s.i}` };
     });
   return cyclesOf(runs).map((cycle) => {
     const first = cycle.runs[0];
@@ -396,6 +505,8 @@ export function officeRoutes({ target, wanted, replay = false }) {
   const timers = new Set();
 
   const names = storeNames(target);
+  const clock = runClock(target);
+  const wake = wakeClock();
 
   /** The session to show, and its entries; read again only when its ledger changed. */
   let cached = { path: null, size: -1, mtime: 0, entries: [] };
@@ -436,12 +547,19 @@ export function officeRoutes({ target, wanted, replay = false }) {
   };
 
   const tick = () => {
+    const now = Date.now();
+    // Looked at whether anyone watches, so a look long after the last is the machine having slept, not nobody watching.
+    const woke = wake(now);
     // Nobody watching live: nothing to cut or send.
     if (![...clients].some((client) => !client.replay)) return;
     const state = current();
-    const now = Date.now();
-    const beats = officeBeats(state.entries, graph, now);
-    const tasks = officeTimeline(state.entries, now, names(state.entries));
+    const written = clock(state.session);
+    const heard = (start) => {
+      const at = written(start);
+      return at === null ? null : Math.max(at, woke);
+    };
+    const beats = officeBeats(state.entries, graph, now, heard);
+    const tasks = officeTimeline(state.entries, now, names(state.entries), heard);
     for (const client of clients) {
       if (client.replay) continue;
       if (client.session !== state.session) greet(client, state);
@@ -458,10 +576,11 @@ export function officeRoutes({ target, wanted, replay = false }) {
   const play = (client) => {
     const state = current();
     greet(client, state);
-    const beats = officeBeats(state.entries, graph, Number.POSITIVE_INFINITY);
+    const heard = clock(state.session);
+    const beats = officeBeats(state.entries, graph, Number.POSITIVE_INFINITY, heard);
     // The timeline as it stood at each beat: cut from the ledger up to that moment, so a replay tells nothing early.
     const known = names(state.entries);
-    const tasksAt = (moment) => officeTimeline(state.entries.filter((e) => Date.parse(e?.at) <= moment), moment, known);
+    const tasksAt = (moment) => officeTimeline(state.entries.filter((e) => Date.parse(e?.at) <= moment), moment, known, heard);
     // What came before the first dispatch sets the room, at once: a session often opens on many of the owner's
     // messages, and played out they kept the office empty for a minute.
     let i = Math.max(0, beats.findIndex((b) => b.type === 'work'));
