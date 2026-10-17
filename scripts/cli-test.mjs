@@ -7444,12 +7444,12 @@ await release();
         setInterval() {},
         setTimeout() {},
       });
-      runInContext(/<script>([\s\S]*)<\/script>/.exec(html)[1], browser);
+      runInContext(html.slice(html.indexOf('<script>') + '<script>'.length, html.lastIndexOf('</script>')), browser);
       return (code) => runInContext(code, browser);
     };
     const crowd = { project: 'crowd', stages: ['planner', 'architect', 'design-reviewer', 'implementer', 'reviewer', 'dba', 'integration-tester', 'qa', 'devops', 'secops'], many: [], owner: 'you', replay: false };
     crowd.seats = { planner: 1, architect: 8, 'design-reviewer': 2, implementer: 8, reviewer: 8, dba: 2, 'integration-tester': 3, qa: 4, devops: 2, secops: 1 };
-    const pages = { fixture: pageRun(page), crowd: pageRun((await readFile(join(ROOT, 'src', 'office.html'), 'utf8')).replace('/*NINA_ROOM*/null', () => JSON.stringify(crowd))) };
+    const pages = { fixture: pageRun(page), crowd: pageRun((await readFile(join(ROOT, 'src', 'office.html'), 'utf8')).replace('/*NINA_ROOM*/null', () => JSON.stringify(crowd).replace(/</g, '\\u003c'))) };
     const shapes = { wide: [2000, 600], screen: [1440, 852], beside: [1140, 852], narrow: [700, 852], tall: [600, 1100] };
     // Every way from one place to another runs along the axes and around the desks, the shelf and the rack.
     const blocked = `(() => {
@@ -7475,7 +7475,8 @@ await release();
     for (const [which, look] of Object.entries(pages)) {
       for (const [name, [width, height]] of Object.entries(shapes)) {
         const at = `${which} ${name}`;
-        const floor = look(`layout(arrange(${width}, ${height})); ({ LW, FLOOR_H, HALL_Y, STRIP, rooms: [...rooms.values(), lobby].map((r) => ({ key: r.key, band: r.band, x: r.x, y: r.y, w: r.w, h: r.h, laneY: r.laneY, doorX: r.doorX, corner: r.corner ? cornerX(r) : null })), desks: [...stages.values()].flatMap((s) => s.desks.map((d) => ({ room: s.room.key, ...d }))) })`);
+        look('layout')(look('arrange')(width, height));
+        const floor = look(`({ LW, FLOOR_H, HALL_Y, STRIP, rooms: [...rooms.values(), lobby].map((r) => ({ key: r.key, band: r.band, x: r.x, y: r.y, w: r.w, h: r.h, laneY: r.laneY, doorX: r.doorX, corner: r.corner ? cornerX(r) : null })), desks: [...stages.values()].flatMap((s) => s.desks.map((d) => ({ room: s.room.key, ...d }))) })`);
         const room = (key) => floor.rooms.find((r) => r.key === key);
         for (const band of ['top', 'bottom']) {
           const row = floor.rooms.filter((r) => r.band === band).sort((a, b) => a.x - b.x);
@@ -7496,16 +7497,22 @@ await release();
       }
     }
     const look = pages.fixture;
-    const zoomOf = (shape, arrangement) => look(`(() => { const m = measure(${JSON.stringify(arrangement)}); return Math.min(${shape[0]} / m.w, ${shape[1]} / m.h); })()`);
-    const arrangedFor = (shape) => look(`(({ top, bottom }) => ({ top, bottom }))(arrange(${shape[0]}, ${shape[1]}))`);
+    const [arrange, layout, measure] = ['arrange', 'layout', 'measure'].map(look);
+    const zoomOf = (shape, arrangement) => Math.min(shape[0] / measure(arrangement).w, shape[1] / measure(arrangement).h);
+    const arrangedFor = (shape) => (({ top, bottom }) => ({ top, bottom }))(arrange(...shape));
     const wide = arrangedFor(shapes.wide);
     const tall = arrangedFor(shapes.tall);
-    const wideSize = look(`measure(${JSON.stringify(wide)})`);
+    const wideSize = measure(wide);
     expect(
       unsound.length === 0 && zoomOf(shapes.wide, wide) > zoomOf(shapes.wide, tall) && zoomOf(shapes.tall, tall) > zoomOf(shapes.tall, wide) && wideSize.w > wideSize.h,
       `office: the floor is laid out for the window's shape — rooms side by side on a wide one, deeper on a tall one — with every desk in its room, none on another, and every way around them — got ${JSON.stringify({ wide, tall, wideSize })} ${unsound.slice(0, 4).join('; ')}`,
     );
-    const kept = look(`(() => { layout(arrange(...${JSON.stringify(shapes.tall)})); const slot = stages.get('architect').slots.at(-1); const was = { x: slot.x, y: slot.y }; layout(arrange(...${JSON.stringify(shapes.wide)})); const now = stages.get('architect').slots.at(-1); return { same: now === slot, moved: now.x !== was.x || now.y !== was.y }; })()`);
+    const lastArchitect = () => look('stages').get('architect').slots.at(-1);
+    layout(arrange(...shapes.tall));
+    const slot = lastArchitect();
+    const was = { x: slot.x, y: slot.y };
+    layout(arrange(...shapes.wide));
+    const kept = { same: lastArchitect() === slot, moved: slot.x !== was.x || slot.y !== was.y };
     expect(kept.same && kept.moved, `office: laid out again, a desk's place is the same one, moved, so whoever sits at it or walks to it keeps it — got ${JSON.stringify(kept)}`);
     // Someone standing beside qa's full desks stays where they stand when the work comes to them again, and laid out
     // anew as they leave, sets out from where that place is now.
