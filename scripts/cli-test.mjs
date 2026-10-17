@@ -20,6 +20,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createContext, runInContext } from 'node:vm';
 import { cyclesOf, decodeProjectDir, modelMatches, statsData } from '../src/commands/stats.mjs';
 import { asRead, projectRecords } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
@@ -7426,6 +7427,105 @@ await release();
     expect(
       seats?.reviewer === 2 && seats.architect === SEATS_MAX && seats.qa === 1 && seats.implementer === 2,
       `office: each stage gets the desks its most agents at once took, in any session of the project, two for one declared × many, up to the most a room holds — got ${JSON.stringify(seats)}`,
+    );
+    // The floor, laid out by the page's own script, run under a stand-in for the browser that draws nothing: the page as
+    // served for the fixture, and as it would be for a project with every stage and many desks — the test lab and
+    // release among them, with their rack and shelf.
+    const draws = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'measureText' ? () => ({ width: 0 }) : () => {}), set: (t, k, v) => ((t[k] = v), true) });
+    const element = () => ({ width: 0, height: 0, style: {}, hidden: false, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, getContext: () => draws, replaceChildren() {}, append() {}, setPointerCapture() {} });
+    const pageRun = (html) => {
+      const browser = createContext({
+        document: { getElementById: element, createElement: element },
+        window: { innerWidth: 1440, innerHeight: 900, devicePixelRatio: 1, addEventListener() {} },
+        localStorage: { getItem: () => null, setItem() {} },
+        EventSource: class { addEventListener() {} },
+        performance: { now: () => 0 },
+        requestAnimationFrame() {},
+        setInterval() {},
+        setTimeout() {},
+      });
+      runInContext(/<script>([\s\S]*)<\/script>/.exec(html)[1], browser);
+      return (code) => runInContext(code, browser);
+    };
+    const crowd = { project: 'crowd', stages: ['planner', 'architect', 'design-reviewer', 'implementer', 'reviewer', 'dba', 'integration-tester', 'qa', 'devops', 'secops'], many: [], owner: 'you', replay: false };
+    crowd.seats = { planner: 1, architect: 8, 'design-reviewer': 2, implementer: 8, reviewer: 8, dba: 2, 'integration-tester': 3, qa: 4, devops: 2, secops: 1 };
+    const pages = { fixture: pageRun(page), crowd: pageRun((await readFile(join(ROOT, 'src', 'office.html'), 'utf8')).replace('/*NINA_ROOM*/null', () => JSON.stringify(crowd))) };
+    const shapes = { wide: [2000, 600], screen: [1440, 852], beside: [1140, 852], narrow: [700, 852], tall: [600, 1100] };
+    // Every way from one place to another runs along the axes and around the desks, the shelf and the rack.
+    const blocked = `(() => {
+      const bad = [];
+      const blocks = [...stages.values()].flatMap((s) => s.desks.map((d) => [d.dx, d.dy, d.dx + 36, d.dy + 25]))
+        .concat([...rooms.values()].filter((r) => r.corner).map((r) => [cornerX(r), r.y + FACE + 2, cornerX(r) + 22, r.y + FACE + 32]));
+      const spots = [...stages.values()].flatMap((s) => [...s.slots, s.drop, s.spare]).concat([BOSS_HOME, ENTRANCE]);
+      for (const a of spots) for (const b of spots) {
+        if (a === b) continue;
+        const pts = [{ x: a.x, y: a.y }, ...route(a, b)];
+        for (let i = 1; i < pts.length; i += 1) {
+          const [p, q] = [pts[i - 1], pts[i]];
+          if (p.x !== q.x && p.y !== q.y) bad.push('a diagonal step at ' + p.x + ',' + p.y);
+          else for (const [x0, y0, x1, y1] of blocks) {
+            const crosses = p.y === q.y ? p.y > y0 && p.y < y1 && Math.max(p.x, q.x) > x0 && Math.min(p.x, q.x) < x1 : p.x > x0 && p.x < x1 && Math.max(p.y, q.y) > y0 && Math.min(p.y, q.y) < y1;
+            if (crosses) bad.push('a way through ' + x0 + ',' + y0 + ' at ' + p.x + ',' + p.y);
+          }
+        }
+      }
+      return bad.slice(0, 3);
+    })()`;
+    const unsound = [];
+    for (const [which, look] of Object.entries(pages)) {
+      for (const [name, [width, height]] of Object.entries(shapes)) {
+        const at = `${which} ${name}`;
+        const floor = look(`layout(arrange(${width}, ${height})); ({ LW, FLOOR_H, HALL_Y, STRIP, rooms: [...rooms.values(), lobby].map((r) => ({ key: r.key, band: r.band, x: r.x, y: r.y, w: r.w, h: r.h, laneY: r.laneY, doorX: r.doorX, corner: r.corner ? cornerX(r) : null })), desks: [...stages.values()].flatMap((s) => s.desks.map((d) => ({ room: s.room.key, ...d }))) })`);
+        const room = (key) => floor.rooms.find((r) => r.key === key);
+        for (const band of ['top', 'bottom']) {
+          const row = floor.rooms.filter((r) => r.band === band).sort((a, b) => a.x - b.x);
+          // Side by side from wall to wall, each band on its side of the corridor.
+          if (row[0].x !== 0 || row.some((r, i) => i > 0 && r.x !== row[i - 1].x + row[i - 1].w) || row.at(-1).x + row.at(-1).w !== floor.LW) unsound.push(`${at}: the ${band} rooms do not run wall to wall`);
+          if (row.some((r) => (band === 'top' ? r.y !== 0 || r.y + r.h !== floor.HALL_Y - 16 : r.y !== floor.HALL_Y + 16 || r.y + r.h !== floor.FLOOR_H))) unsound.push(`${at}: the ${band} rooms do not meet the corridor`);
+          if (row.some((r) => r.doorX <= r.x || r.doorX >= r.x + r.w)) unsound.push(`${at}: a ${band} door is outside its room`);
+        }
+        for (const d of floor.desks) {
+          const r = room(d.room);
+          const right = r.x + r.w - (r.band === 'bottom' ? floor.STRIP : 0);
+          if (d.dx < r.x || d.dx + 36 > right || d.dy < r.y + 24 || d.dy + 35 >= r.laneY) unsound.push(`${at}: a ${d.room} desk at ${d.dx},${d.dy} is outside its room or on its lane`);
+          // The aisle beside a desk, where its agent walks to the lane, stays clear of the shelf or the rack.
+          if (r.corner !== null && d.dx + 44 >= r.corner) unsound.push(`${at}: a ${d.room} desk's aisle at ${d.dx + 44} runs into the shelf at ${r.corner}`);
+        }
+        for (const [i, a] of floor.desks.entries()) for (const b of floor.desks.slice(i + 1)) if (Math.abs(a.dx - b.dx) < 52 && Math.abs(a.dy - b.dy) < 46) unsound.push(`${at}: two desks overlap at ${a.dx},${a.dy}`);
+        unsound.push(...look(blocked).map((what) => `${at}: ${what}`));
+      }
+    }
+    const look = pages.fixture;
+    const zoomOf = (shape, arrangement) => look(`(() => { const m = measure(${JSON.stringify(arrangement)}); return Math.min(${shape[0]} / m.w, ${shape[1]} / m.h); })()`);
+    const arrangedFor = (shape) => look(`(({ top, bottom }) => ({ top, bottom }))(arrange(${shape[0]}, ${shape[1]}))`);
+    const wide = arrangedFor(shapes.wide);
+    const tall = arrangedFor(shapes.tall);
+    const wideSize = look(`measure(${JSON.stringify(wide)})`);
+    expect(
+      unsound.length === 0 && zoomOf(shapes.wide, wide) > zoomOf(shapes.wide, tall) && zoomOf(shapes.tall, tall) > zoomOf(shapes.tall, wide) && wideSize.w > wideSize.h,
+      `office: the floor is laid out for the window's shape — rooms side by side on a wide one, deeper on a tall one — with every desk in its room, none on another, and every way around them — got ${JSON.stringify({ wide, tall, wideSize })} ${unsound.slice(0, 4).join('; ')}`,
+    );
+    const kept = look(`(() => { layout(arrange(...${JSON.stringify(shapes.tall)})); const slot = stages.get('architect').slots.at(-1); const was = { x: slot.x, y: slot.y }; layout(arrange(...${JSON.stringify(shapes.wide)})); const now = stages.get('architect').slots.at(-1); return { same: now === slot, moved: now.x !== was.x || now.y !== was.y }; })()`);
+    expect(kept.same && kept.moved, `office: laid out again, a desk's place is the same one, moved, so whoever sits at it or walks to it keeps it — got ${JSON.stringify(kept)}`);
+    // Someone standing beside qa's full desks stays where they stand when the work comes to them again, and laid out
+    // anew as they leave, sets out from where that place is now.
+    const standing = pages.crowd(`(() => {
+      layout({ top: 1, bottom: 1 });
+      const stage = stages.get('qa');
+      for (const _ of stage.slots) { const p = person('qa-' + people.size, 'qa'); people.set(p.key, p); p.typing = true; place(p, seatAt(stage, p, true)); }
+      const q = person('qa-beside', 'qa');
+      people.set(q.key, q);
+      q.typing = true;
+      place(q, seatAt(stage, q, true));
+      const first = q.slot;
+      const stays = seatAt(stage, q) === first;
+      leave(q);
+      layout({ top: 3, bottom: 3 });
+      return { stays, at: [q.x, q.y], spare: [stage.spare.x, stage.spare.y] };
+    })()`);
+    expect(
+      standing.stays && standing.at.join() === standing.spare.join(),
+      `office: one standing beside a stage's full desks keeps that place, and a new layout moves it with them as they leave — got ${JSON.stringify(standing)}`,
     );
     const port = new URL(office.url).port;
     const statusAs = (host) =>

@@ -152,22 +152,36 @@ function disc(ctx, cx, cy, r, color) {
 }
 
 // ─── the floor plan ───────────────────────────────────────────────────────────────────────────
-const LW = 480;
-const CORRIDOR_X = 224;
-const CORRIDOR_W = 32;
-const HALL_X = CORRIDOR_X + CORRIDOR_W / 2;
+/*
+ * Two rows of rooms either side of one corridor that runs across the building, the garden below. The floor is laid
+ * out for the window it is drawn in: a room's desks go in as many rows as make the whole office come out largest, so
+ * a wide window gets long rooms side by side and a narrow one deeper rooms. Rooms used to stand in two columns, three
+ * deep, off a corridor down the middle, four desks a row: once a stage got as many desks as it ever ran at once, a
+ * project's office grew taller than wide, fitted whole it stood small in the middle of a wide window, and people
+ * watching it asked whether it worked at all.
+ */
 const FACE = 24;
 const DESK_STEP = 52;
 const DESK_ROW = 46;
+const CORRIDOR_H = 32;
 const GARDEN = 52;
+/** The reception's own floor: its counter, the waiting chairs, the vending machine. */
+const LOBBY_W = 224;
+const LOBBY_H = 116;
+/** A room below the corridor is entered through the wall it faces, and walked down a strip by its right wall to its lane. */
+const STRIP = 22;
+/** The column a room's shelf or rack stands in, past its last desk. */
+const CORNER = 28;
+/** An empty room is somewhere to sit, as wide as four desks. */
+const EMPTY_W = 224;
 
 /** The rooms, by phase, in the order the work moves through them. A stage not named here works in build. */
 const PHASES = [
-  { key: 'design', name: 'design', side: 'left', roles: ['planner', 'architect', 'design-reviewer'] },
-  { key: 'build', name: 'build', side: 'left', roles: ['implementer', 'solidity-dev'] },
-  { key: 'review', name: 'review & gates', side: 'right', roles: ['reviewer', 'dba', 'integration-tester', 'solidity-auditor'] },
-  { key: 'lab', name: 'test lab', side: 'right', roles: ['qa'] },
-  { key: 'release', name: 'release', side: 'right', roles: ['devops', 'secops'] },
+  { key: 'design', name: 'design', band: 'top', roles: ['planner', 'architect', 'design-reviewer'] },
+  { key: 'build', name: 'build', band: 'top', roles: ['implementer', 'solidity-dev'] },
+  { key: 'review', name: 'review & gates', band: 'top', roles: ['reviewer', 'dba', 'integration-tester', 'solidity-auditor'] },
+  { key: 'lab', name: 'test lab', band: 'bottom', roles: ['qa'] },
+  { key: 'release', name: 'release', band: 'bottom', roles: ['devops', 'secops'] },
 ];
 
 const rooms = new Map(PHASES.map((ph) => [ph.key, { ...ph, stages: [] }]));
@@ -177,71 +191,167 @@ ROOM.stages.forEach((role, i) => {
   // declares `× many` in a page served before it was.
   rooms.get(phase).stages.push({ role, index: i, seats: ROOM.seats?.[role] ?? (ROOM.many.includes(role) ? 2 : 1) });
 });
-const lobby = { key: 'lobby', name: 'reception', side: 'left', stages: [] };
-const columns = {
-  left: [rooms.get('design'), rooms.get('build'), lobby],
-  right: [rooms.get('review'), rooms.get('lab'), rooms.get('release')],
+const lobby = { key: 'lobby', name: 'reception', band: 'bottom', stages: [] };
+const bands = {
+  top: [rooms.get('design'), rooms.get('build'), rooms.get('review')],
+  bottom: [lobby, rooms.get('lab'), rooms.get('release')],
 };
 for (const room of [...rooms.values(), lobby]) {
-  const desks = room.stages.reduce((n, st) => n + st.seats, 0);
-  room.deskCount = desks;
-  room.rows = Math.max(1, Math.ceil(desks / 4));
-  room.h = room === lobby ? 116 : FACE + 8 + room.rows * DESK_ROW + 26;
-}
-for (const [side, list] of Object.entries(columns)) {
-  let y = 0;
-  for (const room of list) {
-    room.x = side === 'left' ? 0 : CORRIDOR_X + CORRIDOR_W;
-    room.w = side === 'left' ? CORRIDOR_X : LW - room.x;
-    room.y = y;
-    y += room.h;
-  }
-}
-// The shorter column's last room takes up the difference, so both reach the garden wall together.
-const FLOOR_H = Math.max(...Object.values(columns).map((list) => list.at(-1).y + list.at(-1).h));
-for (const list of Object.values(columns)) list.at(-1).h = FLOOR_H - list.at(-1).y;
-const LH = FLOOR_H + GARDEN;
-for (const room of [...rooms.values(), lobby]) {
-  room.laneY = room.y + room.h - 14;
-  room.doorX = room.side === 'left' ? room.x + room.w : room.x;
+  room.deskCount = room.stages.reduce((n, st) => n + st.seats, 0);
+  room.corner = room.key === 'lab' || room.key === 'release';
 }
 
-/** Each stage's desks and the places to stand by them; and the stage of a role. */
+/** How wide a room's name plate is, so what hangs beside it starts after it. */
+const signWidth = (room) => Math.max(40, room.name.length * 4 + 8);
+/** Where a room's shelf or rack stands: in its column, before the strip of a room below the corridor. */
+const cornerX = (room) => room.x + room.w - (room.band === 'bottom' ? STRIP : 0) - CORNER + 3;
+/** Desks a row in a room whose band has `rows` rows of them. */
+const perRow = (room, rows) => Math.ceil(room.deskCount / rows);
+/** How wide a room is with its desks in `rows` rows. */
+function roomWidth(room, rows) {
+  if (room === lobby) return LOBBY_W + STRIP;
+  const desks = room.deskCount ? 12 + perRow(room, rows) * DESK_STEP + 4 + (room.corner ? CORNER : 0) : EMPTY_W;
+  return Math.max(desks, signWidth(room) + 24) + (room.band === 'bottom' ? STRIP : 0);
+}
+/** How tall a band of rooms is with their desks in at most `rows` rows. */
+function bandHeight(list, rows) {
+  const most = Math.max(1, ...list.filter((r) => r.deskCount).map((r) => Math.ceil(r.deskCount / perRow(r, rows))));
+  return Math.max(list.includes(lobby) ? LOBBY_H : 0, FACE + 8 + most * DESK_ROW + 26);
+}
+/** The office's size with each band's desks in so many rows. */
+function measure(arrangement) {
+  const wide = (band) => bands[band].reduce((x, room) => x + roomWidth(room, arrangement[band]), 0);
+  return { w: Math.max(wide('top'), wide('bottom')), h: bandHeight(bands.top, arrangement.top) + CORRIDOR_H + bandHeight(bands.bottom, arrangement.bottom) + GARDEN };
+}
+/** The rows for each band that make the whole office come out largest in a space `width` by `height`. */
+function arrange(width, height) {
+  // A page loaded hidden, as the dashboard's frame is until its tab is opened, has no size yet: it lays out for a common
+  // window, and again when it is shown.
+  const [W, H] = width > 0 && height > 0 ? [width, height] : [1200, 800];
+  const most = (band) => Math.max(1, ...bands[band].map((r) => r.deskCount));
+  let best = null;
+  for (let top = 1; top <= most('top'); top += 1) {
+    for (let bottom = 1; bottom <= most('bottom'); bottom += 1) {
+      const size = measure({ top, bottom });
+      const zoom = Math.min(W / size.w, H / size.h);
+      if (!best || zoom > best.zoom + 1e-9) best = { top, bottom, zoom };
+    }
+  }
+  return best;
+}
+
+/** Each stage's desks and the places to stand by them, placed by `layout`; and the stage of a role. */
 const stages = new Map();
 for (const room of rooms.values()) {
-  let n = 0;
   for (const st of room.stages) {
-    const stage = { role: st.role, room, shirt: SHIRTS[st.index % SHIRTS.length], desks: [], slots: [], folder: null };
-    for (let k = 0; k < st.seats; k += 1, n += 1) {
-      const dx = room.x + 12 + (n % 4) * DESK_STEP;
-      const dy = room.y + FACE + 6 + Math.floor(n / 4) * DESK_ROW;
-      const aisle = dx + 44;
-      const seatY = dy + 34;
-      const exit = [{ x: aisle, y: seatY }, { x: aisle, y: room.laneY }];
-      stage.desks.push({ dx, dy });
-      stage.slots.push({ x: dx + 18, y: seatY, room, exit, kind: 'seat', who: null, desk: stage.desks.at(-1) });
+    const stage = { role: st.role, room, shirt: SHIRTS[st.index % SHIRTS.length], desks: [], slots: [], folder: null, drop: { room }, spare: { room, kind: 'stand', role: st.role } };
+    for (let k = 0; k < st.seats; k += 1) {
+      stage.desks.push({});
+      stage.slots.push({ room, kind: 'seat', who: null, desk: stage.desks.at(-1) });
     }
-    const first = stage.desks[0];
-    stage.drop = { x: first.dx + 44, y: first.dy + 30, room, exit: [{ x: first.dx + 44, y: room.laneY }] };
-    stage.spare = { x: first.dx + 44, y: first.dy + 40, room, exit: [{ x: first.dx + 44, y: room.laneY }], kind: 'stand' };
     stages.set(st.role, stage);
   }
 }
-const COUNTER = { x: lobby.x + 14, y: lobby.y + FACE + 22, w: 104 };
+const COUNTER = { w: 104 };
 // NINA stands at the end of the counter, facing the room: behind it, only her head showed.
-const BOSS_HOME = { x: COUNTER.x + COUNTER.w + 10, y: COUNTER.y + 8, room: lobby, exit: [{ x: COUNTER.x + COUNTER.w + 10, y: lobby.laneY }], kind: 'stand' };
+const BOSS_HOME = { room: lobby, kind: 'stand' };
 // The owner is not drawn: they are the phone on the counter, where the gate's calls ring and their answers come in.
-const PHONE = { x: COUNTER.x + 72, y: COUNTER.y - 11 };
-const OWNER_HOME = { x: PHONE.x + 5, y: PHONE.y + 14, room: lobby, kind: 'line' };
-const ENTRANCE = { x: lobby.x + 150, y: FLOOR_H - 2, room: lobby, exit: [{ x: lobby.x + 150, y: lobby.laneY }], kind: 'stand' };
+const PHONE = {};
+const OWNER_HOME = { room: lobby, kind: 'line' };
+const ENTRANCE = { room: lobby, kind: 'stand' };
+const RECEPTION = {};
 
-/** The way from where someone stands to a spot: out to their room's lane, along the corridor when it is another room. */
+let LW = 0;
+let LH = 0;
+let FLOOR_H = 0;
+let HALL_Y = 0;
+/** The rows each band's desks are in now. */
+let arranged = null;
+
+/**
+ * Lays the floor out with each band's desks in so many rows. Every place someone can be is the same object before and
+ * after, moved, so whoever sits, stands or walks keeps it.
+ */
+function layout(arrangement) {
+  arranged = arrangement;
+  const [wasW, wasH] = [LW, LH];
+  LW = measure(arrangement).w;
+  const topH = bandHeight(bands.top, arrangement.top);
+  const bottomH = bandHeight(bands.bottom, arrangement.bottom);
+  HALL_Y = topH + CORRIDOR_H / 2;
+  FLOOR_H = topH + CORRIDOR_H + bottomH;
+  LH = FLOOR_H + GARDEN;
+  for (const [band, list] of Object.entries(bands)) {
+    let x = 0;
+    for (const room of list) {
+      room.per = perRow(room, arrangement[band]);
+      room.x = x;
+      room.w = roomWidth(room, arrangement[band]);
+      room.y = band === 'top' ? 0 : topH + CORRIDOR_H;
+      room.h = band === 'top' ? topH : bottomH;
+      x += room.w;
+    }
+    // The narrower band's last room takes up the difference, so both reach the end wall together.
+    list.at(-1).w += LW - x;
+  }
+  for (const room of [...rooms.values(), lobby]) {
+    room.laneY = room.y + room.h - 14;
+    // A room above the corridor opens onto it through its bottom wall; one below, through the wall it faces, at its strip.
+    room.doorX = room.band === 'top' ? room.x + room.w - 14 : room.x + room.w - STRIP / 2;
+  }
+  for (const room of rooms.values()) {
+    let n = 0;
+    for (const st of room.stages) {
+      const stage = stages.get(st.role);
+      stage.slots.forEach((slot, k) => {
+        const dx = room.x + 12 + (n % room.per) * DESK_STEP;
+        const dy = room.y + FACE + 6 + Math.floor(n / room.per) * DESK_ROW;
+        const aisle = dx + 44;
+        const seatY = dy + 34;
+        n += 1;
+        Object.assign(stage.desks[k], { dx, dy });
+        Object.assign(slot, { x: dx + 18, y: seatY, exit: [{ x: aisle, y: seatY }, { x: aisle, y: room.laneY }] });
+      });
+      const first = stage.desks[0];
+      Object.assign(stage.drop, { x: first.dx + 44, y: first.dy + 30, exit: [{ x: first.dx + 44, y: room.laneY }] });
+      Object.assign(stage.spare, { x: first.dx + 44, y: first.dy + 40, exit: [{ x: first.dx + 44, y: room.laneY }] });
+    }
+  }
+  Object.assign(COUNTER, { x: lobby.x + 14, y: lobby.y + FACE + 22 });
+  Object.assign(BOSS_HOME, { x: COUNTER.x + COUNTER.w + 10, y: COUNTER.y + 8, exit: [{ x: COUNTER.x + COUNTER.w + 10, y: lobby.laneY }] });
+  Object.assign(PHONE, { x: COUNTER.x + 72, y: COUNTER.y - 11 });
+  Object.assign(OWNER_HOME, { x: PHONE.x + 5, y: PHONE.y + 14 });
+  Object.assign(ENTRANCE, { x: lobby.x + 150, y: FLOOR_H - 2, exit: [{ x: lobby.x + 150, y: lobby.laneY }] });
+  Object.assign(RECEPTION, { x: COUNTER.x + COUNTER.w / 2, y: COUNTER.y + 14 });
+  drawBackground();
+  world.width = LW;
+  world.height = LH;
+  // The view stays over the same part of the office.
+  cam.x = wasW ? (cam.x / wasW) * LW : LW / 2;
+  cam.y = wasH ? (cam.y / wasH) * LH : LH / 2;
+  // Whoever is somewhere is drawn there again; whoever is on their way sets out again from where they were. A place
+  // beside a stage's full desks is a copy of its spare spot, held as where someone stands, sits, is going, or left
+  // from: each is moved with the spot it copies.
+  for (const p of [...people.values(), boss, owner]) {
+    for (const spot of [p.slot, p.at, p.current?.to, ...p.queue.map((q) => q.to)]) {
+      if (!spot?.extra) continue;
+      const { x, y, exit } = stages.get(spot.role).spare;
+      Object.assign(spot, { x, y, exit });
+    }
+    const from = p.at ?? ENTRANCE;
+    p.x = from.x;
+    p.y = from.y;
+    if (p.current?.kind === 'walk') p.path = route(from, p.current.to);
+  }
+}
+
+/** The way from where someone stands to a spot: out to their room's lane and door, along the corridor when it is another room. */
 function route(from, to) {
   const out = from.exit ?? [{ x: from.x, y: from.room.laneY }];
   const into = [...(to.exit ?? [{ x: to.x, y: to.room.laneY }])].reverse();
   const pts = [...out];
   if (from.room !== to.room) {
-    pts.push({ x: from.room.doorX, y: from.room.laneY }, { x: HALL_X, y: from.room.laneY }, { x: HALL_X, y: to.room.laneY }, { x: to.room.doorX, y: to.room.laneY });
+    pts.push({ x: from.room.doorX, y: from.room.laneY }, { x: from.room.doorX, y: HALL_Y }, { x: to.room.doorX, y: HALL_Y }, { x: to.room.doorX, y: to.room.laneY });
   }
   pts.push(...into, { x: to.x, y: to.y });
   return pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
@@ -321,38 +431,35 @@ function wallItem(g, room, kind, x) {
 function sign(g, x, y, w) {
   box(g, x, y, w, 9, C.sign, C.ink);
 }
-/** How wide a room's name plate is, so what hangs beside it starts after it. */
-const signWidth = (room) => Math.max(40, room.name.length * 4 + 8);
 /** Where a room's clock, board or poster hangs: towards the far end of its wall. */
 const wallSpot = (room) => room.x + room.w - 70;
+/** Whether a room's wall has space for its clock, board or poster past its name plate; and for a window between them. */
+const hangs = (room) => wallSpot(room) >= room.x + 8 + signWidth(room) + 6;
+const windowed = (room) => room.x + 8 + signWidth(room) + 16 + 30 <= (hangs(room) ? wallSpot(room) : room.x + room.w - (room.band === 'bottom' ? STRIP : 0)) - 6;
 
 const background = document.createElement('canvas');
-background.width = LW;
-background.height = LH;
-{
+/** The building, drawn again whenever the floor is laid out anew. */
+function drawBackground() {
+  background.width = LW;
+  background.height = LH;
   const g = background.getContext('2d');
   // The garden, and the path to the door.
   rect(g, 0, FLOOR_H, LW, GARDEN, C.grass);
-  for (let i = 0; i < 260; i += 1) {
+  for (let i = 0; i < Math.round(LW * 0.55); i += 1) {
     const hx = hash(`tuft${i}`);
     rect(g, hx % LW, FLOOR_H + 4 + ((hx >> 9) % (GARDEN - 6)), 1, 2, i % 3 ? C.grassDark : C.grassLight);
   }
   rect(g, ENTRANCE.x - 10, FLOOR_H, 20, GARDEN, C.path);
   for (let y = FLOOR_H + 4; y < LH; y += 8) rect(g, ENTRANCE.x - 10, y, 20, 1, C.pathDark);
-  for (const tx of [6, 60, 112, 200, 268, 330, 392, 446]) if (Math.abs(tx + 9 - ENTRANCE.x) > 24) tree(g, tx, FLOOR_H + 14);
-  for (const fx of [34, 92, 236, 300, 362, 424]) if (Math.abs(fx - ENTRANCE.x) > 20) {
+  for (let tx = 6; tx < LW - 18; tx += 56 + (hash(`tree${tx}`) % 12)) if (Math.abs(tx + 9 - ENTRANCE.x) > 24) tree(g, tx, FLOOR_H + 14);
+  for (let fx = 34; fx < LW - 8; fx += 62) if (Math.abs(fx - ENTRANCE.x) > 20) {
     rect(g, fx, FLOOR_H + 6, 2, 2, C.flower);
     rect(g, fx + 5, FLOOR_H + 9, 2, 2, C.flowerY);
   }
-  // The corridor, its floor running the building's height.
-  tiles(g, CORRIDOR_X, 0, CORRIDOR_W, FLOOR_H, C.hall, C.hallLine);
-  rect(g, CORRIDOR_X, 0, CORRIDOR_W, FACE, C.wallFace);
-  rect(g, CORRIDOR_X, FACE - 10, CORRIDOR_W, 8, C.band);
-  rect(g, CORRIDOR_X, FACE - 2, CORRIDOR_W, 2, C.base);
-  box(g, CORRIDOR_X + 9, 4, 14, 9, '#3ec74d');
-  rect(g, CORRIDOR_X + 11, 7, 10, 3, C.white);
-  plant(g, CORRIDOR_X + 9, FACE + 2, true);
-  plant(g, CORRIDOR_X + 9, FLOOR_H - 26, true);
+  // The corridor, across the building between the two rows of rooms.
+  const hallTop = HALL_Y - CORRIDOR_H / 2;
+  tiles(g, 0, hallTop, LW, CORRIDOR_H, C.hall, C.hallLine);
+  plant(g, 6, hallTop + 6, true);
   // Each room: its floor, the wall it faces, its furniture.
   for (const room of [...rooms.values(), lobby]) {
     tiles(g, room.x, room.y, room.w, room.h, C.floor, C.floorLine);
@@ -362,11 +469,16 @@ background.height = LH;
     rect(g, room.x, room.y + FACE - 10, room.w, 1, C.bandDark);
     rect(g, room.x, room.y + FACE - 2, room.w, 2, C.base);
     if (room !== lobby) sign(g, room.x + 8, room.y + 4, signWidth(room));
+    if (room.band === 'bottom') {
+      // The doorway in the wall it faces, onto the corridor.
+      tiles(g, room.doorX - 10, room.y, 20, FACE, C.floor, C.floorLine);
+      rect(g, room.doorX - 11, room.y, 1, FACE, C.ink);
+      rect(g, room.doorX + 10, room.y, 1, FACE, C.ink);
+    }
   }
   for (const room of rooms.values()) {
-    const far = room.side === 'left' ? room.x + 6 : room.x + room.w - 22;
-    wallItem(g, room, 'window', room.x + 8 + signWidth(room) + 16);
-    wallItem(g, room, room.key === 'design' ? 'board' : room.key === 'lab' ? 'poster' : 'clock', wallSpot(room));
+    if (windowed(room)) wallItem(g, room, 'window', room.x + 8 + signWidth(room) + 16);
+    if (hangs(room)) wallItem(g, room, room.key === 'design' ? 'board' : room.key === 'lab' ? 'poster' : 'clock', wallSpot(room));
     for (const st of room.stages) for (const d of stages.get(st.role).desks) deskAt(g, d.dx, d.dy);
     if (room.stages.length === 0) {
       // A room with no stage of its own is somewhere to sit.
@@ -374,14 +486,14 @@ background.height = LH;
       box(g, room.x + 70, room.y + FACE + 20, room.w - 140, 14, C.wood);
       for (let i = 0; i < 4; i += 1) box(g, room.x + 58 + i * 30, room.y + FACE + 8, 10, 9, C.seatRed);
     }
-    plant(g, far, room.laneY - 18, true);
-    // The shelf and the rack stand in a room's far corner, where only a fourth desk reaches — in design, the
-    // design-reviewer's desk was the fourth and stood under the shelf — so a room with four desks has neither.
-    const corner = room.deskCount < 4;
-    if (room.key === 'release' && corner) shelf(g, room.x + room.w - 30, room.y + FACE + 2);
-    if (room.key === 'lab' && corner) {
-      box(g, room.x + room.w - 24, room.y + FACE + 2, 16, 30, C.rack);
-      for (let i = 0; i < 6; i += 1) rect(g, room.x + room.w - 21, room.y + FACE + 5 + i * 4, 2, 1, i % 3 ? C.ledG : C.ledR);
+    plant(g, room.x + 4, room.laneY - 18, true);
+    // The shelf and the rack stand in a column of their own past the last desk: in the room's far corner, the fourth
+    // desk of a room stood under them.
+    const corner = cornerX(room);
+    if (room.key === 'release') shelf(g, corner, room.y + FACE + 2);
+    if (room.key === 'lab') {
+      box(g, corner + 3, room.y + FACE + 2, 16, 30, C.rack);
+      for (let i = 0; i < 6; i += 1) rect(g, corner + 6, room.y + FACE + 5 + i * 4, 2, 1, i % 3 ? C.ledG : C.ledR);
     }
   }
   // The reception: the counter's back, the waiting chairs, a vending machine, plants; the sign on its wall.
@@ -405,7 +517,7 @@ background.height = LH;
     rect(g, lobby.x + 140, lobby.y + FACE + 22, 40, 16, C.rug);
     box(g, lobby.x + 150, lobby.y + FACE + 26, 20, 8, C.wood);
     plant(g, COUNTER.x - 12, COUNTER.y - 4, false);
-    plant(g, lobby.x + 208, lobby.laneY - 20, true);
+    plant(g, lobby.x + 206, lobby.laneY - 20, true);
     rect(g, ENTRANCE.x - 12, FLOOR_H - 8, 24, 6, C.rugEdge);
   }
   // The walls themselves: their white tops, outlined, with doors onto the corridor and out to the garden.
@@ -418,15 +530,17 @@ background.height = LH;
     rect(g, x0, y - 1, x1 - x0, 2, C.wallTop);
   };
   for (const room of [...rooms.values(), lobby]) {
-    wallH(room.x, room.x + room.w, room.y + 1);
-    const outer = room.side === 'left' ? room.x + 1 : room.x + room.w - 1;
-    wallV(outer, room.y, room.y + room.h);
-    const doorTop = room.laneY - 12;
-    const doorBottom = room.laneY + 8;
-    wallV(room.doorX, room.y, doorTop);
-    wallV(room.doorX, doorBottom, room.y + room.h);
-    rect(g, room.doorX - 2, doorTop - 2, 4, 2, C.rail);
+    // A room above the corridor has its door in the wall along its bottom; one below, in the wall along its top.
+    const doorWall = room.band === 'top' ? room.y + room.h - 1 : room.y + 1;
+    wallH(room.x, room.doorX - 10, doorWall);
+    wallH(room.doorX + 10, room.x + room.w, doorWall);
+    rect(g, room.doorX - 12, doorWall - 2, 2, 4, C.rail);
+    rect(g, room.doorX + 10, doorWall - 2, 2, 4, C.rail);
+    if (room.band === 'top') wallH(room.x, room.x + room.w, room.y + 1);
+    if (room.x > 0) wallV(room.x, room.y, room.y + room.h);
   }
+  wallV(1, 0, FLOOR_H);
+  wallV(LW - 1, 0, FLOOR_H);
   wallH(0, ENTRANCE.x - 12, FLOOR_H - 1);
   wallH(ENTRANCE.x + 12, LW, FLOOR_H - 1);
 }
@@ -475,6 +589,8 @@ function seatAt(stage, p, instant = false) {
     }
   }
   if (!slot) {
+    // Already standing beside this stage's full desks, they stay where they stand.
+    if (p.slot?.extra && p.slot.role === stage.role) return p.slot;
     const extra = { ...stage.spare, who: p, extra: true };
     if (p.slot && p.slot.who === p) p.slot.who = null;
     p.slot = extra;
@@ -546,7 +662,6 @@ let banner = null;
 /** What the view follows when it is closer than the whole office: a person as they walk, or a spot. */
 let focus = null;
 const follow = (target) => (focus = target);
-const RECEPTION = { x: COUNTER.x + COUNTER.w / 2, y: COUNTER.y + 14 };
 /** The stage a dispatch past its cap was for, while the gate's call waits on the owner. */
 let capRole = null;
 function settleCap() {
@@ -805,8 +920,6 @@ function step(p, dt) {
 }
 
 const world = document.createElement('canvas');
-world.width = LW;
-world.height = LH;
 const w = world.getContext('2d');
 const screen = document.getElementById('screen');
 const s = screen.getContext('2d');
@@ -834,7 +947,7 @@ let scale = 1;
 let band = 0;
 let ox = 0;
 let oy = 0;
-const cam = { x: LW / 2, y: LH / 2 };
+const cam = { x: 0, y: 0 };
 let handsOffUntil = 0;
 /** 'fit', a zoom the viewer chose in points an office pixel, or null when they never chose. */
 let chosen = null;
@@ -967,6 +1080,9 @@ function resize() {
   screen.style.width = `${window.innerWidth - side}px`;
   screen.style.height = `${window.innerHeight}px`;
   band = Math.round(BAND * dpr);
+  // The floor is laid out for the space the office is drawn in, and again when that space takes another shape.
+  const next = arrange(window.innerWidth - side, window.innerHeight - BAND);
+  if (!arranged || next.top !== arranged.top || next.bottom !== arranged.bottom) layout(next);
   fit = Math.min(screen.width / LW, (screen.height - band) / LH);
   scale = level() * dpr;
   syncButtons();
@@ -1101,7 +1217,7 @@ function drawWorld(now) {
   // The clock in each room says the time it is here.
   const t = new Date();
   for (const room of rooms.values()) {
-    if (room.key === 'design' || room.key === 'lab') continue;
+    if (room.key === 'design' || room.key === 'lab' || !hangs(room)) continue;
     const cx = wallSpot(room) + 5;
     const cy = room.y + 10;
     for (const [len, turn] of [[2, (t.getHours() % 12) / 12 + t.getMinutes() / 720], [3, t.getMinutes() / 60]]) {
@@ -1175,7 +1291,7 @@ function drawScreen(now) {
   if (Number.isInteger(scale) || scale > 4) s.drawImage(world, ox, oy, LW * scale, LH * scale);
   else {
     const k = Math.max(1, Math.ceil(scale));
-    if (crisp.width !== LW * k) {
+    if (crisp.width !== LW * k || crisp.height !== LH * k) {
       crisp.width = LW * k;
       crisp.height = LH * k;
     }
