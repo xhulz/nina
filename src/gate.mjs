@@ -399,8 +399,9 @@ export function replay(entries, loops, forward = new Map()) {
 
   entries.forEach((e, i) => {
     if (e.k === 'reset') {
-      // Ledgers written before the model's own questions stopped counting as the owner speaking hold those too.
-      if (e.why === 'ask') return;
+      // Ledgers written before the model's own questions stopped counting as the owner speaking hold those too. The
+      // prompt that opens a session carrying loops over is the owner resuming the work, not answering a loop.
+      if (e.why === 'ask' || e.why === 'resume') return;
       for (const key of streak.keys()) if (key.split('|').length === 2) grace.set(key, (grace.get(key) ?? 0) + 1);
       return;
     }
@@ -441,7 +442,7 @@ export function replay(entries, loops, forward = new Map()) {
       for (const r of rounds) {
         streak.set(r.key, { n: r.edgeRound, agents: r.agents, at: r.at, blind: r.blind });
         for (const issue of r.issues ?? []) streak.set(`${r.key}|${issue.id}`, { n: issue.round, edge: r.edgeRound });
-        made.push({ ...r, at: e.at });
+        made.push({ ...r, at: e.at, index: i, ...(e.inherited ? { inherited: e.inherited } : {}) });
       }
     }
   });
@@ -460,7 +461,7 @@ export function replay(entries, loops, forward = new Map()) {
       const onward = [...forward].filter(([, sources]) => sources.has(source)).map(([stage]) => stage);
       return { source, token, rounds: s.n, cap, given: grace.get(key) ?? 0, issues, closing, targets: [...targetsOf(source)], onward };
     });
-  const waiting = [...pending.entries()].flatMap(([source, batch]) => batch.filter((v) => isLoopBack(v.verdict)).map((v) => ({ source, verdict: v.verdict, issues: v.issues ?? [] })));
+  const waiting = [...pending.entries()].flatMap(([source, batch]) => batch.filter((v) => isLoopBack(v.verdict)).map((v) => ({ source, verdict: v.verdict, issues: v.issues ?? [], index: v.at })));
   return { effect: (to) => effect(to, entries.length), rounds: made, open, waiting };
 }
 
@@ -913,10 +914,102 @@ export function loopState(project, entries) {
   }
   for (const w of waiting) lines.push(`- waiting on a fix: ${w.source} ${w.verdict}${w.issues.length ? `, issues ${w.issues.join(', ')}` : ''}`);
   if (open.length === 0 && waiting.length === 0) lines.push('- no loop is open');
-  const dispatched = entries.filter((e) => e.k === 'dispatch' && e.role).slice(-4);
+  const dispatched = entries.filter((e) => e.k === 'dispatch' && e.role && !e.inherited).slice(-4);
   if (dispatched.length) lines.push(`- the latest dispatches: ${dispatched.map((e) => e.role).join(', ')}, the newest at ${String(dispatched.at(-1).at ?? '').slice(11, 16)} UTC`);
   const closing = open.filter((l) => l.closing).length;
   return { lines, open: open.length - closing, closing, waiting: waiting.length };
+}
+
+/** The entries a replay reads, and so the ones a session carries over from the one before it. */
+const REPLAYED = new Set(['pre', 'dispatch', 'verdict', 'reset']);
+
+/**
+ * How long the latest earlier session must have been quiet for a new one to carry its loops over: written to within
+ * the last minute, it is still at work, and a session the selftest begins milliseconds after another is not its sequel.
+ */
+const QUIET_MS = 60_000;
+
+/**
+ * A new session's ledger begins with the loops the project's latest earlier session left open: the ledger is a
+ * session's, so a loop open when its session ended was not open in the next, and its cap started over. Work that
+ * pauses with a handoff note and resumes in a new session paused one design loop at round 1 of 2, and the next
+ * session's gate would have let it make two more. What is carried over is the earlier ledger's own entries from the
+ * launch whose rejection began the oldest loop still open, marked `inherited` with the session they came from, so
+ * the replay counts them as it counted them there; the office and `learn` leave them to the session that wrote them.
+ * A session running beside this one in the same checkout is carried over too: its loops are counted here as well,
+ * which holds a cap tighter, never looser.
+ *
+ * @param {string} root - The project.
+ * @param {object} project - `loadProject`'s.
+ * @param {string} path - This session's ledger, not written yet.
+ * @param {string} at - Now.
+ * @returns {{from: string, lines: string[]}|null} What was carried over, said as `nina gate --status` says it.
+ */
+function inherit(root, project, path, at) {
+  const session = basename(path, '.jsonl');
+  const earlier = sessionLedgers(root).ledgers.find((l) => l.session !== session);
+  if (!earlier || Date.parse(at) - earlier.written.getTime() < QUIET_MS) return null;
+  const entries = readLedger(earlier.path);
+  const { open, waiting, rounds } = replay(entries, project.loops, project.forward);
+  const held = open.filter((l) => !l.closing);
+  if (held.length === 0 && waiting.length === 0) return null;
+  // Where each began: the launch of its source before the dispatch that made its first round since it last closed,
+  // or before the rejection a fix still waits on — so its rejection, its fix and every round after it come along. A
+  // launch is where its `pre` stands: a foreground run's `dispatch` is written after its verdict, and cut there the
+  // rejection that began the loop stayed behind.
+  const launchBefore = (source, index) => {
+    const j = entries.findLastIndex((e, k) => k < index && (e.k === 'pre' || e.k === 'dispatch') && e.role === source);
+    const pre = j >= 0 && entries[j].k === 'dispatch' && entries[j].id ? entries.findIndex((e, k) => k < j && e.k === 'pre' && e.id === entries[j].id) : -1;
+    return pre >= 0 ? pre : j;
+  };
+  const starts = [
+    ...held.map((l) => {
+      const first = rounds.findLast((r) => r.key === `${l.source}|${l.token}` && r.edgeRound === 1);
+      return first ? launchBefore(l.source, first.index) : 0;
+    }),
+    ...waiting.map((w) => launchBefore(w.source, w.index)),
+  ];
+  const from = Math.max(0, Math.min(...starts));
+  const carried = entries.slice(from).filter((e) => REPLAYED.has(e.k));
+  mkdirSync(dirname(path), { recursive: true });
+  const head = { k: 'inherit', at, from: earlier.session, loops: held.length, waiting: waiting.length };
+  try {
+    writeFileSync(path, [head, ...carried.map((e) => ({ ...e, inherited: e.inherited ?? earlier.session }))].map((e) => `${JSON.stringify(e)}\n`).join(''), { flag: 'wx' });
+  } catch (error) {
+    // Two of this session's hooks at once: the other carried them over.
+    if (error?.code === 'EEXIST') return null;
+    throw error;
+  }
+  const lines = loopState(project, [head, ...carried]).lines.filter((line) => !line.startsWith('- the latest dispatches'));
+  return { from: earlier.session, lines };
+}
+
+/**
+ * What a session that carried loops over still owes its first prompt, when another event began its ledger: that prompt
+ * resumes the work, and is told what was carried. Read only where the ledger opens with what was carried.
+ *
+ * @param {object} project - `loadProject`'s.
+ * @param {string} path - The session's ledger.
+ * @returns {{from: string, lines: string[]}|null}
+ */
+function owedResume(project, path) {
+  let head = null;
+  try {
+    const fd = openSync(path, 'r');
+    try {
+      const buffer = Buffer.alloc(512);
+      const read = readSync(fd, buffer, 0, buffer.length, 0);
+      head = JSON.parse(buffer.toString('utf8', 0, read).split('\n')[0]);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+  if (head?.k !== 'inherit') return null;
+  const entries = readLedger(path);
+  if (entries.some((e) => e.k === 'reset' && !e.inherited)) return null;
+  return { from: String(head.from ?? ''), lines: loopState(project, entries).lines.filter((line) => !line.startsWith('- the latest dispatches')) };
 }
 
 /**
@@ -992,15 +1085,28 @@ export function handle(input, { root, now = new Date(), pkg = PACKAGE }) {
     if (!project) return null;
     const path = ledgerPath(root, input?.session_id);
     const at = now.toISOString();
+    // A session's first event: its ledger begins with the loops the one before it left open. A carry-over that fails
+    // costs only itself, never the event's own work.
+    let carried = null;
+    try {
+      carried = input?.session_id && !existsSync(path) ? inherit(root, project, path, at) : null;
+    } catch (error) {
+      logError(root, input?.hook_event_name, error, now);
+    }
     switch (input?.hook_event_name) {
-      case 'UserPromptSubmit':
+      case 'UserPromptSubmit': {
         if (typeof input.prompt === 'string' && DELIVERED.test(input.prompt.slice(0, DELIVERY_HEAD))) {
           const from = /<agent-message from="([^"]+)"/.exec(input.prompt)?.[1] ?? /<task-id>([^<\s]+)<\/task-id>/.exec(input.prompt)?.[1];
           return leftBehind(input, project, path, at, from, 'UserPromptSubmit');
         }
-        append(path, { k: 'reset', at, why: 'prompt' });
+        // The session's first prompt, whatever event began its ledger.
+        const resumed = carried ?? owedResume(project, path);
+        append(path, { k: 'reset', at, why: resumed ? 'resume' : 'prompt' });
         prune(root, now);
-        return null;
+        if (!resumed) return null;
+        const said = [`The NINA loop gate carried over what session ${resumed.from.slice(0, 8)} left open; its caps hold here as they did there:`, ...resumed.lines];
+        return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: said.join('\n') } };
+      }
       case 'SubagentStop':
         return onStop(input, project, path, at);
       case 'SessionStart':

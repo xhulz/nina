@@ -138,7 +138,7 @@ function liveness(target, project) {
   const shown = last.filter((r) => String(r.result_ts) >= from).length;
   // Over the window the reports were counted in: verdicts from before it, in a session that spans a change in
   // Claude Code, hid a gate that stopped hearing its hooks after the change.
-  const recorded = entries.filter((e) => e.k === 'verdict' && String(e.at) >= since && String(e.at) >= from).length;
+  const recorded = entries.filter((e) => e.k === 'verdict' && !e.inherited && String(e.at) >= since && String(e.at) >= from).length;
   if (shown < LIVE_SAMPLE) return { unasked: `the newest measured session holds ${shown} report(s) with a verdict line, too few to compare` };
   if (recorded * 2 >= shown) return { compared: shown };
   return {

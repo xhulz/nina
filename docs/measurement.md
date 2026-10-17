@@ -271,8 +271,19 @@ still to land were forecast after it, and measured by all three they were correc
 forecast was written is the oldest commit of the newest run that carried its number, so an edit to the rest of a step
 file does not move it; a forecast changed in the working tree is newer than every commit.
 
+What a step missed its forecast by is its first round where its step file says so (`First round: ~N lines`, which the
+orchestrator writes with the commit of a step that took more than one implementer round): the rounds after it are the
+review's. In the third project two steps of a new script landed ×1.61 and ×1.49, and the second's first round was ×1.18:
+its fix rounds made the rest, and each rate went onto steps that only extend an existing file, forecast at ×1.35 from
+their own kind, until those stood at ×3.24 of their count and twenty more splits were asked for. So a step may say its
+kind (`Kind: new`, `extends`, `tests`), and is measured by the landed steps of its kind where any landed, by all of them
+otherwise. A step revised while it was built is shown against the revision too (`×1.32; ×1.04 against it`), so a
+correction round reads apart from a forecasting miss.
+
 As a detector in every project's `harness:check` (`--check`), it speaks when the newest landed step came in more than
-a quarter over and steps forecast no later than it still carry those forecasts, and stops once each is forecast again.
+a quarter over and steps forecast no later than it still carry those forecasts, and stops once any of them is forecast
+again: the next to go out is forecast at its turn, and the rest at theirs, once the steps before them have measured the
+rate again. Asked for every one at once, it kept the detector red for steps three or more away.
 It runs every turn, so it asks git four times, not once per file: a version per process came to most of its second.
 During `nina upgrade --apply` it stands aside, as the lessons detector does, and the move says what it found once it is
 done: an overrun is the project's history, not the move's doing, and the release that first shipped the detector read

@@ -248,8 +248,9 @@ const BUDGETS = {
   // And for the probes it runs on its own claims, and on a correction the design-reviewer sent back: each of one day's
   // three design re-checks found a new issue in the text the correction had just written, unrun. And for a check the
   // gates make on every step, a script they call: one step set's were paragraphs, rebuilt in each of six runs in a day.
-  // And for a timeout the spec lets each case set: cases of one battery waited out a real minute each.
-  '.claude/agents/architect.md': 21400,
+  // And for a timeout the spec lets each case set: cases of one battery waited out a real minute each. And for a step's
+  // kind, so a new module's rate is not put on steps that extend a file.
+  '.claude/agents/architect.md': 21550,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 4900,
@@ -266,8 +267,9 @@ const BUDGETS = {
   // for the lines a step may write, and the mutations run from one script rather than one turn each; and for a check's
   // battery generated from its code, after nine loosened guards survived batteries written from the spec's rules; and
   // for a lesson learned three times in a day: the TSDoc sweep before the handoff covers test files and changed members;
-  // and for a simple change, which leaves its mutations to qa rather than building a mirror to run them twice.
-  '.claude/agents/implementer.md': 22550,
+  // and for a simple change, which leaves its mutations to qa rather than building a mirror to run them twice; and for
+  // a step past its forecast while written, finished and never trimmed to fit: one implementer cut TSDoc to meet it.
+  '.claude/agents/implementer.md': 22800,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -295,7 +297,8 @@ const BUDGETS = {
   // review before code, and the notes that ride with the work instead of sending it back. And for a step measured
   // against its forecast at each commit: two steps landed 1.5× theirs before a reviewer worked the rate out by hand.
   // And for the simple change: the dispatch says whether a critical path is touched, and its mutations go to qa alone.
-  '.claude/router.md': 18550,
+  // And for a step's first round and kind, and each step forecast again at its turn: rates compounded to ×3.24.
+  '.claude/router.md': 19050,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a

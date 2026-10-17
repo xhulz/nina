@@ -689,7 +689,8 @@ function gateActivity(target, since) {
     const recent = entries.filter((e) => String(e.at ?? '') >= since);
     if (recent.length === 0) continue;
     out.sessions += 1;
-    const made = replay(entries, project?.loops ?? new Map(), project?.forward).rounds.filter((r) => String(r.at ?? '') >= since);
+    // A round a session carried over is counted in the session that made it.
+    const made = replay(entries, project?.loops ?? new Map(), project?.forward).rounds.filter((r) => String(r.at ?? '') >= since && !r.inherited);
     out.rounds += made.length;
     // The longest loop is the edge's count: a round counted by issue numbers that issue, not the loop.
     out.longest = Math.max(out.longest, ...made.map((r) => r.edgeRound ?? r.round));

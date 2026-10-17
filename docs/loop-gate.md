@@ -163,6 +163,19 @@ blob with no space in it made the first version of this take seconds. A `cd` int
 followed. It names, it does not block: holding a stage at its stop to clean up would run it again after its report was
 already delivered.
 
+A ledger is a session's, and a loop open when its session ended was not open in the next: its cap started over. The
+third project carries long work across sessions with a handoff note, and paused one design loop at round 1 of 2; the
+next session's `--status` said no loop was open, and its gate would have let that loop make two more rounds. So a
+session's first event begins its ledger with what the project's latest earlier session left open — each loop still
+counted that no pass settled, and each loop-back waiting on a fix. What is carried is that ledger's own entries, from
+the launch whose rejection began the oldest of them, marked `inherited` with the session they came from, so the replay
+counts them as it counted them there; the office draws them, and `learn` counts their rounds, only in the session that
+made them. The first prompt says so, with each loop as `--status` prints it, and does not give the loops the round
+the owner speaking gives them: it resumes the work, it does not answer a loop. A session written to within the last
+minute is still at work, and nothing is carried from it: the selftest begins its sessions milliseconds apart, and a
+session begun beside a running one is not its sequel. One begun beside a quiet one carries its loops too, which holds
+a cap tighter, never looser.
+
 A review that saw the fix and passed closes its loop at the next dispatch the loop could act on, not when it
 reports, so a loop in that gap is still counted — and its rounds are said to be settled, and which dispatch
 will drop them; when the work is done, none ever comes, and none needs to. Listed as open, three loops

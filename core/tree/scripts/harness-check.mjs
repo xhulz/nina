@@ -65,12 +65,13 @@ process.exit(
         ignore: /^gate: current$/,
       },
       // A step that landed well past its forecast says the steps forecast with it are short by as much, and it took
-      // a reviewer noticing, then a whole architect run, to work the rate out. It speaks while they are not forecast again.
+      // a reviewer noticing, then a whole architect run, to work the rate out. It speaks until the next of them is
+      // forecast again; the rest are forecast at their turn.
       {
         name: 'step sizes',
         bin: 'nina',
         args: ['sizes', '--check', '--quiet'],
-        hint: 'forecast those steps again at that rate — a `Size:` line each, the numbers `nina sizes` lists — and send the architect only a step the new number puts past the limit, to split',
+        hint: 'forecast the next of those steps again before it goes out — a `Size:` line, the number `nina sizes` lists for it — and send the architect only a step the new number puts past the limit, to split; the rest at their turn',
         ignore: /^sizes: current$/,
       },
 <!-- nina:slot project.1 detectors -->
