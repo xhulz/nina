@@ -4751,8 +4751,14 @@ const dated = (date, status = 'active') =>
       'each worker on its own scratch copy of what it changes and in its own process group, killed when it ends or times out',
       'A case that boots a runtime, a database or a browser runs alone, and so does the suite.',
       'never with a `sleep` a turn',
+      // A battery of process-starting cases ran one at a time on ten cores, and cases waited out a real minute's timeout.
+      "measure one case's peak resident memory first, its processes summed, and run no more workers than fit at that peak in a quarter of the machine's memory, a sixteenth when you are one of the gates",
+      "the script holds its pool to the smaller of that count and the cores'",
+      'No case waits out a real timeout or delay of the code it tests: that code takes it from the case',
+      'and the spec of such code says how',
     ].every((said) => nineteen.includes(said)) &&
-      implementer.includes('run them side by side and wait for them as Hard Rule #19 says: these mirrors are plain `node`, light enough to run together, as the suite is not.') &&
+      implementer.includes('run them side by side and wait for them as Hard Rule #19 says: these mirrors are plain `node`, run together as many as that rule sizes them, as the suite is not.') &&
+      (await spec('agents/architect.md')).includes('**Code that waits on a timeout or a delay takes it from its caller.** Say in the spec how a case sets it') &&
       !(await spec('agents/qa.md')).includes('a worker per core'),
     "compose: Hard Rule #19 sends every stage's light battery side by side, narrower for a gate, a runtime and the suite alone; the implementer follows it and qa's suite runs stay one at a time",
   );
