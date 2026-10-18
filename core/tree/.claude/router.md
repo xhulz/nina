@@ -84,7 +84,8 @@ first. Its first spec reached an eighth revision, which had become the way new w
 A spike is an experiment: it answers a question about a service, a library or the data before anything is
 designed on it, and its code is evidence, kept in a directory of its own outside the product's packages.
 The architect writes a spike plan, one page, not a spec: the question, what to run and observe, the
-answer that settles it, and when to stop. The reviewer checks that it measures what it says it measures.
+answer that settles it, with the run that prints each token that would refuse it, and when to stop. The
+reviewer checks that it measures what it says it measures.
 No qa, devops or secops. A plan in steps runs them as a spec's (§ *A spec's steps are passes of their own*), without qa:
 a step that builds on another goes out once every review of that one approved, whatever the plan says. Its plan is
 corrected at most twice, counting a correction you make in place; past that, or when its answer raises a new

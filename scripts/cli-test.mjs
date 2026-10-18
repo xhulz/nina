@@ -4820,6 +4820,21 @@ const dated = (date, status = 'active') =>
     ['the binding by block', 'binds where the language binds it, block by block, with a row against the nearest wrong binding'],
     ['the fuzzed table', 'specify that it is fuzzed differentially against the compiler'],
   ]) expect(architect.includes(said), `compose: the architect's source-check rule keeps ${clause}`);
+  // A lesson the third project learned four times in eight days: a spike, a gate and a memory ceiling each printed
+  // their passing token for the failure they existed to catch.
+  for (const [clause, said] of [
+    ['its scope', '**A check is specified with the run that prints its failing token.**'],
+    ['the walk through wrappers', 'walk the likeliest failure of its premise through the exact code the check runs, every catch, retry and default on the way'],
+    ['the positive success', 'the check recognizes success positively (an exact message, a bound) and sends the rest to its failing token, or to a token that is neither pass nor failure (`UNSETTLED`)'],
+    ['the run that prints each token', 'A failing token no run has printed is a claim, not a check: give each a row with the input that drives the check into it.'],
+    ['the reading of nothing', 'A measurement that read nothing — an empty sample, a missing line — is unclassifiable, never zero and never the pass.'],
+  ]) expect(architect.includes(said) && !architect.includes('four times in eight days'), `compose: the architect's failing-token rule keeps ${clause}`);
+  // The spike plan the rule's first incident was in, and the stage that caught the other three, hold it too.
+  expect(
+    /the answer that settles it, with the run that prints each token that would refuse it/.test((await spec('router.md')).replace(/\s+/g, ' ')) &&
+      (await spec('agents/design-reviewer.md')).replace(/\s+/g, ' ').includes('**Check every check can print its failing tokens.** A token no row drives the check into, a wrapper that turns the likeliest failure into the pass, or a reading of nothing that lands on the pass, is an issue.'),
+    "compose: a spike plan gives the run that prints each refusing token, and the design-reviewer sends back a check that cannot print its own",
+  );
   for (const [clause, said] of [
     ['its scope', "**For a check whose refusing is the feature — a scanner, classifier, parser or gate, the kind the architect sends to design review — generate the battery from the code, not from the rules.**"],
     ['the walk', 'Walk each refusing function condition by condition, one mutant per entry'],
