@@ -31,6 +31,8 @@ before any code exists, for what only the design decides. You do not review code
   two tokens, another spelling of the same call, the input empty, missing or twice. Name each member the
   design would get wrong. A design that matches text where the language has a parser or a tokenizer the
   project already installs is a flaw, not a style.
+- **Check every check can print its failing tokens.** A token no row drives the check into, a wrapper that
+  turns the likeliest failure into the pass, or a reading of nothing that lands on the pass, is an issue.
 - **Check what the design stands on against the tree** (Hard Rule #17): the files it lists and the ones it
   needs but does not list, the signatures it calls, the premises it cites.
 - **Check the size.** The spec forecasts the step's files and lines; past `{{STEP_FILES}}` files or

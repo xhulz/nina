@@ -76,5 +76,8 @@
   },
   "2026-10-15-implementer__tsdoc-sweep-includes-edited-test-stub-members": {
     "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-18-architect__spike-checks-fail-closed": {
+    "in": "core/tree/.claude/agents/architect.md"
   }
 }

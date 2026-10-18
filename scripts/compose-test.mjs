@@ -249,8 +249,11 @@ const BUDGETS = {
   // three design re-checks found a new issue in the text the correction had just written, unrun. And for a check the
   // gates make on every step, a script they call: one step set's were paragraphs, rebuilt in each of six runs in a day.
   // And for a timeout the spec lets each case set: cases of one battery waited out a real minute each. And for a step's
-  // kind, so a new module's rate is not put on steps that extend a file.
-  '.claude/agents/architect.md': 21550,
+  // kind, so a new module's rate is not put on steps that extend a file. And for a lesson the third project learned four
+  // times in eight days: a check is specified with the run that prints its failing token, and a reading of nothing
+  // is never the pass — a spike, a gate and a memory ceiling each printed their passing token for the failure they
+  // existed to catch.
+  '.claude/agents/architect.md': 22300,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 4900,
@@ -298,7 +301,9 @@ const BUDGETS = {
   // against its forecast at each commit: two steps landed 1.5× theirs before a reviewer worked the rate out by hand.
   // And for the simple change: the dispatch says whether a critical path is touched, and its mutations go to qa alone.
   // And for a step's first round and kind, and each step forecast again at its turn: rates compounded to ×3.24.
-  '.claude/router.md': 19050,
+  // And for a spike plan's answer given with the run that prints each token that would refuse it: a spike's check
+  // printed ACCEPTED for the rejection it existed to catch.
+  '.claude/router.md': 19150,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
