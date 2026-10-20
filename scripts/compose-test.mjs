@@ -317,8 +317,10 @@ const BUDGETS = {
   // own: in one shared scratchpad a reviewer set up in another stage's, overwrote its files and removed the dba's harness.
   // And for the harness a gate keeps for the re-check of its fix, which one gate had rebuilt from nothing in each of six runs.
   // And for a battery's pool held to what one case's memory allows, and no case waiting out a real timeout: a task's
-  // implementer rounds had waited three quarters of nine hours on batteries run one case at a time.
-  'CLAUDE.md': 28900,
+  // implementer rounds had waited three quarters of nine hours on batteries run one case at a time. And for Hard Rule
+  // #21, a run proved local by a guard that refuses at once, no control leaving the machine; and, where a project has
+  // edge-cf, for wrangler, which calls npm on its own: two lessons one project learned three times each.
+  'CLAUDE.md': 30550,
 };
 
 /**
