@@ -271,8 +271,10 @@ const BUDGETS = {
   // battery generated from its code, after nine loosened guards survived batteries written from the spec's rules; and
   // for a lesson learned three times in a day: the TSDoc sweep before the handoff covers test files and changed members;
   // and for a simple change, which leaves its mutations to qa rather than building a mirror to run them twice; and for
-  // a step past its forecast while written, finished and never trimmed to fit: one implementer cut TSDoc to meet it.
-  '.claude/agents/implementer.md': 22800,
+  // a step past its forecast while written, finished and never trimmed to fit: one implementer cut TSDoc to meet it; and
+  // for the claim that no one mutation reddens a row, run condition by condition, and the battery's log compared by its
+  // script with every fails-if line: two reviewers built mutants of their own to refute such a claim.
+  '.claude/agents/implementer.md': 23300,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.

@@ -5684,6 +5684,13 @@ const dated = (date, status = 'active') =>
       implementer.includes('read from what the run saw') && implementer.includes('went red on a copy of the final bytes, and when it ran'),
     'compose: the implementer reports its mutation run on the final bytes, read line by line, each claim naming what the run saw',
   );
+  // The opposite claim, that no one mutation reddens a row, no mutant of a battery backs; both reviewers of one step
+  // built mutants of their own to refute it, the second miss since the rule above graduated.
+  expect(
+    implementer.includes('A claim that no one mutation turns a row red, since two or more conditions refuse it, needs for that row a mutant per condition that refuses it') &&
+      implementer.includes('compares that log with every `fails if` line and every such claim before `DIFF-READY`'),
+    'compose: a claim that no one mutation reddens a row is run condition by condition, and the battery script checks every fails-if line against its log',
+  );
   expect(
     implementer.includes("A sentence about a dependency's behavior") && implementer.includes('or it says the behavior is unobserved') &&
       reviewer.includes('a citation that only resolves proves nothing') && architect.includes("A sentence your spec dictates about a dependency's behavior is a premise too"),
