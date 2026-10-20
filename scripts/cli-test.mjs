@@ -3158,6 +3158,22 @@ const dated = (date, status = 'active') =>
     next([rc[0], rd[0], rc[1], { k: 'dispatch', role: 'reviewer', agent: rd[0].agent, via: 'SendMessage', resumed: true }, { ...rd[1] }, fix(), report('reviewer', 'REJECTED')]) === 2,
     'gate: a sibling resumed with no fix sent in between releases nothing either',
   );
+  // But the reviewer that rejected, resumed with no fix sent to judge its own rejection again, withdraws it by passing:
+  // the third project's reviewer, wrong about its own case, approved on resume, and with no qa after that step its
+  // rejection waited on a fix that never came, into the next session.
+  const ownAgain = (agent, ...before) => [
+    ...before,
+    { k: 'dispatch', role: 'reviewer', agent },
+    { k: 'verdict', role: 'reviewer', verdict: 'REJECTED', agent, declared: true, issues: ['k13-untested'] },
+    { k: 'dispatch', role: 'reviewer', agent, via: 'SendMessage', resumed: true },
+    { k: 'verdict', role: 'reviewer', verdict: 'APPROVED', agent, declared: true },
+  ];
+  const withdrawn = replay(ownAgain('w'), loops, forward);
+  expect(
+    next([ownAgain('w')]) === 0 && withdrawn.waiting.length === 0 && withdrawn.open.length === 0,
+    `gate: a reviewer resumed with no fix sent, that passes, withdraws its own rejection — got ${JSON.stringify(withdrawn)}`,
+  );
+  expect(next([ownAgain('w2', ...report('reviewer', 'REJECTED'))]) === 1, "gate: and only its own: a rejection beside it still waits on a fix");
   expect(replay(stuck.slice(0, 4).flat(), loops, forward).rounds.map((r) => r.round).join() === '1,2', 'gate: the replay lists the rounds the dispatches made');
   // A pass that saw the fix closes the loop at the next dispatch it could act on, and until then the loop is still
   // counted. A compaction in that gap handed three approved loops back as open and capped; each says it is closing.

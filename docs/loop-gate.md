@@ -87,6 +87,15 @@ source — reached a cap eight times, and seven were different issues on the sam
 - a pass cancels a rejection only if a fix went out between the two — a later review that saw the fix —
   and closes the loop only if it began after the latest fix with no rejection running beside it, so a
   fan-out's sibling approving, or a reviewer of another dimension launched later, releases nothing;
+- a later completion of the agent that rejected — resumed with no fix sent between, to judge its rejection again —
+  withdraws that rejection by passing: it is the same review judged again, and nothing else would settle it. In the
+  third project a reviewer's mutant survived because its own case was refused by another clause first; the script was
+  right, so the orchestrator resumed the reviewer to correct its case, and it approved. That step had no qa, so no pass
+  came after it either, and the rejection waited on a fix none would send — into the next session, whose first
+  implementer would have counted a round under it. Only the agent's own completion withdraws: a sibling resumed with no
+  fix still releases nothing. A withdrawal on the orchestrator's word, `nina gate --withdraw`, was asked for beside it
+  and is not here: the orchestrator does not overrule a gate, and a rejection left waiting costs the next fix one
+  counted round, closed by the review after it;
 - a pass from the stage the source hands passing work on to — qa, after the reviewer — closes the
   source's loops, which is how a rejection the orchestrator settled itself stops counting; but only if
   that stage ran after the source last reported and the source was not sent out again since, because
