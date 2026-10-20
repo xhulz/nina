@@ -5730,6 +5730,20 @@ const dated = (date, status = 'active') =>
       claude.includes('A data local, a literal typed by a documented declaration and a property descriptor passed as an argument need none'),
     "compose: Hard Rule #9 names the members a sweep kept skipping, and what needs no TSDoc",
   );
+  // Two lessons the third project graduated on one day. A run proved local is proved by a guard that refuses at once —
+  // a control fetch reached the registry, and a loopback profile that only timed out was trusted by every later pass —
+  // and wrangler, which only a project with edge-cf runs, calls npm on its own through a variable named the wrong way.
+  const edge = await readFile(join(await composed('acme'), 'CLAUDE.md'), 'utf8');
+  expect(
+    claude.includes('21. **A run proved local is proved by a refusal, and no control leaves the machine.**') &&
+      claude.includes('a timeout is what a packet that left looks like, and proves nothing') &&
+      claude.includes('is a premise, not a guard: it runs under the guard too') &&
+      edge.includes('**Wrangler calls out on its own.**') &&
+      edge.includes('`WRANGLER_HIDE_BANNER=true npm_registry=http://127.0.0.1:9 CLOUDFLARE_CF_FETCH_ENABLED=false WRANGLER_SEND_METRICS=false`') &&
+      edge.includes("The project's own scripts that start wrangler set them") &&
+      !claude.includes('Wrangler calls out on its own'),
+    'compose: Hard Rule #21 proves a run local by a refusal, and edge-cf keeps wrangler from calling npm, said where only it composes',
+  );
   // The rule reached the reviewer and not the stage that writes: its own spec said "every new declaration".
   const patterns = await readFile(join(dir, '.claude', 'patterns.md'), 'utf8');
   expect(

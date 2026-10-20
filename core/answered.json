@@ -79,5 +79,11 @@
   },
   "2026-10-18-architect__spike-checks-fail-closed": {
     "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-10-20-shared__network-controls-use-a-local-listener": {
+    "in": "core/tree/CLAUDE.md"
+  },
+  "2026-10-20-shared__wrangler-update-check-stays-local": {
+    "in": "surfaces/edge-cf/tree/CLAUDE.md"
   }
 }
