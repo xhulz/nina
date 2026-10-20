@@ -76,7 +76,11 @@ model each side ran on, rather than print a number that measures the model:
   <pill> --here <file>` retires the pill and keeps a record under `.nina/requests/`. A rule any project of
   that shape needs goes to the harness: `nina learn --graduate <pill>` writes a **request** there — the pinned
   version, the layer the rule belongs in, the lesson in the project's words — because a project cannot edit
-  the harness, only ask, and asking decides nothing. `--check` names each lesson at three with both commands,
+  the harness, only ask, and asking decides nothing. The layer is proposed from the roles the pill applies to,
+  and `--layer core` or `--layer surfaces/<s>` records the owner's choice where it differs, with the proposal
+  beside it: a lesson of shared roles about wrangler, which runs only where a project has `edge-cf`, was filed
+  for the core, and its target and heading were edited by hand. A pill is named by its path or by its `id:`,
+  which is how an owner reads it, and was refused as "no pill" when it was named that way. `--check` names each lesson at three with both commands,
   every turn, until one of them is run. It used to file every one as a request on its own, which decided
   the question before anyone asked it: a convention of one codebase went the whole way — request, decline,
   release, upgrade — and came back still a pill, since the one step it needed, a rule in its own project,
