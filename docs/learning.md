@@ -80,7 +80,8 @@ model each side ran on, rather than print a number that measures the model:
   and `--layer core` or `--layer surfaces/<s>` records the owner's choice where it differs, with the proposal
   beside it: a lesson of shared roles about wrangler, which runs only where a project has `edge-cf`, was filed
   for the core, and its target and heading were edited by hand. A pill is named by its path or by its `id:`,
-  which is how an owner reads it, and was refused as "no pill" when it was named that way. `--check` names each lesson at three with both commands,
+  which is how an owner reads it, and was refused as "no pill" when it was named that way. `--check` names each
+  lesson at three with both commands,
   every turn, until one of them is run. It used to file every one as a request on its own, which decided
   the question before anyone asked it: a convention of one codebase went the whole way — request, decline,
   release, upgrade — and came back still a pill, since the one step it needed, a rule in its own project,

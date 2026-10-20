@@ -72,7 +72,7 @@ process.exit(
         name: 'step sizes',
         bin: 'nina',
         args: ['sizes', '--check', '--quiet'],
-        hint: 'forecast the next of those steps again before it goes out — a `Size:` line, the number `nina sizes` lists for it — and send the architect only a step the new number puts past the limit, to split; the rest at their turn. A `Size:` line it cannot read opens with its number',
+        hint: 'forecast the next of those steps again before it goes out — a `Size:` line, the number `nina sizes` lists for it — and send the architect only a step the new number puts past the limit, to split; the rest at their turn. A `Size:` line it cannot read is written `Size: ~N lines in M files`, the forecast followed by `lines`',
         ignore: /^sizes: current$/,
       },
 <!-- nina:slot project.1 detectors -->

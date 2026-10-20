@@ -320,7 +320,7 @@ const BUDGETS = {
   // implementer rounds had waited three quarters of nine hours on batteries run one case at a time. And for Hard Rule
   // #21, a run proved local by a guard that refuses at once, no control leaving the machine; and, where a project has
   // edge-cf, for wrangler, which calls npm on its own: two lessons one project learned three times each.
-  'CLAUDE.md': 30550,
+  'CLAUDE.md': 30650,
 };
 
 /**

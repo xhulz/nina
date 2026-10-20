@@ -407,7 +407,8 @@ export async function sizes(argv) {
     }
     // Only a step still to land: its line can be written again now, and once it lands, the line it carried is history.
     for (const u of unread.filter((x) => !x.landed)) {
-      said.push(`step ${u.step} of ${u.spec}: no forecast it can read in its \`Size:\` line ("${u.said}") — open it with the number, \`Size: ~N lines in M files\`, before the step lands, or no rate counts it`);
+      // "~215 raw lines" opens with a number too: what reads is the forecast it is measured by, followed by `lines`.
+      said.push(`step ${u.step} of ${u.spec}: no forecast it can read in its \`Size:\` line ("${u.said}") — write it as \`Size: ~N lines in M files\`, the forecast the step is measured by followed by \`lines\`, before the step lands, or no rate counts it`);
     }
     if (said.length === 0) {
       console.log('sizes: current');
