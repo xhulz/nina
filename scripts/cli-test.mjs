@@ -3203,6 +3203,12 @@ const dated = (date, status = 'active') =>
     `gate: a reviewer resumed with no fix sent, that passes, withdraws its own rejection — got ${JSON.stringify(withdrawn)}`,
   );
   expect(next([ownAgain('w2', ...report('reviewer', 'REJECTED'))]) === 1, "gate: and only its own: a rejection beside it still waits on a fix");
+  // A review of a fix that rejected, then withdrew on resume, is a review of that fix that passed: the loop it is in closes.
+  const afterFix = replay([report('reviewer', 'REJECTED'), fix(), ownAgain('w3')].flat(), loops, forward);
+  expect(
+    afterFix.waiting.length === 0 && afterFix.open.length === 1 && afterFix.open[0].closing,
+    `gate: a withdrawal by a review launched after the fix settles the loop's earlier rounds — got ${JSON.stringify(afterFix)}`,
+  );
   expect(replay(stuck.slice(0, 4).flat(), loops, forward).rounds.map((r) => r.round).join() === '1,2', 'gate: the replay lists the rounds the dispatches made');
   // A pass that saw the fix closes the loop at the next dispatch it could act on, and until then the loop is still
   // counted. A compaction in that gap handed three approved loops back as open and capped; each says it is closing.
@@ -5091,7 +5097,7 @@ const dated = (date, status = 'active') =>
   const toLandUnread = run(['sizes', '--project', kinds, '--check'], { loud: true });
   expect(
     toLandUnread.status === 1 &&
-      toLandUnread.out.includes('step e of k-spec: no forecast it can read in its `Size:` line ("about three hundred, give or take") — open it with the number, `Size: ~N lines in M files`, before the step lands, or no rate counts it'),
+      toLandUnread.out.includes('step e of k-spec: no forecast it can read in its `Size:` line ("about three hundred, give or take") — write it as `Size: ~N lines in M files`, the forecast the step is measured by followed by `lines`, before the step lands, or no rate counts it'),
     `sizes: one still to land, which can be written again now, sets the detector off — got ${toLandUnread.out}`,
   );
 }
@@ -5738,6 +5744,7 @@ const dated = (date, status = 'active') =>
     claude.includes('21. **A run proved local is proved by a refusal, and no control leaves the machine.**') &&
       claude.includes('a timeout is what a packet that left looks like, and proves nothing') &&
       claude.includes('is a premise, not a guard: it runs under the guard too') &&
+      claude.includes('a guard that cannot be checked without one is reported unchecked, never checked by the call') &&
       edge.includes('**Wrangler calls out on its own.**') &&
       edge.includes('`WRANGLER_HIDE_BANNER=true npm_registry=http://127.0.0.1:9 CLOUDFLARE_CF_FETCH_ENABLED=false WRANGLER_SEND_METRICS=false`') &&
       edge.includes("The project's own scripts that start wrangler set them") &&
