@@ -1,0 +1,2 @@
+<!-- nina:slot integrations.1 -->
+- **Input validation / injection / SSRF** — validate at every trust boundary: request body, query, queue message, webhook payload, and every integration response. Parameterized queries only — never string-built SQL. Outbound HTTP to an integration: SSRF and URL-allowlist posture. Start with the unauthenticated internet-facing paths — a webhook receiver, a health route, a dev-only surface — and verify their signature or secret gate cannot be bypassed or replayed.
