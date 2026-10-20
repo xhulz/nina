@@ -181,9 +181,11 @@ Each step's commit is measured against the forecast it was built to (`nina sizes
 turn). When a step took more than one implementer round, write `First round: ~N lines` in its step file with its
 commit, the count its implementer's first report gave: the rounds after it are the review's, not the forecast's, and
 the rate is measured by the first. One that landed more than a quarter over says the steps forecast with it are short
-by as much: forecast each again at its turn, before it goes out — a `Size:` line at the rate `nina sizes` prints for
-it, from the steps of its `Kind:` where any landed — and send the architect only a step the new number puts past
-{{STEP_LINES}} lines, to be split. The rest wait for their turn, when the steps before them will have measured the
+by as much: forecast each again at its turn, before it goes out — a `Size:` line that opens with its number, at the rate
+`nina sizes` prints for it, from the steps of its `Kind:` where any landed — and send the architect only a step the new
+number puts past {{STEP_LINES}} lines, to be split. A forecast that already carries a rate measured on steps of another
+kind is restated from its own count at its kind's, never multiplied again: `nina sizes` shows what a step carries over
+its first forecast beside what its kind's steps missed by. The rest wait for their turn, when the steps before them will have measured the
 rate again.
 
 ### Commits

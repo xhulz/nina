@@ -302,8 +302,9 @@ const BUDGETS = {
   // And for the simple change: the dispatch says whether a critical path is touched, and its mutations go to qa alone.
   // And for a step's first round and kind, and each step forecast again at its turn: rates compounded to ×3.24.
   // And for a spike plan's answer given with the run that prints each token that would refuse it: a spike's check
-  // printed ACCEPTED for the rejection it existed to catch.
-  '.claude/router.md': 19150,
+  // printed ACCEPTED for the rejection it existed to catch. And for a forecast restated from its own count at its kind's
+  // rate, never multiplied again: one project's steps carried three rates of another kind, at ×2.54 of their count.
+  '.claude/router.md': 19400,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a

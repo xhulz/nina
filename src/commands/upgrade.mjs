@@ -633,7 +633,7 @@ export async function upgrade(argv, ctx) {
     }
     const forecasts = nina(ctx, target, ['sizes', '--project', target, '--check']);
     if (!forecasts.ok && forecasts.out.trim()) {
-      console.log('\n  a step landed past its forecast — not caused by this move, now visible:');
+      console.log('\n  the step forecasts have something to act on — not caused by this move, now visible:');
       for (const line of forecasts.out.trim().split('\n')) console.log(`    ${line}`);
     }
     // The move is done and the tree is sound, but it is not finished: until these are written
