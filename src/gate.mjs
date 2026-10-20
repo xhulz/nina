@@ -268,6 +268,8 @@ function append(path, entry) {
  *
  * - a rejection is cancelled by a pass launched after a fix went out for it: that review saw the fix. A
  *   sibling launched with it, or a reviewer launched after it that saw no fix, cancels nothing;
+ * - a rejection is withdrawn by a later completion of the agent that made it, passing with no fix sent between:
+ *   the same review judged again, which nothing else would settle;
  * - a rejection from a review that was already running when the edge's last round went out belongs to
  *   that round, and makes no new one;
  * - the rest make this dispatch a round on the edge: one more than the rounds since the loop last
@@ -335,12 +337,15 @@ export function replay(entries, loops, forward = new Map()) {
   };
 
   /**
-   * A source's waiting verdicts, settled: the rejections no later review of a fix cancelled, and whether a pass
-   * closes its loops — one that began after the latest fix, with no rejection running beside it.
+   * A source's waiting verdicts, settled: the rejections no later review of a fix cancelled and no later completion of
+   * their own agent withdrew, and whether a pass closes its loops — one that began after the latest fix, with no
+   * rejection running beside it.
    */
   const settle = (source, batch) => {
     const passes = batch.filter((v) => !isLoopBack(v.verdict));
-    const live = batch.filter((v) => isLoopBack(v.verdict) && !passes.some((p) => p.launch > v.at && fixBetween(source, v.at, p.launch)));
+    const live = batch.filter(
+      (v) => isLoopBack(v.verdict) && !passes.some((p) => p.launch > v.at && (p.agent === v.agent || fixBetween(source, v.at, p.launch))),
+    );
     return { live, closes: passes.some((p) => p.launch > (lastFix.get(source) ?? -1) && !live.some((v) => v.launch < p.at)) };
   };
 
@@ -461,7 +466,8 @@ export function replay(entries, loops, forward = new Map()) {
       const onward = [...forward].filter(([, sources]) => sources.has(source)).map(([stage]) => stage);
       return { source, token, rounds: s.n, cap, given: grace.get(key) ?? 0, issues, closing, targets: [...targetsOf(source)], onward };
     });
-  const waiting = [...pending.entries()].flatMap(([source, batch]) => batch.filter((v) => isLoopBack(v.verdict)).map((v) => ({ source, verdict: v.verdict, issues: v.issues ?? [], index: v.at })));
+  // A rejection its own agent withdrew waits on no fix: counted as waiting, the next session inherited it.
+  const waiting = [...pending.entries()].flatMap(([source, batch]) => settle(source, batch).live.map((v) => ({ source, verdict: v.verdict, issues: v.issues ?? [], index: v.at })));
   return { effect: (to) => effect(to, entries.length), rounds: made, open, waiting };
 }
 
