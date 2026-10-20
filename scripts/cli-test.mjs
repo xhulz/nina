@@ -982,7 +982,7 @@ async function sound(fixture, core) {
   await quiet('1.2.0');
   const inherited = bed(['upgrade', '--project', dir, '--to', '1.2.0', '--apply']);
   expect(
-    inherited.out.includes('a step landed past its forecast — not caused by this move, now visible:') && inherited.out.includes('step 1 of feat-spec landed 200 lines against ~100'),
+    inherited.out.includes('the step forecasts have something to act on — not caused by this move, now visible:') && inherited.out.includes('step 1 of feat-spec landed 200 lines against ~100'),
     `upgrade: a step that overran is set aside for the move and said after it — got ${inherited.out}`,
   );
   expect(
@@ -4816,7 +4816,8 @@ const dated = (date, status = 'active') =>
     ['the first round', /write `First round: ~N lines` in its step file with its\s+commit, the count its implementer's first report gave/.test(routed)],
     ['the kind', /from the steps of its `Kind:` where any landed/.test(routed) && (await spec('agents/architect.md')).includes('and say its kind (`Kind: new` for a module of its own, `extends` for a file that exists, `tests` for tests alone)')],
     ['no trimming to fit', (await spec('agents/implementer.md')).includes('finish the step rather than stop mid-way, and never trim documentation or tests to meet the count')],
-    ['the architect only to split', /send the\s+architect only a step the new number puts past\s+400 lines, to be split/.test(routed)],
+    ['the architect only to split', /send the\s+architect only a step the\s+new\s+number puts past\s+400 lines, to be split/.test(routed)],
+    ['a rate never multiplied onto another kind\'s', /carries a rate measured on steps of another\s+kind is restated from its own count at its kind's, never multiplied again/.test(routed)],
     ['the commit names its step', /as its step file does \(`<spec> step <n>`\), which is how\s+`nina sizes` finds it/.test(routed)],
     ['the architect forecasts at the rate', (await spec('agents/architect.md')).includes('at the rate `nina sizes` measured on the steps that landed')],
   ]) expect(held, `compose: a step is measured against its forecast at each commit — keeps ${clause}`);
@@ -5024,6 +5025,45 @@ const dated = (date, status = 'active') =>
   expect(
     /c\s+~100\s+→ ~100\s+to land, at ×1\.00 over 1 extends step\(s\)/.test(klisted) && /d\s+~100\s+→ ~110\s+to land, at ×1\.10 over 1 new step\(s\)/.test(klisted),
     `sizes: a step to land is forecast again at the rate of the landed steps of its kind — got ${klisted}`,
+  );
+
+  // A Size line rewritten into prose left its step out of every rate without a word; and a forecast restated at rates
+  // multiplied onto one another, another kind's among them, put the third project's steps at ×2.54 of their count.
+  const { unreadSize } = await import('../src/commands/sizes.mjs');
+  expect(
+    unreadSize('- **Size:** round 1 landed +498/−95 against ~272 (2,852 lines)') === 'round 1 landed +498/−95 against ~272 (2,852 lines)' &&
+      unreadSize('- **Size:** ~340 lines in 3 files') === null &&
+      unreadSize('a {\n  font-size: 16px;\n}\nThe `Size:` line says how big.') === null,
+    'sizes: a Size line that reads as no forecast is said, and font-size or a sentence naming the line is no Size line',
+  );
+  await writeFile(join(kspecs, 'k-spec.step-c.md'), '# Step c\n\nKind: extends\n- **Size:** ~250 lines in 1 file, at ×2.5 over ~100.\n');
+  await writeFile(join(kspecs, 'k-spec.step-f.md'), '# Step f\n\nKind: extends\n- **Size:** ~120 lines in 1 file.\n');
+  kgit('add', '-A');
+  kcommit('Re-forecast c, plan f (k-spec)', '2026-03-02T13:00:00Z');
+  await writeFile(join(kspecs, 'k-spec.step-f.md'), '# Step f\n\nKind: extends\n- **Size:** round 1 landed +130/−2 against ~120.\n');
+  kgit('add', '-A');
+  kcommit('Notes on f between its rounds (k-spec)', '2026-03-02T13:10:00Z');
+  await writeFile(join(kinds, 'src', 'f.ts'), lines(130));
+  kgit('add', '-A');
+  kcommit('k step f (k-spec step f)', '2026-03-02T13:20:00Z');
+  const carried = run(['sizes', '--project', kinds], { loud: true }).out;
+  const landedUnread = run(['sizes', '--project', kinds, '--check'], { loud: true });
+  expect(
+    /c\s+~250\s+to land .*· first forecast ~100, ×2\.50 since; its extends steps missed by ×1\.00/.test(carried),
+    `sizes: a step to land shows what it carries over its first forecast, beside what its kind's steps missed by — got ${carried}`,
+  );
+  expect(
+    /f\s+no forecast it can read — its `Size:` line before [0-9a-f]{7}, the commit that landed it, says "round 1 landed \+130\/−2 against ~120\.", so no rate counts it/.test(carried) &&
+      landedUnread.status === 0 &&
+      landedUnread.out.includes('sizes: current'),
+    `sizes: a landed step whose Size line reads as no forecast is listed, and the detector stays quiet, its history past changing — got ${carried} / ${landedUnread.out}`,
+  );
+  await writeFile(join(kspecs, 'k-spec.step-e.md'), '# Step e\n\n- **Size:** about three hundred, give or take\n');
+  const toLandUnread = run(['sizes', '--project', kinds, '--check'], { loud: true });
+  expect(
+    toLandUnread.status === 1 &&
+      toLandUnread.out.includes('step e of k-spec: no forecast it can read in its `Size:` line ("about three hundred, give or take") — open it with the number, `Size: ~N lines in M files`, before the step lands, or no rate counts it'),
+    `sizes: one still to land, which can be written again now, sets the detector off — got ${toLandUnread.out}`,
   );
 }
 

@@ -75,6 +75,23 @@ export function forecastIn(text) {
   return { lines: Number(m[1].replace(/,/g, '')), files: files ? Number(files[1]) : null };
 }
 
+/**
+ * What a step file's `Size:` line says when {@link forecastIn} reads no forecast from it, or null when it reads one or
+ * the file has no such line. A step whose line was rewritten into prose — "round 1 landed +498/−95 against ~272" — was
+ * left out of every rate without a word. The label opens its line, as `Kind:` does: `font-size:` in a step's CSS and a
+ * sentence that names the `Size:` line are no line of their own.
+ *
+ * @param {string} text - A step file.
+ * @returns {string|null} The line after `Size:`, shortened.
+ */
+export function unreadSize(text) {
+  if (forecastIn(text)) return null;
+  const m = /^[\s>*_-]*Size:[*_ \t]*([^\n]*)/im.exec(text);
+  if (!m) return null;
+  const said = m[1].trim();
+  return said.length > 72 ? `${said.slice(0, 71)}…` : said;
+}
+
 /** Runs git in the project, or says it could not. */
 function git(dir, args) {
   const r = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
@@ -178,7 +195,8 @@ const median = (xs) => {
  * Every step with a forecast, landed or not: what it was forecast before it was built, and what its commits added.
  *
  * @param {string} dir - The project.
- * @returns {{steps: object[], limit: number}|null} Null outside a git repository.
+ * @returns {{steps: object[], limit: number, unread: object[]}|null} Null outside a git repository. `unread` is each step
+ *   file whose `Size:` line reads as no forecast, with what it says (`said`).
  */
 export function measure(dir) {
   const profile = (() => {
@@ -191,7 +209,7 @@ export function measure(dir) {
   const limit = Number(profile?.vocabulary?.STEP_LINES) || Number(defaultVocabulary(PACKAGE).STEP_LINES) || 400;
   // It runs every turn: a project with no step file does not pay for its history.
   const files = stepFiles(dir);
-  if (files.length === 0) return git(dir, ['rev-parse', '--verify', '--quiet', 'HEAD']) === null ? null : { steps: [], limit };
+  if (files.length === 0) return git(dir, ['rev-parse', '--verify', '--quiet', 'HEAD']) === null ? null : { steps: [], limit, unread: [] };
   const log = git(dir, ['log', '--format=%H%x09%ct%x09%cI%x09%s', 'HEAD']);
   if (log === null) return null;
   // Times as instants: an ISO time carries its zone, and two zones compared as text order wrongly.
@@ -227,23 +245,36 @@ export function measure(dir) {
     return when;
   };
   const steps = [];
+  // Step files whose `Size:` line reads as no forecast: left out of every rate, so said rather than skipped.
+  const unread = [];
   for (const file of files) {
     const current = readFileSync(join(dir, file.path), 'utf8');
     const now = forecastIn(current);
     const kind = kindIn(current);
     const landings = named.get(file.path).filter((c) => code.get(c.hash)?.size > 0);
     if (landings.length === 0) {
-      if (!now) continue;
+      if (!now) {
+        const said = unreadSize(current);
+        if (said !== null) unread.push({ ...file, landed: false, said });
+        continue;
+      }
       // Forecast again in the working tree, it is newer than every commit.
       const since = at('HEAD', file.path)?.lines === now.lines ? writtenAt(file.path, Infinity, now.lines) : Infinity;
-      steps.push({ ...file, kind, landed: false, forecast: now, since });
+      // What it was first forecast at: a forecast restated at a rate carries that rate over it, and rates multiplied
+      // onto one another — another kind's among them — put one project's steps at ×2.54 of their count.
+      const original = changes.get(file.path).map((c) => at(c.hash, file.path)).filter(Boolean).at(-1) ?? null;
+      steps.push({ ...file, kind, landed: false, forecast: now, since, original: original && original.lines !== now.lines ? original : null });
       continue;
     }
     // The forecast the step was built to: its file before its first commit, or as that commit wrote it.
     const first = landings[0];
     const before = at(`${first.hash}^`, file.path);
     const forecast = before ?? at(first.hash, file.path);
-    if (!forecast) continue;
+    if (!forecast) {
+      const said = unreadSize(text.get(`${first.hash}^:${file.path}`) ?? '') ?? unreadSize(text.get(`${first.hash}:${file.path}`) ?? '');
+      if (said !== null) unread.push({ ...file, landed: true, said, hash: first.hash });
+      continue;
+    }
     const since = (before ? writtenAt(file.path, order.get(first.hash), forecast.lines) : null) ?? first.t;
     const lines = new Map();
     for (const c of landings) for (const [path, added] of code.get(c.hash)) lines.set(path, (lines.get(path) ?? 0) + added);
@@ -272,7 +303,7 @@ export function measure(dir) {
       hash: last.hash,
     });
   }
-  return { steps, limit };
+  return { steps, limit, unread };
 }
 
 /**
@@ -292,6 +323,20 @@ export function rateOf(steps, { spec, since, kind = null }) {
   const mine = kind ? landed.filter((s) => s.kind === kind) : [];
   const over = (mine.length ? mine : landed).slice(-RATE_OVER);
   return over.length ? { rate: median(over.map((s) => s.measured ?? s.ratio)), over: over.length, kind: mine.length ? kind : null } : null;
+}
+
+/**
+ * What a spec's newest landed steps of one kind missed by, whenever they were forecast: set beside a step to land that
+ * carries more over its first forecast than its kind ever missed by, which reads as rates carried from elsewhere.
+ *
+ * @param {object[]} steps
+ * @param {{spec: string, kind?: string|null}} step - Its spec and kind.
+ * @returns {number|null}
+ */
+export function kindRate(steps, { spec, kind = null }) {
+  if (!kind) return null;
+  const over = steps.filter((s) => s.landed && s.spec === spec && s.kind === kind).sort((a, b) => a.t - b.t).slice(-RATE_OVER);
+  return over.length ? median(over.map((s) => s.measured ?? s.ratio)) : null;
 }
 
 /**
@@ -336,7 +381,7 @@ export async function sizes(argv) {
     else console.error('  not a git repository, or one with no commit yet: a step is measured by its commits\n');
     return check ? 0 : 1;
   }
-  const { steps, limit } = measured;
+  const { steps, limit, unread } = measured;
   if (check) {
     // During `nina upgrade --apply`: a step that overran is the project's history, not the move — and the release that
     // first shipped this detector rolled itself back in the project that asked for it. The move says it after.
@@ -344,30 +389,49 @@ export async function sizes(argv) {
       console.log('sizes: current');
       return 0;
     }
+    const said = [];
     const found = overrun(measured);
-    if (!found) {
+    if (found) {
+      const { step, stale } = found;
+      const again = stale.slice(0, 4).map((s) => {
+        const rate = rateOf(steps, s);
+        const next = Math.round(s.forecast.lines * (rate?.rate ?? 1));
+        return `${s.step} ~${s.forecast.lines} → ~${next}${rate?.kind ? ` (${rate.kind})` : ''}${next > limit ? ` past ${limit}` : ''}`;
+      });
+      const first = step.first === null ? '' : `, ${step.first} in its first round (${times(step.measured)})`;
+      said.push(
+        `step ${step.step} of ${step.spec} landed ${step.lines} lines against ~${step.forecast.lines} (${times(step.ratio)}${first}); ` +
+          `before the next of its ${stale.length} step(s) forecast when it was goes out, forecast that one again — a \`Size:\` line at the rate \`nina sizes\` gives it — ` +
+          `and split it if that puts it past ${limit}; the rest at their turn: ${again.join(', ')}${stale.length > again.length ? ', …' : ''}`,
+      );
+    }
+    // Only a step still to land: its line can be written again now, and once it lands, the line it carried is history.
+    for (const u of unread.filter((x) => !x.landed)) {
+      said.push(`step ${u.step} of ${u.spec}: no forecast it can read in its \`Size:\` line ("${u.said}") — open it with the number, \`Size: ~N lines in M files\`, before the step lands, or no rate counts it`);
+    }
+    if (said.length === 0) {
       console.log('sizes: current');
       return 0;
     }
-    const { step, stale } = found;
-    const again = stale.slice(0, 4).map((s) => {
-      const rate = rateOf(steps, s);
-      const next = Math.round(s.forecast.lines * (rate?.rate ?? 1));
-      return `${s.step} ~${s.forecast.lines} → ~${next}${rate?.kind ? ` (${rate.kind})` : ''}${next > limit ? ` past ${limit}` : ''}`;
-    });
-    const first = step.first === null ? '' : `, ${step.first} in its first round (${times(step.measured)})`;
-    console.log(
-      `step ${step.step} of ${step.spec} landed ${step.lines} lines against ~${step.forecast.lines} (${times(step.ratio)}${first}); ` +
-        `before the next of its ${stale.length} step(s) forecast when it was goes out, forecast that one again — a \`Size:\` line at the rate \`nina sizes\` gives it — ` +
-        `and split it if that puts it past ${limit}; the rest at their turn: ${again.join(', ')}${stale.length > again.length ? ', …' : ''}`,
-    );
+    for (const line of said) console.log(line);
     return 1;
   }
-  if (steps.length === 0) {
+  if (steps.length === 0 && unread.length === 0) {
     console.log(`  no step file under ${SPECS} states a \`Size:\` line yet\n`);
     return 0;
   }
-  for (const spec of [...new Set(steps.map((s) => s.spec))]) {
+  // What a step to land carries over its first forecast, beside what its kind's landed steps missed by: rates multiplied
+  // onto one another, another kind's among them, read as one step's own.
+  const carried = (s) => {
+    if (!s.original) return '';
+    const factor = s.forecast.lines / s.original.lines;
+    const own = kindRate(steps, s);
+    const note = ` · first forecast ~${s.original.lines}, ${times(factor)} since`;
+    if (own === null) return dim(note);
+    const beside = `${note}; its ${s.kind} steps missed by ${times(own)}`;
+    return factor > own * OVERRUN ? amber(beside) : dim(beside);
+  };
+  for (const spec of [...new Set([...steps, ...unread].map((s) => s.spec))]) {
     const mine = steps.filter((s) => s.spec === spec);
     console.log(`\n  ${bold(pink(spec))}${dim(`  landed against the forecast it was built to; limit ${limit} lines`)}`);
     for (const s of mine.filter((x) => x.landed).sort((a, b) => a.t - b.t)) {
@@ -382,15 +446,20 @@ export async function sizes(argv) {
     for (const s of mine.filter((x) => !x.landed)) {
       const rate = rateOf(steps, s);
       if (!rate) {
-        console.log(`    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} ${dim('to land — forecast after every step that landed, so none measures it yet')}`);
+        console.log(`    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} ${dim('to land — forecast after every step that landed, so none measures it yet')}${carried(s)}`);
         continue;
       }
       const next = Math.round(s.forecast.lines * rate.rate);
       console.log(
         `    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} → ~${String(next).padEnd(5)} ` +
           dim(`to land, at ${times(rate.rate)} over ${rate.over} ${rate.kind ? `${rate.kind} ` : ''}step(s) forecast as it was`) +
-          (next > limit ? amber(`  past ${limit}: split`) : ''),
+          (next > limit ? amber(`  past ${limit}: split`) : '') +
+          carried(s),
       );
+    }
+    for (const u of unread.filter((x) => x.spec === spec)) {
+      const where = u.landed ? `before ${u.hash.slice(0, 7)}, the commit that landed it,` : 'to land,';
+      console.log(`    ${u.step.padEnd(10)} ${amber('no forecast it can read')} ${dim(`— its \`Size:\` line ${where} says "${u.said}", so no rate counts it`)}`);
     }
   }
   console.log('');

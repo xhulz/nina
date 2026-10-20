@@ -289,6 +289,22 @@ During `nina upgrade --apply` it stands aside, as the lessons detector does, and
 done: an overrun is the project's history, not the move's doing, and the release that first shipped the detector read
 it as breakage and rolled itself back in the project that had asked for it.
 
+A step file whose `Size:` line reads as no forecast is listed, with what the line says, rather than left out of every
+rate without a word: in the third project an orchestrator rewrote one step's line between its fix rounds into "round 1
+landed +498/−95 against ~272", and that step went missing from every rate. The detector names only a step still to
+land, whose line can be written again now; a landed step's line is history, and a detector that speaks about history
+speaks every turn for good. The label opens its line, as `Kind:` does, so `font-size:` in a step's CSS and a sentence
+that names the line are not one. Nor is a line it cannot read read more loosely: another project writes `~220 raw lines
+… ≤ ~400 at the milestone`, where the forecast it means is the second number, and read as the first every one of its
+steps would have overrun.
+
+Beside a step still to land, `nina sizes` shows what it carries over its first forecast — the oldest number its file
+held in a commit — and what its kind's landed steps missed by. The third project's steps were restated at three rates
+of a new script's steps, one onto another, and stood at ×2.54 of their count where their own kind measured ×1.35: ten
+of them would have gone to the architect to be split. It reads this from the file's history, not from the rates a
+`Size:` line names, which are prose each project writes its own way; the router says a forecast carrying another kind's
+rate is restated from its own count.
+
 ### While a run is still running: the cost watch
 
 `stats` says what a run cost after it ended, and by then the money is spent. Three quarters of the first
