@@ -1474,6 +1474,35 @@ async function sound(fixture, core) {
   expect(req.includes(`core: ${newest}`) && req.includes('target: core') && req.includes('do the thing'), 'learn: the request carries the pin, the layer and the lesson');
   expect(run(['requests']).out.includes('.claude/pills/reviewer/lesson.md'), "requests: the harness inbox should list the project's request");
   expect(run(['requests', '--check']).status === 1, 'requests: an open request is a signal on the harness side');
+  // A pill is named by its id as well as its path, and the owner's choice of layer is recorded without a hand edit: a
+  // lesson of shared roles about a tool only one surface runs was filed for the core, then edited by hand.
+  const chosen = await scratch();
+  await mkdir(join(chosen, '.nina'), { recursive: true });
+  await writeFile(join(chosen, '.nina', 'profile.json'), JSON.stringify({ core: newest, surfaces: ['edge-cf'], vocabulary: {} }));
+  await mkdir(join(chosen, '.claude', 'pills', 'shared'), { recursive: true });
+  await writeFile(
+    join(chosen, '.claude', 'pills', 'shared', 'tool-stays-local.md'),
+    `---\nid: shared-tool-stays-local\napplies_to: [implementer, reviewer]\nstatus: active\ndate: ${today}\noccurrences: 3\n---\n**Rule:** keep the tool local.\n`,
+  );
+  // A file that could hold the rule, so only the two flags together are what --here refuses.
+  await writeFile(join(chosen, 'RULES.md'), '# Rules\n\nKeep the tool local.\n');
+  const graduateIt = (...more) => run(['learn', '--graduate', 'shared-tool-stays-local', ...more, '--project', chosen]);
+  expect(
+    graduateIt('--layer', 'surfaces/db').status === 1 &&
+      graduateIt('--layer', 'surfaces/edge-cf', '--here', 'RULES.md').status === 1 &&
+      (await readdir(join(chosen, '.nina', 'requests')).catch(() => [])).length === 0,
+    'learn --layer: a layer the project does not compose, or one beside --here, is refused, and nothing is filed',
+  );
+  const byId = graduateIt('--layer', 'surfaces/edge-cf');
+  const [chosenReq] = await readdir(join(chosen, '.nina', 'requests')).catch(() => []);
+  const chosenText = chosenReq ? await readFile(join(chosen, '.nina', 'requests', chosenReq), 'utf8') : '';
+  expect(
+    byId.status === 0 &&
+      chosenText.includes('target: surfaces/edge-cf') &&
+      chosenText.includes('pill: .claude/pills/shared/tool-stays-local.md') &&
+      chosenText.includes('proposed as a rule in `surfaces/edge-cf`** — the owner chose it; `nina learn` proposed `core`, since every project composes these roles'),
+    `learn --graduate: a pill named by its id goes to the layer --layer names, and the request says the owner chose it — got ${byId.out}\n${chosenText}`,
+  );
 
   // The harness answers it, a release carries the answer, and the upgrade that installs the release
   // closes it. Answering writes the working core, so it runs against a copy of the CLI whose core is

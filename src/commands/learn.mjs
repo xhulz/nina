@@ -73,7 +73,7 @@ async function recorded(target) {
  * Every pill, with what the cycle needs from it.
  *
  * @param {string} target - The project directory.
- * @returns {Promise<{rel: string, path: string, roles: string[], date: string, last: string, occurrences: number, retired: boolean, body: string}[]>}
+ * @returns {Promise<{rel: string, path: string, id: string|null, roles: string[], date: string, last: string, occurrences: number, retired: boolean, body: string}[]>}
  */
 export async function lessons(target) {
   const dir = join(target, '.claude', 'pills');
@@ -95,6 +95,8 @@ export async function lessons(target) {
       at: mtime && day(mtime) === last ? mtime : null,
       rel: relative(target, pill.path),
       path: pill.path,
+      // How the owner names it: one asked to graduate a pill by its `id:` was told there was no such pill.
+      id: fields.id ? String(fields.id) : null,
       roles: list(fields.applies_to),
       date,
       last,
@@ -758,10 +760,16 @@ async function deepReport(target, records, known, argv) {
  * @param {{core: string}} profile - The project's profile.
  * @param {string} layerRoot - The pinned release, which says which layer each role lives in.
  * @param {Awaited<ReturnType<typeof lessons>>[number]} lesson - A lesson that names its roles.
+ * @param {{reopens?: object|null, recurred?: number, layer?: string|null}} [options] - `layer`: the one the owner chose,
+ *   where it is not the one the roles propose.
  * @returns {Promise<{file: string, layer: string, why: string}>}
  */
-async function fileRequest(target, profile, layerRoot, lesson, { reopens = null, recurred = 0 } = {}) {
-  const target_ = graduationTarget(lesson.roles, await roleGates(layerRoot));
+async function fileRequest(target, profile, layerRoot, lesson, { reopens = null, recurred = 0, layer = null } = {}) {
+  const proposed = graduationTarget(lesson.roles, await roleGates(layerRoot));
+  // The roles propose a layer and only a person can tell: a lesson of shared roles about a tool only one surface runs
+  // was filed for the core, and its target and heading edited by hand.
+  const target_ =
+    layer && layer !== proposed.layer ? { layer, why: `the owner chose it; \`nina learn\` proposed \`${proposed.layer}\`, since ${proposed.why}` } : proposed;
   const date = localDay(new Date().toISOString());
   // Asked about the pill where it was learned, a retired one included: its request names that path.
   const pill = reopens?.pill ?? lesson.rel;
@@ -919,18 +927,40 @@ async function graduateHere(target, profile, lesson, rule) {
 }
 
 /**
- * `nina learn --graduate <pill>` — sends a lesson to the harness as a request; with `--here <file>`, records
- * that the project made it a rule of its own, in that file, and retires the pill. The detector asks for one or
- * the other once a lesson reaches three occurrences, and either can be done sooner.
+ * `nina learn --graduate <pill>` — sends a lesson to the harness as a request, to the layer its roles propose or the
+ * one `--layer` names; with `--here <file>`, records that the project made it a rule of its own, in that file, and
+ * retires the pill. The pill is named by its path or its `id:`. The detector asks for one or the other once a lesson
+ * reaches three occurrences, and either can be done sooner.
  *
+ * @param {string} which - The pill: its path, or its `id:`.
  * @param {string|null} here - The file that holds the rule, for a lesson that graduates in its own project.
+ * @param {string|null} [layer] - The layer of the harness the owner chose: `core` or `surfaces/<s>`.
  * @returns {Promise<number>} Process exit code.
  */
-async function graduate(target, profile, layerRoot, known, which, here) {
-  const lesson = known.find((l) => l.rel === which || l.path === resolve(target, which));
-  if (!lesson) {
-    console.error(`  no pill at ${which} — run \`nina learn\` to list them\n`);
+async function graduate(target, profile, layerRoot, known, which, here, layer = null) {
+  const matches = known.filter((l) => l.rel === which || l.path === resolve(target, which) || (l.id !== null && l.id === which));
+  // A retired pill keeps its id, so the active one is the lesson meant; two active pills with one id are two lessons.
+  const active = matches.filter((l) => !l.retired);
+  if (active.length > 1) {
+    console.error(`  ${which} is the id of ${active.length} pills — name one by its path: ${active.map((l) => l.rel).join(', ')}\n`);
     return 1;
+  }
+  const lesson = active[0] ?? matches[0];
+  if (!lesson) {
+    console.error(`  no pill at ${which}, and none with that id — run \`nina learn\` to list them\n`);
+    return 1;
+  }
+  if (here !== null && layer !== null) {
+    console.error('  --here makes it a rule of this project, and --layer names a layer of the harness: one or the other\n');
+    return 1;
+  }
+  if (layer !== null) {
+    const surfaces = profile.surfaces ?? [];
+    const layers = ['core', ...surfaces.map((s) => `surfaces/${s}`)];
+    if (!layers.includes(layer)) {
+      console.error(`  ${layer || 'no layer'} is not a layer this project composes — one of ${layers.join(', ')}\n`);
+      return 1;
+    }
   }
   if (here !== null) {
     // Declined is the one answer from the harness that leaves the rule to the project. A request still open is
@@ -967,7 +997,7 @@ async function graduate(target, profile, layerRoot, known, which, here) {
     console.error(`  ${lesson.rel} was already requested on ${earlier.date} (${earlier.status}): ${HARNESS}/requests/${earlier.file}\n`);
     return 1;
   }
-  const filed = await fileRequest(target, profile, layerRoot, lesson);
+  const filed = await fileRequest(target, profile, layerRoot, lesson, { layer });
   console.log(`  request written: ${HARNESS}/requests/${filed.file}`);
   console.log(`  target: ${filed.layer} — ${filed.why}`);
   console.log('  the harness maintainer sees it with `nina requests`\n');
@@ -1020,7 +1050,7 @@ export async function learningData(target, layerRoot, profile, { days = CAPTURE_
 /**
  * Runs the learning report, the detector, or a graduation.
  *
- * @param {string[]} argv - `[--project <dir>] [--check] [--graduate <pill>] [--days N]`.
+ * @param {string[]} argv - `[--project <dir>] [--check] [--graduate <pill> [--here <file> | --layer <layer>]] [--days N]`.
  * @param {{root: string}} ctx - CLI context.
  * @returns {Promise<number>} Process exit code.
  */
@@ -1064,7 +1094,8 @@ export async function learn(argv, ctx) {
 
   if (argv.includes('--graduate')) {
     const here = argv.includes('--here') ? argv[argv.indexOf('--here') + 1] ?? '' : null;
-    return graduate(target, profile, resolved.dir, known, argv[argv.indexOf('--graduate') + 1] ?? '', here);
+    const layer = argv.includes('--layer') ? argv[argv.indexOf('--layer') + 1] ?? '' : null;
+    return graduate(target, profile, resolved.dir, known, argv[argv.indexOf('--graduate') + 1] ?? '', here, layer);
   }
   if (argv.includes('--close')) return close(target, argv[argv.indexOf('--close') + 1] ?? '');
 
@@ -1135,7 +1166,7 @@ export async function learn(argv, ctx) {
       }
       console.log(`  ${lesson.rel} has recurred ${lesson.occurrences} times — a rule, not a pill. Where it goes is this project's call:`);
       console.log(`    → a convention of this codebase: write the rule in this project's layer under ${HARNESS}/project/tree/ (\`nina where <file>\` lists the slots) or in a file it owns, then ${here}`);
-      console.log(`    → a rule any project of this shape needs: \`nina learn --graduate ${lesson.rel}\` sends it to the harness; commit the request with the pill`);
+      console.log(`    → a rule any project of this shape needs: \`nina learn --graduate ${lesson.rel}\` sends it to the harness, \`--layer core\` or \`--layer surfaces/<s>\` to choose where; commit the request with the pill`);
     }
     const what = (o) => `${o.lesson.rel} came back ${o.recurred} time(s) after ${ruleWent(o.reopens)}`;
     for (const s of sent) {
