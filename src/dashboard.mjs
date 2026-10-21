@@ -82,7 +82,8 @@ export function dashboardTabs(target, ctx) {
         late: d.late.map(({ role, count, since, recent }) => ({ role, count, since, recent: recent.map(({ ts, desc }) => ({ ts, desc: desc ?? null })) })),
         active: d.active.length,
         ready: d.ready.map((l) => ({ rel: l.rel, occurrences: l.occurrences })),
-        open: d.open.map(({ date, pill, target: layer }) => ({ date, pill, target: layer })),
+        // A request a project wrote by hand carries no pill: its name stands in, as `learn` prints it.
+        open: d.open.map(({ date, pill, id, target: layer }) => ({ date, pill: pill || id, target: layer })),
         owed: d.owed.map(({ lesson, declined }) => ({ rel: lesson.rel, occurrences: lesson.occurrences, declined: declined ? { why: declined.declined, in: declined.answered_in } : null })),
         madeHere: d.madeHere,
         relapses: d.relapses.map(({ lesson, request, recurred, due }) => ({ rel: lesson.rel, recurred, due, target: request.target, rule_in: request.rule_in, answered_in: request.answered_in })),

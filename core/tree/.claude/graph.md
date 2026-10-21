@@ -46,7 +46,7 @@ gate, the dispatch past a cap waits for the owner to confirm it; `router.md` say
 - `design-reviewer` → `implementer` on `APPROVED`
 - `design-reviewer` → `architect` on `REJECTED` — a design flaw, found before any code · max 2
 - `implementer` → `reviewer` on `DIFF-READY`
-- `implementer` → `architect` on `BLOCKED` — the spec is wrong, needs a file it does not list, or asks one run for more files or lines than a step may write · max 2
+- `implementer` → `architect` on `BLOCKED` — the spec is wrong, needs a file it does not list, or asks one run for more files or lines than a step may write, or half again its forecast · max 2
 - `implementer` → `planner` on `BLOCKED` — the spec is too large for one step · max 1
 <!-- nina:slot db.2 -->
 <!-- nina:slot integrations.2 -->
