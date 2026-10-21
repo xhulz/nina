@@ -1474,6 +1474,15 @@ async function sound(fixture, core) {
   expect(req.includes(`core: ${newest}`) && req.includes('target: core') && req.includes('do the thing'), 'learn: the request carries the pin, the layer and the lesson');
   expect(run(['requests']).out.includes('.claude/pills/reviewer/lesson.md'), "requests: the harness inbox should list the project's request");
   expect(run(['requests', '--check']).status === 1, 'requests: an open request is a signal on the harness side');
+  // A project wrote a request by hand, about a defect in a command, with no pill, and the inbox listed it as "undefined".
+  const byHand = join(dir, '.nina', 'requests', '2026-01-01-harness__a-command-defect.md');
+  await writeFile(byHand, `---\nkind: harness-request\nstatus: open\ndate: 2026-01-01\ncore: ${newest}\ntarget: core\n---\n**A defect.**\n`);
+  const inbox = [run(['requests', '--check']).out, run(['requests']).out].join('\n');
+  expect(
+    inbox.includes('(no pill) → core') && inbox.includes('(no pill)\n') && !inbox.includes('undefined'),
+    `requests: a request with no pill is listed as one, not as "undefined" — got\n${inbox}`,
+  );
+  await rm(byHand);
   // A pill is named by its id as well as its path, and the owner's choice of layer is recorded without a hand edit: a
   // lesson of shared roles about a tool only one surface runs was filed for the core, then edited by hand.
   const chosen = await scratch();

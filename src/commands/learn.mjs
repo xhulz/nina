@@ -1236,7 +1236,7 @@ export async function learn(argv, ctx) {
         : `            to graduate: ${lesson.rel} — here (\`--graduate ${lesson.rel} --here <file>\`) or in the harness (\`--graduate ${lesson.rel}\`)`,
     );
   }
-  for (const r of open) console.log(`            open since ${r.date}: ${r.pill} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
+  for (const r of open) console.log(`            open since ${r.date}: ${r.pill || r.id} → ${r.target}. \`nina upgrade\` to the release that answers it closes it`);
   for (const r of learning.relapses) {
     const shipped = `came back ${r.recurred} time(s) after ${ruleWent(r.request, false)}`;
     if (r.due) console.log(`            ✗ ${r.lesson.rel} ${shipped} — the rule did not hold; \`harness:check\` reopens it`);
@@ -1399,6 +1399,8 @@ export async function requests(argv = [], ctx = { root: '.' }) {
   const unanswered = found.filter((r) => !working[r.id] && !shipped.has(r.id));
   const unreleased = found.filter((r) => working[r.id] && !shipped.has(r.id));
   const where = (r) => join(r.dir, HARNESS, 'requests', r.f);
+  // A request a project wrote by hand — a defect in a command — carries no pill, and was listed as "undefined".
+  const about = (r) => r.fields.pill || '(no pill)';
 
   if (check) {
     if (unanswered.length === 0 && unreleased.length === 0) {
@@ -1408,7 +1410,7 @@ export async function requests(argv = [], ctx = { root: '.' }) {
     // The maintainer's side of graduation used to be "run nina requests and remember to" — the one
     // step with nothing to prompt it. This repo's own harness:check runs this every turn.
     const reopened = (r) => (r.fields.reopens ? ` — reopens a rule that did not hold (${r.fields.rule_in || r.fields.target})` : '');
-    for (const r of unanswered) console.log(`  ${r.fields.date}  ${r.fields.pill} → ${r.fields.target} (core ${r.fields.core})${reopened(r)}  ${where(r)}`);
+    for (const r of unanswered) console.log(`  ${r.fields.date}  ${about(r)} → ${r.fields.target} (core ${r.fields.core})${reopened(r)}  ${where(r)}`);
     for (const r of unreleased) console.log(`  answered, not released: ${r.id}`);
     console.log(
       `requests: ${[
@@ -1441,7 +1443,7 @@ export async function requests(argv = [], ctx = { root: '.' }) {
       : working[r.id]
         ? 'answered in the working core — cut a release to carry it'
         : `waiting — nina requests --answer ${r.id} --in <layer file>, or --decline … --why …`;
-    console.log(`  ${r.fields.date}  ${r.fields.target.padEnd(20)} core ${r.fields.core}  ${r.fields.pill}${r.fields.reopens ? `  — reopens a rule that did not hold (${r.fields.rule_in || r.fields.target})` : ''}`);
+    console.log(`  ${r.fields.date}  ${r.fields.target.padEnd(20)} core ${r.fields.core}  ${about(r)}${r.fields.reopens ? `  — reopens a rule that did not hold (${r.fields.rule_in || r.fields.target})` : ''}`);
     console.log(`              ${where(r)}`);
     console.log(`              ${state}`);
   }
