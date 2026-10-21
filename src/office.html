@@ -31,8 +31,15 @@
   #tasks .who { margin-top: 3px; color: #c9cde0; font-size: 12px; overflow-wrap: anywhere; }
   #tasks .now { margin-top: 2px; color: #ffd34d; font-size: 12px; }
   #tasks .now.quiet { color: #8a8fa8; }
+  #tasks ul.agents { list-style: none; margin: 8px 0 0; padding: 0; }
+  #tasks ul.agents li { margin: 0 0 7px; padding: 0 0 0 14px; }
+  #tasks ul.agents li::before { left: 1px; top: 4px; width: 7px; height: 7px; border: 0; background: #ffd34d; animation: beat 1.2s ease-in-out infinite; }
+  #tasks .agent { overflow-wrap: anywhere; font-size: 12px; color: #c9cde0; }
+  #tasks .role { font: 600 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #fff8e8; margin-right: 6px; }
+  #tasks .desc { margin-top: 1px; color: #8a8fa8; font-size: 11px; overflow-wrap: anywhere; }
+  #tasks .took { margin-top: 1px; color: #a9adbf; font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   @keyframes beat { 50% { opacity: 0.35; } }
-  @media (prefers-reduced-motion: reduce) { #tasks li.running::before { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #tasks li.running::before, #tasks ul.agents li::before { animation: none; } }
 </style>
 </head>
 <body>
@@ -805,6 +812,14 @@ function onBeat(b) {
     }
     return;
   }
+  if (b.type === 'home') {
+    // Reported, and nobody came for the work in time: it goes home, unless it was sent back to work meanwhile.
+    const p = b.agent ? people.get(b.agent) : null;
+    if (!p || !(p.reported || p.reporting) || p.leaving) return;
+    if (b.instant) leave(p, true);
+    else act(p, () => p.reported && !p.typing && !p.leaving && leave(p));
+    return;
+  }
   if (b.type === 'refused' || b.type === 'stale') {
     // A dispatch the owner refused never ran; a run that never reported has stopped. Either way, whoever sat down
     // for it gets up — and a refusal answers the gate's call.
@@ -975,14 +990,16 @@ function syncButtons() {
  * The session's work, task by task, as the server cuts it — the way `nina runs` does: each named by the words the
  * orchestrator gave its first dispatch, with the stages that worked on it, from when that went out to the verdict
  * that closed it. The server sends the whole list whenever it changes, and it replaces what is here. A task still
- * open counts up while anyone is at work on it, and stops at the last thing that happened while nobody is.
+ * open counts up while anyone is at work on it, and stops at the last of its runs to start or end while nobody is;
+ * under it, each of its agents at work, as Claude Code lists its own: the stage, what it is doing now, the words of
+ * its dispatch, how long it has been at work and the context it holds.
  */
 const SIDE = 300;
 /** Narrower than this, the timeline is drawn over the room, and starts hidden. */
 const NARROW = 760;
 const TASKS_KEY = 'nina-office-tasks';
 let tasks = [];
-/** The newest dispatch or verdict: a replay's clock, and where an idle task's count stops. */
+/** The newest dispatch or verdict: a replay's clock. */
 let lastActivity = 0;
 let tasksOpen = (() => {
   try {
@@ -998,6 +1015,15 @@ let tasksOpen = (() => {
 const atWork = () => [...new Set([...people.values()].filter((p) => p.work && !p.reported && !p.leaving).map((p) => p.role))];
 
 const two = (n) => String(n).padStart(2, '0');
+/** How long an agent has been at work, as Claude Code says it: 28s, 7m 19s, 1h 4m. */
+function took(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+/** A count of tokens: 850, 49.8k, 1.2M — a count that rounds to a thousand thousands is a million. */
+const tokens = (n) => (n >= 999_950 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 /** A moment as the hour, with the day when it is not the day of `beside` — now, or the moment it follows. */
 function stamp(at, beside) {
   const t = new Date(at);
@@ -1021,26 +1047,43 @@ function counter(ms) {
 function drawTasks() {
   if (!tasksOpen) return;
   const clock = status.startsWith('replay') ? lastActivity : Date.now();
-  const working = atWork();
-  const line = (cls, text) => {
-    const el = document.createElement('div');
+  const line = (cls, text, tag = 'div') => {
+    const el = document.createElement(tag);
     el.className = cls;
     el.textContent = text;
     return el;
+  };
+  // What it is doing now, as Claude Code's list leads with, and under it the words its dispatch was given.
+  const agentRow = (a) => {
+    const li = document.createElement('li');
+    const what = line('agent', '');
+    what.append(line('role', a.role, 'span'), a.doing ?? a.desc ?? '');
+    li.append(what);
+    if (a.doing && a.desc) li.append(line('desc', a.desc));
+    li.append(line('took', a.tokens === null ? took(clock - a.start) : `${took(clock - a.start)} · ${tokens(a.tokens)} tokens`));
+    return li;
   };
   const shown = [...tasks].sort((a, b) => b.start - a.start);
   document.getElementById('task-list').replaceChildren(
     ...shown.map((t) => {
       const li = document.createElement('li');
       const running = t.end === null;
-      const idle = running && working.length === 0;
+      const agents = t.agents ?? [];
+      const idle = running && agents.length === 0;
       li.className = running ? (idle ? 'idle' : 'running') : t.how === 'closed' ? 'done' : 'ended';
       li.append(line('name', t.name || '(no description)'));
       if (t.who?.length > 0) li.append(line('who', t.who.map(([role, n]) => (n > 1 ? `${role} ×${n}` : role)).join(' · ')));
       if (running) {
-        const upTo = idle ? Math.max(t.start, lastActivity) : Math.max(t.start, clock);
+        // Idle, it stops at the last of its own runs to start or end, whatever another task is doing.
+        const upTo = idle ? Math.max(t.start, t.last ?? t.start) : Math.max(t.start, clock);
         li.append(line('when', `${stamp(t.start, clock)} → now · ${counter(upTo - t.start)}`));
-        li.append(line('now', idle ? `idle since ${stamp(lastActivity, clock)}` : `at work: ${working.join(', ')}`));
+        if (idle) li.append(line('now', `idle since ${stamp(t.last ?? t.start, clock)}`));
+        else {
+          const list = document.createElement('ul');
+          list.className = 'agents';
+          list.append(...agents.map(agentRow));
+          li.append(list);
+        }
       } else {
         li.append(line('when', `${stamp(t.start, clock)} → ${stamp(t.end, t.start)} · ${span(t.end - t.start)}`));
         // A task that waited — overnight, on the owner — says how much of it anyone was at work.

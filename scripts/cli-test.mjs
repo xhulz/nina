@@ -40,7 +40,7 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
-import { PARTY_QUIET_MS, SEATS_MAX, SILENT_MS, STALE_MS, busiest, busyFor, officeBeats, officeTimeline, runClock, serveOffice, storeNames, wakeClock } from '../src/office.mjs';
+import { HANDOFF_MS, PARTY_QUIET_MS, SEATS_MAX, SILENT_MS, STALE_MS, actionOf, busiest, busyFor, officeBeats, officeTimeline, runClock, runFiles, runState, serveOffice, storeNames, wakeClock } from '../src/office.mjs';
 import { serveDashboard } from '../src/dashboard.mjs';
 import { taskList } from '../src/commands/runs.mjs';
 import { pipelineData } from '../src/commands/pipeline.mjs';
@@ -7584,6 +7584,19 @@ await release();
   );
   const stillWriting = officeTimeline(sideBySide, t0 + STALE_MS + 60_000, new Map(), (s) => (s.end === null ? t0 + STALE_MS : null));
   expect(stillWriting.length === 1 && stillWriting[0].end === null, `office: a run still writing its transcript holds its task open past ${STALE_MS / 3_600_000} hours — got ${JSON.stringify(stillWriting)}`);
+  // An open task lists its agents at work, as Claude Code lists its own: the stage, its own dispatch's words, when it
+  // started, the context it holds and what it is doing. One that reported is not among them, nor one the orchestrator
+  // stopped. An open task with nobody at work counts up to the last of its runs to start or end, not another task's.
+  const listed = officeTimeline(sideBySide, t0 + 40_000, new Map(), () => null, (s) => (s.role === 'architect' ? { tokens: 135_300, doing: 'Read spec.md' } : null));
+  const waiting = officeTimeline(described(0, 'implementer', 'DIFF-READY', 'Implement x'), t0 + 60_000);
+  const haltedHere = ran(0, 'implementer');
+  const afterHalt = officeTimeline([haltedHere, { k: 'stop', at: at(30), agent: haltedHere[1].agent, role: 'implementer' }, ran(60, 'implementer')].flat(), t0 + 62_000);
+  expect(
+    JSON.stringify(listed[0]?.agents) === JSON.stringify([{ role: 'architect', desc: 'Spec the entries', start: t0 + 1000, tokens: 135_300, doing: 'Read spec.md' }]) &&
+      reported[0].agents.length === 0 && JSON.stringify(afterHalt.map((x) => x.agents.map((a) => [a.role, a.start - t0, a.tokens, a.doing]))) === '[[["implementer",60000,null,null]]]' &&
+      waiting[0]?.end === null && waiting[0].agents.length === 0 && waiting[0].last === t0 + 5000,
+    `office: an open task lists its agents at work with their dispatch's words, start, context and step, none that reported or was stopped, and an idle one its own last moment — got ${JSON.stringify([listed, afterHalt, waiting])}`,
+  );
   // A task that begins with a message — a design-reviewer resumed to re-check a corrected spec, after qa closed the
   // last task — is named by the message's summary, else by the words its agent was launched with; never nothing.
   const reviewed2 = [...described(0, 'design-reviewer', 'REJECTED', 'Design review the import'), ...described(10, 'qa', 'PASS', 'QA the export')];
@@ -7660,6 +7673,20 @@ await release();
   const besideQa = [{ k: 'pre', at: at(0), role: 'dba', id: 'd2' }, { k: 'dispatch', at: at(0), role: 'dba', agent: 'db2', via: 'Agent', id: 'd2' }, { k: 'pre', at: at(0), role: 'qa', id: 'q2' }, { k: 'dispatch', at: at(0), role: 'qa', agent: 'qa2', via: 'Agent', id: 'q2' }, { k: 'verdict', at: at(5), agent: 'qa2', role: 'qa', verdict: 'PASS', declared: true }, { k: 'verdict', at: at(8), agent: 'db2', role: 'dba', verdict: 'APPROVED', declared: true }];
   expect(parties(besideQa).length === 1, `office: a pass beside the one that closed the task throws no second party — got ${JSON.stringify(parties(besideQa).map((b) => [b.role, b.at - t0]))}`);
 
+  // One whose report is in goes home once HANDOFF_MS passes with nothing coming for its work: with tasks side by side, a
+  // report in four sat on past two minutes waiting for the next dispatch, done and with nothing in hand.
+  const homeOf = (entries, now) => beatsOf(entries, now).filter((b) => b.type === 'home');
+  const alone = ran(0, 'architect', 'SPEC-READY');
+  const handedSoon = [ran(0, 'architect', 'SPEC-READY'), ran(60, 'implementer')];
+  const partied = [ran(0, 'qa', 'PASS')];
+  const wentHome = homeOf([alone], t0 + 5000 + HANDOFF_MS);
+  expect(
+    homeOf([alone], t0 + 5000 + HANDOFF_MS - 1).length === 0 && wentHome.length === 1 && wentHome[0].at === t0 + 5000 + HANDOFF_MS && wentHome[0].agent === alone[1].agent &&
+      homeOf(handedSoon).length === 0 && homeOf(partied).length === 0 && homeOf([alone, ran(5 + HANDOFF_MS / 1000 + 1, 'implementer')]).length === 1 &&
+      homeOf([ran(0, 'architect', 'BLOCKED')]).length === 0,
+    `office: one whose report is in goes home after ${HANDOFF_MS / 60_000} minutes with no dispatch and no party between, not before, and not one waiting on the owner's answer — got ${JSON.stringify([wentHome, homeOf(handedSoon), homeOf(partied)])}`,
+  );
+
   // A dispatch the owner refused writes `pre` and the gate's `ask`, and no `dispatch`: once the orchestrator launches
   // something else it is refused — whoever sat down for it gets up, and it keeps no party away.
   // These hold the party of a pass that closes no task — a spike's approval — since one that closes a task has its party
@@ -7707,7 +7734,7 @@ await release();
       await write('agent-bare.jsonl', '{}\n');
       await write('agent-half.meta.json', '{"agentType":"qa","toolU');
       await write('agent-half.jsonl', '{}\n');
-      const clock = runClock(link);
+      const clock = runClock(runFiles(link));
       const heard = clock('s-clock');
       const found = [
         heard({ agent: 'abc', id: null }),
@@ -7724,6 +7751,60 @@ await release();
       expect(
         found.slice(0, 3).every((x) => x === when.getTime()) && found.slice(3).every((x) => x === null) && later === when.getTime(),
         `office: a run's transcript is found by its agent, or by the launch its meta names once the meta is whole, through a link too, and when it was last written read — got ${JSON.stringify([...found, later])}`,
+      );
+    } finally {
+      if (saved === undefined) delete process.env.NINA_TRANSCRIPTS;
+      else process.env.NINA_TRANSCRIPTS = saved;
+    }
+  }
+  // A run as its transcript tells it: the context its newest message holds and its newest step — the words it gave a
+  // shell command, or the tool and a file's name, never the command — read as the transcript grows, a line half
+  // written waiting for the rest, and for a replay as it stood at a moment.
+  {
+    const saved = process.env.NINA_TRANSCRIPTS;
+    try {
+      process.env.NINA_TRANSCRIPTS = await scratch();
+      const target = await scratch();
+      const dir = join(process.env.NINA_TRANSCRIPTS, slugFor(realpathSync(target)), 's-meter', 'subagents');
+      await mkdir(dir, { recursive: true });
+      const said = (id, s, read, block) => JSON.stringify({ type: 'assistant', timestamp: at(s), message: { id, content: [block], usage: { input_tokens: 2, cache_read_input_tokens: read, cache_creation_input_tokens: 500, output_tokens: 7 } } });
+      const tool = (name, input) => ({ type: 'tool_use', id: `tu_${name}`, name, input });
+      const file = join(dir, 'agent-m1.jsonl');
+      const third = said('msg_3', 9, 40_000, tool('Edit', { file_path: '/repo/src/probe4.mjs', old_string: 'a', new_string: 'b' }));
+      // A message is written once for each block: the second copy of the first is the same message, and its step.
+      await writeFile(
+        file,
+        `${[
+          said('msg_1', 1, 9_000, { type: 'thinking', thinking: 'plan' }),
+          said('msg_1', 1.5, 9_000, tool('Bash', { command: 'SECRET=1 pnpm test', description: 'Run  the\nsuite' })),
+          JSON.stringify({ type: 'user', timestamp: at(2) }),
+          said('msg_2', 5, 20_000, tool('Read', { file_path: '/repo/.claude/plans/spec.md' })),
+        ].join('\n')}\n${third.slice(0, 40)}`,
+      );
+      const looks = runState(runFiles(target));
+      const look = looks('s-meter');
+      const run1 = { agent: 'm1', id: null };
+      const first = [look(run1), look(run1, t0 + 3000), look(run1, t0), look({ agent: 'zzz', id: null }), looks(null)(run1)];
+      await appendFile(file, `${third.slice(40)}\n`);
+      const grown = looks('s-meter')(run1);
+      expect(
+        JSON.stringify(first) ===
+          JSON.stringify([{ tokens: 20_502, doing: 'Read spec.md' }, { tokens: 9_502, doing: 'Run the suite' }, { tokens: null, doing: null }, null, null]) &&
+          JSON.stringify(grown) === JSON.stringify({ tokens: 40_502, doing: 'Edit probe4.mjs' }),
+        `office: a run's context is its newest message's and its step its newest tool call's, as they stood at a moment, a half-written line read once it is whole — got ${JSON.stringify([first, grown])}`,
+      );
+      const steps = [
+        actionOf(tool('Bash', { command: 'curl -H "Authorization: x" y' })),
+        actionOf(tool('Bash', { command: 'x', description: 'd'.repeat(200) })),
+        actionOf(tool('mcp__atlassian__createJiraIssue', { description: 'the issue body' })),
+        actionOf(tool('Grep', { pattern: 'password', path: '/repo/src' })),
+        actionOf({ type: 'text', text: 'hi' }),
+        actionOf(tool('Read', { file_path: 'C:\\Users\\me\\proj\\secret.txt' })),
+        actionOf(tool('mcp__srv__', { file_path: '/repo/f.txt' })),
+      ];
+      expect(
+        JSON.stringify(steps) === JSON.stringify(['Bash', `${'d'.repeat(119)}…`, 'createJiraIssue', 'Grep', null, 'Read secret.txt', 'srv f.txt']),
+        `office: a step is a shell command's description or a tool and a file's name — never a command, another tool's input or a pattern — got ${JSON.stringify(steps)}`,
       );
     } finally {
       if (saved === undefined) delete process.env.NINA_TRANSCRIPTS;
@@ -7866,7 +7947,8 @@ await release();
     const writingDir = join(process.env.NINA_TRANSCRIPTS, slugFor(realpathSync(project)), 'office-session-1', 'subagents');
     await mkdir(writingDir, { recursive: true });
     await writeFile(join(writingDir, `agent-${unfinished}.meta.json`), JSON.stringify({ agentType: 'implementer' }));
-    await writeFile(join(writingDir, `agent-${unfinished}.jsonl`), '{}\n');
+    const usage = { input_tokens: 3, cache_read_input_tokens: 61_000, cache_creation_input_tokens: 400, output_tokens: 12 };
+    await writeFile(join(writingDir, `agent-${unfinished}.jsonl`), `${JSON.stringify({ type: 'assistant', timestamp: at(41), message: { id: 'msg_live', usage } })}\n`);
     office = await serveOffice({ target: project, port: 0 });
   } catch (error) {
     restoreTranscripts();
@@ -7890,9 +7972,9 @@ await release();
     // release among them, with their rack and shelf.
     const draws = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'measureText' ? () => ({ width: 0 }) : () => {}), set: (t, k, v) => ((t[k] = v), true) });
     const element = () => ({ width: 0, height: 0, style: {}, hidden: false, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, getContext: () => draws, replaceChildren() {}, append() {}, setPointerCapture() {} });
-    const pageRun = (html) => {
+    const pageRun = (html, document = { getElementById: element, createElement: element }) => {
       const browser = createContext({
-        document: { getElementById: element, createElement: element },
+        document,
         window: { innerWidth: 1440, innerHeight: 900, devicePixelRatio: 1, addEventListener() {} },
         localStorage: { getItem: () => null, setItem() {} },
         EventSource: class { addEventListener() {} },
@@ -7991,6 +8073,53 @@ await release();
       standing.stays && standing.at.join() === standing.spare.join(),
       `office: one standing beside a stage's full desks keeps that place, and a new layout moves it with them as they leave — got ${JSON.stringify(standing)}`,
     );
+    // One whose report is in goes home when the server says nothing came for its work, unless it was sent back to work.
+    const goneHome = look(`(() => {
+      reset();
+      const report = (id, agent) => onBeat({ id, at: 2000, type: 'verdict', role: 'architect', agent, verdict: 'SPEC-READY', back: false, asks: false, issues: [], instant: true });
+      onBeat({ id: 'w1', at: 1000, type: 'work', role: 'architect', agent: 'ag1', instant: true });
+      onBeat({ id: 'w2', at: 1000, type: 'work', role: 'architect', agent: 'ag2', instant: true });
+      report('v1', 'ag1');
+      report('v2', 'ag2');
+      const seated = people.has('ag1') && people.has('ag2');
+      onBeat({ id: 'home:v1', at: 122000, type: 'home', role: 'architect', agent: 'ag1', instant: true });
+      const gone = !people.has('ag1') && people.has('ag2');
+      // Sent back to work before its own going home is read, it stays.
+      onBeat({ id: 'w3', at: 123000, type: 'work', role: 'architect', agent: 'ag2', resumed: true, instant: true });
+      onBeat({ id: 'home:v2', at: 122000, type: 'home', role: 'architect', agent: 'ag2', instant: true });
+      return { seated, gone, resumedStays: people.has('ag2') && !people.get('ag2').leaving };
+    })()`);
+    expect(goneHome.seated && goneHome.gone && goneHome.resumedStays, `office: the page sends home one whose report is in, and keeps one sent back to work — got ${JSON.stringify(goneHome)}`);
+    // Under an open task, each agent at work as Claude Code lists its own: stage, words, time at work, context.
+    {
+      const made = new Map();
+      const node = (tag) => ({
+        tag, className: '', textContent: '', title: '', hidden: false, style: {}, children: [],
+        classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, getContext: () => draws, setPointerCapture() {},
+        append(...xs) { this.children.push(...xs); },
+        replaceChildren(...xs) { this.children = xs; },
+      });
+      const said = (n) => (typeof n === 'string' ? n : `${n.textContent}${n.children.map(said).join('')}`);
+      const rows = (n) => (typeof n === 'string' ? [] : ['agent', 'desc', 'took', 'now', 'when'].includes(n.className) ? [said(n)] : n.children.flatMap(rows));
+      const listing = pageRun(page, { getElementById: (id) => made.get(id) ?? made.set(id, node(id)).get(id), createElement: node });
+      listing(`tasks = [
+        { key: 'a', name: 'M2 step 15', start: Date.now() - 600000, end: null, how: null, busy: null, who: [['architect', 1], ['implementer', 2]],
+          agents: [
+            { role: 'architect', desc: 'M2 15b/15c spec fix', start: Date.now() - 439000, tokens: 135300, doing: 'Rerun all mutants' },
+            { role: 'reviewer', desc: null, start: Date.now() - 28000, tokens: null, doing: null },
+            { role: 'qa', desc: 'QA M2', start: Date.now() - 5000, tokens: 999960, doing: null },
+          ] },
+        { key: 'b', name: 'M9 step 8', start: Date.now() - 900000, end: null, last: Date.now() - 300000, how: null, busy: null, who: [['dba', 1]], agents: [] },
+      ];
+      drawTasks();`);
+      const shown = made.get('task-list').children.map(rows);
+      expect(
+        JSON.stringify(shown[0].slice(1)) === JSON.stringify(['architectRerun all mutants', 'M2 15b/15c spec fix', '7m 19s · 135.3k tokens', 'reviewer', '28s', 'qaQA M2', '5s · 1.0M tokens']) &&
+          shown[1].length === 2 && shown[1][0].endsWith('→ now · 10:00') && shown[1][1].startsWith('idle since') &&
+          listing('[took(59_999), took(3_725_000), tokens(850), tokens(49_800), tokens(1_250_000)]').join() === '59s,1h 2m,850,49.8k,1.3M',
+        `office: an open task lists each agent at work with its step, its words, time and context, and one with none is idle since its own last moment — got ${JSON.stringify(shown)}`,
+      );
+    }
     const port = new URL(office.url).port;
     const statusAs = (host) =>
       new Promise((resolveGet) => {
@@ -8034,6 +8163,10 @@ await release();
       timelines.length >= 2 && timelines[0].length === 1 && timelines[0][0].end === null &&
         timelines.at(-1)[0].how === 'closed' && timelines.at(-1)[0].who.some(([role]) => role === 'qa'),
       `office: a client is sent the timeline as it connects, and again, whole, when the ledger changes it — got ${JSON.stringify(timelines)}`,
+    );
+    expect(
+      JSON.stringify(timelines[0][0].agents.map((a) => [a.role, a.tokens])) === '[["implementer",61403]]' && timelines.at(-1)[0].agents.length === 0,
+      `office: the timeline sent lists the agent at work with the context its transcript says it holds — got ${JSON.stringify(timelines.map((t) => t[0]?.agents))}`,
     );
     const restored = live.filter((e) => e.event === 'beat' && e.data.instant);
     const fresh = live.find((e) => e.event === 'beat' && !e.data.instant);
