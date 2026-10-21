@@ -5711,6 +5711,12 @@ const dated = (date, status = 'active') =>
     router.includes('### A spec is corrected in place') && router.includes('Never ask for\na `Revision N` section') && !router.includes('eighth revision') && !router.includes('The rule\n  used to be'),
     'compose: the orchestrator asks for no revision sections, and the history behind both rules is not composed',
   );
+  // What the owner reads beside each agent at work is the dispatch's description: the plan's ids alone named nothing.
+  expect(
+    router.includes('### A dispatch is named for whoever watches') && router.includes('in words someone who has not read the plan understands, then the step\'s id') &&
+      router.includes('`Fix the export spec · M2 15b`') && !router.includes('could not tell what any of them was doing'),
+    'compose: the orchestrator names a dispatch in words anyone understands, then the step\'s id, and the history behind the rule is not composed',
+  );
 
   // Where a lesson graduates is the project's call — a rule here, or a request to the harness. Filed on its own as
   // a request, a convention of one codebase went the whole way to the harness and came back still a pill.

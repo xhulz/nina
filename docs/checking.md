@@ -196,7 +196,10 @@ detail: each task's name, who worked on it (each stage in the order it first did
 sent), when it started and ended, and how long it took; a task still open counts up while anyone is at work on it,
 and stops at the last thing that happened while nobody is. A task is a cycle, cut as `nina runs` cuts one
 (`cyclesOf`, one function for both): a session's dispatches up to the verdict that closes them, named by the words
-the orchestrator gave the first. The gate keeps those words on each dispatch's entries; a ledger written before it
+the orchestrator gave the first. The router asks for those words plain, then the step's id short (`router.md` § *A
+dispatch is named for whoever watches*): written as the plan's ids alone — `M2 15b/15c spec fix`, `10e round 2:
+controls and rows` — they told the owner watching the office nothing of what any agent was doing. The gate keeps
+those words on each dispatch's entries; a ledger written before it
 did takes them from the measurement store, by the dispatch's id, read again only when the store has changed. A task
 can begin with a message — an agent resumed after it had reported, a design-reviewer sent to re-check a corrected
 spec after qa closed the last task — and a message has no description: it is named by its `summary`, which the gate

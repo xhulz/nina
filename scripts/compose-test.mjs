@@ -311,7 +311,9 @@ const BUDGETS = {
   // And for a spike plan's answer given with the run that prints each token that would refuse it: a spike's check
   // printed ACCEPTED for the rejection it existed to catch. And for a forecast restated from its own count at its kind's
   // rate, never multiplied again: one project's steps carried three rates of another kind, at ×2.54 of their count.
-  '.claude/router.md': 19400,
+  // And for a dispatch named in words anyone understands before its step's id: the plan's ids alone, beside every
+  // agent at work, told the owner watching nothing of what each was doing.
+  '.claude/router.md': 19900,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
