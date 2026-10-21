@@ -1114,7 +1114,7 @@ const REWRITE_FLOOR = 30_000;
  */
 export function contextOf(usage) {
   const n = (v) => (typeof v === 'number' ? v : 0);
-  const turns = [...usage.values()].map(({ usage: u }) => ({ size: n(u.input_tokens) + n(u.cache_read_input_tokens) + n(u.cache_creation_input_tokens), written: n(u.cache_creation_input_tokens) }));
+  const turns = [...usage.values()].map(({ usage: u }) => ({ size: contextSize(u), written: n(u.cache_creation_input_tokens) }));
   const sizes = turns.map((t) => t.size);
   let rewrites = 0;
   let rewritten = 0;
@@ -1125,6 +1125,18 @@ export function contextOf(usage) {
     }
   }
   return { turns: sizes.length, start: sizes[0] ?? null, peak: sizes.length > 0 ? Math.max(...sizes) : null, rewrites, rewritten };
+}
+
+/**
+ * The context a turn held: everything it read, from the cache or not. What `stats` measures a round's context by, the
+ * cost watch a run's, and the office an agent at work.
+ *
+ * @param {object} usage - A message's usage.
+ * @returns {number} Tokens.
+ */
+export function contextSize(usage) {
+  const n = (v) => (typeof v === 'number' ? v : 0);
+  return n(usage?.input_tokens) + n(usage?.cache_read_input_tokens) + n(usage?.cache_creation_input_tokens);
 }
 
 /** How the cost watch opens an output it clipped (`src/cost.mjs`), which is how a snapshot counts them. */

@@ -23,7 +23,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { projectGateDir } from './gate.mjs';
-import { CLIP_MARK } from './transcripts.mjs';
+import { CLIP_MARK, contextSize } from './transcripts.mjs';
 
 /** Where a run's counts are kept between calls, one file per agent. */
 const stateDir = (root) => join(projectGateDir(root), 'cost');
@@ -38,7 +38,7 @@ const KEEP_MS = 7 * 86_400_000;
  * @param {number} from - The offset already read.
  * @returns {{text: string, to: number}}
  */
-function gained(path, from) {
+export function gained(path, from) {
   const size = statSync(path).size;
   if (size <= from) return { text: '', to: size < from ? 0 : from };
   const buffer = Buffer.alloc(size - from);
@@ -238,7 +238,7 @@ function count(input, { root, warnAt, now }) {
         state.read[message.id] = read;
         last = read;
         // The whole context that turn held, which a turn after an expired cache writes again.
-        state.context = read + n(message.usage.cache_creation_input_tokens) + n(message.usage.input_tokens);
+        state.context = contextSize(message.usage);
       }
     } catch {
       // A torn line loses one message's count.

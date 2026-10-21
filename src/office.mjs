@@ -4,11 +4,14 @@
  * Each stage of the project's composed graph has a desk, and each agent the loop gate saw launched is someone
  * sitting at one. The gate's ledger is what is read, and it holds metadata only, so the office shows who worked,
  * what they answered, the ids of the issues they named and the few words the orchestrator gave each dispatch —
- * never what an agent wrote or reported. Beside the room, a timeline of the session's tasks (`officeTimeline`), cut
- * and named as `nina runs` cuts and names them:
+ * never what an agent reported. Of a run's own transcript it reads when it was last written, how much context it
+ * holds and what it is doing — the description it gave its shell command, or a tool and a file's name (`actionOf`).
+ * Beside the room, a timeline of the session's tasks (`officeTimeline`), cut and named as `nina runs` cuts and names
+ * them, each open one with its agents at work:
  *
  *   a dispatch                        someone sits down to work, the folder carried over by whoever handed it on
  *   a verdict                         a check over their head, or a cross when it sends work back
+ *   a report nothing follows          after `HANDOFF_MS`, its agent goes home
  *   a verdict the graph sends to the  a question mark over the one who asked, until the owner speaks
  *   owner, or the orchestrator asking
  *   the gate asking at a cap          the phone on the reception's counter rings, the owner's line
@@ -31,7 +34,8 @@ import { readLedger, sessionLedgers } from './gate.mjs';
 import { readProfile, slugFor } from './paths.mjs';
 import { projectStoreFile, readStoreFile } from './store.mjs';
 import { CYCLE_ENDS, IN_FLIGHT, cyclesOf } from './commands/stats.mjs';
-import { isLoopBack, transcriptsOf } from './transcripts.mjs';
+import { contextSize, isLoopBack, transcriptsOf } from './transcripts.mjs';
+import { gained } from './cost.mjs';
 import { shapeOf } from './commands/pipeline.mjs';
 import { listenHere, openInBrowser, refuseElsewhere, untilStopped } from './serve.mjs';
 
@@ -47,6 +51,14 @@ export const OFFICE_PORT = 6462;
  * `done` is celebrated at once.
  */
 export const PARTY_QUIET_MS = 20_000;
+
+/**
+ * How long one whose report is in waits at its desk to hand its work on before it goes home. Any dispatch moves the
+ * reported on, but with tasks side by side the next could be a long while coming: of two projects' 1,266 reports, 346
+ * sat on past two minutes and 149 past ten, done and with nothing in hand, while Claude Code had already let them go.
+ * Of 544 hand-offs, 92.8% went out within two minutes, and 93.9% within three.
+ */
+export const HANDOFF_MS = 2 * 60 * 1000;
 
 /** How far back, when a live client moves to a session already running, beats still play rather than set the room. */
 const SWITCH_GRACE_MS = 10_000;
@@ -77,14 +89,13 @@ export const SILENT_MS = 45 * 60 * 1000;
 const staleAt = (start, heard) => (heard === null ? start.at + STALE_MS : Math.max(start.at, heard) + SILENT_MS);
 
 /**
- * When each run of a session last wrote its own transcript, so that a run still writing is at work however long it
- * takes. A run is found by its agent's id once the gate knows it, and before that — a foreground run still going — by
- * the tool_use id that launched it, which its transcript's `.meta.json` keeps.
+ * Each run's own transcript in a session. A run is found by its agent's id once the gate knows it, and before that — a
+ * foreground run still going — by the tool_use id that launched it, which its transcript's `.meta.json` keeps.
  *
  * @param {string} target - The project directory.
- * @returns {(session: string|null) => (start: {agent: string|null, id: string|null}) => number|null}
+ * @returns {(session: string|null) => (start: {agent: string|null, id: string|null}) => string|null}
  */
-export function runClock(target) {
+export function runFiles(target) {
   // Named as the gate names the project's ledgers, by where it really is: reached through a link, it is the same one.
   let real = target;
   try {
@@ -121,9 +132,23 @@ export function runClock(target) {
       }
       if (launchedBy.has(meta)) byLaunch.set(launchedBy.get(meta), file);
     }
+    return (start) => (start.agent && byAgent.get(start.agent)) || (start.id && byLaunch.get(start.id)) || null;
+  };
+}
+
+/**
+ * When each run of a session last wrote its own transcript, so that a run still writing is at work however long it
+ * takes.
+ *
+ * @param {(session: string|null) => (start: object) => string|null} files - Each run's transcript (`runFiles`).
+ * @returns {(session: string|null) => (start: {agent: string|null, id: string|null}) => number|null}
+ */
+export function runClock(files) {
+  return (session) => {
+    const fileOf = files(session);
     const written = new Map();
     return (start) => {
-      const file = (start.agent && byAgent.get(start.agent)) || (start.id && byLaunch.get(start.id)) || null;
+      const file = fileOf(start);
       if (!file) return null;
       if (!written.has(file)) {
         try {
@@ -133,6 +158,89 @@ export function runClock(target) {
         }
       }
       return written.get(file);
+    };
+  };
+}
+
+/** The most of a run's own words the timeline shows for what it is doing. */
+const ACTION_MAX = 120;
+
+/**
+ * What a tool call is doing, in the few words a list beside the room has: the description the run gave a shell
+ * command, which the run writes for a person to read, or the tool and the name of the file it works on. Never the
+ * command, a path, a pattern, another tool's input or what came back.
+ *
+ * @param {object} block - A `tool_use` block of an assistant message.
+ * @returns {string|null}
+ */
+export function actionOf(block) {
+  if (block?.type !== 'tool_use' || typeof block.name !== 'string') return null;
+  const input = block.input && typeof block.input === 'object' ? block.input : {};
+  // An MCP tool is named by its server too: the tool's own name says what it does.
+  const name = block.name.startsWith('mcp__') ? (block.name.split('__').filter(Boolean).at(-1) ?? block.name) : block.name;
+  const said = block.name === 'Bash' && typeof input.description === 'string' ? input.description.replace(/\s+/g, ' ').trim() : '';
+  if (said) return said.length > ACTION_MAX ? `${said.slice(0, ACTION_MAX - 1)}…` : said;
+  const path = [input.file_path, input.notebook_path].find((x) => typeof x === 'string' && x.trim());
+  // A transcript written on Windows names its files with backslashes, which a path read here does not split on.
+  return path ? `${name} ${basename(path.trim().replace(/\\/g, '/'))}` : name;
+}
+
+/**
+ * Each run of a session as its own transcript tells it now: how much context it holds (`contextSize` of its newest
+ * message) and what it is doing (`actionOf` its newest tool call) — what Claude Code shows beside each of its running
+ * agents, but for a line it writes as it watches, which it keeps nowhere. Read once a look and only what the
+ * transcript gained since the last, keeping those and nothing else the run wrote; each with when its message was
+ * written, so a replay is told the run as it stood at a beat.
+ *
+ * @param {(session: string|null) => (start: object) => string|null} files - Each run's transcript (`runFiles`).
+ * @returns {(session: string|null) => (start: {agent: string|null, id: string|null}, moment?: number) => {tokens: number|null, doing: string|null}|null}
+ */
+export function runState(files) {
+  /** By transcript, in the session last looked at: how far it was read, its last message, the counts and actions by when. */
+  let read = new Map();
+  let looking = null;
+  return (session) => {
+    // The office follows one session at a time: one it moved away from is read again if it comes back.
+    if (session !== looking) read = new Map();
+    looking = session;
+    const fileOf = files(session);
+    const looked = new Set();
+    return (start, moment = Number.POSITIVE_INFINITY) => {
+      const file = fileOf(start);
+      if (!file) return null;
+      if (!read.has(file)) read.set(file, { offset: 0, last: null, counts: [], actions: [] });
+      const kept = read.get(file);
+      if (!looked.has(file)) {
+        looked.add(file);
+        try {
+          const { text, to } = gained(file, kept.offset);
+          // A transcript shorter than what was read of it is another one: read again from its start.
+          if (to < kept.offset) Object.assign(kept, { last: null, counts: [], actions: [] });
+          kept.offset = to;
+          for (const line of text.split('\n')) {
+            if (!line.includes('"cache_read_input_tokens"')) continue;
+            try {
+              const row = JSON.parse(line);
+              const at = Date.parse(row?.timestamp);
+              if (!row?.message?.usage || !row.message.id || !Number.isFinite(at)) continue;
+              // A message is written once for each of its blocks, with the same usage: its first is counted, and
+              // each of its tool calls is a step.
+              if (row.message.id !== kept.last) kept.counts.push([at, contextSize(row.message.usage)]);
+              kept.last = row.message.id;
+              for (const block of Array.isArray(row.message.content) ? row.message.content : []) {
+                const action = actionOf(block);
+                if (action) kept.actions.push([at, action]);
+              }
+            } catch {
+              // A torn line loses one message's count; the next one has its own.
+            }
+          }
+        } catch {
+          // A transcript gone between the listing and the read tells what it had.
+        }
+      }
+      const by = (list) => list.findLast(([at]) => at <= moment)?.[1] ?? null;
+      return { tokens: by(kept.counts), doing: by(kept.actions) };
     };
   };
 }
@@ -256,11 +364,12 @@ function readStarts(ledger) {
  * verdict that ends a cycle of the timeline, qa's `PASS` — is a party at once, whoever else is at work. Any other pass
  * ends the work — a party — when nothing since the last dispatch was sent back, something since then could route to
  * `done`, nobody is still at work, and no dispatch follows within `PARTY_QUIET_MS`; at once when the pass routes only
- * to a terminal. A party that waits on the quiet is only beaten once `now` has passed it.
+ * to a terminal. A party that waits on the quiet is only beaten once `now` has passed it. So is the beat that sends one
+ * whose report is in home (`home`): `HANDOFF_MS` after its verdict, when no dispatch and no party came between.
  *
  * @param {object[]} entries - The ledger, oldest first.
  * @param {{edges: {from: string, to: string, token: string}[]}} graph - The project's parsed graph.
- * @param {number} [now] - The time a waiting party is judged against; `Infinity` for a session that has ended.
+ * @param {number} [now] - The time a waiting party or a going home is judged against; `Infinity` for a session that has ended.
  * @param {(start: object) => number|null} [heard] - When a run last wrote its transcript (`runClock`), or null.
  * @returns {object[]} Beats, each `{id, at, type, ...}`; the id is stable as the ledger grows.
  */
@@ -345,6 +454,19 @@ export function officeBeats(ledger, graph, now = Date.now(), heard = () => null)
     // A reset written for the model's own question, by ledgers older than the `question` entry, is not the owner.
     else if (e.k === 'reset' && e.why !== 'ask') beats.push({ id, at, type: 'owner' });
   });
+  // One whose report is in goes home once `HANDOFF_MS` passes with no dispatch and no party, either of which sends the
+  // reported on anyway. Its work, handed on later, the orchestrator carries. One that asked the owner stays with its
+  // question until the work moves on. "After" is the ledger's order, which the beats keep until they are sorted: a
+  // qa's party falls at its verdict's own moment.
+  const moves = beats.flatMap((b, i) => ((b.type === 'work' && !b.message) || b.type === 'party' ? [{ i, at: b.at }] : []));
+  const home = [];
+  beats.forEach((v, i) => {
+    if (v.type !== 'verdict' || v.asks) return;
+    const moment = v.at + HANDOFF_MS;
+    if (now < moment || moves.some((m) => m.i > i && m.at <= moment)) return;
+    home.push({ id: `home:${v.id}`, at: moment, type: 'home', role: v.role, agent: v.agent });
+  });
+  beats.push(...home);
   // Stable: beats of one moment keep the ledger's order. A beat that waited — a party, a refusal — sorts where it fell.
   return beats.sort((a, b) => a.at - b.at);
 }
@@ -359,13 +481,18 @@ export function officeBeats(ledger, graph, now = Date.now(), heard = () => null)
  * grows — a run still at work lets nothing through until its verdict, a dispatch is known refused only seconds later
  * — and sent piece by piece, a task that a later fact merged away stayed on the page for good.
  *
+ * A task still open lists its agents at work, oldest first, each with its stage, the words its own dispatch was given,
+ * when it started, how much context it holds and what it is doing (`runState`) — the detail Claude Code shows of its
+ * own running agents. Every task says when the last of its runs started or ended, which an idle one counts up to.
+ *
  * @param {object[]} ledger - The ledger, oldest first.
  * @param {number} [now] - The moment it is read at: a run with no verdict that has not gone quiet is still at work.
  * @param {Map<string, string>} [names] - Descriptions by dispatch id, for entries that carry none.
  * @param {(start: object) => number|null} [heard] - When a run last wrote its transcript (`runClock`), or null.
- * @returns {{key: string, name: string|null, start: number, end: number|null, how: string|null, busy: number|null, who: [string, number][]}[]}
+ * @param {(start: object) => {tokens: number|null, doing: string|null}|null} [state] - A run as its transcript tells it (`runState`).
+ * @returns {{key: string, name: string|null, start: number, end: number|null, last: number, how: string|null, busy: number|null, who: [string, number][], agents: {role: string, desc: string|null, start: number, tokens: number|null, doing: string|null}[]}[]}
  */
-export function officeTimeline(ledger, now = Date.now(), names = new Map(), heard = () => null) {
+export function officeTimeline(ledger, now = Date.now(), names = new Map(), heard = () => null, state = () => null) {
   const { entries, starts, verdictOf } = readStarts(ledger);
   // A run a message started — an agent resumed after it had reported — is named by the message's summary, or, in a
   // ledger from before the gate kept one, by the words the agent was launched with: it goes on with that work.
@@ -385,15 +512,22 @@ export function officeTimeline(ledger, now = Date.now(), names = new Map(), hear
     // A task its closing verdict ended while one of its runs is still at work stays open until that run reports: work
     // planned side by side — three architects sent together, one of whose specs went on to qa — fell inside the task
     // the first one's qa closed, and the room showed two architects at work beside a list with no task open.
-    const open = cycle.end === 'open' || cycle.runs.some((r) => r.verdict === IN_FLIGHT && r.start.end == null);
+    const atWork = cycle.runs.filter((r) => r.verdict === IN_FLIGHT && r.start.end == null);
+    const open = cycle.end === 'open' || atWork.length > 0;
+    const last = Math.max(...cycle.runs.map((r) => r.start.end ?? r.start.at));
     return {
       key: first.key,
       name: first.desc ? String(first.desc) : null,
       start: first.start.at,
-      end: open ? null : Math.max(...cycle.runs.map((r) => r.start.end ?? r.start.at)),
+      end: open ? null : last,
+      last,
       how: open ? null : cycle.end,
       busy: open ? null : busyFor(cycle.runs.map((r) => r.start)),
       who: [...who],
+      agents: atWork.map((r) => {
+        const told = state(r.start);
+        return { role: r.role, desc: r.desc ? String(r.desc) : null, start: r.start.at, tokens: told?.tokens ?? null, doing: told?.doing ?? null };
+      }),
     };
   });
 }
@@ -505,7 +639,9 @@ export function officeRoutes({ target, wanted, replay = false }) {
   const timers = new Set();
 
   const names = storeNames(target);
-  const clock = runClock(target);
+  const files = runFiles(target);
+  const clock = runClock(files);
+  const looks = runState(files);
   const wake = wakeClock();
 
   /** The session to show, and its entries; read again only when its ledger changed. */
@@ -559,7 +695,7 @@ export function officeRoutes({ target, wanted, replay = false }) {
       return at === null ? null : Math.max(at, woke);
     };
     const beats = officeBeats(state.entries, graph, now, heard);
-    const tasks = officeTimeline(state.entries, now, names(state.entries), heard);
+    const tasks = officeTimeline(state.entries, now, names(state.entries), heard, looks(state.session));
     for (const client of clients) {
       if (client.replay) continue;
       if (client.session !== state.session) greet(client, state);
@@ -580,7 +716,8 @@ export function officeRoutes({ target, wanted, replay = false }) {
     const beats = officeBeats(state.entries, graph, Number.POSITIVE_INFINITY, heard);
     // The timeline as it stood at each beat: cut from the ledger up to that moment, so a replay tells nothing early.
     const known = names(state.entries);
-    const tasksAt = (moment) => officeTimeline(state.entries.filter((e) => Date.parse(e?.at) <= moment), moment, known, heard);
+    const look = looks(state.session);
+    const tasksAt = (moment) => officeTimeline(state.entries.filter((e) => Date.parse(e?.at) <= moment), moment, known, heard, (start) => look(start, moment));
     // What came before the first dispatch sets the room, at once: a session often opens on many of the owner's
     // messages, and played out they kept the office empty for a minute.
     let i = Math.max(0, beats.findIndex((b) => b.type === 'work'));

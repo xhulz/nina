@@ -143,10 +143,15 @@ review and the gates above one corridor, the reception, the test lab and release
 as the phone on its counter (they are not drawn: they are watching), a garden outside the
 door new agents come in by, and each agent the loop gate saw launched sitting at its stage's desk. It
 reads the gate's ledger, so it shows what the ledger holds — who worked, what they answered, the ids of the issues
-they named, the few words the orchestrator gave each dispatch — and never what an agent wrote or reported. A dispatch is someone sitting down to work, the
+they named, the few words the orchestrator gave each dispatch — and never what an agent reported; of an agent's own
+transcript, the timeline below reads only its context and its current step. A dispatch is someone sitting down to work, the
 folder carried over by whoever handed it on along an edge of the graph (a diff to its reviewer, a rejection back
 in red to its fixer) and by the orchestrator otherwise; whoever handed it on then leaves, and everyone else whose
 report is in gets up as the work moves on, so the room holds the work in hand and not everyone who ever sat in it.
+One whose report is in waits two minutes for its work to be handed on, and then goes home; handed on later, the
+orchestrator carries it. One that asked the owner stays with its question until the work moves on. Waiting for the next dispatch alone, with tasks side by side, 346 of the 1,266 reports
+measured across two projects sat on past two minutes and 149 past ten, done and with nothing in hand, while Claude
+Code had already let them go; of 544 hand-offs, 92.8% went out within two minutes, and only 93.9% within three.
 The title says who is at work, or that the room waits for the next dispatch: between dispatches, little moves. A verdict is a check or a cross over their head; a verdict
 the graph sends to `human`, or the orchestrator asking, a question mark until the owner answers or speaks; the gate
 asking at a cap, the reception's phone ringing until the dispatch goes out, is refused, or the owner speaks. Whoever sat
@@ -203,7 +208,16 @@ that waited — overnight, on the owner — also says how long anyone was at wor
 side by side count once. The list is cut again as the ledger grows and sent whole whenever it changes, and the page
 replaces what it has: the cut moves — a review still at work lets nothing through until its verdict, a refused
 dispatch is known only once the orchestrator goes on — and sent task by task, a task a later fact merged away stayed
-on the page running for ever. A replay sends it as it stood at each beat, cut from the ledger up to that beat. On a
+on the page running for ever. A replay sends it as it stood at each beat, cut from the ledger up to that beat.
+Under a task still open, each of its agents at work, oldest first, as Claude Code lists its own: the stage, what it is
+doing now, the words its own dispatch was given, how long it has been at work, and how much context it holds (its
+newest message's). What it is doing is its newest tool call: the description it gave a shell command, which it writes
+for a person to read, or the tool and the name of the file it works on — never the command, the file's path, a pattern,
+another tool's input or what came back. Claude Code leads its line with words a model writes as it watches each agent, and
+keeps them nowhere, neither in a transcript nor among the requests it logs, so the office reads the step itself: the
+dispatch's words alone, shown first, read beside Claude Code's list as the wrong names. Both are read from the run's own
+transcript as it grows, and nothing else of it is kept; a replay is told them as they stood at the beat. A task open
+with nobody at work counts up to the last of its own runs to start or end, not to another task's work. On a
 narrow window it is drawn over the room and starts hidden; the `tasks` button, or `t`, shows or hides it, and the
 viewer's browser keeps the choice.
 
