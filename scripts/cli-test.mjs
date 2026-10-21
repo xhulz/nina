@@ -7963,7 +7963,7 @@ await release();
   try {
     const page = await (await fetch(`${office.url}/`)).text();
     expect(
-      page.includes('<title>NINA office</title>') && page.includes(`"owner":"Ana $& $' \\u003c/script>"`) && page.includes('"stages":["architect","implementer","reviewer"') && !page.includes('/*NINA_ROOM*/null') &&
+      page.includes('<title>NINA office</title>') && page.includes('<button id="theme" type="button"') && page.includes(`"owner":"Ana $& $' \\u003c/script>"`) && page.includes('"stages":["architect","implementer","reviewer"') && !page.includes('/*NINA_ROOM*/null') &&
         // The whole office opens whole when it fits at 0.7 of the readable zoom: at 0.85, a room sized by its desks opened close.
         page.includes('const WHOLE = 0.7;') && page.includes('whole >= READABLE * WHOLE'),
       "office: the page is served with the room filled in, stages in the order the line takes them, and an owner's name stays text — got " + page.slice(page.indexOf('const ROOM'), page.indexOf('const ROOM') + 200),
@@ -7978,11 +7978,12 @@ await release();
     // release among them, with their rack and shelf.
     const draws = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'measureText' ? () => ({ width: 0 }) : () => {}), set: (t, k, v) => ((t[k] = v), true) });
     const element = () => ({ width: 0, height: 0, style: {}, hidden: false, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, getContext: () => draws, replaceChildren() {}, append() {}, setPointerCapture() {} });
-    const pageRun = (html, document = { getElementById: element, createElement: element }) => {
+    const pageRun = (html, document = { getElementById: element, createElement: element }, localStorage = { getItem: () => null, setItem() {} }) => {
       const browser = createContext({
         document,
-        window: { innerWidth: 1440, innerHeight: 900, devicePixelRatio: 1, addEventListener() {} },
-        localStorage: { getItem: () => null, setItem() {} },
+        // What the page listens for, kept so a test can press a key.
+        window: { innerWidth: 1440, innerHeight: 900, devicePixelRatio: 1, heard: {}, addEventListener(type, fn) { (this.heard[type] ??= []).push(fn); } },
+        localStorage,
         EventSource: class { addEventListener() {} },
         performance: { now: () => 0 },
         requestAnimationFrame() {},
@@ -8124,6 +8125,36 @@ await release();
           shown[1].length === 2 && shown[1][0].endsWith('→ now · 10:00') && shown[1][1].startsWith('idle since') &&
           listing('[took(59_999), took(3_725_000), tokens(850), tokens(49_800), tokens(1_250_000)]').join() === '59s,1h 2m,850,49.8k,1.3M',
         `office: an open task lists each agent at work with its step, its words, time and context, and one with none is idle since its own last moment — got ${JSON.stringify(shown)}`,
+      );
+    }
+    // Night: a viewer watching in the dark turns the building's lights down with a button, and the choice is kept. The
+    // building takes every color from the palette, or night would leave it lit.
+    {
+      const lit = (kept) => {
+        const made = new Map();
+        const node = () => ({ textContent: '', title: '', hidden: false, style: {}, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, getContext: () => draws, replaceChildren() {}, append() {}, setPointerCapture() {} });
+        const saved = new Map(kept ? [['nina-office-theme', kept]] : []);
+        const look = pageRun(page, { getElementById: (id) => made.get(id) ?? made.set(id, node()).get(id), createElement: node }, { getItem: (k) => saved.get(k) ?? null, setItem: (k, v) => saved.set(k, v) });
+        return { look, button: () => made.get('theme'), saved };
+      };
+      const fresh = lit(null);
+      const byDay = { floor: fresh.look('C.floor'), label: fresh.button().textContent };
+      fresh.look('showNight(true)');
+      const atNight = { floor: fresh.look('C.floor'), grass: fresh.look('C.grass'), screen: fresh.look('C.screen'), label: fresh.button().textContent, kept: fresh.saved.get('nina-office-theme') };
+      // The building is drawn once and kept: the switch draws it again, in the other palette.
+      const redrawn = fresh.look('background.width = 0; showNight(false); background.width === LW');
+      const back = { floor: fresh.look('C.floor'), kept: fresh.saved.get('nina-office-theme') };
+      fresh.look("window.heard.keydown.forEach((f) => f({ key: 'd' }))");
+      const byKey = fresh.look('night');
+      const reopened = lit('dark');
+      const building = page.slice(page.indexOf('the building, drawn once'), page.indexOf('// ─── the people'));
+      expect(
+        byDay.floor === fresh.look('DAY.floor') && byDay.label === 'dark' &&
+          atNight.floor === fresh.look('NIGHT.floor') && atNight.floor !== byDay.floor && atNight.grass !== fresh.look('DAY.grass') && atNight.screen === fresh.look('DAY.screen') &&
+          atNight.label === 'light' && atNight.kept === 'dark' && redrawn && back.floor === byDay.floor && back.kept === 'light' && byKey === true &&
+          reopened.look('C.floor') === reopened.look('NIGHT.floor') && reopened.button().textContent === 'light' &&
+          building.length > 1000 && !/'#[0-9a-fA-F]{3,8}'|C\.white\b/.test(building),
+        `office: the night button, or d, turns the building's lights down and up, draws it again, keeps the screens lit, is remembered, and the building has no color outside the palette — got ${JSON.stringify({ byDay, atNight, redrawn, back, byKey, literals: building.match(/'#[0-9a-fA-F]{3,8}'|C\.white\b/g) })}`,
       );
     }
     const port = new URL(office.url).port;

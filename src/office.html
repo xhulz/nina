@@ -46,6 +46,7 @@
 <canvas id="screen"></canvas>
 <div id="zoom" role="toolbar" aria-label="zoom">
   <button id="tasks-toggle" type="button" title="the session's tasks (t)" aria-controls="tasks">tasks</button>
+  <button id="theme" type="button" title="lights down for the night (d)">dark</button>
   <button id="zoom-out" type="button" title="zoom out (−)" aria-label="zoom out">−</button>
   <button id="zoom-fit" type="button" title="the whole office (0)">fit</button>
   <button id="zoom-in" type="button" title="zoom in (+)" aria-label="zoom in">+</button>
@@ -69,19 +70,47 @@
 const ROOM = /*NINA_ROOM*/null || { project: 'demo', stages: ['planner', 'architect', 'design-reviewer', 'implementer', 'reviewer', 'qa', 'dba', 'integration-tester', 'devops', 'secops'], many: ['architect', 'implementer', 'reviewer'], owner: 'you', replay: false };
 
 // ─── palette and sprites ──────────────────────────────────────────────────────────────────────
-const C = {
-  ink: '#262331', white: '#ffffff', paper: '#fff8e8', red: '#e43b44', green: '#3ec74d',
+// The building takes every color it is drawn in from here, so that night can turn its lights down.
+const DAY = Object.freeze({
+  ink: '#262331', white: '#ffffff', sheet: '#ffffff', paper: '#fff8e8', red: '#e43b44', green: '#3ec74d',
   floor: '#dfe3e8', floorLine: '#ccd2d9', floorLight: '#e9ecf0', hall: '#d4d9df', hallLine: '#c3c9d0',
   wallTop: '#f7f6f2', wallFace: '#efe4c3', wallFaceDark: '#e2d5ae', band: '#4e7356', bandDark: '#3b5a43', rail: '#9a7247', base: '#3a4a3f',
-  wood: '#d9a066', woodMid: '#b97f45', woodDark: '#7a4f2c', counter: '#e8b878',
-  chair: '#3c6bd0', chairDark: '#274a96', seatRed: '#c4473b', seatRedDark: '#8e2f27',
+  wood: '#d9a066', woodMid: '#b97f45', woodDark: '#7a4f2c', woodShine: '#ebc08e', counter: '#e8b878',
+  chair: '#3c6bd0', chairDark: '#274a96', chairShine: '#5b8be3', seatRed: '#c4473b', seatRedDark: '#8e2f27', seatShine: '#df6a5e',
   frame: '#2c2f3c', screen: '#59c1ff', screenOff: '#3a4d66', code: '#d8f3ff', key: '#9aa3ad',
-  leaf: '#3e8948', leafDark: '#265c42', leafLight: '#63c74d', leafShine: '#9de64e', pot: '#c76b3c', potDark: '#8e4a2a', potWhite: '#e9e9ee',
+  leaf: '#3e8948', leafDark: '#265c42', leafLight: '#63c74d', leafShine: '#9de64e', pot: '#c76b3c', potDark: '#8e4a2a', potShine: '#e08a58', potWhite: '#e9e9ee',
   grass: '#69b33a', grassDark: '#4f9030', grassLight: '#8fd14f', trunk: '#6b4a2b', path: '#cfc6b2', pathDark: '#b4aa93', flower: '#f6757a', flowerY: '#ffd34d',
   glass: '#9fdcff', glassShine: '#d8f2ff', metal: '#a3acb7', metalDark: '#6c7480', rack: '#3a3f4b', ledG: '#3ef06a', ledR: '#ff5d5d',
-  board: '#fdfdfb', boardEdge: '#9aa3ad', book1: '#e43b44', book2: '#3c6bd0', book3: '#feae34', book4: '#3ec74d', sign: '#22202b', signText: '#ffd34d',
+  board: '#fdfdfb', boardEdge: '#9aa3ad', poster: '#7fc8f8', book1: '#e43b44', book2: '#3c6bd0', book3: '#feae34', book4: '#3ec74d', sign: '#22202b', signText: '#ffd34d',
   rug: '#c9d6e8', rugEdge: '#9fb3cf',
-};
+});
+/**
+ * The office at night, for a viewer watching in the dark: the building's lights down, and what is lit stays lit — a
+ * screen someone is at work on, the rack's lights, the names, the people.
+ */
+const NIGHT = Object.freeze({
+  ...DAY,
+  floor: '#2e3345', floorLine: '#282c3c', floorLight: '#353a4e', hall: '#262a3a', hallLine: '#212534',
+  wallTop: '#56536b', wallFace: '#3a3550', wallFaceDark: '#322d45', band: '#2f4b39', bandDark: '#243a2c', rail: '#6b5038', base: '#1e2a24',
+  wood: '#9a6d45', woodMid: '#7a5433', woodDark: '#4f3420', woodShine: '#b08458', counter: '#a87b4f',
+  chair: '#2f55a8', chairDark: '#203b78', chairShine: '#4170c4', seatRed: '#9a4038', seatRedDark: '#682a24', seatShine: '#b0544a',
+  frame: '#16181f', screenOff: '#2a3a52', key: '#5c636d', sheet: '#a9aebb',
+  leaf: '#2f6a3a', leafDark: '#1d4630', leafLight: '#3e8a40', leafShine: '#5c9c40', pot: '#8e4c2c', potDark: '#62321e', potShine: '#a5603a', potWhite: '#8d8d99',
+  grass: '#1f3f27', grassDark: '#18321f', grassLight: '#285030', trunk: '#3c2a1a', path: '#4e4a40', pathDark: '#423e35', flower: '#9a4c55', flowerY: '#9a8a3e',
+  glass: '#24375a', glassShine: '#3b5786', metal: '#5c636d', metalDark: '#3c4149', rack: '#20242c',
+  board: '#9ba1ad', boardEdge: '#5c636d', poster: '#2f5d86', book1: '#9a3238', book2: '#2f55a8', book3: '#a8782c', book4: '#2f8a3c',
+  rug: '#38425a', rugEdge: '#4a5672',
+});
+/** Day or night, as this viewer last chose: kept by their browser, and day until they choose. */
+const THEME_KEY = 'nina-office-theme';
+let night = (() => {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'dark';
+  } catch {
+    return false;
+  }
+})();
+const C = { ...(night ? NIGHT : DAY) };
 const SHIRTS = ['#e86a92', '#3c8bd9', '#3ec74d', '#feae34', '#8b6fd6', '#f2763a', '#1fb5a5', '#b0b8c4', '#a3d63a', '#f3a6c4', '#a2445e', '#2a8f56'];
 const SKINS = ['#ffd6b3', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'];
 const HAIRS = ['#3a2a1a', '#e6a33a', '#24212e', '#a5532c', '#c2c3c7', '#7e2553', '#5f574f', '#d96b2b'];
@@ -373,7 +402,7 @@ function tiles(g, x, y, w, h, fill, line) {
 function plant(g, x, y, big) {
   if (big) {
     box(g, x + 2, y + 12, 10, 8, C.pot);
-    rect(g, x + 3, y + 13, 8, 1, '#e08a58');
+    rect(g, x + 3, y + 13, 8, 1, C.potShine);
     disc(g, x + 7, y + 7, 6, C.leafDark);
     disc(g, x + 6, y + 6, 5, C.leaf);
     disc(g, x + 5, y + 4, 2, C.leafLight);
@@ -397,13 +426,13 @@ function deskAt(g, dx, dy) {
   box(g, dx + 11, dy, 14, 10, C.frame);
   rect(g, dx + 16, dy + 10, 4, 1, C.frame);
   box(g, dx, dy + 9, 36, 10, C.wood);
-  rect(g, dx + 1, dy + 10, 34, 1, '#ebc08e');
+  rect(g, dx + 1, dy + 10, 34, 1, C.woodShine);
   box(g, dx, dy + 18, 36, 7, C.woodMid);
   rect(g, dx + 1, dy + 24, 34, 1, C.woodDark);
   rect(g, dx + 13, dy + 13, 10, 2, C.key);
-  rect(g, dx + 29, dy + 12, 3, 3, C.white);
+  rect(g, dx + 29, dy + 12, 3, 3, C.sheet);
   box(g, dx + 13, dy + 27, 10, 8, C.chair);
-  rect(g, dx + 14, dy + 28, 8, 2, '#5b8be3');
+  rect(g, dx + 14, dy + 28, 8, 2, C.chairShine);
 }
 function windowAt(g, x, y, w) {
   box(g, x, y, w, 14, C.wallTop);
@@ -431,8 +460,8 @@ function wallItem(g, room, kind, x) {
     disc(g, x + 5, y + 7, 5, C.ink);
     disc(g, x + 5, y + 7, 4, C.board);
   } else if (kind === 'poster') {
-    box(g, x, y + 1, 12, 15, '#7fc8f8');
-    rect(g, x + 3, y + 5, 6, 6, C.white);
+    box(g, x, y + 1, 12, 15, C.poster);
+    rect(g, x + 3, y + 5, 6, 6, C.sheet);
   }
 }
 function sign(g, x, y, w) {
@@ -516,7 +545,7 @@ function drawBackground() {
     windowAt(g, lobby.x + 132, lobby.y + 3, 30);
     for (let i = 0; i < 3; i += 1) {
       box(g, lobby.x + 140 + i * 14, lobby.y + FACE + 2, 11, 10, i === 1 ? C.chair : C.seatRed);
-      rect(g, lobby.x + 141 + i * 14, lobby.y + FACE + 3, 9, 2, i === 1 ? '#5b8be3' : '#df6a5e');
+      rect(g, lobby.x + 141 + i * 14, lobby.y + FACE + 3, 9, 2, i === 1 ? C.chairShine : C.seatShine);
     }
     box(g, lobby.x + 186, lobby.y + FACE - 6, 18, 28, C.metal);
     rect(g, lobby.x + 189, lobby.y + FACE - 3, 12, 14, C.glass);
@@ -1108,6 +1137,27 @@ function showTasks(open) {
 }
 document.getElementById('tasks-toggle').addEventListener('click', () => showTasks(!tasksOpen));
 
+/** Night or day: the building drawn again in the other palette, and the viewer's choice kept for the next visit. */
+function showNight(on) {
+  night = on;
+  Object.assign(C, on ? NIGHT : DAY);
+  try {
+    localStorage.setItem(THEME_KEY, on ? 'dark' : 'light');
+  } catch {
+    // Kept for this page only.
+  }
+  if (arranged) drawBackground();
+  syncTheme();
+}
+/** The button names the way it goes: dark by day, light at night. */
+function syncTheme() {
+  const button = document.getElementById('theme');
+  button.textContent = night ? 'light' : 'dark';
+  button.title = night ? 'lights up (d)' : 'lights down for the night (d)';
+}
+document.getElementById('theme').addEventListener('click', () => showNight(!night));
+syncTheme();
+
 function resize() {
   dpr = window.devicePixelRatio || 1;
   // The timeline takes its width from the room on a wide window, and is drawn over it on a narrow one.
@@ -1161,6 +1211,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '-' || e.key === '_') zoomBy(0.8);
   else if (e.key === '0') zoomBy(0);
   else if (e.key === 't') showTasks(!tasksOpen);
+  else if (e.key === 'd') showNight(!night);
 });
 let drag = null;
 screen.addEventListener('pointerdown', (e) => {

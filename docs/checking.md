@@ -224,6 +224,12 @@ with nobody at work counts up to the last of its own runs to start or end, not t
 narrow window it is drawn over the room and starts hidden; the `tasks` button, or `t`, shows or hides it, and the
 viewer's browser keeps the choice.
 
+The `dark` button, or `d`, turns the building's lights down for watching it at night, and `light` turns them up again:
+the floors, walls, furniture and garden go dark, and what is lit stays lit — a screen someone is at work on, the rack's
+lights, the names, the people. The office by day, bright floors and cream walls, was hard to keep open beside a dark
+screen at night. The building takes every color it is drawn in from one palette, so night is the same drawing in
+another; the viewer's browser keeps the choice, and the office opens by day until one is made.
+
 It is a page served on the loopback address for as long as the command runs, on port 6462 (NINA on a phone's
 keypad) or any free one, and the command prints its address at the end of a line, where a terminal makes it a
 link: whoever wants to watch clicks it. VS Code's own browser opens a page only for an extension or for a click,
