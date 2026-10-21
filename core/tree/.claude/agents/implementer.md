@@ -89,18 +89,24 @@ When in doubt: **smaller diff, escalate sooner.**
   boundaries, and TSDoc (Hard Rule #9).
 <!-- nina:slot project.3 conventions -->
 - Scope the diff to exactly what is in the spec — no "while I was here" cleanup, no new abstractions the spec did not authorize.
-- **Before the handoff, sweep your diff for TSDoc as the reviewer will: every file, tests included.** Each
-  declaration it adds or changes gets a block — a field you only widened, a type literal in a cast or a return type written
-  on one line (`as { … }`, `): Promise<{ … }>`), a mock assigned to a local. A type changed in a test reads as not
-  code, and is the line that gets skipped.<!-- nina:why --> One
+- **Before the handoff, sweep your diff for TSDoc as the reviewer will: every file, tests included, by running the
+  sweep, not from memory.** Each declaration it adds or changes gets a block — a field you only widened,
+  a type literal in a cast, a parameter or a return type however short (`as unknown as { … }`, `): Promise<{ … }>`,
+  `): { … }[]`), a mock or a spy assigned to a local (`vi.fn()`, `vi.spyOn(…)`: each is a function). Name a literal
+  rather than document it: a type the library exports, or one documented alias, leaves no member to document. List the
+  lines to check over every touched and new file, and give each hit on a line you added or changed a `/** … */`
+  directly above it:
+  `{ git diff --name-only --diff-filter=d HEAD; git ls-files -o --exclude-standard; } | grep -E '\.tsx?$' | xargs grep -nHE '^\s+(readonly )?[[:alnum:]_$]+\??: [^,]*;$|= vi\.(fn|spyOn)\(|as (unknown as )?\[?\{|\)\s*:\s*(Promise<)?\{|(^|[^&|])[&|<]\s*\{'`.
+  A type changed in a test reads as not code, and is the line that gets skipped.<!-- nina:why --> One
   project's reviewer sent a step back three times in one day for it: five stub fields widened in tests, then mocks'
   locals and literals in casts, then a return type's literal written on one line — each time with every source member
-  documented.<!-- /nina:why -->
+  documented. With those cases named here, the same project was sent back three more times in one day: a cast to
+  `as unknown as { … }`, a `vi.spyOn` local, a helper returning `{ … }[]`.<!-- /nina:why -->
 - Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done.
 - If the spec is wrong, ambiguous, or you hit an unknown, **STOP and escalate** — do not guess. Loop back to architect.
 - **If a spec premise about an external library looks wrong while you're writing code that depends on it** (e.g., the cited line says X but the function clearly does Y), STOP — do not silently work around it. Loop back to architect to re-verify the citation. Premises in the spec are the contract; if the contract is wrong, do not paper over.
 - If the spec is too large to implement without losing fidelity (you find yourself losing track of the spec's invariants while coding), **STOP and escalate to the planner** for further decomposition. Better to pause than to ship a 700-line diff that the reviewer cannot audit cleanly.
-- **Write at most {{STEP_FILES}} files, and about {{STEP_LINES}} lines, in one run.** If this dispatch asks for more (a spec with no steps, several of its steps at once, or a forecast past either), return `BLOCKED` to the architect before writing any, with the count: the spec needs steps. Say in your report how many lines you wrote against the spec's forecast. Past it by more than a quarter while you write, finish the step rather than stop mid-way, and never trim documentation or tests to meet the count: report what this round wrote, and the steps after it are forecast again from it. A run re-reads its own growing context on every turn, so past that size its cost per file multiplies. When the spec has steps, write only the step you were dispatched for, reading the spec and that step's file.
+- **Write at most {{STEP_FILES}} files, and about {{STEP_LINES}} lines, in one run, and know which before you write.** If this dispatch asks for more (a spec with no steps, several of its steps at once, or a forecast past either), return `BLOCKED` to the architect before writing any, with the count: the spec needs steps. Then forecast it yourself, once you have read the step file and the code it extends and before you write the bulk of it: rows, helpers and documentation, each with its lines. Past either limit, or more than half over the step's `Size:`, return `BLOCKED` then, with your forecast and the point to split at, usually the next step's rows.<!-- nina:why --> In one project three implementers in a row finished steps forecast at ~350, ~365 and ~190 with 497, 480 and 443 lines, and the third had forecast ~290 itself before writing on.<!-- /nina:why --> Say in your report your forecast, and how many lines you wrote against the spec's. Past it by more than a quarter while you write, finish the step rather than stop mid-way, and never trim documentation or tests to meet the count: report what this round wrote, and the steps after it are forecast again from it. A run re-reads its own growing context on every turn, so past that size its cost per file multiplies. When the spec has steps, write only the step you were dispatched for, reading the spec and that step's file.
 <!-- nina:slot db.2 -->
 <!-- nina:slot drizzle.1 -->
 <!-- nina:slot integrations.1 -->
@@ -171,7 +177,7 @@ Diff + summary → **reviewer**. **Cap your final message at ~250 words**, the C
 - Typecheck, lint, and build status (PASS/FAIL).
 - Any deviation from the spec, with justification (if none, say so).
 - **Where the spec was wrong about the tree** — a range, a file list, a premise — and what you did about it (Hard Rule #17). This is not a deviation: a deviation is what YOU did differently, this is what the SPEC got wrong. If nothing, say "spec matched the tree".
-- **Claims:** each sentence the diff writes or leaves standing in a README, module header or docstring that states behavior, with the `file:line` that does it — or "none touched".
+- **Claims:** each sentence the diff writes or leaves standing in a README, module header or docstring that states behavior, with the `file:line` that does it — or, for behavior another step will build, worded as a contract naming that step (`.claude/patterns.md` § *TSDoc*) — or "none touched".
 - **Mutations run:** each test's `fails if` line, and whether it went red on a copy of the final bytes, and when it ran — or why it could not run, or "left to qa" on a simple change.
 - **Early exits:** in code that validates, parses or classifies input or ends a run early, each early `return`, `continue`, `throw` or `except`, and what the caller receives there — or "none". One that answers "nothing" or "ok" is fixed before `DIFF-READY`, not listed.
 - **Required downstream gates:** list which of the gates in `.claude/graph.md` the diff triggers. They go out beside the reviewer, and `qa` waits for every one of them.

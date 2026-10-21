@@ -80,10 +80,25 @@
   "2026-10-18-architect__spike-checks-fail-closed": {
     "in": "core/tree/.claude/agents/architect.md"
   },
+  "2026-10-20-shared__dictated-tsdoc-for-unbuilt-consumer-is-a-contract": {
+    "in": "core/tree/.claude/patterns.md"
+  },
   "2026-10-20-shared__network-controls-use-a-local-listener": {
     "in": "core/tree/CLAUDE.md"
   },
   "2026-10-20-shared__wrangler-update-check-stays-local": {
     "in": "surfaces/edge-cf/tree/CLAUDE.md"
+  },
+  "2026-10-21-harness__sizes-names-matches-a-step-number-anywhere-in-the-subject": {
+    "in": "core/tree/.claude/router.md"
+  },
+  "2026-10-21-implementer__size-cap-is-checked-before-writing-not-after": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-21-implementer__tsdoc-sweep-includes-edited-test-stub-members": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-21-shared__leak-check-matches-by-containment-and-covers-every-privacy-class": {
+    "in": "surfaces/pii/tree/CLAUDE.md"
   }
 }

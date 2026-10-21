@@ -225,6 +225,10 @@ Every named declaration gets a TSDoc block (`/** ... */`) — exported or not: f
 
 ### What TSDoc is NOT
 - Not a restatement of the signature. Not a changelog. Not a crutch for bad naming.
+- Not a statement about code that is not built yet. A block that names what another function, service or step does
+  states it only once that exists in the tree; until then it is a contract with its owner named — "Contract for the
+  caller: the rule service (R4) must refuse …", "Selected for site 2, which R6 builds" — never the present tense: a later
+  stage checking whether a guard exists reads "X guarantees Y" beside the code that relies on it as proof that it does.
 
 ### Enforcement
 Reviewer verifies coverage. **Missing TSDoc on any declaration or member the diff adds or changes — test files
