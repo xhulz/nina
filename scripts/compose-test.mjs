@@ -253,8 +253,9 @@ const BUDGETS = {
   // times in eight days: a check is specified with the run that prints its failing token, and a reading of nothing
   // is never the pass — a spike, a gate and a memory ceiling each printed their passing token for the failure they
   // existed to catch. And for a step split again, whose file becomes its parts' spec: one of 102 KB kept whole was a
-  // twentieth of what one project's stages read.
-  '.claude/agents/architect.md': 22400,
+  // twentieth of what one project's stages read. And for a sentence dictated about code another step builds, worded
+  // as a contract: one read as proof that a guard existed before it did.
+  '.claude/agents/architect.md': 22600,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 4900,
@@ -274,8 +275,10 @@ const BUDGETS = {
   // and for a simple change, which leaves its mutations to qa rather than building a mirror to run them twice; and for
   // a step past its forecast while written, finished and never trimmed to fit: one implementer cut TSDoc to meet it; and
   // for the claim that no one mutation reddens a row, run condition by condition, and the battery's log compared by its
-  // script with every fails-if line: two reviewers built mutants of their own to refute such a claim.
-  '.claude/agents/implementer.md': 23300,
+  // script with every fails-if line: two reviewers built mutants of their own to refute such a claim; and for a step
+  // forecast by the implementer before it writes, three in a row having finished far past theirs; and for the TSDoc
+  // sweep as a command, after it came back three times in a day with its cases named.
+  '.claude/agents/implementer.md': 24500,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -294,8 +297,9 @@ const BUDGETS = {
   // Raised for the design-reviewer's stage and edges.
   '.claude/graph.md': 6950,
   // Raised for a D1 project's findings that hold for every project: a schema generator never writes the
-  // tracked schema, and an integration may be of more than one kind.
-  '.claude/patterns.md': 20700,
+  // tracked schema, and an integration may be of more than one kind. And for TSDoc about code not built yet, a
+  // contract naming its owner: a lesson one project learned three times.
+  '.claude/patterns.md': 21200,
   '.claude/pills/README.md': 10000,
   '.claude/pipeline.md': 9500,
   '.claude/retrieval.md': 10500,
@@ -322,8 +326,9 @@ const BUDGETS = {
   // #21, a run proved local by a guard that refuses at once, no control leaving the machine; and, where a project has
   // edge-cf, for wrangler, which calls npm on its own: two lessons one project learned three times each. And for a
   // wait held within the five minutes a stage's cache lives: past them the next turn writes the whole context again,
-  // and one project's turns after such calls were a quarter of what its stages spent on input.
-  'CLAUDE.md': 30850,
+  // and one project's turns after such calls were a quarter of what its stages spent on input. And, where a project has
+  // pii, for a leak check matched by containment over every channel and property: one project's was sent back three times.
+  'CLAUDE.md': 31450,
 };
 
 /**

@@ -4785,7 +4785,7 @@ const dated = (date, status = 'active') =>
   const spec = async (rel) => readFile(join(young, '.claude', rel), 'utf8');
   expect(
     (await spec('agents/architect.md')).includes('One implementer run writes at most 15 files') &&
-      (await spec('agents/implementer.md')).includes('**Write at most 15 files, and about 400 lines, in one run.**') &&
+      (await spec('agents/implementer.md')).includes('**Write at most 15 files, and about 400 lines, in one run, and know which before you write.**') &&
       (await spec('router.md')).includes("### A spec's steps are passes of their own"),
     'compose: the step limit is stated where the spec is written, where it is implemented, and where it is dispatched',
   );
@@ -4799,7 +4799,7 @@ const dated = (date, status = 'active') =>
   await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, STEP_FILES: '25' } }));
   expect(!inside([]).includes('wrote more files than one step may'), 'stats: a project that declares a larger step is held to it');
   run(['compose', '--project', young]);
-  expect((await spec('agents/implementer.md')).includes('**Write at most 25 files, and about 400 lines, in one run.**'), 'compose: and its own limit is the one its pipeline is told');
+  expect((await spec('agents/implementer.md')).includes('**Write at most 25 files, and about 400 lines, in one run, and know which before you write.**'), 'compose: and its own limit is the one its pipeline is told');
   // A spec whose design is the question is read before any code: a stage of its own between the architect and the
   // implementer, whose loop back to the architect is counted apart from the reviewer's.
   const composedGraph = parseGraph(await spec('graph.md'));
@@ -5814,12 +5814,65 @@ const dated = (date, status = 'active') =>
     implementer.includes('TSDoc on every declaration or member you add or change, in test files as in source') &&
       implementer.includes('untouched ones beside it') &&
       implementer.includes('a type literal in a cast') &&
-      implementer.includes('**Before the handoff, sweep your diff for TSDoc as the reviewer will: every file, tests included.**') &&
-      implementer.includes('a field you only widened') && implementer.includes('a return type written') && implementer.includes('on one line (`as { … }`') &&
+      implementer.includes('**Before the handoff, sweep your diff for TSDoc as the reviewer will: every file, tests included, by running the') &&
+      implementer.includes('a field you only widened') && implementer.includes('a type literal in a cast, a parameter or a return type however short (`as unknown as { … }`') &&
+      implementer.includes('a mock or a spy assigned to a local (`vi.fn()`, `vi.spyOn(…)`: each is a function)') &&
+      implementer.includes('Name a literal\n  rather than document it') &&
       reviewer.includes('**TSDoc on every declaration the diff adds or changes** — Hard Rule #9') &&
       patterns.includes('Missing TSDoc on any declaration or member the diff adds or changes') &&
       ![implementer, reviewer, patterns].some((text) => text.includes('TSDoc on every new declaration') || text.includes('TSDoc on any new declaration')),
     'compose: the implementer documents every declaration it adds or changes, tests included, and sweeps its own diff before the handoff — no spec says "new" alone',
+  );
+  // The sweep came back three times in a day after its cases were named: it is a command now, and the command is run
+  // here on the cases that were sent back, beside the value literals it must leave alone.
+  const sweep = /`(\{ git diff --name-only --diff-filter=d HEAD; git ls-files -o --exclude-standard; \} \| grep [^`]+)`/.exec(implementer)?.[1];
+  const swept = await scratch();
+  const sweepGit = (...args) => spawnSync('git', ['-C', swept, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' });
+  sweepGit('init', '-q');
+  await writeFile(join(swept, 'old.ts'), 'export const a = 1;\n');
+  sweepGit('add', '.');
+  sweepGit('commit', '-qm', 'base');
+  const flagged = [
+    '  matchedRule: bigint | null;',
+    '  readonly id?: string;',
+    'const db = (env as unknown as { DATABASE_URL: string }).DATABASE_URL;',
+    "async function kyc(): Promise<{ accountId: string }> { return { accountId: 'a' }; }",
+    'function where(): { entityId: { startsWith: string } }[] { return []; }',
+    "const sendSpy = vi.spyOn(mailer, 'send').mockResolvedValue(undefined);",
+    'const ruleCreate = vi.fn();',
+    'type Bound = Base & { expectedAmountCents: bigint | null };',
+    'const rows = [] as [{ data: number }];',
+  ];
+  const left = ['  amount: 100,', '  owner: { name: 1 },', 'const y = x || {};', 'const z = a && { b: 1 };', 'makeStub({ cents: 1n });'];
+  await writeFile(join(swept, 'old.ts'), ['export const a = 1;', ...left].join('\n') + '\n');
+  await writeFile(join(swept, 'new.test.ts'), flagged.join('\n') + '\n');
+  const hits = sweep ? spawnSync('sh', ['-c', sweep], { cwd: swept, encoding: 'utf8' }).stdout : '';
+  expect(
+    Boolean(sweep) && flagged.every((line) => hits.includes(`new.test.ts:${flagged.indexOf(line) + 1}:${line}`)) && !left.some((line) => hits.includes(line)),
+    `compose: the implementer's TSDoc sweep is a command, and it lists each line sent back and no value literal — got\n${hits}`,
+  );
+  // Three implementers in a row finished steps far past their forecasts; the third had forecast it before writing on.
+  expect(
+    implementer.includes('in one run, and know which before you write.**') &&
+      implementer.includes('Then forecast it yourself, once you have read the step file and the code it extends and before you write the bulk of it') &&
+      implementer.includes("Past either limit, or more than half over the step's `Size:`, return `BLOCKED` then, with your forecast and the point to split at") &&
+      implementer.includes('finish the step rather than stop mid-way'),
+    'compose: the implementer forecasts its step before writing it and stops then, and an overrun found while writing is still finished',
+  );
+  // A sentence dictated about a caller no step had built yet read as proof the guard existed.
+  expect(
+    patterns.includes('Not a statement about code that is not built yet.') && patterns.includes('it is a contract with its owner named') &&
+      architect.includes('One about code another step or subtask will build is a contract, dictated as one with its owner named') &&
+      implementer.includes('or, for behavior another step will build, worded as a contract naming that step'),
+    'compose: a doc sentence about code not built yet is a contract naming its owner, in the patterns, the spec and the claims',
+  );
+  // A leak check that refused only equal values passed `${id}:${amount}`; it is said where only pii composes.
+  const privacy = await readFile(join(await composed('ledger'), 'CLAUDE.md'), 'utf8');
+  expect(
+    privacy.includes('**A test that proves a value stays out matches by containment**') && privacy.includes('(`Object.getOwnPropertyNames`)') &&
+      privacy.includes('each with a control that embeds it in a longer string under an allowed key and must fail the check') &&
+      !privacy.includes('missed an amount on a non-enumerable property') && !claude.includes('matches by containment'),
+    'compose: a leak check matches by containment over every channel and property, with a control per class, where pii composes and without its history',
   );
   // A simple change runs its mutations once, in qa: the implementer's mirror ran them twice on a screen's labels.
   expect(
