@@ -27,8 +27,10 @@ install that file. The hooks an older `init` or `wire` wrote still say so, and `
 them. Publishing is not a step anyone takes: a release cut on a branch and merged to `main` is published by
 `.github/workflows/publish.yml`, once, after the suites pass on a clean runner. npm trusts that workflow in
 this repository through OIDC (trusted publishing), so no token exists to leak, and every version carries
-the provenance of the build that made it. `npm pack` still builds the same file locally, to try one before
-it ships.
+the provenance of the build that made it. GitHub once dropped the push that merged a cut, 0.71.0, and
+started no run to re-run; the workflow also runs by hand on `main` (`gh workflow run publish.yml`), and
+publishes only a version npm does not have yet. `npm pack` still builds the same file locally, to try one
+before it ships.
 
 The package is scoped because `nina` is taken on the public registry. The scope changes what you
 install and nothing else: `bin` names the binary, so the command, the banner and every path in this
