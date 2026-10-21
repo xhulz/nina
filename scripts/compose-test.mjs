@@ -252,8 +252,9 @@ const BUDGETS = {
   // kind, so a new module's rate is not put on steps that extend a file. And for a lesson the third project learned four
   // times in eight days: a check is specified with the run that prints its failing token, and a reading of nothing
   // is never the pass — a spike, a gate and a memory ceiling each printed their passing token for the failure they
-  // existed to catch.
-  '.claude/agents/architect.md': 22300,
+  // existed to catch. And for a step split again, whose file becomes its parts' spec: one of 102 KB kept whole was a
+  // twentieth of what one project's stages read.
+  '.claude/agents/architect.md': 22400,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 4900,
@@ -319,8 +320,10 @@ const BUDGETS = {
   // And for a battery's pool held to what one case's memory allows, and no case waiting out a real timeout: a task's
   // implementer rounds had waited three quarters of nine hours on batteries run one case at a time. And for Hard Rule
   // #21, a run proved local by a guard that refuses at once, no control leaving the machine; and, where a project has
-  // edge-cf, for wrangler, which calls npm on its own: two lessons one project learned three times each.
-  'CLAUDE.md': 30650,
+  // edge-cf, for wrangler, which calls npm on its own: two lessons one project learned three times each. And for a
+  // wait held within the five minutes a stage's cache lives: past them the next turn writes the whole context again,
+  // and one project's turns after such calls were a quarter of what its stages spent on input.
+  'CLAUDE.md': 30850,
 };
 
 /**
