@@ -1,13 +1,16 @@
 # Runs the suites on every pull request and every push to main, and publishes to npm the version
 # package.json names, once: a release is cut on a branch and merged by pull request, so the push that
 # lands `Cut <version>` on main is the one that publishes it. No token is kept anywhere. npm trusts
-# this workflow, in this repository, through OIDC, and records the build's provenance.
+# this workflow, in this repository, through OIDC, and records the build's provenance. GitHub has dropped
+# that push once, merging 0.71.0 with no run at all, and a run that never started cannot be re-run: on main,
+# `gh workflow run publish.yml` runs it by hand, and it still publishes only what npm does not have.
 name: Publish
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,7 +34,7 @@ jobs:
 
   publish:
     needs: suites
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
