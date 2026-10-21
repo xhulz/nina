@@ -261,7 +261,9 @@ forecast with what landed. In the third project two steps landed about 1.5× the
 factor out by hand, and a whole architect run — 28 minutes, 375k tokens — then re-derived the rates from
 `git diff --numstat` to forecast six steps again. `nina sizes` reads each step file
 (`.claude/plans/specs/<spec>.step-<n>.md`), finds its commits by their message — the spec and `step <n>`, as the
-router has a commit named — and sets the lines they added outside the harness's own files and the lockfiles beside the
+router has a commit named; where the spec is followed by a step, that step alone, since a commit that landed
+`<spec> step 6` and said "M6 step 7's clause corrected" was counted a landing of step 7 too, 412 lines against a step
+with no code yet; where no step follows it, any step the message names, the form older commits took — and sets the lines they added outside the harness's own files and the lockfiles beside the
 forecast the file carried before the first of them: the forecast it was built to. A forecast a fix round changed while
 the step was built is shown, not measured against, because measured against it a step always lands on forecast.
 

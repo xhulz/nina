@@ -162,13 +162,17 @@ const literal = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Whether a commit message names this step of this spec: `step 10e2` names neither `step 10e2a` nor `step 10`, and
- * `1.6-spec-c` is not `1.6-spec-c2`.
+ * `1.6-spec-c` is not `1.6-spec-c2`. A spec followed by a step, as the router has a commit named (`<spec> step <n>`),
+ * names that step and no other the message mentions: one project's commit landed `<spec> step 6` and said "M6 step 7's
+ * clause corrected", and was counted a landing of step 7 too. A message whose spec no step follows names any step it
+ * mentions, the form older commits took (`1.8 step 1: … (1.8-spike)`).
  */
 export function names(subject, spec, step) {
   const whole = '(?![\\w.-]*\\w)';
-  return (
-    new RegExp(`(^|[^\\w.-])${literal(spec)}${whole}`, 'i').test(subject) && new RegExp(`\\bstep[\\s-]+${literal(step)}${whole}`, 'i').test(subject)
-  );
+  if (!new RegExp(`(^|[^\\w.-])${literal(spec)}${whole}`, 'i').test(subject)) return false;
+  const followed = [...subject.matchAll(new RegExp(`(?:^|[^\\w.-])${literal(spec)}[\\s:,]+step[\\s-]+([\\w.-]*\\w)`, 'gi'))];
+  if (followed.length) return followed.some((m) => m[1].toLowerCase() === step.toLowerCase());
+  return new RegExp(`\\bstep[\\s-]+${literal(step)}${whole}`, 'i').test(subject);
 }
 
 /** The step files in the working tree, as `{path, spec, step}`, in their natural order. */
