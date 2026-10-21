@@ -191,7 +191,12 @@ and carry far more than the harness, so `init` never edits settings that exist a
 gains what it lacks. Whatever `init` could not write is §4 of the TODO, `nina wire --apply` merges it,
 and `nina check` reports it as a problem until it is done. The list lives in
 `src/wiring.mjs`, read by both — Spliter's wiring was typed by hand one piece per release, and the
-piece that let the model see a finding at all came last. A stub is a filled slot as far as every tool is concerned, so a tree of TODOs would
+piece that let the model see a finding at all came last. Beside the hooks it holds one setting, shipped with the
+cost watch: `skillListingBudgetFraction` at 0.001, which keeps the listing of installed skills to their names. Every
+stage allowed `Skill` re-read every skill's description on every turn, 9.2k tokens in two projects, while the skills
+a stage must use are named in its spec and every name stays listed however small the budget
+([measurement](measurement.md#where-the-re-read-went)). It shortens the main session's listing as well. A value the
+owner wrote, in either settings file, is the owner's: `wire` adds a missing key and never changes one. A stub is a filled slot as far as every tool is concerned, so a tree of TODOs would
 compose and check clean while saying nothing — the exact failure this harness exists to remove.
 The project layer stays empty, and `compose` keeps naming what is missing until the work is done.
 
@@ -211,7 +216,9 @@ Two things it can work out rather than ask:
   `pnpm typecheck` exactly as before, and one on another stack declares four lines instead of editing
   a core it cannot reach. `STEP_FILES`, the most files one implementer run may write (15), is a default
   for the same reason: the limit is the harness's, and a project whose files are unusually small or
-  large moves it without editing a rule. `nina stats` reads the same value. The model and effort level each
+  large moves it without editing a rule. `nina stats` reads the same value. `OUTPUT_CLIP`, the characters past
+  which the cost watch moves a shell output to a file (8000; 0 turns it off), and `RUN_READ_WARN`, the millions of
+  tokens a run re-reads before it is told, are defaults for the same reason. The model and effort level each
   stage runs at are five more (`DEEP_MODEL`, `DEEP_EFFORT`, `ARCHITECT_EFFORT`, `WORK_MODEL`, `WORK_EFFORT`): with an alias and
   no level, a stage ran on whatever the alias pointed to that week, at whatever the session was set to
   (see [measurement](measurement.md#at-what-effort)). Declaring a name takes it

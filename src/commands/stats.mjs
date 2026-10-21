@@ -299,6 +299,17 @@ function contextReport(records) {
         `${(row.prompt === null ? '—' : row.prompt.toLocaleString('en-US')).padStart(9)}`,
     );
   }
+  if (d.reread.length === 0) return;
+  const pct = (x) => (x === null ? '—' : `${Math.round(x * 100)}%`);
+  console.log('');
+  console.log(dim('    what the turns re-read: the context each round opened with, the expired cache written again, the outputs clipped to a file'));
+  console.log(dim(`    ${'stage'.padEnd(20)}${'rounds'.padStart(6)}${'opened with'.padStart(13)}${'rewrites'.padStart(10)}${'of spend'.padStart(10)}${'clipped'.padStart(9)}`));
+  for (const row of d.reread) {
+    console.log(
+      `    ${pink(row.role)}${' '.repeat(Math.max(20 - row.role.length, 1))}${String(row.n).padStart(6)}${pct(row.fixed).padStart(13)}` +
+        `${String(row.rewrites).padStart(10)}${pct(row.rewriteShare).padStart(10)}${String(row.clipped).padStart(9)}`,
+    );
+  }
 }
 
 /**
@@ -334,7 +345,52 @@ export function contextData(records) {
       });
     }
   }
-  return { rows };
+  return { rows, reread: rereadData(shaped) };
+}
+
+/**
+ * Where each stage's re-read went, as data: the share of the context its turns re-read that was what each
+ * round opened with — the system prompt, CLAUDE.md, the spec, the dispatch — the share of what it spent that
+ * went on writing an expired cache again, and the outputs the cost watch clipped to a file. Rounds measured
+ * before the fields existed are left out of the shares rather than counted as none; a stage with no
+ * measured round has no row.
+ *
+ * @param {object[]} shaped - The rounds that recorded their turns.
+ * @returns {{role: string, n: number, fixed: number|null, rewrites: number, rewriteShare: number|null, clipped: number}[]}
+ */
+export function rereadData(shaped) {
+  const measured = shaped.filter((r) => typeof r.cache_rewrites === 'number');
+  const byRole = new Map();
+  for (const r of measured) byRole.set(r.role, [...(byRole.get(r.role) ?? []), r]);
+  const t = (n) => (typeof n === 'number' ? n : 0);
+  const rows = [];
+  for (const [role, rounds] of byRole) {
+    let opened = 0;
+    let reread = 0;
+    let rewriteCost = 0;
+    let spent = 0;
+    for (const r of rounds) {
+      const total = t(r.tokens?.input) + t(r.tokens?.read) + t(r.tokens?.write_5m) + t(r.tokens?.write_1h);
+      if (total > 0 && typeof r.context_start === 'number') {
+        opened += Math.min(r.context_start * r.turns, total);
+        reread += total;
+      }
+      const cost = costOf(r.tokens, r.usage_model);
+      if (cost !== null && cost > 0) {
+        spent += cost;
+        rewriteCost += costOf({ write_5m: t(r.cache_rewritten) }, r.usage_model);
+      }
+    }
+    rows.push({
+      role,
+      n: rounds.length,
+      fixed: reread > 0 ? opened / reread : null,
+      rewrites: rounds.reduce((a, r) => a + t(r.cache_rewrites), 0),
+      rewriteShare: spent > 0 ? rewriteCost / spent : null,
+      clipped: rounds.reduce((a, r) => a + t(r.clipped), 0),
+    });
+  }
+  return rows.sort((a, b) => b.n - a.n);
 }
 
 /**

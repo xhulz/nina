@@ -366,9 +366,9 @@ export async function upgrade(argv, ctx) {
   const newScripts = new Set([...(await shippedScripts(onto.dir, kept))].filter((s) => !scriptsBefore.has(s)));
   const unwired = newScripts.size > 0 ? await missingWiring(target, newScripts) : [];
   // A script already run whose hooks this NINA needs more of — a matcher that grew — holds what it held, so it does
-  // not stop the move; it is said, with what fixes it.
+  // not stop the move; it is said, with what fixes it. So is a setting it now ships beside them.
   const stillRun = new Set([...(await shippedScripts(onto.dir, kept))].filter((s) => scriptsBefore.has(s)));
-  const widened = stillRun.size > 0 ? (await missingWiring(target, stillRun)).filter((w) => / hook running `[^`]+` does not match /.test(w)) : [];
+  const widened = stillRun.size > 0 ? (await missingWiring(target, stillRun)).filter((w) => / hook running `[^`]+` does not match /.test(w) || /^\.claude\/settings\.json has no "/.test(w)) : [];
   if (widened.length > 0) {
     for (const w of widened) console.log(`  · ${w}`);
     console.log('');

@@ -860,7 +860,7 @@ async function attachAgentDetail(projectDir, dispatches) {
       if (
         run.agent_read_bytes === size &&
         !('resumes' in run) &&
-        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'lines_written' in r && 'shell_writes' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r)
+        [...records, ...later].every((r) => settled(r) && 'round' in r && 'lessons_read' in r && 'tokens' in r && 'files_touched' in r && 'lines_written' in r && 'shell_writes' in r && 'effort' in r && 'turns' in r && 'prompt_chars' in r && 'cache_rewrites' in r && 'clipped' in r)
       ) {
         continue;
       }
@@ -899,6 +899,8 @@ async function attachAgentDetail(projectDir, dispatches) {
         calls: new Set(),
         /** How long the prompt that opened the round was, in characters; never the prompt. */
         promptChars: null,
+        /** The tool results the cost watch clipped to a file, so they were never re-read whole. */
+        clipped: 0,
       });
       const rounds = [fresh()];
       const roundOf = roundsOf();
@@ -940,6 +942,19 @@ async function attachAgentDetail(projectDir, dispatches) {
             }
           } catch {
             // A torn line loses one edit, not the run's.
+          }
+        }
+        if (line.includes(CLIP_MARK) && line.includes('"tool_result"')) {
+          try {
+            const row = JSON.parse(line);
+            const content = row?.type === 'user' ? row.message?.content : null;
+            for (const block of Array.isArray(content) ? content : []) {
+              const said = block?.type === 'tool_result' ? block.content : null;
+              const text = typeof said === 'string' ? said : Array.isArray(said) ? said.map((x) => x?.text ?? '').join('') : '';
+              if (text.includes(CLIP_MARK)) round.clipped += 1;
+            }
+          } catch {
+            // A torn line loses one count.
           }
         }
         if (line.includes('"name":"Bash"')) {
@@ -1028,6 +1043,9 @@ async function attachAgentDetail(projectDir, dispatches) {
           record.tool_calls = round.calls.size;
           record.context_start = shape.start;
           record.context_peak = shape.peak;
+          record.cache_rewrites = shape.rewrites;
+          record.cache_rewritten = shape.rewritten;
+          record.clipped = round.clipped;
           record.prompt_chars = round.promptChars;
           record.usage_model = spent.model;
           record.effort = spent.effort;
@@ -1078,19 +1096,39 @@ export function promptOf(row, round) {
   return row?.type === 'user' && (round > 1 || !row.isMeta) && typeof content === 'string' ? content : null;
 }
 
+/** The smallest context whose loss counts as a rewrite: below it, a turn writing most of it is the round beginning. */
+const REWRITE_FLOOR = 30_000;
+
 /**
- * How a round spent its context: how many turns it took, and how large the context each turn re-read was
- * when the round began and at its largest. Every turn is billed the whole context again, so a round that
- * begins where a long one ended — a run resumed for a fix — pays for everything before it on each turn.
+ * How a round spent its context: how many turns it took, how large the context each turn re-read was
+ * when the round began and at its largest, and how often its cache had expired. Every turn is billed the
+ * whole context again, so a round that begins where a long one ended — a run resumed for a fix — pays for
+ * everything before it on each turn.
+ *
+ * A turn reads its context from the cache only while the cache is alive — five minutes after the turn
+ * before, for a subagent — and past that writes all of it again, at twelve times a read's price. So a turn
+ * that wrote more than half of a context of at least {@link REWRITE_FLOOR} tokens is counted a rewrite.
  *
  * @param {Map<string, {usage: object}>} usage - Message id → its final usage, in the order the round sent them.
- * @returns {{turns: number, start: number|null, peak: number|null}} Context sizes in tokens.
+ * @returns {{turns: number, start: number|null, peak: number|null, rewrites: number, rewritten: number}} Context sizes in tokens.
  */
 export function contextOf(usage) {
   const n = (v) => (typeof v === 'number' ? v : 0);
-  const sizes = [...usage.values()].map(({ usage: u }) => n(u.input_tokens) + n(u.cache_read_input_tokens) + n(u.cache_creation_input_tokens));
-  return { turns: sizes.length, start: sizes[0] ?? null, peak: sizes.length > 0 ? Math.max(...sizes) : null };
+  const turns = [...usage.values()].map(({ usage: u }) => ({ size: n(u.input_tokens) + n(u.cache_read_input_tokens) + n(u.cache_creation_input_tokens), written: n(u.cache_creation_input_tokens) }));
+  const sizes = turns.map((t) => t.size);
+  let rewrites = 0;
+  let rewritten = 0;
+  for (let i = 1; i < turns.length; i += 1) {
+    if (sizes[i - 1] >= REWRITE_FLOOR && turns[i].written > sizes[i - 1] / 2) {
+      rewrites += 1;
+      rewritten += turns[i].written;
+    }
+  }
+  return { turns: sizes.length, start: sizes[0] ?? null, peak: sizes.length > 0 ? Math.max(...sizes) : null, rewrites, rewritten };
 }
+
+/** How the cost watch opens an output it clipped (`src/cost.mjs`), which is how a snapshot counts them. */
+export const CLIP_MARK = '[NINA clipped this output';
 
 /**
  * What a run spent, from each of its messages' final usage: tokens by kind, and the model and effort
