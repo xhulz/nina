@@ -21,10 +21,10 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
-import { cyclesOf, decodeProjectDir, modelMatches, statsData } from '../src/commands/stats.mjs';
+import { cyclesOf, decodeProjectDir, modelMatches, rereadData, statsData } from '../src/commands/stats.mjs';
 import { asRead, projectRecords } from '../src/store.mjs';
 import { rereadOver } from '../src/commands/snapshot.mjs';
-import { ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf, writesThroughShell } from '../src/transcripts.mjs';
+import { CLIP_MARK, ROLE_TOKENS, classifyVerdict, declaredIssues, isLoopBack, pillReads, roundsOf, runOf, scanProject, contextOf, tokensOf, writesThroughShell } from '../src/transcripts.mjs';
 import { CAPTURE_AT, CAPTURE_DAYS, VERIFY_DAYS, applied, closeAnswered, overdue, relapsed, sentBackTo, slugFor, undecided, verified } from '../src/commands/learn.mjs';
 import { readStatus } from '../src/commands/langfuse.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
@@ -55,7 +55,7 @@ import { realpathSync } from 'node:fs';
 import { MAX_BODY, digest, due, exportCommand } from '../src/commands/export.mjs';
 import { BATCH as SPAN_BATCH, spanIdOf, spansOf } from '../src/langfuse.mjs';
 import { readRun, redact } from '../src/agentrun.mjs';
-import { watch } from '../src/cost.mjs';
+import { clipOutput, readsByShell, watch } from '../src/cost.mjs';
 
 const ROOT = resolve(dirname(dirname(fileURLToPath(import.meta.url))));
 const NINA = join(ROOT, 'bin', 'nina.mjs');
@@ -4099,11 +4099,16 @@ const dated = (date, status = 'active') =>
   const narrowedSettings = join(narrowed, '.claude', 'settings.json');
   const wiredThere = JSON.parse(await readFile(narrowedSettings, 'utf8'));
   for (const g of wiredThere.hooks.PreToolUse) if (JSON.stringify(g).includes('loop-gate')) g.matcher = 'Agent|Task|SendMessage';
+  delete wiredThere.skillListingBudgetFraction;
   await writeFile(narrowedSettings, JSON.stringify(wiredThere));
   const movingOn = run(['upgrade', '--project', narrowed, '--to', 'dev'], { loud: true }).out;
   expect(
     movingOn.includes('· the PreToolUse hook running `scripts/loop-gate.mjs` does not match AskUserQuestion — `nina wire --apply` widens it'),
     `wiring: an upgrade names a hook its scripts need more of, with what widens it — got ${movingOn}`,
+  );
+  expect(
+    movingOn.includes('· .claude/settings.json has no "skillListingBudgetFraction"') && movingOn.includes('`nina wire --apply` sets it to 0.001'),
+    `wiring: and a setting its scripts now ship beside them, with what sets it — got ${movingOn}`,
   );
   expect((await withMatcher('*')).length === 0, 'wiring: a matcher of * reaches every tool');
   expect((await withMatcher('Agent | Task | SendMessage')).length === 1, 'wiring: spaces make it a regular expression that reaches none of them');
@@ -4339,6 +4344,11 @@ const dated = (date, status = 'active') =>
       // One shell command writes the tree, and one writes only its scratch directory.
       tool('Bash', { command: "cd src && python3 - <<'EOF'\nopen('a.ts', 'w').write('x')\nEOF" }),
       tool('Bash', { command: "D=/tmp/x && cd $D && python3 - <<'EOF'\nopen('a.ts', 'w').write('x')\nEOF" }),
+      // An output the cost watch clipped counts where the run received it, and not in the hook's echo of it or where
+      // the model quoted it.
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu-clip', content: `line 0\n…\n${CLIP_MARK}: 900 lines]\n…\nline 899` }] } }),
+      JSON.stringify({ type: 'attachment', attachment: { type: 'hook_success', stdout: `{"tool_result": "${CLIP_MARK}"}` } }),
+      JSON.stringify({ type: 'assistant', message: { id: 'q1', content: [{ type: 'text', text: `the output said ${CLIP_MARK}` }] } }),
       JSON.stringify({ type: 'assistant', message: { id: 'h1', content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message: 'VERDICT: REJECTED\\nISSUES: a' } }] } }),
     ].join('\n')}\n`,
   );
@@ -4383,6 +4393,26 @@ const dated = (date, status = 'active') =>
   );
   const shape = contextOf(new Map([['a', { usage: { input_tokens: 5, cache_read_input_tokens: 100 } }], ['b', { usage: { cache_read_input_tokens: 300, cache_creation_input_tokens: 20 } }]]));
   expect(shape.turns === 2 && shape.start === 105 && shape.peak === 320, `context: a turn's context is its input, read and written tokens — got ${JSON.stringify(shape)}`);
+  // A turn after an expired cache writes the whole context again, at twelve times a read: counted, with what it wrote.
+  // A round still opening, whose context is small, writes most of it on every turn and is not.
+  expect(record.cache_rewrites === 0 && record.cache_rewritten === 0 && record.clipped === 1, `context: a round keeps its cache rewrites, and its clipped outputs counted once — got ${JSON.stringify(record)}`);
+  const expired = contextOf(
+    new Map([
+      ['a', { usage: { cache_creation_input_tokens: 40_000 } }],
+      ['b', { usage: { cache_read_input_tokens: 40_000, cache_creation_input_tokens: 2_000 } }],
+      ['c', { usage: { cache_creation_input_tokens: 43_000 } }],
+      ['d', { usage: { cache_read_input_tokens: 43_000, cache_creation_input_tokens: 500 } }],
+    ]),
+  );
+  expect(expired.rewrites === 1 && expired.rewritten === 43_000, `context: a turn that wrote its whole context again is a rewrite — got ${JSON.stringify(expired)}`);
+  const opening = contextOf(new Map([['a', { usage: { cache_creation_input_tokens: 5_000 } }], ['b', { usage: { cache_creation_input_tokens: 6_000 } }]]));
+  expect(opening.rewrites === 0, `context: and a small context written again as a round opens is not — got ${JSON.stringify(opening)}`);
+  for (const field of ['cache_rewrites', 'clipped']) {
+    const without = { ...record, tokens: { output: -1 } };
+    delete without[field];
+    const [again] = (await scanProject(dir, { cursors: {}, records: [without] })).records;
+    expect(again?.[field] === record[field] && again.tokens.output === 600, `context: a record from before ${field} was kept is read once more`);
+  }
   const unshaped = { ...record, tokens: { output: -1 } };
   delete unshaped.turns;
   const [shaped] = (await scanProject(dir, { cursors: {}, records: [unshaped] })).records;
@@ -6022,6 +6052,70 @@ const dated = (date, status = 'active') =>
   await copyFile(agentFile, join(projects, 's-cost', 'subagents', 'agent-undefined.jsonl'));
   expect(call({ agent_id: undefined }) === null && call({ hook_event_name: 'PreToolUse' }) === null, 'cost: a call outside a subagent, or before a tool, is not watched');
 
+  // A shell output stays in the context and is re-read on every turn after: past the limit it goes to a file beside the
+  // ones Claude Code keeps for the session, and the run sees its first and last lines and where the rest is.
+  const long = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join('\n');
+  const bash = (command, stdout, extra = {}) =>
+    watch(
+      { hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost1', agent_type: 'implementer', tool_name: 'Bash', tool_use_id: 'toolu_clip1', tool_input: { command }, tool_response: { stdout, stderr: '', interrupted: false, isImage: false, noOutputExpected: false }, ...extra },
+      { root, warnAt: 40e6, clipAt: 8000 },
+    );
+  const clippedCall = bash('cd /p && node battery.mjs', long);
+  const shown = clippedCall?.hookSpecificOutput?.updatedToolOutput;
+  const kept = join(projects, 's-cost', 'tool-results', 'nina-toolu_clip1.txt');
+  expect(
+    shown?.stdout.startsWith('line 0\n') && shown.stdout.endsWith('line 1999') && shown.stdout.includes(CLIP_MARK) && shown.stdout.includes(kept) &&
+      shown.stdout.length < 8000 && shown.interrupted === false && shown.noOutputExpected === false && existsSync(kept) && (await readFile(kept, 'utf8')) === long &&
+      !clippedCall.hookSpecificOutput.additionalContext,
+    `cost: a long output goes to a file in the session's tool-results, and the run sees its ends and where it is — got ${JSON.stringify(clippedCall)?.slice(0, 400)}`,
+  );
+  expect(bash('node battery.mjs', 'short\n') === null, 'cost: a short output reaches the run as it was');
+  // What a command line prints last is its last command's, and of a pipe its last stage's: that is the one judged.
+  const reads = ['sed -n 1,2000p notes.md', 'cd /p && cat a.log', 'git -C /p diff', 'git --no-pager show HEAD', 'A=1 tail -n 3000 run.log', 'cd /p; head -n 2000 a.md', 'timeout 60 cat f', '(cd /p && cat f)', 'export A=1 && cat f', 'node run.mjs && tail -n 3000 run.log'];
+  const runs = ['cd /p && node run.mjs', 'grep -rn foo .', 'python3 battery.py', 'D=/tmp/x && cd $D && pnpm vitest run', 'git log -p', 'cat a | node x', 'sed -i s/a/b/ f && node run', "python3 - <<'EOF'\nprint(1)\nEOF", 'cd /p && cat f | grep x'];
+  expect(
+    reads.every((c) => readsByShell(c) && bash(c, long) === null) && runs.every((c) => !readsByShell(c)),
+    `cost: a command that reads a file or a diff is what the run asked to read, and is not clipped — misread ${JSON.stringify([...reads.filter((c) => !readsByShell(c)), ...runs.filter((c) => readsByShell(c))])}`,
+  );
+  // A short stdout beside a long stderr is shown once, whole, and the file holds both, stderr after.
+  const noisy = bash('node run.mjs', 'ok\n', { tool_use_id: 'toolu_clip3', tool_response: { stdout: 'ok\n', stderr: long, interrupted: false, isImage: false } })?.hookSpecificOutput?.updatedToolOutput;
+  const noisyFile = join(projects, 's-cost', 'tool-results', 'nina-toolu_clip3.txt');
+  expect(
+    noisy?.stdout.startsWith('ok\n\n' + CLIP_MARK) && noisy.stdout.split('ok').length === 2 && noisy.stdout.includes('2,003 lines') && noisy.stdout.includes('stderr after stdout') &&
+      noisy.stderr.endsWith('line 1999') && noisy.stderr.length <= 1000 && (await readFile(noisyFile, 'utf8')) === `ok\n\n--- stderr ---\n${long}`,
+    `cost: a short stdout is shown once beside a long stderr's last lines, and the file holds both — got ${JSON.stringify(noisy)?.slice(0, 300)}`,
+  );
+  expect(
+    bash('node run.mjs', long, { tool_response: { stdout: long, stderr: '', interrupted: false, isImage: true } }) === null &&
+      watch({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost1', tool_name: 'Bash', tool_input: { command: 'node run.mjs' }, tool_response: { stdout: long, stderr: '' } }, { root, warnAt: 40e6, clipAt: Number('{{OUTPUT_CLIP}}') }) === null &&
+      bash('node run.mjs', long, { session_id: '../s-cost' }) === null,
+    'cost: an image, a limit the vocabulary left unfilled, and a session id that is not a name clip nothing',
+  );
+  // Neither depends on the re-read count: with no threshold, an output is still clipped and a long call still named.
+  const unwarned = watch(
+    { hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost1', tool_name: 'Bash', tool_use_id: 'toolu_clip4', duration_ms: 6 * 60_000, tool_input: { command: 'node run.mjs' }, tool_response: { stdout: long, stderr: '', interrupted: false, isImage: false } },
+    { root, warnAt: 0, clipAt: 8000 },
+  );
+  expect(
+    unwarned?.hookSpecificOutput?.updatedToolOutput?.stdout.includes(CLIP_MARK) && unwarned.hookSpecificOutput.additionalContext.includes('that call ran 6 minutes') && !unwarned.hookSpecificOutput.additionalContext.includes('this run has re-read'),
+    `cost: with no threshold, an output is still clipped and a long call still named — got ${JSON.stringify(unwarned)?.slice(0, 300)}`,
+  );
+  const response = { stdout: long, stderr: '', interrupted: false, isImage: false };
+  expect(
+    clipOutput({ tool_name: 'Read', tool_response: response, transcript_path: join(projects, 's-cost.jsonl'), session_id: 's-cost' }, 8000) === null &&
+      clipOutput({ tool_name: 'Bash', tool_input: { command: 'node a.mjs' }, tool_response: response, transcript_path: join(projects, 's-cost.jsonl'), session_id: 's-cost' }, 0) === null,
+    'cost: only a Bash output is clipped, and a limit of 0 clips nothing',
+  );
+  // A call past the five minutes the run's cache lives makes its next turn write the whole context again: the run is
+  // told then, with the context that costs, and the person in a line.
+  const waited = bash('node battery.mjs', 'done\n', { duration_ms: 9 * 60_000 });
+  expect(
+    waited?.hookSpecificOutput?.additionalContext?.includes('that call ran 9 minutes') && waited.hookSpecificOutput.additionalContext.includes('about 20.0M tokens') &&
+      waited.hookSpecificOutput.additionalContext.includes('within three minutes') && waited.systemMessage?.includes('waited 9 min in one call') && !waited.hookSpecificOutput.updatedToolOutput,
+    `cost: a call that outlived the cache is named to the run and the person — got ${JSON.stringify(waited)}`,
+  );
+  expect(bash('node battery.mjs', 'done\n', { duration_ms: 4 * 60_000 }) === null, 'cost: and one within it is not');
+
   // End to end, through the hook command a composed project runs, at the threshold its profile declares.
   const bed = await sound('plain', 'dev');
   const profilePath = join(bed, '.nina', 'profile.json');
@@ -6044,6 +6138,65 @@ const dated = (date, status = 'active') =>
   expect(
     Boolean(command) && fired.status === 0 && fired.stdout === '' && again.status === 0 && JSON.parse(again.stdout || '{}').hookSpecificOutput?.additionalContext?.includes('NINA cost watch'),
     `cost: a composed project's hook watches every tool, at the threshold it declares — got ${command} ${fired.stdout}${fired.stderr} / ${again.stdout}${again.stderr}`,
+  );
+  // And clips at the release's own limit, which the profile does not name.
+  const clippedHook = spawnSync('sh', ['-c', command ?? 'false'], {
+    input: JSON.stringify({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'acost2', agent_type: 'reviewer', tool_name: 'Bash', tool_use_id: 'toolu_clip2', tool_input: { command: 'node run.mjs' }, tool_response: { stdout: 'x'.repeat(8001), stderr: '', interrupted: false, isImage: false } }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: bed },
+  });
+  const clippedOut = JSON.parse(clippedHook.stdout || '{}').hookSpecificOutput?.updatedToolOutput?.stdout ?? '';
+  expect(
+    clippedOut.includes(CLIP_MARK) && clippedOut.includes('8,001 characters'),
+    `cost: a composed project's hook clips a shell output past the limit its release states — got ${clippedHook.stdout.slice(0, 300)}${clippedHook.stderr}`,
+  );
+}
+
+// ─── stats: what the turns re-read ──────────────────────────────────────────────────────
+{
+  // A stage's turns re-read what each round opened with, an expired cache written again and the outputs it kept.
+  const rows = rereadData([
+    { role: 'implementer', turns: 10, context_start: 40_000, cache_rewrites: 1, cache_rewritten: 300_000, clipped: 2, usage_model: 'claude-sonnet-5-5', tokens: { input: 0, read: 1_600_000, write_5m: 400_000, write_1h: 0, output: 0 } },
+    // Measured before the fields existed: left out of every share rather than counted as none.
+    { role: 'implementer', turns: 4, context_start: 30_000, usage_model: 'claude-sonnet-5-5', tokens: { read: 10_000_000 } },
+    { role: 'qa', turns: 2, context_start: 20_000, cache_rewrites: 0, cache_rewritten: 0, clipped: 0, usage_model: 'not-a-priced-model', tokens: { read: 30_000, write_5m: 20_000 } },
+  ]);
+  const implementer = rows.find((r) => r.role === 'implementer');
+  const qa = rows.find((r) => r.role === 'qa');
+  expect(
+    implementer?.n === 1 && Math.abs(implementer.fixed - 0.2) < 1e-9 && implementer.rewrites === 1 && Math.abs(implementer.rewriteShare - 750_000 / 1_320_000) < 1e-9 && implementer.clipped === 2,
+    `stats: a stage's re-read is split into what its rounds opened with, the cache written again as a share of its spend, and its clipped outputs — got ${JSON.stringify(implementer)}`,
+  );
+  expect(Math.abs(qa?.fixed - 0.8) < 1e-9 && qa.rewriteShare === null, `stats: and a model the price table does not know has no share of spend — got ${JSON.stringify(qa)}`);
+}
+
+// ─── wire: the skill listing kept to names ─────────────────────────────────────────────
+{
+  // Every stage that may invoke a skill re-read every installed skill's description on every turn, 32k characters.
+  const dir = await scratch();
+  await mkdir(join(dir, '.claude'), { recursive: true });
+  const costOnly = new Set(['scripts/cost-watch.mjs']);
+  const fresh = JSON.parse(settingsFile(costOnly));
+  expect(fresh.skillListingBudgetFraction === 0.001 && !('skillListingBudgetFraction' in JSON.parse(settingsFile(new Set(['scripts/harness-check.mjs'])))), 'wire: a fresh settings file keeps the skill listing to names, where the version ships the cost watch');
+  const hooksOnly = { ...fresh };
+  delete hooksOnly.skillListingBudgetFraction;
+  const shared = join(dir, '.claude', 'settings.json');
+  await writeFile(shared, JSON.stringify(hooksOnly));
+  const told = await missingWiring(dir, costOnly);
+  const applied = await applyWiring(dir, costOnly);
+  const after = JSON.parse(await readFile(shared, 'utf8'));
+  expect(
+    told.some((w) => w.includes('"skillListingBudgetFraction"') && w.includes('about 9k tokens')) && after.skillListingBudgetFraction === 0.001 &&
+      applied.done.some((d) => d.includes('skillListingBudgetFraction')) && (await missingWiring(dir, costOnly)).every((w) => !w.includes('skillListing')),
+    `wire: a project without the setting is told, and wire adds it — got ${JSON.stringify({ told, applied })}`,
+  );
+  // The owner's value, in either file, is theirs.
+  await writeFile(shared, JSON.stringify(hooksOnly));
+  await writeFile(join(dir, '.claude', 'settings.local.json'), JSON.stringify({ skillListingBudgetFraction: 0.01 }));
+  await applyWiring(dir, costOnly);
+  expect(
+    (await missingWiring(dir, costOnly)).every((w) => !w.includes('skillListing')) && !('skillListingBudgetFraction' in JSON.parse(await readFile(shared, 'utf8'))),
+    "wire: a value the owner wrote in the local file is theirs, and none is added beside it",
   );
 }
 

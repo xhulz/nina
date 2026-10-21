@@ -112,8 +112,11 @@ export function contextMode(setting) {
   return setting?.content === 'prompts' ? 'prompts' : setting?.content ? 'full' : null;
 }
 
-/** A round's shape, as metadata on its root: how many turns and calls it took, and how large its context and prompt were. */
-const SHAPE = ['turns', 'tool_calls', 'context_start', 'context_peak', 'prompt_chars'];
+/**
+ * A round's shape, as metadata on its root: how many turns and calls it took, how large its context and prompt
+ * were, how often it wrote an expired cache again and how much, and how many outputs the cost watch clipped.
+ */
+const SHAPE = ['turns', 'tool_calls', 'context_start', 'context_peak', 'prompt_chars', 'cache_rewrites', 'cache_rewritten', 'clipped'];
 
 /**
  * The OTLP span at the root of a dispatch's trace. Without its context, a run that spent tokens is a

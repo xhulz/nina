@@ -146,6 +146,23 @@ const HOOKS = [
 /** Where a project's hooks can live: Claude Code reads both, so a hook kept in the local file counts. */
 const SETTINGS_FILES = ['.claude/settings.json', '.claude/settings.local.json'];
 
+/**
+ * Settings a project's `.claude/settings.json` carries beside its hooks, each shipped with the script whose
+ * concern it is. `why` is what `check` says when one is missing. A key the owner already wrote, in either
+ * settings file and with whatever value, is theirs: `wire` adds a missing one and never changes one.
+ *
+ * The skill listing is every installed skill's description, sized at a hundredth of the model's context
+ * window, and every stage whose tools include `Skill` re-reads it on every turn: 32k characters in two
+ * projects, a twentieth of what their stages re-read. The skills a stage must use are named in its spec,
+ * and every skill's name stays listed however small the budget, so the descriptions buy a stage nothing.
+ */
+const SETTINGS = [
+  {
+    key: 'skillListingBudgetFraction', value: 0.001, script: COST,
+    why: "every stage that may invoke a skill re-reads every installed skill's description on every turn, about 9k tokens",
+  },
+];
+
 /** The scripts some hook runs — `check` asks for these by hook, not by npm script. */
 export const HOOK_SCRIPTS = new Set(HOOKS.map((h) => h.script));
 
@@ -252,11 +269,13 @@ function covered(hooks, h) {
  *
  * @param {string} target - The project directory.
  * @param {(event: string) => boolean} [wanted] - Events whose malformed lists are worth a problem.
- * @returns {Promise<{merged: Record<string, object[]>, problems: string[]}>} Each merged group says `from` which file.
+ * @returns {Promise<{merged: Record<string, object[]>, problems: string[], keys: Set<string>}>} Each merged group says
+ *   `from` which file; `keys` holds every top-level key either file sets.
  */
 async function projectHooks(target, wanted = () => false) {
   const merged = {};
   const problems = [];
+  const keys = new Set();
   for (const rel of SETTINGS_FILES) {
     const path = join(target, rel);
     if (!existsSync(path)) continue;
@@ -267,6 +286,7 @@ async function projectHooks(target, wanted = () => false) {
       problems.push(`${rel} is not valid JSON — ${error.message}`);
       continue;
     }
+    if (settings && typeof settings === 'object' && !Array.isArray(settings)) for (const key of Object.keys(settings)) keys.add(key);
     const shape = settings?.hooks;
     if (shape === undefined || shape === null) continue;
     if (typeof shape !== 'object' || Array.isArray(shape)) {
@@ -278,7 +298,7 @@ async function projectHooks(target, wanted = () => false) {
       else if (wanted(event)) problems.push(`${rel}'s hooks.${event} is not a list — no hook in it can run`);
     }
   }
-  return { merged, problems };
+  return { merged, problems, keys };
 }
 
 /** The command settings run for a hook, when they run one — the selftest runs it the same way. */
@@ -298,7 +318,8 @@ export function hookCommand(settings, event, script) {
  * @returns {string}
  */
 export function settingsFile(shipped = HOOK_SCRIPTS) {
-  return `${JSON.stringify({ hooks: settingsHooks(HOOKS.filter((h) => shipped.has(h.script))) }, null, 2)}\n`;
+  const values = Object.fromEntries(SETTINGS.filter((x) => shipped.has(x.script)).map((x) => [x.key, x.value]));
+  return `${JSON.stringify({ ...values, hooks: settingsHooks(HOOKS.filter((h) => shipped.has(h.script))) }, null, 2)}\n`;
 }
 
 /** Hooks as settings JSON, grouped by event. */
@@ -369,8 +390,11 @@ export async function missingWiring(target, shipped) {
   }
   const wanted = HOOKS.filter((h) => shipped.has(h.script));
   if (wanted.length === 0) return out;
-  const { merged, problems } = await projectHooks(target, (event) => wanted.some((h) => h.event === event));
+  const { merged, problems, keys } = await projectHooks(target, (event) => wanted.some((h) => h.event === event));
   out.push(...problems);
+  for (const x of SETTINGS.filter((x) => shipped.has(x.script) && !keys.has(x.key))) {
+    out.push(`.claude/settings.json has no "${x.key}" — without it ${x.why}; \`nina wire --apply\` sets it to ${x.value}`);
+  }
   for (const h of wanted) {
     const running = (merged[h.event] ?? []).filter((g) => runs(g, h));
     if (doubled(running)) {
@@ -468,7 +492,11 @@ export async function applyWiring(target, shipped, { settings: editSettings = tr
     if (readable) {
       const hooks = settings.hooks ?? {};
       const added = [];
-      const { merged } = await projectHooks(target);
+      const { merged, keys } = await projectHooks(target);
+      for (const x of SETTINGS.filter((x) => shipped.has(x.script) && !keys.has(x.key))) {
+        settings[x.key] = x.value;
+        added.push(`"${x.key}": ${x.value}`);
+      }
       for (const h of HOOKS.filter((h) => shipped.has(h.script))) {
         const running = (merged[h.event] ?? []).filter((g) => runs(g, h));
         if (covered(merged, h) && !doubled(running)) continue;

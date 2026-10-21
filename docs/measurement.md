@@ -305,6 +305,32 @@ of them would have gone to the architect to be split. It reads this from the fil
 `Size:` line names, which are prose each project writes its own way; the router says a forecast carrying another kind's
 rate is restated from its own count.
 
+### Where the re-read went
+
+Turns times context says what a round cost, not what filled the context. Read from the transcripts of two projects'
+subagents — the third project's 132 rounds over a week and the second's 685 over three — the context a round opened
+with was 18% and 30% of all they re-read: the system prompt and tools, `CLAUDE.md` (9.7k and 13.7k tokens), the
+spec (6.7k and 7.3k), and a listing of every installed skill's description, 9.2k tokens in every stage allowed
+`Skill`, as much as `CLAUDE.md`. Shell output longer than a screen was 22% in both, though Hard Rule #19 had asked
+for it in a file since it was written. And in the third project a quarter of what the stages spent on input was
+the cache written again: a subagent's cache lives five minutes without a turn, a write costs twelve times a read,
+and 142 calls had waited five to ten minutes in one, as the rule then said to.
+
+So each round keeps three counts more. `cache_rewrites` is the turns that wrote more than half of a context of
+at least 30k tokens again, and `cache_rewritten` what they wrote; `clipped` is the outputs the cost watch moved
+to a file, counted where the run received them, never in the hook's echo of one or where the model quoted it.
+`stats` sets beside the context table, stage by stage, the share of its re-read that was what its rounds opened
+with, its rewrites with their share of what it spent at its model's price, and its clipped outputs; a round
+measured before the fields existed is left out of the shares rather than counted as none. That first reading
+put the third project's implementer at 95 rewrites and 38% of its spend, and every reviewer's rounds at 43% to
+51% opened-with: a short run is mostly the context it began with.
+
+Two measured things were left as they were. A subagent can skip `CLAUDE.md` (`omitClaudeMd`), and the part only
+the orchestrator needs is 3k tokens of it — but the rest would have to reach each stage some other way, and a
+hook's `additionalContext` is capped at 10,000 characters where that rest is 24,000. And a subagent's cache can
+live an hour, but its every write then costs 2× rather than 1.25×: the third project would have saved about 13% of
+its input spend, and the second, whose calls rarely wait, lost about 12%.
+
 ### While a run is still running: the cost watch
 
 `stats` says what a run cost after it ended, and by then the money is spent. Three quarters of the first
@@ -322,6 +348,20 @@ re-read and what one more turn now costs, and to hand back what is left if that 
 should carry; and it tells the person in one line. 40M passes one implementer round in ten in the project
 whose steps were sized right, and half in the one whose were not. It keeps counts only, under the project's
 gate directory, and a call outside a subagent returns at once.
+
+Two things a turn pays for on every turn after are settled at the call itself. A Bash output longer than
+`OUTPUT_CLIP` characters (8000 by default; 0 turns it off) is written whole to a file in the session's
+`tool-results` directory, beside the ones Claude Code moves out itself past 30,000, which stages were already
+reading there; in its place the run gets the hook's `updatedToolOutput` — the first lines, the last, where a test
+runner or a battery prints its summary, and where the rest is. A command that reads a file or a diff (`cat`, `sed`,
+`head`, `tail`, `git diff`, `git show`) is left alone: what it prints is what the run asked for, and clipping it would
+only send the run to read the file it was cut to. That a subagent sees the replaced output was probed on 2.1.303,
+not assumed. Only successful calls reach a PostToolUse hook, so a failure is never clipped. The file is the command's
+output, kept where Claude Code keeps its own and for as long as the session's are, never in the measurement store,
+which counts the clipped outputs and holds none. And a call whose
+`duration_ms` passed the five minutes a subagent's cache lives is named to the run — its next turn writes all of
+its context again, with the size the transcript last gave — and to the person in a line, so the wait that cost it is
+seen while there is still a run to change.
 
 ### Which model a stage ran on
 
