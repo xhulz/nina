@@ -4750,6 +4750,11 @@ const dated = (date, status = 'active') =>
       (await spec('router.md')).includes("### A spec's steps are passes of their own"),
     'compose: the step limit is stated where the spec is written, where it is implemented, and where it is dispatched',
   );
+  // A step's file of 102 KB, split again into some fifteen and kept whole as their spec, was opened by 98 runs.
+  expect(
+    (await spec('agents/architect.md')).includes("A step split again is no exception: its file becomes their spec, so what only one of them needs moves into that one's file."),
+    'compose: a step split again leaves its file as its parts\' spec, holding only what they share',
+  );
   const profilePath = join(young, '.nina', 'profile.json');
   const profile = JSON.parse(await readFile(profilePath, 'utf8'));
   await writeFile(profilePath, JSON.stringify({ ...profile, vocabulary: { ...profile.vocabulary, STEP_FILES: '25' } }));
@@ -4793,8 +4798,10 @@ const dated = (date, status = 'active') =>
     (await spec('agents/implementer.md')).includes('Run them all from one script') && (await spec('agents/qa.md')).includes('every mutation from one script'),
     'compose: the implementer and qa run their mutations from one script, not one turn each',
   );
-  // Every stage's battery, fuzz or differential check side by side, waited for in one call: three stages of one step ran
-  // theirs one case at a time, and the gates waited an hour on the slowest. The suite stays alone.
+  // Every stage's battery, fuzz or differential check side by side: three stages of one step ran theirs one case at a
+  // time, and the gates waited an hour on the slowest. The suite stays alone. And waited for in calls that end within
+  // the five minutes a stage's cache lives: past them the next turn writes the whole context again, and one project's
+  // turns after such calls were a quarter of what its stages spent on input.
   const rules = await readFile(join(young, 'CLAUDE.md'), 'utf8');
   const nineteen = rules.split('\n').find((line) => line.startsWith('19. ')) ?? '';
   const implementer = await spec('agents/implementer.md');
@@ -4804,7 +4811,9 @@ const dated = (date, status = 'active') =>
       'a worker per core less two (`os.availableParallelism() - 2`), a quarter of that when you are one of the gates that run together',
       'each worker on its own scratch copy of what it changes and in its own process group, killed when it ends or times out',
       'A case that boots a runtime, a database or a browser runs alone, and so does the suite.',
-      'never with a `sleep` a turn',
+      'Wait in calls that each end within three minutes',
+      'the turn after a longer call writes all of it again',
+      'never a short `sleep` a turn',
       // A battery of process-starting cases ran one at a time on ten cores, and cases waited out a real minute's timeout.
       "measure one case's peak resident memory first, its processes summed, and run no more workers than fit at that peak in a quarter of the machine's memory, a sixteenth when you are one of the gates",
       "the script holds its pool to the smaller of that count and the cores'",
