@@ -67,18 +67,36 @@ const CACHE_MS = 5 * 60_000;
  */
 export function readsByShell(command) {
   if (typeof command !== 'string') return false;
-  const last = command
+  // Read as words, never by a pattern that backtracks: the command is the model's, of any length.
+  const assignment = (word) => /^\w+=/.test(word);
+  // A subshell's parentheses are not part of the words they hold.
+  const unwrap = (word) => {
+    let from = 0;
+    let to = word.length;
+    while (from < to && word[from] === '(') from += 1;
+    while (to > from && word[to - 1] === ')') to -= 1;
+    return word.slice(from, to);
+  };
+  const segments = command
     .split(/&&|\|\||;|\n/)
-    .map((s) => s.trim().replace(/^\(+|\)+$/g, '').trim())
-    .filter((s) => s && !/^(\w+=\S*\s*)+$/.test(s))
-    .at(-1);
-  const words = (last ?? '')
-    .split('|')
-    .at(-1)
-    .trim()
-    // Less what runs a command rather than being it: assignments, `export`, `timeout`, `nice`, `command`.
-    .replace(/^((\w+=\S*|export\s+\w+=\S*|timeout\s+\S+|nice|command)\s+)+/, '');
-  return /^(cat|sed|head|tail|nl|awk|less|more)(\s|$)/.test(words) || /^git(\s+(-C\s+\S+|--no-pager|-c\s+\S+))*\s+(diff|show)\b/.test(words);
+    .map((segment) => segment.split(/\s+/).map(unwrap).filter(Boolean))
+    // A segment of assignments alone prints nothing.
+    .filter((words) => words.length && !words.every(assignment));
+  const piped = (segments.at(-1) ?? []).join(' ').split('|').at(-1);
+  const words = piped.split(/\s+/).filter(Boolean);
+  // Less what runs a command rather than being it: assignments, `export NAME=…`, `timeout N`, `nice`, `command`.
+  let i = 0;
+  while (i < words.length) {
+    if (assignment(words[i]) || words[i] === 'nice' || words[i] === 'command') i += 1;
+    else if ((words[i] === 'export' && assignment(words[i + 1] ?? '')) || (words[i] === 'timeout' && words[i + 1])) i += 2;
+    else break;
+  }
+  if (['cat', 'sed', 'head', 'tail', 'nl', 'awk', 'less', 'more'].includes(words[i])) return true;
+  if (words[i] !== 'git') return false;
+  // `git diff` and `git show`, past the options that come before a subcommand.
+  i += 1;
+  while (words[i] === '--no-pager' || words[i] === '-C' || words[i] === '-c') i += words[i] === '--no-pager' ? 1 : 2;
+  return words[i] === 'diff' || words[i] === 'show';
 }
 
 /**

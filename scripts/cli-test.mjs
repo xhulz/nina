@@ -6100,6 +6100,11 @@ const dated = (date, status = 'active') =>
     unwarned?.hookSpecificOutput?.updatedToolOutput?.stdout.includes(CLIP_MARK) && unwarned.hookSpecificOutput.additionalContext.includes('that call ran 6 minutes') && !unwarned.hookSpecificOutput.additionalContext.includes('this run has re-read'),
     `cost: with no threshold, an output is still clipped and a long call still named — got ${JSON.stringify(unwarned)?.slice(0, 300)}`,
   );
+  // The command is the model's, of any length, and the hook runs on every call: read in linear time. A trailing-
+  // parenthesis pattern took 58 seconds on the third of these.
+  const started = Date.now();
+  for (const bad of ['('.repeat(1e5) + ')'.repeat(1e5), '0='.repeat(1e5), `${')'.repeat(2e5)}x`, `git ${'-C a '.repeat(5e4)}`, '|'.repeat(2e5)]) readsByShell(bad);
+  expect(Date.now() - started < 2000, `cost: a command of any length is read in linear time — took ${Date.now() - started} ms`);
   const response = { stdout: long, stderr: '', interrupted: false, isImage: false };
   expect(
     clipOutput({ tool_name: 'Read', tool_response: response, transcript_path: join(projects, 's-cost.jsonl'), session_id: 's-cost' }, 8000) === null &&
