@@ -1482,6 +1482,8 @@ async function sound(fixture, core) {
     inbox.includes('(no pill) → core') && inbox.includes('(no pill)\n') && !inbox.includes('undefined'),
     `requests: a request with no pill is listed as one, not as "undefined" — got\n${inbox}`,
   );
+  const ownSide = run(['learn', '--project', dir]).out;
+  expect(ownSide.includes('open since 2026-01-01: 2026-01-01-harness__a-command-defect → core'), `learn: the project's own report names a request with no pill by its name — got\n${ownSide}`);
   await rm(byHand);
   // A pill is named by its id as well as its path, and the owner's choice of layer is recorded without a hand edit: a
   // lesson of shared roles about a tool only one surface runs was filed for the core, then edited by hand.
@@ -5825,7 +5827,7 @@ const dated = (date, status = 'active') =>
   );
   // The sweep came back three times in a day after its cases were named: it is a command now, and the command is run
   // here on the cases that were sent back, beside the value literals it must leave alone.
-  const sweep = /`(\{ git diff --name-only --diff-filter=d HEAD; git ls-files -o --exclude-standard; \} \| grep [^`]+)`/.exec(implementer)?.[1];
+  const sweep = /`(\{ git diff -z --name-only --diff-filter=d HEAD [^`]+ \| xargs -0 grep [^`]+)`/.exec(implementer)?.[1];
   const swept = await scratch();
   const sweepGit = (...args) => spawnSync('git', ['-C', swept, '-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { encoding: 'utf8' });
   sweepGit('init', '-q');
@@ -5842,13 +5844,19 @@ const dated = (date, status = 'active') =>
     'const ruleCreate = vi.fn();',
     'type Bound = Base & { expectedAmountCents: bigint | null };',
     'const rows = [] as [{ data: number }];',
+    '  b: Map<string, number>;',
+    '  cb: (a: number, b: string) => void;',
+    '  private y: string;',
+    'const f = vi.fn<[number], void>();',
+    '  send(to: string): Promise<void>;',
   ];
-  const left = ['  amount: 100,', '  owner: { name: 1 },', 'const y = x || {};', 'const z = a && { b: 1 };', 'makeStub({ cents: 1n });'];
+  const left = ['  amount: 100,', '  owner: { name: 1 },', 'const y = x || {};', 'const z = a && { b: 1 };', 'makeStub({ cents: 1n });', '  expect(a).toBe(b);', '  return a ? b : c;', 'const q: Foo = bar();'];
   await writeFile(join(swept, 'old.ts'), ['export const a = 1;', ...left].join('\n') + '\n');
-  await writeFile(join(swept, 'new.test.ts'), flagged.join('\n') + '\n');
+  // A file whose name has a space in it was split by xargs, and skipped.
+  await writeFile(join(swept, 'new stub.test.ts'), flagged.join('\n') + '\n');
   const hits = sweep ? spawnSync('sh', ['-c', sweep], { cwd: swept, encoding: 'utf8' }).stdout : '';
   expect(
-    Boolean(sweep) && flagged.every((line) => hits.includes(`new.test.ts:${flagged.indexOf(line) + 1}:${line}`)) && !left.some((line) => hits.includes(line)),
+    Boolean(sweep) && flagged.every((line) => hits.includes(`new stub.test.ts:${flagged.indexOf(line) + 1}:${line}`)) && !left.some((line) => hits.includes(line)),
     `compose: the implementer's TSDoc sweep is a command, and it lists each line sent back and no value literal — got\n${hits}`,
   );
   // Three implementers in a row finished steps far past their forecasts; the third had forecast it before writing on.
@@ -5870,6 +5878,7 @@ const dated = (date, status = 'active') =>
   const privacy = await readFile(join(await composed('ledger'), 'CLAUDE.md'), 'utf8');
   expect(
     privacy.includes('**A test that proves a value stays out matches by containment**') && privacy.includes('(`Object.getOwnPropertyNames`)') &&
+      privacy.includes('where it lists what may be logged, every other value the run carries') &&
       privacy.includes('each with a control that embeds it in a longer string under an allowed key and must fail the check') &&
       !privacy.includes('missed an amount on a non-enumerable property') && !claude.includes('matches by containment'),
     'compose: a leak check matches by containment over every channel and property, with a control per class, where pii composes and without its history',

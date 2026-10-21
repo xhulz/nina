@@ -96,7 +96,7 @@ When in doubt: **smaller diff, escalate sooner.**
   rather than document it: a type the library exports, or one documented alias, leaves no member to document. List the
   lines to check over every touched and new file, and give each hit on a line you added or changed a `/** … */`
   directly above it:
-  `{ git diff --name-only --diff-filter=d HEAD; git ls-files -o --exclude-standard; } | grep -E '\.tsx?$' | xargs grep -nHE '^\s+(readonly )?[[:alnum:]_$]+\??: [^,]*;$|= vi\.(fn|spyOn)\(|as (unknown as )?\[?\{|\)\s*:\s*(Promise<)?\{|(^|[^&|])[&|<]\s*\{'`.
+  `{ git diff -z --name-only --diff-filter=d HEAD -- '*.ts' '*.tsx'; git ls-files -oz --exclude-standard -- '*.ts' '*.tsx'; } | xargs -0 grep -nHE '^\s+((private|protected|public|static|readonly|declare|abstract|override) )*[[:alnum:]_$]+[?!]?(\(.*\))?: .*;$|= vi\.(fn|spyOn)[<(]|as (unknown as )?\[?\{|\)\s*:\s*(Promise<)?\{|(^|[^&|])[&|<]\s*\{'`.
   A type changed in a test reads as not code, and is the line that gets skipped.<!-- nina:why --> One
   project's reviewer sent a step back three times in one day for it: five stub fields widened in tests, then mocks'
   locals and literals in casts, then a return type's literal written on one line — each time with every source member

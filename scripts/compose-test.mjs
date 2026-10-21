@@ -278,7 +278,7 @@ const BUDGETS = {
   // script with every fails-if line: two reviewers built mutants of their own to refute such a claim; and for a step
   // forecast by the implementer before it writes, three in a row having finished far past theirs; and for the TSDoc
   // sweep as a command, after it came back three times in a day with its cases named.
-  '.claude/agents/implementer.md': 24500,
+  '.claude/agents/implementer.md': 24600,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -328,7 +328,7 @@ const BUDGETS = {
   // wait held within the five minutes a stage's cache lives: past them the next turn writes the whole context again,
   // and one project's turns after such calls were a quarter of what its stages spent on input. And, where a project has
   // pii, for a leak check matched by containment over every channel and property: one project's was sent back three times.
-  'CLAUDE.md': 31450,
+  'CLAUDE.md': 31500,
 };
 
 /**
