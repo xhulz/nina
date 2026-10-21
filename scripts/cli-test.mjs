@@ -4981,6 +4981,15 @@ const dated = (date, status = 'active') =>
       !names('x (my1.6-spec-c step 3)', '1.6-spec-c', '3'),
     'sizes: a commit names a step by its spec and its id, and step 1 is neither step 10 nor step 1-2, nor spec-c spec-c2',
   );
+  // The landing that also corrected another spec's step 7 was counted a landing of this spec's step 7.
+  const both = "fees-step9-spec step 6: messages.ts, and M6 step 7's fee-write clause corrected";
+  expect(
+    names(both, 'fees-step9-spec', '6') &&
+      !names(both, 'fees-step9-spec', '7') &&
+      names('fees-spec: step 2 test label X-3 -> X-4', 'fees-spec', '2') &&
+      names('Fees-Spec Step 2B: x', 'fees-spec', '2b'),
+    'sizes: a spec followed by a step names that step, not another the message mentions',
+  );
 
   const dir = await scratch();
   // Each commit at its own time, in zones that order its ISO times as text against the order of the instants: the last
