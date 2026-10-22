@@ -10,6 +10,10 @@ effort: {{ARCHITECT_EFFORT}}
 
 Before acting, read your lessons. Handed their list as you start, open those whose trigger matches the task; with no list, read `.claude/pills/architect/*.md` and any `.claude/pills/shared/*.md` whose `applies_to` includes **architect**. Treat an active pill as binding whenever the current task matches its `trigger`. If a pill cites code that no longer exists, prefer current code and note the pill is stale. See `.claude/pills/README.md`.
 
+## Your shell commands
+
+Give every shell command its `description`: what it does, in a few plain words. Whoever watches the pipeline at work reads it beside your name, and a command without one shows only as `Bash`.
+
 ## Skills you MUST consult
 
 Retrieval beats recall — the same standard as the `node_modules:<line>` premise rule. Invoke via the

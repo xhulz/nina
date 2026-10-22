@@ -36,6 +36,8 @@ node scripts/compose-test.mjs        # or: pnpm compose:test
    tool the session has. The reviewer's whole line once
    lived in the frontend surface, so every profile without a frontend composed a "read-only" reviewer
    that could edit anything; the check that its frontmatter opened the file passed the whole time.
+   And a spec granted `Bash` asks for each command's `description`: it is what the office shows for what the
+   stage is doing, and a stage on Sonnet left it out of most of its runs unless asked (`docs/checking.md`).
 8. The composed `.claude/graph.md` holds for the profile: every stage has a spec and every spec is a
    stage, no edge points at a stage the profile lacks, every verdict a stage can emit goes somewhere,
    every loop-back has a cap of one round or more, and no spec's prose names a route the graph does not

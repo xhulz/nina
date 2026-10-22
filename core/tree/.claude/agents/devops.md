@@ -14,6 +14,10 @@ Before acting, read your lessons. Handed their list as you start, open those who
 
 <!-- nina:slot project.2 why-this-stage -->
 
+## Your shell commands
+
+Give every shell command its `description`: what it does, in a few plain words. Whoever watches the pipeline at work reads it beside your name, and a command without one shows only as `Bash`.
+
 ## Skills you MUST consult
 
 <!-- nina:slot edge-cf.1 -->
