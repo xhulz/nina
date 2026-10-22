@@ -6167,7 +6167,8 @@ const dated = (date, status = 'active') =>
   const noisy = bash('node run.mjs', 'ok\n', { tool_use_id: 'toolu_clip3', tool_response: { stdout: 'ok\n', stderr: long, interrupted: false, isImage: false } })?.hookSpecificOutput?.updatedToolOutput;
   const noisyFile = join(projects, 's-cost', 'tool-results', 'nina-toolu_clip3.txt');
   expect(
-    noisy?.stdout.startsWith('ok\n\n' + CLIP_MARK) && noisy.stdout.split('ok').length === 2 && noisy.stdout.includes('2,003 lines') && noisy.stdout.includes('stderr after stdout') &&
+    // Counted without the file's path, a random directory's name: one named `nina-cli-o9Tokd` was an `ok` more.
+    noisy?.stdout.startsWith('ok\n\n' + CLIP_MARK) && noisy.stdout.replaceAll(noisyFile, '').split('ok').length === 2 && noisy.stdout.includes('2,003 lines') && noisy.stdout.includes('stderr after stdout') &&
       noisy.stderr.endsWith('line 1999') && noisy.stderr.length <= 1000 && (await readFile(noisyFile, 'utf8')) === `ok\n\n--- stderr ---\n${long}`,
     `cost: a short stdout is shown once beside a long stderr's last lines, and the file holds both — got ${JSON.stringify(noisy)?.slice(0, 300)}`,
   );
