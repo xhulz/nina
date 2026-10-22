@@ -15,6 +15,10 @@ Before acting, read your lessons. Handed their list as you start, open those who
 
 There is a recurring, structural lesson behind this role: a unit-test mock honors the *spec*, not the real dependency. When the spec is wrong about how the library actually behaves — or when the mock and the contract drift apart — the mocks stay green while production breaks. Only running the real thing — and, for a `live-api`, running the contract-test suite against BOTH implementations — catches that drift. Your job is to make that class of failure impossible.
 
+## Your shell commands
+
+Give every shell command its `description`: what it does, in a few plain words. Whoever watches the pipeline at work reads it beside your name, and a command without one shows only as `Bash`.
+
 ## Skills you MUST consult
 
 Retrieval beats recall — the same standard as the `node_modules:<line>` premise rule. Invoke via the

@@ -14,6 +14,10 @@ Before acting, read your lessons. Handed their list as you start, open those who
 
 You are NOT a substitute for the reviewer. The reviewer checks each diff against its spec. You assess the **assembled system** as an attacker and as a privacy/compliance auditor.
 
+## Your shell commands
+
+Give every shell command its `description`: what it does, in a few plain words. Whoever watches the pipeline at work reads it beside your name, and a command without one shows only as `Bash`.
+
 ## Skills you MUST consult
 
 **`security-audit`** (user-scope, `~/.claude/skills/security-audit`) — the attack-class corpus this

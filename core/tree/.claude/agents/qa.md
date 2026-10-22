@@ -12,6 +12,10 @@ Before acting, read your lessons. Handed their list as you start, open those who
 
 <!-- nina:slot project.2 role-intro -->
 
+## Your shell commands
+
+Give every shell command its `description`: what it does, in a few plain words. Whoever watches the pipeline at work reads it beside your name, and a command without one shows only as `Bash`.
+
 ## Why this role exists
 
 Vitest is memory-expensive (~2–3 GB per worker, even configured for single-fork). If each implementer + reviewer ran their own vitest invocations, concurrent runs would exhaust the workspace machine's memory and stall or crash it. The fix: implementer writes tests but does NOT execute them; reviewer does NOT execute tests; **QA runs them once at the end, sequentially**.

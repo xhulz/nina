@@ -27,7 +27,8 @@
  *   7. Every composed agent spec declares `name:`, `description:` and `tools:` in its frontmatter.
  *      Claude Code does not load a spec with no description at all; and one with no `tools:` is not
  *      restricted — the subagent inherits every tool the session has — so a role told it is
- *      read-only is not, and nothing says so. A `model:` it declares is an alias or a model id.
+ *      read-only is not, and nothing says so. A `model:` it declares is an alias or a model id. One granted
+ *      `Bash` asks for each command's `description`, the words the office shows for what the stage is doing.
  *   9. Every numbered list composes as 1, 2, 3 — except the hard rules, whose numbers are ids.
  *  10. Every composed document fits its size budget (`BUDGETS`), and no `nina:why` passage survives, nor history
  *      left unmarked: a count of one project's runs ("2 times in 743 runs") composed into every other's.
@@ -45,7 +46,7 @@
 
 import { cp, mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
-import { frontmatterFindings, modelFindings, toolFindings } from '../src/tools.mjs';
+import { frontmatterFindings, granted, modelFindings, toolFindings } from '../src/tools.mjs';
 import { existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -203,6 +204,12 @@ async function runFixture(name) {
   // from every role while the specs made skills mandatory.
   for (const finding of toolFindings(specs, null)) failures.push(`tools: ${finding}`);
   for (const finding of modelFindings(specs)) failures.push(`model: ${finding}`);
+  // A shell command run with no `description` is drawn in the office as `Bash` and nothing else. A run writes one for
+  // every command or for none, as its first went, and Sonnet's runs mostly went without: asked for in the spec, every
+  // run of a probe wrote them.
+  for (const [role, spec] of specs) {
+    if (granted(spec).includes('Bash') && !spec.includes(ASKS_DESCRIPTION)) failures.push(`shell: ${role} may run Bash, and its spec does not ask for each command's description`);
+  }
 
   for (const rel of expect.present ?? []) {
     if (!existsSync(join(work, rel))) failures.push(`expected ${rel} to be composed`);
@@ -218,13 +225,9 @@ async function runFixture(name) {
 }
 
 
-/**
- * The most characters each composed document may hold, in the largest profile a fixture composes: the
- * size measured when budgets were introduced, with about a tenth of room. Raising one is allowed and is
- * the point — it is written in the commit that needs it, where a reviewer sees the context grow. The
- * fixtures have empty project layers, so this bounds the harness's own share of each file; a project's
- * fragments come on top. Only documents are budgeted: they are what a dispatch reads.
- */
+/** What a spec granted Bash says to ask for each command's description (property 7). */
+const ASKS_DESCRIPTION = 'Give every shell command its `description`';
+
 /** A shell line that kills whatever a pattern matched (property 11). */
 const KILLS = /\b(?:pkill|killall)\b|\bxargs\b[^|]*\bkill\b|\bkill\b[^|]*\$\(\s*(?:pgrep|ps)\b/;
 
@@ -234,8 +237,17 @@ const OWN_CHECKOUT = 'grep -F "$ROOT/"';
 /** How history reads when it was left unmarked: a count of one project's own runs, or an event it lived through. */
 const HISTORY = /\b\d+ (?:times|invocations|runs|rounds) (?:in|out of) \d+\b[^.]*|\b\d+% of the time\b|\bhappened here once\b/g;
 
+/**
+ * The most characters each composed document may hold, in the largest profile a fixture composes: the
+ * size measured when budgets were introduced, with about a tenth of room. Raising one is allowed and is
+ * the point — it is written in the commit that needs it, where a reviewer sees the context grow. The
+ * fixtures have empty project layers, so this bounds the harness's own share of each file; a project's
+ * fragments come on top. Only documents are budgeted: they are what a dispatch reads.
+ */
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
+  // The specs below with no room left were raised by 250 for the section asking each shell command's description, which
+  // the office shows beside the stage: Sonnet stages wrote one in a third of their runs, all of a run's or none.
   // Raised for two lessons one project learned three times each: a filter is specified by what it refuses, and one
   // that mirrors another program's parse is premised on that program's whole input path, not the one stage it copies.
   // And for the integrations surface's citation form: the package's own link, not a store directory a peer renames.
@@ -255,14 +267,14 @@ const BUDGETS = {
   // existed to catch. And for a step split again, whose file becomes its parts' spec: one of 102 KB kept whole was a
   // twentieth of what one project's stages read. And for a sentence dictated about code another step builds, worded
   // as a contract: one read as proof that a guard existed before it did.
-  '.claude/agents/architect.md': 22600,
+  '.claude/agents/architect.md': 22850,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
-  '.claude/agents/design-reviewer.md': 4900,
+  '.claude/agents/design-reviewer.md': 5150,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   // And for Hard Rule #20's line: a rejection holds only what blocks.
-  '.claude/agents/dba.md': 13250,
-  '.claude/agents/devops.md': 11500,
+  '.claude/agents/dba.md': 13500,
+  '.claude/agents/devops.md': 11750,
   // Raised with patterns.md, when the owner asked that code be written to read well (§ Readable code), and
   // again for a lesson a project learned five times: a spike's verdict covers only the cases that ran, and
   // again for the largest profile yet — a frontend beside a database on D1 reached through Drizzle — and again
@@ -278,18 +290,18 @@ const BUDGETS = {
   // script with every fails-if line: two reviewers built mutants of their own to refute such a claim; and for a step
   // forecast by the implementer before it writes, three in a row having finished far past theirs; and for the TSDoc
   // sweep as a command, after it came back three times in a day with its cases named.
-  '.claude/agents/implementer.md': 24600,
+  '.claude/agents/implementer.md': 24850,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
   // overwrite-and-restore. And for running every mutation from one script.
-  '.claude/agents/qa.md': 13800,
+  '.claude/agents/qa.md': 14050,
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
   // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path —
   // and a case that skips the code that judges, and a citation that resolves without saying the sentence. And for
   // Hard Rule #20: notes kept apart from what blocks. And for TSDoc on what a diff changes, not only what it adds.
-  '.claude/agents/reviewer.md': 21450,
+  '.claude/agents/reviewer.md': 21700,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
