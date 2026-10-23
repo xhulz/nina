@@ -342,7 +342,9 @@ const BUDGETS = {
   // wait held within the five minutes a stage's cache lives: past them the next turn writes the whole context again,
   // and one project's turns after such calls were a quarter of what its stages spent on input. And, where a project has
   // pii, for a leak check matched by containment over every channel and property: one project's was sent back three times.
-  'CLAUDE.md': 31500,
+  // And, there too, for a check that claims a class covering every member of it — every slot, every form of
+  // a value, every state that withholds it: one project's sweeps were lists, sent back three times in two days.
+  'CLAUDE.md': 32250,
 };
 
 /**
