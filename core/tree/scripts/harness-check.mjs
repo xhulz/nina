@@ -75,6 +75,8 @@ process.exit(
         hint: 'forecast the next of those steps again before it goes out — a `Size:` line, the number `nina sizes` lists for it — and send the architect only a step the new number puts past the limit, to split; the rest at their turn. A `Size:` line it cannot read is written `Size: ~N lines in M files`, the forecast followed by `lines`',
         ignore: /^sizes: current$/,
       },
+      // A detector of the project's own compares and never writes. A reviewer runs this check read-only, and one
+      // that regenerates what it checks reports a clean tree it has just changed.
 <!-- nina:slot project.1 detectors -->
     ],
     { root: ROOT, hook: process.argv.includes('--hook'), context: process.argv.includes('--context') },

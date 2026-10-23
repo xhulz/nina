@@ -5889,6 +5889,18 @@ const dated = (date, status = 'active') =>
       !privacy.includes('missed an amount on a non-enumerable property') && !claude.includes('matches by containment'),
     'compose: a leak check matches by containment over every channel and property, with a control per class, where pii composes and without its history',
   );
+  // A sweep of three named attributes, proven by mutants in those three, stayed green with the label in a fourth; the
+  // next missed the raw amounts, the one after the state built to show none.
+  expect(
+    privacy.includes('Where what it claims to keep out names a class — an attribute, an amount — it covers every member: a surface with open-ended slots is read whole, never through a list of them') &&
+      privacy.includes('every attribute of every element a rendered page carries') &&
+      privacy.includes('and a sweep that read nothing fails') &&
+      privacy.includes('in every form the code can give it, formatted and raw') &&
+      privacy.includes('each state that shows, hides or replaces a value is swept on its own, the one built to withhold it most of all') &&
+      privacy.includes("One mutant puts the value in a slot the check does not name (`data-x`), and one per field puts that field's raw value in such a slot") &&
+      !privacy.includes('proven by mutants in those three') && !claude.includes('every attribute of every element'),
+    'compose: a pii check covers every slot, every form of a value and every state of the class it claims, with a mutant outside its list, and without its history',
+  );
   // A simple change runs its mutations once, in qa: the implementer's mirror ran them twice on a screen's labels.
   expect(
     implementer.includes('- **A simple change leaves its mutations to qa:** a dispatch that is your spec and says the change touches no critical') &&

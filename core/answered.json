@@ -100,5 +100,8 @@
   },
   "2026-10-21-shared__leak-check-matches-by-containment-and-covers-every-privacy-class": {
     "in": "surfaces/pii/tree/CLAUDE.md"
+  },
+  "2026-10-23-implementer__a-never-in-an-attribute-check-sweeps-every-attribute": {
+    "in": "surfaces/pii/tree/CLAUDE.md"
   }
 }
