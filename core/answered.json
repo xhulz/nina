@@ -103,5 +103,11 @@
   },
   "2026-10-23-implementer__a-never-in-an-attribute-check-sweeps-every-attribute": {
     "in": "surfaces/pii/tree/CLAUDE.md"
+  },
+  "2026-10-23-shared__invisible-or-lookalike-characters-are-written-as-escapes": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-23-shared__scratch-files-live-in-your-mktemp-dir-never-the-scratchpad-root": {
+    "in": "core/tree/CLAUDE.md"
   }
 }

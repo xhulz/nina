@@ -106,6 +106,16 @@ When in doubt: **smaller diff, escalate sooner.**
   locals and literals in casts, then a return type's literal written on one line — each time with every source member
   documented. With those cases named here, the same project was sent back three more times in one day: a cast to
   `as unknown as { … }`, a `vi.spyOn` local, a helper returning `{ … }[]`.<!-- /nina:why -->
+- **Write a character that is invisible or can be taken for another as its `\u` escape**, never as itself, even where
+  the spec shows it raw: a line or paragraph separator, a no-break or zero-width space, a byte-order mark, a control
+  byte, a full-width digit. Raw, it reads in a diff as a space or as nothing, and a paste or an editor can turn it into
+  a plain space, leaving its row green and its case gone. The Write and Edit tools and a heredoc can decode an escape
+  you typed into the character, so after every write of such a file list what in it is not printable ASCII —
+  `perl -ne 'print "$ARGV:$.:$_" if /[^\t\n\r\x20-\x7E]/; close ARGV if eof' <files>`, not `grep -P`, which the system grep
+  may lack — and leave only the letters and signs its text means. Where a tool keeps decoding it, write the line from a
+  script that builds the backslash from its code point (`String.fromCharCode(92)`).<!-- nina:why --> In one project a
+  reviewer sent back rows holding a raw U+2028 and full-width digits, read in the diff as a trailing space; then an
+  architect and three implementers each typed the escape, and the tools wrote the character.<!-- /nina:why -->
 - Run `{{TYPECHECK_CMD}}`, `{{LINT_CMD}}`, and (when frontend code changed) `{{BUILD_CMD}}` for the affected packages before declaring the task done.
 - If the spec is wrong, ambiguous, or you hit an unknown, **STOP and escalate** — do not guess. Loop back to architect.
 - **If a spec premise about an external library looks wrong while you're writing code that depends on it** (e.g., the cited line says X but the function clearly does Y), STOP — do not silently work around it. Loop back to architect to re-verify the citation. Premises in the spec are the contract; if the contract is wrong, do not paper over.
