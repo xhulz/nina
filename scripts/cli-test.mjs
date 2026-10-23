@@ -5901,6 +5901,31 @@ const dated = (date, status = 'active') =>
       !privacy.includes('proven by mutants in those three') && !claude.includes('every attribute of every element'),
     'compose: a pii check covers every slot, every form of a value and every state of the class it claims, with a mutant outside its list, and without its history',
   );
+  // Raw invisible characters in a spec's rows were copied raw and read as a trailing space; then the tools decoded the
+  // escapes four stages typed. The composed command is run on the bytes they wrote, beside a file it must pass over.
+  const nonAscii = /`(perl -ne 'print "\$ARGV:\$\.:\$_" if \/\[\^\\t\\n\\r\\x20-\\x7E\]\/; close ARGV if eof') <files>`/.exec(implementer)?.[1];
+  const raw = await scratch();
+  await writeFile(join(raw, 'rows.test.ts'), "const ok = 'plain';\nconst sep = 'P\u2028';\nconst digit = '\uff12';\nconst kept = 'P\\u2028';\r\nconst tab = '\ta';\nconst bell = 'a\x01';\n");
+  await writeFile(join(raw, 'clean.ts'), "export const a = 'x';\n");
+  const listed = nonAscii ? spawnSync('sh', ['-c', `${nonAscii} rows.test.ts clean.ts`], { cwd: raw, encoding: 'utf8' }).stdout : '';
+  expect(
+    implementer.includes('- **Write a character that is invisible or can be taken for another as its `\\u` escape**, never as itself, even where') &&
+      implementer.includes('The Write and Edit tools and a heredoc can decode an escape') &&
+      implementer.includes('builds the backslash from its code point (`String.fromCharCode(92)`)') &&
+      architect.includes('**is written in the spec as its `\\u` escape**, never as itself: a raw one in a table is copied raw') &&
+      architect.includes("(`perl -ne 'print \"$.:$_\" if /[^\\t\\n\\r\\x20-\\x7E]/' <spec>`)") &&
+      listed === 'rows.test.ts:2:const sep = \'P\u2028\';\nrows.test.ts:3:const digit = \'\uff12\';\nrows.test.ts:6:const bell = \'a\x01\';\n' &&
+      !implementer.includes('and the tools wrote the character'),
+    `compose: an invisible or lookalike character is an escape in the spec and in source, and the composed check lists each raw one and nothing else — got\n${listed}`,
+  );
+  // A qa and a reviewer wrote their files at the scratchpad's root, one with its own directory named in its dispatch.
+  expect(
+    claude.includes('before its first write there. Every file it writes goes inside one — a log, a captured output, a note of a path — and none at the scratchpad') &&
+      claude.includes('it lists the root to see that none of its files is there') &&
+      claude.includes('output longer than a screen goes to a file in your scratch directory (Hard Rule #18), which you grep') &&
+      !claude.includes('a qa wrote a path note at the root'),
+    'compose: every file a stage writes goes in its own scratch directory, never at the root, long output included',
+  );
   // A simple change runs its mutations once, in qa: the implementer's mirror ran them twice on a screen's labels.
   expect(
     implementer.includes('- **A simple change leaves its mutations to qa:** a dispatch that is your spec and says the change touches no critical') &&

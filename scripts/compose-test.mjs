@@ -266,8 +266,9 @@ const BUDGETS = {
   // is never the pass — a spike, a gate and a memory ceiling each printed their passing token for the failure they
   // existed to catch. And for a step split again, whose file becomes its parts' spec: one of 102 KB kept whole was a
   // twentieth of what one project's stages read. And for a sentence dictated about code another step builds, worded
-  // as a contract: one read as proof that a guard existed before it did.
-  '.claude/agents/architect.md': 22850,
+  // as a contract: one read as proof that a guard existed before it did. And for an invisible or lookalike character
+  // written as its escape, checked after each write: raw ones in a spec's table were copied raw into the tests.
+  '.claude/agents/architect.md': 23350,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 5150,
@@ -289,8 +290,9 @@ const BUDGETS = {
   // for the claim that no one mutation reddens a row, run condition by condition, and the battery's log compared by its
   // script with every fails-if line: two reviewers built mutants of their own to refute such a claim; and for a step
   // forecast by the implementer before it writes, three in a row having finished far past theirs; and for the TSDoc
-  // sweep as a command, after it came back three times in a day with its cases named.
-  '.claude/agents/implementer.md': 24850,
+  // sweep as a command, after it came back three times in a day with its cases named. And for an invisible or lookalike
+  // character written as its escape, with the command that lists what the tools wrote raw: they decoded four stages' escapes.
+  '.claude/agents/implementer.md': 25700,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -343,8 +345,9 @@ const BUDGETS = {
   // and one project's turns after such calls were a quarter of what its stages spent on input. And, where a project has
   // pii, for a leak check matched by containment over every channel and property: one project's was sent back three times.
   // And, there too, for a check that claims a class covering every member of it — every slot, every form of
-  // a value, every state that withholds it: one project's sweeps were lists, sent back three times in two days.
-  'CLAUDE.md': 32250,
+  // a value, every state that withholds it: one project's sweeps were lists, sent back three times in two days. And for
+  // every file a stage writes kept in its own scratch directory, long output included: two wrote three files at the root.
+  'CLAUDE.md': 32550,
 };
 
 /**
