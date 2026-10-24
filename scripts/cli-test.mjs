@@ -6307,6 +6307,25 @@ const dated = (date, status = 'active') =>
   const costOnly = new Set(['scripts/cost-watch.mjs']);
   const fresh = JSON.parse(settingsFile(costOnly));
   expect(fresh.skillListingBudgetFraction === 0.001 && !('skillListingBudgetFraction' in JSON.parse(settingsFile(new Set(['scripts/harness-check.mjs'])))), 'wire: a fresh settings file keeps the skill listing to names, where the version ships the cost watch');
+  // The budget spares the skills bundled with Claude Code: 8k of the 10k characters it left were their descriptions.
+  expect(fresh.skillListingMaxDescChars === 1 && !('skillListingMaxDescChars' in JSON.parse(settingsFile(new Set(['scripts/harness-check.mjs'])))), 'wire: and caps each description, which reaches the bundled skills the budget spares');
+  {
+    const capless = { ...fresh };
+    delete capless.skillListingMaxDescChars;
+    const file = join(dir, '.claude', 'settings.json');
+    await writeFile(file, JSON.stringify(capless));
+    const told = await missingWiring(dir, costOnly);
+    await applyWiring(dir, costOnly);
+    expect(
+      told.length === 1 && told[0].includes('"skillListingMaxDescChars"') && told[0].includes('bundled with Claude Code') && told[0].includes('sets it to 1') &&
+        JSON.parse(await readFile(file, 'utf8')).skillListingMaxDescChars === 1 && (await missingWiring(dir, costOnly)).length === 0,
+      `wire: a project wired before the cap is told of it alone, and wire adds it — got ${JSON.stringify(told)}`,
+    );
+    await writeFile(file, JSON.stringify({ ...capless, skillListingMaxDescChars: 200 }));
+    await applyWiring(dir, costOnly);
+    expect(JSON.parse(await readFile(file, 'utf8')).skillListingMaxDescChars === 200, "wire: a cap the owner wrote is theirs");
+    await rm(file);
+  }
   const hooksOnly = { ...fresh };
   delete hooksOnly.skillListingBudgetFraction;
   const shared = join(dir, '.claude', 'settings.json');

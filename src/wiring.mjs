@@ -155,11 +155,17 @@ const SETTINGS_FILES = ['.claude/settings.json', '.claude/settings.local.json'];
  * window, and every stage whose tools include `Skill` re-reads it on every turn: 32k characters in two
  * projects, a twentieth of what their stages re-read. The skills a stage must use are named in its spec,
  * and every skill's name stays listed however small the budget, so the descriptions buy a stage nothing.
+ * The budget spares the skills bundled with Claude Code, whose descriptions were 8k of the 10k characters
+ * left; a cap on each description reaches them too, and 1 is the least it takes.
  */
 const SETTINGS = [
   {
     key: 'skillListingBudgetFraction', value: 0.001, script: COST,
     why: "every stage that may invoke a skill re-reads every installed skill's description on every turn, about 9k tokens",
+  },
+  {
+    key: 'skillListingMaxDescChars', value: 1, script: COST,
+    why: "every stage that may invoke a skill re-reads on every turn the descriptions the budget spares, those of the skills bundled with Claude Code, about 3k tokens",
   },
 ];
 
