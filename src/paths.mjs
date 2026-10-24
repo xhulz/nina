@@ -47,6 +47,16 @@ export function hookStateDir() {
 }
 
 /**
+ * Where `nina eval` stages each run: in the home directory, because the reviewer's sandbox denies it the
+ * shared temp directories, where earlier runs keep their reports.
+ *
+ * @returns {string}
+ */
+export function evalRunsDir() {
+  return process.env.NINA_DATA ? join(process.env.NINA_DATA, 'eval') : join(homedir(), '.nina', 'eval');
+}
+
+/**
  * Where `nina export` keeps what it has sent, per destination and project — beside the snapshots it reads.
  *
  * @returns {string}

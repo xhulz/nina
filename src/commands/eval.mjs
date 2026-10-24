@@ -35,16 +35,51 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { composeProject } from './compose.mjs';
-import { slugFor } from '../paths.mjs';
+import { evalRunsDir, slugFor } from '../paths.mjs';
 import { PROJECTS_ROOT } from '../transcripts.mjs';
 
 /** Credentials that would make `claude -p` bill per token instead of using the login. */
 const BILLED = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'];
 
-/** What the reviewer may do: read the tree and the diff, nothing else. */
-const TOOLS = ['Read', 'Grep', 'Glob', 'Bash(git diff:*)', 'Bash(git status:*)', 'Bash(git show:*)', 'Bash(git log:*)'];
+/**
+ * What the reviewer may do: read the staged tree and the diff, nothing else. A bare `Read` reads any path,
+ * and the answer key is on the same disk — `evals/reviewer/` in the installed package, and the reports of
+ * earlier runs beside the staged project — so each file tool is scoped to the project, and `FENCE` makes
+ * the tools refuse a path outside it whatever the rules say.
+ */
+const TOOLS = ['Read(./**)', 'Grep(./**)', 'Glob(./**)', 'Bash(git diff:*)', 'Bash(git status:*)', 'Bash(git show:*)', 'Bash(git log:*)'];
+
+/**
+ * The settings the reviewer runs under, beside the project's own, in two layers. The first is the
+ * permission rules: no file tool reads outside the project, and no git command carries `--no-index`, which
+ * diffs any two paths on disk, `--output`, which writes wherever it names, a redirection, or the quoting
+ * that would hide either. They are best-effort — the client matches a command after normalising it, so an
+ * escaped flag or an absolute path can pass them. The second is the boundary: every Bash command runs in
+ * the OS sandbox or not at all, which confines its writes to the project and its own temp directory, and
+ * denies it the shared temp directories, where earlier runs keep their reports.
+ */
+const FENCE = JSON.stringify({
+  permissions: {
+    blockReadsOutsideWorkingDirectories: true,
+    deny: ['--output', '--no-index', '<', '>', "'", '"', '\\', '{', '}', '`'].map((text) => `Bash(git *${text}*)`),
+  },
+  sandbox: {
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    autoAllowBashIfSandboxed: false,
+    filesystem: { denyRead: ['/private/tmp', '/tmp', '/private/var/folders', '/var/folders'] },
+  },
+});
+
+/**
+ * The git configuration the reviewer's git reads: the staged repository's own, and not the machine's. A
+ * user or system config can name a pager, an external diff or a textconv — a program git runs on every
+ * diff, outside every rule above — and it differs from one machine to the next.
+ */
+const GIT_ENV ={ GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 
 /**
  * What the staged repository ignores: the harness composed beside the change, so the diff and the status
@@ -174,11 +209,13 @@ export function grade(report, defects) {
  * @returns {Promise<string>} The scratch project.
  */
 async function stage(fixture, core, ctx) {
-  const dir = mkdtempSync(join(tmpdir(), 'nina-eval-'));
+  mkdirSync(evalRunsDir(), { recursive: true });
+  const run = mkdtempSync(join(evalRunsDir(), 'run-'));
   try {
-    return await build(dir, fixture, core, ctx);
+    mkdirSync(join(run, 'tmp'));
+    return await build(join(run, 'project'), fixture, core, ctx);
   } catch (error) {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(run, { recursive: true, force: true });
     throw error;
   }
 }
@@ -451,7 +488,7 @@ function describe(label, graded, total, cost, judged) {
  * @param {{model?: string, api?: boolean}} options
  */
 export function reviewerCommand({ model, api }) {
-  const env = childEnv(api);
+  const env = { ...childEnv(api), ...GIT_ENV };
   const args = [
     '-p', PROMPT,
     '--agent', 'reviewer',
@@ -459,6 +496,7 @@ export function reviewerCommand({ model, api }) {
     '--no-session-persistence',
     '--setting-sources', 'project',
     '--permission-mode', 'dontAsk',
+    '--settings', FENCE,
     '--allowedTools', ...TOOLS,
     ...(model ? ['--model', model] : []),
   ];
@@ -558,7 +596,9 @@ export async function evalCommand(argv, ctx) {
           console.log(`  dry run — ${core} staged in ${dir}; would run: claude ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}`);
           report = readFileSync(join(fixture, 'sample-report.md'), 'utf8');
         } else {
-          const run = spawnSync('claude', args, { cwd: dir, env, encoding: 'utf8', timeout: 1_800_000, maxBuffer: 64 * 1024 * 1024 });
+          // The sandbox writes the reviewer's temp files to TMPDIR, kept beside the project and out of the
+          // shared temp directories it denies.
+          const run = spawnSync('claude', args, { cwd: dir, env: { ...env, TMPDIR: join(dirname(dir), 'tmp') }, encoding: 'utf8', timeout: 1_800_000, maxBuffer: 64 * 1024 * 1024 });
           const failed = runFailure(run, { review: true });
           // A run that did not review — not logged in, rate-limited, out of turns — is a failure to report,
           // not a review that caught nothing: graded, it would drag its release's mean down.
@@ -577,7 +617,7 @@ export async function evalCommand(argv, ctx) {
         console.log(describe(`${core} run ${n}`, graded, defects.length, cost, judged));
       } finally {
         if (!dry) forgetProject(dir);
-        if (!keep) rmSync(dir, { recursive: true, force: true });
+        if (!keep) rmSync(dirname(dir), { recursive: true, force: true });
       }
     }
   }
