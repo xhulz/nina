@@ -327,6 +327,17 @@ measured before the fields existed is left out of the shares rather than counted
 put the third project's implementer at 95 rewrites and 38% of its spend, and every reviewer's rounds at 43% to
 51% opened-with: a short run is mostly the context it began with.
 
+Read again by the same method, over the second project's 477 subagent runs in the six days before those changes
+and its 475 in the three after, the context a call re-read was the same, 137k and 138k tokens. The skill listing had
+gone from 8.6% of what the stages re-read to 6.1%, and shell output past a screen stayed at 22%: three quarters of it
+was a file or a diff the run asked for, by `sed`, `head`, `cat` or `git diff`, which the clip leaves whole on purpose.
+What the listing kept was mostly the skills bundled with Claude Code, whose descriptions the budget spares: 8k of its
+10k characters, `dataviz`, `code-review` and the artifact skills among them, none of which a stage uses. A cap on
+each description reaches them, so `wire` sets that too; in a probe the listing went from 8,266 characters to 2,194 in
+the main session and in a subagent alike, with all 78 skills still named. The servers' own instructions were 2.6% more,
+an MCP server's reaching every stage whether or not its tools did, but which servers run is the owner's machine
+configuration, not a project's, so the harness leaves it to them.
+
 Two measured things were left as they were. A subagent can skip `CLAUDE.md` (`omitClaudeMd`), and the part only
 the orchestrator needs is 3k tokens of it — but the rest would have to reach each stage some other way, and a
 hook's `additionalContext` is capped at 10,000 characters where that rest is 24,000. And a subagent's cache can

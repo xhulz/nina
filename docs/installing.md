@@ -193,12 +193,14 @@ and carry far more than the harness, so `init` never edits settings that exist a
 gains what it lacks. Whatever `init` could not write is §4 of the TODO, `nina wire --apply` merges it,
 and `nina check` reports it as a problem until it is done. The list lives in
 `src/wiring.mjs`, read by both — Spliter's wiring was typed by hand one piece per release, and the
-piece that let the model see a finding at all came last. Beside the hooks it holds one setting, shipped with the
-cost watch: `skillListingBudgetFraction` at 0.001, which keeps the listing of installed skills to their names. Every
-stage allowed `Skill` re-read every skill's description on every turn, 9.2k tokens in two projects, while the skills
-a stage must use are named in its spec and every name stays listed however small the budget
-([measurement](measurement.md#where-the-re-read-went)). It shortens the main session's listing as well. A value the
-owner wrote, in either settings file, is the owner's: `wire` adds a missing key and never changes one. A stub is a filled slot as far as every tool is concerned, so a tree of TODOs would
+piece that let the model see a finding at all came last. Beside the hooks it holds two settings, shipped with the
+cost watch, which keep the listing of installed skills to their names. Every stage allowed `Skill` re-read every
+skill's description on every turn, 9.2k tokens in two projects, while the skills a stage must use are named in its
+spec and every name stays listed however small the budget ([measurement](measurement.md#where-the-re-read-went)).
+`skillListingBudgetFraction` at 0.001 shortens the descriptions to fit, but spares the skills bundled with Claude
+Code, whose descriptions were then 8k of the 10k characters left; `skillListingMaxDescChars` at 1, a cap on each
+description, reaches those too. Both shorten the main session's listing as well. A value the owner wrote, in either
+settings file, is the owner's: `wire` adds a missing key and never changes one. A stub is a filled slot as far as every tool is concerned, so a tree of TODOs would
 compose and check clean while saying nothing — the exact failure this harness exists to remove.
 The project layer stays empty, and `compose` keeps naming what is missing until the work is done.
 
