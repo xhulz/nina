@@ -103,7 +103,7 @@ must not break.
 | `check`, `where`, `pipeline` and its office, `dashboard`, `status`, deferred decisions | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
 | `upgrade`, `release`, what a move may or may not roll back for | [`docs/upgrading.md`](docs/upgrading.md) |
-| `snapshot`, `stats`, `runs`, `sizes`, cost, the cost watch, models, proportion, `eval`, `export`, `langfuse` | [`docs/measurement.md`](docs/measurement.md) |
+| `snapshot`, `stats`, `runs`, `sizes`, cost, the cost watch, models and tiers, proportion, `eval`, `export`, `langfuse` | [`docs/measurement.md`](docs/measurement.md) |
 | `pills`, `learn` and `learn --deep`, `requests` | [`docs/learning.md`](docs/learning.md) |
 
 Each document says why its mechanism ended up the way it did — usually because the obvious version was
@@ -116,6 +116,7 @@ nina                                          # on a terminal: the banner once, 
 nina init --project ../thing                  # profile, TODO, wiring, and a first composition
 nina status --project ../thing                # one screen: pin, install, newest release, hooks, gate, check, cost, learning
 nina compose --project ../thing [--check]     # rebuild a project's harness files, or say if they drifted
+nina compose --project ../thing --tier low    # what its stages run on — low, medium or high — kept in its profile
 nina check --project ../thing                 # is what the project declared about itself true?
 nina where <path> --project ../thing          # does this path belong to the harness, and which layer?
 nina pipeline --project ../thing              # the agent chain drawn: gates, loop-backs, models, skills

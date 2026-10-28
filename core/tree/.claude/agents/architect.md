@@ -2,7 +2,7 @@
 name: architect
 description: Use after the planner, or directly for a well-scoped single-component change. Designs the technical approach and produces a written spec (files, signatures, data flow, tests) that the implementer can code from without re-planning. Do NOT use for trivial edits or pure Q&A.
 tools: Read, Write, Edit, Grep, Glob, Bash, WebSearch, WebFetch, Skill
-model: {{DEEP_MODEL}}
+model: {{ARCHITECT_MODEL}}
 effort: {{ARCHITECT_EFFORT}}
 ---
 

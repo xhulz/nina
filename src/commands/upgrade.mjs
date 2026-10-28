@@ -23,7 +23,7 @@ import { tidyRetired } from './pills.mjs';
 import { lacksPackage, missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
 import { granted } from '../tools.mjs';
-import { defaultVocabulary } from '../vocabulary.mjs';
+import { TOOK_OVER, defaultVocabulary, tierProblem, tiers } from '../vocabulary.mjs';
 
 /** What stops a move from outside it: Ctrl-C, a `kill`, the terminal closing. */
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
@@ -288,6 +288,14 @@ export async function upgrade(argv, ctx) {
     );
     return 1;
   }
+  // A tier the target release lacks would fail the compose that ends the move, after the pin had moved. Not
+  // forceable, and said before anything is read: the tier is set back first, or the move goes to a release that has it.
+  const tierError = tierProblem(onto.dir, profile.tier, to);
+  if (tierError) {
+    const way = Object.keys(tiers(onto.dir)).length > 0 ? `set one ${to} has with \`nina compose --tier\`, or take` : 'take';
+    console.error(`  ${tierError} — ${way} "tier" out of ${HARNESS}/profile.json before the move\n`);
+    return 1;
+  }
 
   const surfaces = profile.surfaces ?? [];
   const available = (await surfacesIn(onto.dir));
@@ -313,7 +321,7 @@ export async function upgrade(argv, ctx) {
 
   const declared = profile.vocabulary ?? {};
   // A name the new release supplies a default for is not owed: it composes as the default until declared.
-  const defaultsAfter = defaultVocabulary(onto.dir);
+  const defaultsAfter = defaultVocabulary(onto.dir, profile.tier);
   const waits = (key) => typeof profile.deferred?.[key] === 'string' && profile.deferred[key].trim() !== '';
   const needed = [...vocabAfter].filter((v) => ((!(v in declared) && !(v in defaultsAfter)) || declared[v] === null) && !waits(v)).sort();
   const unused = Object.keys(declared).filter((v) => !vocabAfter.has(v)).sort();
@@ -351,6 +359,13 @@ export async function upgrade(argv, ctx) {
   }
   if (unused.length > 0) {
     console.log(`  · ${unused.length} vocabulary entr(ies) nothing in ${to} references: ${unused.join(', ')}\n`);
+  }
+  // Stages that ran on a value this profile declares and, after the move, read a name of their own that it does not.
+  const tookOver = Object.entries(TOOK_OVER).filter(([name, was]) => vocabAfter.has(name) && !vocabBefore.has(name) && typeof declared[was] === 'string' && !(name in declared));
+  if (tookOver.length > 0) {
+    console.log(`  · ${tookOver.length} name(s) ${to} reads where it read one this profile declares — each composes as ${to}'s default until declared:`);
+    for (const [name, was] of tookOver) console.log(`      ${name}, was ${was}: ${defaultsAfter[name] ?? '(no default)'}, where ${was} is ${declared[was]}`);
+    console.log('');
   }
   if (newSlots.length > 0) {
     console.log(`  · ${newSlots.length} new project slot(s) to fill:`);
