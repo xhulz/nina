@@ -4942,9 +4942,22 @@ const dated = (date, status = 'active') =>
     ['the walk', 'Walk each refusing function condition by condition, one mutant per entry'],
     ['the strings', 'literal collection and string a comparison tests'],
     ['the siblings', "sibling branches that differ by a condition each get the other's"],
-    ['the equivalents', 'or is reported equivalent with why'],
+    ['the equivalents', 'or is reported equivalent with why, as the rule above asks'],
     ['the schema left light', 'A schema or a bounds check gets a case per constraint, not a mutant per operand.'],
   ]) expect(implementer.includes(said), `compose: the implementer's generated-battery rule keeps ${clause}`);
+  // A survivor filed as caught by the parser, which it was not, then two filed equivalent on what the grammar allows,
+  // each told apart by a form in a place no attempt had stood.
+  for (const [clause, said] of [
+    ['its two bins', '- **A mutant that survives is equivalent or killed.** Equivalent, when you can say why no input tells it apart from the code; else a case you add kills it, in a file the step authorizes, or your report names the row the spec lacks (Hard Rule #17).'],
+    ['another gate shown, not assumed', '"Another gate catches it" holds only with that gate\'s failing output on that mutant, and only where no input the test could hold tells them apart'],
+    ['the grammar tried', 'write the input in every place the grammar lets those tokens stand — a parameter, a property, a type member, an expression — and compile or run the attempts.'],
+  ]) expect(implementer.replace(/\s+/g, ' ').includes(said) && !implementer.replace(/\s+/g, ' ').includes('ten compiled attempts'), `compose: the implementer's survivor rule keeps ${clause}`);
+  // A transition run with one org, one project and one status change everywhere let each hard-coded constant pass.
+  expect(
+    architect.includes('An input the code passes through — a value it writes, matches on or sends — takes two or more values across the cases that read its effect, none of them the constant a broken version would hard-code (the one the other cases use), and some case reads it') &&
+      architect.includes('Where a case can use only one, the spec says so.') && !architect.includes("a provoker's sentinel"),
+    'compose: the architect gives each input the code passes through two values across the cases, none the constant a broken version would use',
+  );
 
   // The architect runs what its spec claims a probe settles, and a correction runs the probe that found the issue: each of
   // one day's three design re-checks found a new issue in the text the correction had just written, by a probe the
@@ -5883,11 +5896,23 @@ const dated = (date, status = 'active') =>
   // A leak check that refused only equal values passed `${id}:${amount}`; it is said where only pii composes.
   const privacy = await readFile(join(await composed('ledger'), 'CLAUDE.md'), 'utf8');
   expect(
-    privacy.includes('**A test that proves a value stays out matches by containment**') && privacy.includes('(`Object.getOwnPropertyNames`)') &&
+    privacy.includes('**A test that proves a value stays out matches by containment**') &&
       privacy.includes('where it lists what may be logged, every other value the run carries') &&
       privacy.includes('each with a control that embeds it in a longer string under an allowed key and must fail the check') &&
       !privacy.includes('missed an amount on a non-enumerable property') && !claude.includes('matches by containment'),
     'compose: a leak check matches by containment over every channel and property, with a control per class, where pii composes and without its history',
+  );
+  // A walk of own keys missed a Map, a symbol key and a nested object, a spy that read only the first argument stayed
+  // green, and the silent methods were one list with the rest: learned three times in one project.
+  expect(
+    privacy.includes("counts the console's calls by method and asserts each method the path must not use at zero") &&
+      privacy.includes('reads at least what the console prints of each entry and each error the runs produce, recursively: every own key, symbols and non-enumerable ones too (`Reflect.ownKeys`)') &&
+      privacy.includes('the entries of every `Map`, `Set`, `Headers` and `URLSearchParams`, unless the spec rules one out in writing') &&
+      privacy.includes("Its controls put their value where the real emitter puts its own, past a call's first argument and among several") &&
+      privacy.includes('the spec names the window its spy covers and why nothing logs after it') &&
+      !privacy.includes('Object.getOwnPropertyNames') && !privacy.includes("where the runtime's loggers put theirs second") &&
+      !claude.includes('Reflect.ownKeys'),
+    'compose: a leak walk reads what the console prints, recursively, symbols and holders included, with every forbidden method counted at zero, where pii composes',
   );
   // A sweep of three named attributes, proven by mutants in those three, stayed green with the label in a fourth; the
   // next missed the raw amounts, the one after the state built to show none.
@@ -5897,9 +5922,18 @@ const dated = (date, status = 'active') =>
       privacy.includes('and a sweep that read nothing fails') &&
       privacy.includes('in every form the code can give it, formatted and raw') &&
       privacy.includes('each state that shows, hides or replaces a value is swept on its own, the one built to withhold it most of all') &&
-      privacy.includes("One mutant puts the value in a slot the check does not name (`data-x`), and one per field puts that field's raw value in such a slot") &&
+      privacy.includes('One mutant puts the value in a slot the check does not name — `data-x` on a page;') &&
+      privacy.includes("and one per field puts that field's raw value in each such slot, on every error the code throws, not only one it builds") &&
       !privacy.includes('proven by mutants in those three') && !claude.includes('every attribute of every element'),
     'compose: a pii check covers every slot, every form of a value and every state of the class it claims, with a mutant outside its list, and without its history',
+  );
+  // Three steps in two days went back from review for a slot no mutant the step listed tried: an error's cause, its
+  // stack, a hidden key. The implementer tries them before the handoff, whatever the step lists.
+  expect(
+    privacy.includes('on an object or an error, a non-enumerable key, a symbol key, a nested object, a `Map` entry, `cause`, the end of `message` or `stack` —') &&
+      privacy.includes('The implementer runs them on its mirror, as one block it reuses, before `DIFF-READY`, whatever the step lists, and reports one left green as the row the spec lacks (Hard Rule #17)') &&
+      !privacy.includes('three steps in two days went back') && !claude.includes('a symbol key, a nested object'),
+    "compose: the implementer tries a value in every slot a leak check does not name, on every error thrown, before its handoff, where pii composes",
   );
   // Raw invisible characters in a spec's rows were copied raw and read as a trailing space; then the tools decoded the
   // escapes four stages typed. The composed command is run on the bytes they wrote, beside a file it must pass over.
@@ -5922,6 +5956,8 @@ const dated = (date, status = 'active') =>
   expect(
     claude.includes('before its first write there. Every file it writes goes inside one — a log, a captured output, a note of a path — and none at the scratchpad') &&
       claude.includes('it lists the root to see that none of its files is there') &&
+      claude.includes('A shell variable does not outlive its call, so the call that makes the directory prints its path (`echo "$S"`), and each later call writes that path out in full.') &&
+      !claude.includes('an implementer to keep its directory') &&
       claude.includes('output longer than a screen goes to a file in your scratch directory (Hard Rule #18), which you grep') &&
       !claude.includes('a qa wrote a path note at the root'),
     'compose: every file a stage writes goes in its own scratch directory, never at the root, long output included',
