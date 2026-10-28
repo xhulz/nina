@@ -426,20 +426,59 @@ calls that gathered it. The reviewer went the same way, 4.5k a run on Opus 4.8 a
 Opus 5.5, with no release in between.
 
 So each spec names a model id and an effort level, from defaults in `core/vocabulary.json`:
-`DEEP_MODEL` (`claude-opus-5-5`) and `DEEP_EFFORT` (`high`) for the stages that judge (the reviewer,
-secops, devops, and the two that write and audit immutable code), and `WORK_MODEL` (`claude-sonnet-5-5`) and
-`WORK_EFFORT` (`xhigh`) for the stages that carry a spec out. `high` for the first is one level below where
-they ran and one above Opus 5.5's own default, `medium`. `xhigh` for the second is where they always ran,
-and none of them wrote more than it had. The architect runs on `DEEP_MODEL` at its own level,
-`ARCHITECT_EFFORT` (`xhigh`): the owner had seen it specify worse at a lower one, and a spec is what every
-later stage builds on, so what it writes is cut in the spec's text instead. A model moves when a release
-moves it, and a project declares any of these to change it: a provider with its own model ids, or a level
-it has measured and prefers. The record keeps the effort beside the model, `stats` reads one model at
-two levels as two lines, and Langfuse gets it as metadata. A record from before the field is read once more
-while its transcript is on disk.
+`DEEP_MODEL` (`claude-opus-5-5`) and `DEEP_EFFORT` (`high`) for the stages that judge (the reviewer, the
+design-reviewer, secops, devops), and `WORK_MODEL` (`claude-sonnet-5-5`) and `WORK_EFFORT` (`xhigh`) for the
+stages that carry a spec out. `high` for the first is one level below where they ran and one above Opus 5.5's
+own default, `medium`. `xhigh` for the second is where they always ran, and none of them wrote more than it
+had. The architect has a pair of its own, `ARCHITECT_MODEL` (`claude-opus-5-5`) at `ARCHITECT_EFFORT`
+(`xhigh`): the owner had seen it specify worse at a lower level, and a spec is what every later stage builds
+on, so what it writes is cut in the spec's text instead. The two stages that write and audit immutable code
+have theirs, `IMMUTABLE_MODEL` and `IMMUTABLE_EFFORT`, at the judges' values, because a miss there cannot be
+fixed after it ships. Until 0.81.0 both read the judges' names; they got their own so a [tier](#at-what-tier)
+could move the judges without them. A project that declares `DEEP_MODEL` for a provider of its own declares
+these too, and `upgrade` names each one a move leaves on the release's default (`TOOK_OVER` in
+`src/vocabulary.mjs`). A model moves when a release moves it, and a project declares any of
+these to change it: a provider with its own model ids, or a level it has measured and prefers. The record
+keeps the effort beside the model, `stats` reads one model at two levels as two lines, and Langfuse gets it
+as metadata. A record from before the field is read once more while its transcript is on disk.
 
 What this cannot say yet is whether the reviewer at `high` still catches what it caught at `xhigh`. That is
 a question for `nina eval`, run on the release that names the level against the one before it.
+
+### At what tier
+
+A project picks how much its pipeline spends in one word: `nina init --tier <level>`, or later
+`nina compose --tier <level>`, recorded in the profile as `tier`, right after the `core` whose tiers it names.
+A tier is a named set of the defaults above, in `core/tiers.json`, frozen with each release:
+
+| | `high`, the release's own | `medium` | `low` |
+|---|---|---|---|
+| architect | Opus 5.5 · `xhigh` | Opus 5.5 · `xhigh` | Opus 5.5 · `xhigh` |
+| the stages that judge | Opus 5.5 · `high` | Opus 5.5 · `medium` | Sonnet 5.5 · `high` |
+| the stages that carry a spec out | Sonnet 5.5 · `xhigh` | Sonnet 5.5 · `high` | Sonnet 5.5 · `medium` |
+| immutable code | Opus 5.5 · `high` | Opus 5.5 · `high` | Opus 5.5 · `high` |
+
+A cheaper tier is a smaller family or a lower level, never an older model: Opus 5 and Opus 4.8 cost more per
+token than Opus 5.5 (`src/prices.mjs`), and Sonnet 5 costs what Sonnet 5.5 does. The level was the larger cut
+anyway — [above](#at-what-effort), it moved what a stage wrote more than the model did. The architect and
+immutable code are in no tier, for the reasons they have names of their own.
+
+A tier takes only `_MODEL` and `_EFFORT` names: one that moved a command or a limit would change what a stage
+does, not what it runs on. A model the project declares wins over its tier, as it wins over the release's
+default. Every reader of a default a tier can move — `compose`, `check`, `init`, `upgrade`, `status` — asks
+`defaultVocabulary(root, tier)` in `src/vocabulary.mjs`, so the tier is read one way. It lives in the profile
+rather than on a flag because a flag only the composing command saw would be undone by the next `compose`
+without it, and every hook that recomposes runs without it. A tier the pinned release lacks is refused by
+`init`, `compose` and `upgrade` before they write anything, and reported by `check` and `status`: composing
+the release's own models instead, without a word, would run every stage on what the project said it did not
+want. `status` shows the tier and what each kind of stage runs on, and `compose --tier` asks for a new Claude
+Code session, which registers each agent's frontmatter when it starts.
+
+A cheaper tier saves less than its price per token says if it lets through what the dearer one catches: the
+work comes back a round later. `stats` and `runs` already split a stage by model and effort, and
+`nina eval --release <v> --tier low --tier high` sets one tier's reviewer against another's on the same
+planted defects before a project trusts it. `--model` is refused beside `--tier`: it runs every reviewer on
+one model, and the two tiers would differ in effort alone.
 
 ### Sending it to Langfuse: `nina langfuse`
 
@@ -559,6 +598,7 @@ each one caught.
 
 ```bash
 nina eval --release 0.23.0 --release 0.24.0 --repeat 2    # two releases, two runs each
+nina eval --release 0.81.0 --tier low --tier high          # one release at two tiers: each tier is an arm
 nina eval --release 0.24.0 --dry-run                       # stage, compose and grade a canned report; no model
 nina eval --regrade <reports dir> --judge                  # read kept reports again, with the judge; no review run
 ```

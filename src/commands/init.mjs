@@ -20,7 +20,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { REQUIRES, SLOT, byVersion, closedGate, composedPaths, composeProject, defaultedSlots, layerRootFor, projectOwned, walk } from './compose.mjs';
 import { owedDocuments } from './check.mjs';
-import { PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
+import { PLACEHOLDER, defaultVocabulary, tierProblem, tiers } from '../vocabulary.mjs';
 import { DETECTABLE, missingNeeds } from '../surfaces.mjs';
 import { bold, dim, green, pink } from '../look.mjs';
 
@@ -309,6 +309,15 @@ export async function init(argv, ctx) {
     console.error(`  ${resolved.error}\n`);
     return 1;
   }
+  // Asked for, or kept from the profile it replaces; refused before anything is written when the pin has no such tier.
+  const tier = arg('--tier') ?? previous?.tier;
+  const tierError = tierProblem(resolved.dir, tier, core);
+  if (tierError) {
+    // One kept from the profile being replaced is not one the command named, so it says where it came from.
+    const kept = arg('--tier') === null ? ` — the profile being replaced holds it: ${Object.keys(tiers(resolved.dir)).length > 0 ? 'pass --tier with one it has, or ' : ''}take "tier" out of ${HARNESS}/profile.json` : '';
+    console.error(`  ${tierError}${kept}\n`);
+    return 1;
+  }
 
   // Everything below is read from the version this profile will pin — the surfaces that
   // exist, what each one costs, and the slots to fill — so the checklist describes the
@@ -377,7 +386,7 @@ export async function init(argv, ctx) {
 
   // A name the release supplies a default for is not asked: it composes as the default until the
   // project declares it, and the TODO says what the default is so a project on another stack can.
-  const defaults = defaultVocabulary(resolved.dir);
+  const defaults = defaultVocabulary(resolved.dir, tier);
   const defaulted = [...vocabulary].filter((name) => name in defaults).sort();
   for (const name of defaulted) vocabulary.delete(name);
   // What the profile being replaced had filled in, for a name these layers still use or one the release
@@ -388,11 +397,12 @@ export async function init(argv, ctx) {
 
   const profile = {
     core,
+    ...(tier !== undefined ? { tier } : {}),
     surfaces,
     ...(surfaces.includes('integrations') ? { integrations: keptIntegrations } : {}),
     vocabulary: Object.fromEntries([...[...vocabulary].map((name) => [name, null]), ...kept].sort(([a], [b]) => a.localeCompare(b))),
     // Anything else the profile said is the project's, and stays.
-    ...Object.fromEntries(Object.entries(previous ?? {}).filter(([key]) => !['core', 'surfaces', 'integrations', 'vocabulary'].includes(key))),
+    ...Object.fromEntries(Object.entries(previous ?? {}).filter(([key]) => !['core', 'tier', 'surfaces', 'integrations', 'vocabulary'].includes(key))),
   };
 
   await mkdir(join(harness, 'project', 'tree'), { recursive: true });
@@ -596,7 +606,7 @@ export async function init(argv, ctx) {
   for (const w of unwired) console.log(`    to wire    ${w}`);
   if (wired.length || unwired.length) console.log('');
   console.log(`    surfaces:  ${surfaces.join(', ') || '(none)'}`);
-  console.log(`    core:      ${profile.core}`);
+  console.log(`    core:      ${profile.core}${tier !== undefined ? `, tier ${tier}` : ''}`);
   console.log(`    to fill:   ${vocabulary.size} vocabulary entries, ${slots.length} project slots, ${owed.size} document(s)`);
   if (inTheWay.length > 0) {
     console.log(`    composed:  nothing — ${inTheWay.length} file(s) of yours sit where the harness composes one, and would be lost:`);

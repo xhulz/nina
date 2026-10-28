@@ -3,8 +3,8 @@
 name: solidity-dev
 <!-- nina:slot project.1 description -->
 tools: Read, Write, Edit, Glob, Grep, Bash, Skill
-model: {{DEEP_MODEL}}
-effort: {{DEEP_EFFORT}}
+model: {{IMMUTABLE_MODEL}}
+effort: {{IMMUTABLE_EFFORT}}
 ---
 
 ## Consult your pills first

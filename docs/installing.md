@@ -223,10 +223,12 @@ Two things it can work out rather than ask:
   large moves it without editing a rule. `nina stats` reads the same value. `OUTPUT_CLIP`, the characters past
   which the cost watch moves a shell output to a file (8000; 0 turns it off), and `RUN_READ_WARN`, the millions of
   tokens a run re-reads before it is told, are defaults for the same reason. The model and effort level each
-  stage runs at are five more (`DEEP_MODEL`, `DEEP_EFFORT`, `ARCHITECT_EFFORT`, `WORK_MODEL`, `WORK_EFFORT`): with an alias and
-  no level, a stage ran on whatever the alias pointed to that week, at whatever the session was set to
-  (see [measurement](measurement.md#at-what-effort)). Declaring a name takes it
-  over, `null` included; `init`'s TODO lists each default so there is something to change it from. A
+  stage runs at are eight more, a `_MODEL` and an `_EFFORT` for each of `ARCHITECT`, `DEEP`, `WORK` and
+  `IMMUTABLE`: with an alias and no level, a stage ran on whatever the alias pointed to that week, at whatever
+  the session was set to (see [measurement](measurement.md#at-what-effort)). `--tier low|medium|high` picks a
+  named set of them in one word, from the release's `core/tiers.json`, kept in the profile as `tier` and moved
+  later with `nina compose --tier` ([measurement](measurement.md#at-what-tier)). Declaring a name takes it
+  over, `null` included, whatever the tier; `init`'s TODO lists each default so there is something to change it from. A
   release with no such file supplies nothing.
 
 `init` reads the layers from the version it is about to pin, so the checklist describes the harness

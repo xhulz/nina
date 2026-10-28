@@ -2,6 +2,7 @@
  * `nina eval` — does a release's reviewer catch more of a planted set of defects than another's?
  *
  *   nina eval --release 0.23.0 --release 0.24.0 [--repeat 2] [--model <m>] [--judge] [--keep]
+ *   nina eval --release 0.81.0 --tier low --tier high [--repeat 2]
  *   nina eval --release 0.24.0 --dry-run
  *   nina eval --regrade <reports dir> [--judge]
  *
@@ -57,9 +58,10 @@ const IGNORE = ['.claude/*', '!.claude/plans/', '!.claude/code-map.md', '!.claud
 /** How far a cited line may sit from a defect's anchor and still be that defect. */
 const TOLERANCE = 2;
 
-/** The vocabulary the fixture composes with: a plain project, no surfaces. */
-const PROFILE = (core) => ({
+/** The vocabulary the fixture composes with: a plain project, no surfaces, at the tier asked for if any. */
+const PROFILE = (core, tier) => ({
   core,
+  ...(tier !== undefined ? { tier } : {}),
   surfaces: [],
   vocabulary: { OWNER: 'the maintainer', API_DIR: 'src/server', APP_DIR: 'src/web', PKG_SCOPE: '@notes', EMITTING_PKGS: '`core`' },
 });
@@ -171,12 +173,13 @@ export function grade(report, defects) {
  * @param {string} fixture - The eval's directory.
  * @param {string} core - The release to compose.
  * @param {{root: string}} ctx - CLI context.
+ * @param {string} [tier] - The tier to compose it at; its own models when absent.
  * @returns {Promise<string>} The scratch project.
  */
-async function stage(fixture, core, ctx) {
+async function stage(fixture, core, ctx, tier) {
   const dir = mkdtempSync(join(tmpdir(), 'nina-eval-'));
   try {
-    return await build(dir, fixture, core, ctx);
+    return await build(dir, fixture, core, ctx, tier);
   } catch (error) {
     rmSync(dir, { recursive: true, force: true });
     throw error;
@@ -184,7 +187,7 @@ async function stage(fixture, core, ctx) {
 }
 
 /** Fills a scratch directory with the reviewer's world; `stage` removes it if this throws. */
-async function build(dir, fixture, core, ctx) {
+async function build(dir, fixture, core, ctx, tier) {
   cpSync(join(fixture, 'base'), dir, { recursive: true });
   writeFileSync(join(dir, '.gitignore'), IGNORE);
   const git = (...args) => spawnSync('git', ['-c', 'user.name=nina-eval', '-c', 'user.email=eval@nina.invalid', ...args], { cwd: dir, encoding: 'utf8' });
@@ -195,7 +198,7 @@ async function build(dir, fixture, core, ctx) {
   // reviewer reads is the change alone.
   cpSync(join(fixture, 'after'), dir, { recursive: true });
   mkdirSync(join(dir, '.nina'), { recursive: true });
-  writeFileSync(join(dir, '.nina', 'profile.json'), JSON.stringify(PROFILE(core), null, 2));
+  writeFileSync(join(dir, '.nina', 'profile.json'), JSON.stringify(PROFILE(core, tier), null, 2));
   const result = await composeProject(dir, ctx);
   if (result.error) throw new Error(result.error);
   if (!existsSync(join(dir, '.claude', 'agents', 'reviewer.md'))) throw new Error(`core ${core} composed no reviewer into ${dir}`);
@@ -472,6 +475,9 @@ export function reviewerCommand({ model, api }) {
  */
 export async function evalCommand(argv, ctx) {
   const releases = argv.flatMap((a, i) => (a === '--release' ? [argv[i + 1]] : []));
+  // Each release at each tier asked for, or at its own models when none is: an arm is one composition to measure.
+  const levels = argv.flatMap((a, i) => (a === '--tier' ? [argv[i + 1]] : []));
+  const arms = releases.flatMap((core) => (levels.length ? levels.map((tier) => ({ core, tier, label: `${core}@${tier}` })) : [{ core, label: core }]));
   const repeat = Number(argv.includes('--repeat') ? argv[argv.indexOf('--repeat') + 1] : 1);
   const options = {
     model: argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : undefined,
@@ -483,8 +489,13 @@ export async function evalCommand(argv, ctx) {
   const reportsAt = argv.includes('--reports') ? argv[argv.indexOf('--reports') + 1] : null;
   const regrade = argv.includes('--regrade') ? argv[argv.indexOf('--regrade') + 1] : null;
   if ((releases.length === 0 && !regrade) || !Number.isInteger(repeat) || repeat < 1) {
-    console.error('  usage: nina eval --release <version> [--release <version>] [--repeat N] [--model m] [--judge] [--dry-run] [--keep] [--reports <dir>]');
+    console.error('  usage: nina eval --release <version> [--release <version>] [--tier <level>] [--repeat N] [--model m] [--judge] [--dry-run] [--keep] [--reports <dir>]');
     console.error('         nina eval --regrade <reports dir> [--judge]\n');
+    return 2;
+  }
+  // --model is passed to the reviewer over its spec's model line, so under it two tiers would differ in effort alone.
+  if (levels.length > 0 && options.model) {
+    console.error('  --model runs every reviewer on one model, which is half of what --tier compares: give one or the other\n');
     return 2;
   }
 
@@ -525,7 +536,7 @@ export async function evalCommand(argv, ctx) {
     return 0;
   }
   control();
-  console.log(`  ${defects.length} planted defects · ${releases.length} release(s) × ${repeat} run(s) · reviewer via \`claude -p\`` +
+  console.log(`  ${defects.length} planted defects · ${releases.length} release(s)${levels.length ? ` × ${levels.length} tier(s)` : ''} × ${repeat} run(s) · reviewer via \`claude -p\`` +
     (options.api ? ' with the API credentials in the environment' : ' on the login, never a per-token key') + '\n');
 
   // Every report is kept, whatever the grade said: a number is only as good as the text behind it, and
@@ -541,13 +552,13 @@ export async function evalCommand(argv, ctx) {
     writeFileSync(join(reports, name), text);
   };
   const results = [];
-  for (const core of releases) {
+  for (const { core, tier, label } of arms) {
     for (let n = 1; n <= repeat; n += 1) {
       let dir;
       try {
-        dir = await stage(fixture, core, ctx);
+        dir = await stage(fixture, core, ctx, tier);
       } catch (error) {
-        console.error(`  ✗ ${core}: ${error.message}`);
+        console.error(`  ✗ ${label}: ${error.message}`);
         return 1;
       }
       try {
@@ -555,7 +566,7 @@ export async function evalCommand(argv, ctx) {
         let report;
         let cost = null;
         if (dry) {
-          console.log(`  dry run — ${core} staged in ${dir}; would run: claude ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}`);
+          console.log(`  dry run — ${label} staged in ${dir}; would run: claude ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}`);
           report = readFileSync(join(fixture, 'sample-report.md'), 'utf8');
         } else {
           const run = spawnSync('claude', args, { cwd: dir, env, encoding: 'utf8', timeout: 1_800_000, maxBuffer: 64 * 1024 * 1024 });
@@ -563,18 +574,18 @@ export async function evalCommand(argv, ctx) {
           // A run that did not review — not logged in, rate-limited, out of turns — is a failure to report,
           // not a review that caught nothing: graded, it would drag its release's mean down.
           if (failed) {
-            console.error(`  ✗ ${core} run ${n}: ${failed}`);
+            console.error(`  ✗ ${label} run ${n}: ${failed}`);
             return 1;
           }
           const out = JSON.parse(run.stdout);
           report = out.result ?? '';
           cost = typeof out.total_cost_usd === 'number' ? out.total_cost_usd : null;
         }
-        keepReport(`${core}-${n}.md`, report);
+        keepReport(`${label}-${n}.md`, report);
         const graded = grade(report, defects);
         const judged = judging ? judge(defects, report, diff, options) : unjudged;
-        results.push({ core, n, ...graded, cost, judged });
-        console.log(describe(`${core} run ${n}`, graded, defects.length, cost, judged));
+        results.push({ arm: label, n, ...graded, cost, judged });
+        console.log(describe(`${label} run ${n}`, graded, defects.length, cost, judged));
       } finally {
         if (!dry) forgetProject(dir);
         if (!keep) rmSync(dir, { recursive: true, force: true });
@@ -584,28 +595,28 @@ export async function evalCommand(argv, ctx) {
 
   if (reports) console.log(`\n  reports: ${reports}`);
   else console.log('');
-  for (const core of releases) {
-    const runs = results.filter((r) => r.core === core);
+  for (const { label } of arms) {
+    const runs = results.filter((r) => r.arm === label);
     const mean = runs.reduce((a, r) => a + r.caught.length, 0) / runs.length;
     const always = defects.filter((d) => runs.every((r) => !r.caught.includes(d.id))).map((d) => d.id);
     const judged = runs.filter((r) => r.judged && !r.judged.failed && !r.judged.skipped);
     console.log(
-      `  ${core}: caught ${mean.toFixed(1)}/${defects.length} on average over ${runs.length} run(s)` +
+      `  ${label}: caught ${mean.toFixed(1)}/${defects.length} on average over ${runs.length} run(s)` +
         (judged.length
           ? `, ${(judged.reduce((a, r) => a + r.judged.found.length, 0) / judged.length).toFixed(1)} identified by the judge (${judged.length} of ${runs.length} judged${suspect ? ', suspect' : ''})`
           : '') +
         (always.length ? ` — never caught: ${always.join(', ')}` : ''),
     );
   }
-  // Each release against the first, with the widest spread any release showed between its own runs.
-  const counts = releases.map((core) => results.filter((r) => r.core === core).map((r) => r.caught.length));
+  // Each arm against the first, with the widest spread any arm showed between its own runs.
+  const counts = arms.map(({ label }) => results.filter((r) => r.arm === label).map((r) => r.caught.length));
   const mean = (xs) => xs.reduce((x, y) => x + y, 0) / xs.length;
   const spread = Math.max(...counts.map((xs) => Math.max(...xs) - Math.min(...xs)));
-  for (let i = 1; i < releases.length; i += 1) {
+  for (let i = 1; i < arms.length; i += 1) {
     const delta = mean(counts[i]) - mean(counts[0]);
     console.log(
-      `\n  ${releases[i]} − ${releases[0]}: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} defect(s)` +
-        (repeat > 1 ? `, against a run-to-run spread of ${spread} within a release` : ' — one run each cannot tell a difference from noise'),
+      `\n  ${arms[i].label} − ${arms[0].label}: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} defect(s)` +
+        (repeat > 1 ? `, against a run-to-run spread of ${spread} within one` : ' — one run each cannot tell a difference from noise'),
     );
   }
   return 0;

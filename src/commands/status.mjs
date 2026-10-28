@@ -14,10 +14,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
-import { readProfile } from '../paths.mjs';
+import { HARNESS, readProfile } from '../paths.mjs';
 import { costOf } from '../prices.mjs';
 import { runOf } from '../transcripts.mjs';
 import { missingWiring, shippedScripts } from '../wiring.mjs';
+import { defaultVocabulary, modelsLine, tierProblem, tiers } from '../vocabulary.mjs';
 import { amber, bold, dim, green, pink } from '../look.mjs';
 import { byVersion, layerRootFor } from './compose.mjs';
 import { filedRequests } from './learn.mjs';
@@ -114,6 +115,15 @@ export async function status(argv, ctx) {
   if (!layers.error) {
     const unwired = await missingWiring(target, await shippedScripts(layers.dir, profile.surfaces ?? []));
     row('hooks', unwired.length === 0 ? green('every hook its release needs is wired') : warn(`${unwired.length} missing — \`nina wire --apply\` merges them`));
+    // What each kind of stage runs on: the tier names it, and a model the project declared itself wins over it.
+    const tierError = tierProblem(layers.dir, profile.tier, pinned);
+    const declared = Object.fromEntries(Object.entries(profile.vocabulary ?? {}).filter(([, value]) => typeof value === 'string'));
+    row(
+      'models',
+      tierError
+        ? warn(`${tierError} — ${Object.keys(tiers(layers.dir)).length > 0 ? '`nina compose --tier <level>` sets one it has' : `take "tier" out of ${HARNESS}/profile.json`}`)
+        : `${profile.tier === undefined ? "the release's own" : `tier ${bold(profile.tier)}`} · ${modelsLine({ ...defaultVocabulary(layers.dir, profile.tier), ...declared })}`,
+    );
   } else {
     row('hooks', warn(layers.error));
   }

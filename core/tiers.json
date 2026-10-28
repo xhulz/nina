@@ -1,0 +1,5 @@
+{
+  "low": { "DEEP_MODEL": "claude-sonnet-5-5", "WORK_EFFORT": "medium" },
+  "medium": { "DEEP_EFFORT": "medium", "WORK_EFFORT": "high" },
+  "high": {}
+}

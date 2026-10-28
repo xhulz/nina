@@ -59,7 +59,9 @@ path the new version starts composing is refused in the preview; under `--force`
 copy kept in `.nina/replaced/` first. Without that, a rolled-back move left the new version's
 loop gate on disk, run by hooks the owner had just wired for it, on a pin that has no gate. Hooks a move
 needs cannot be forced past either: `upgrade` prints them and refuses until
-`nina wire --to <version> --apply` has put them in.
+`nina wire --to <version> --apply` has put them in. Nor can a profile's `tier` the new version lacks
+([measurement](measurement.md#at-what-tier)): the compose that ends the move would refuse it, after the pin
+had moved, so the move is refused before anything is read.
 
 A move can also be stopped from outside: Ctrl-C, a `kill`, a terminal closed half-way. It used to die
 with the pin already moved and the tree half-composed, and the owner's own edits it was about to put back

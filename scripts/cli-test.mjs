@@ -35,7 +35,7 @@ import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk }
 import { filledSlots, outsideFences, projectSlots, transitiveCitations, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
-import { NAME as VOCABULARY_NAME, defaultVocabulary } from '../src/vocabulary.mjs';
+import { NAME as VOCABULARY_NAME, defaultVocabulary, tiers } from '../src/vocabulary.mjs';
 import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
@@ -4244,6 +4244,132 @@ const dated = (date, status = 'active') =>
   expect(!preview.includes('TYPECHECK_CMD'), `vocabulary: an upgrade onto a release with defaults does not ask for them — got ${preview}`);
 }
 
+// ─── tier: one word picks what the stages run on, and the architect never moves ─────────
+{
+  const levels = tiers(ROOT);
+  expect(JSON.stringify(Object.keys(levels)) === '["low","medium","high"]', `tier: the working core has low, medium and high — got ${Object.keys(levels).join(', ')}`);
+  expect(JSON.stringify(tiers(join(ROOT, 'releases', '0.80.0'))) === '{}', 'tier: a release from before tiers has none');
+  // Every model a tier names is one the price table knows, and every effort one Claude Code takes, so a tier never
+  // composes a spec that check refuses or a run stats cannot price.
+  const named = Object.values(levels).flatMap((moves) => Object.entries(moves));
+  expect(
+    named.length > 0 &&
+      named.every(([name, value]) => (name.endsWith('_MODEL') ? priceOf(value) !== null : ['low', 'medium', 'high', 'xhigh', 'max'].includes(value))),
+    `tier: each model a tier names is priced and each effort is a level — got ${JSON.stringify(levels)}`,
+  );
+  // The architect and the stages whose code ships immutable are in no tier: the spec is what every later stage builds
+  // on, and a miss on immutable code cannot be fixed after.
+  expect(!named.some(([name]) => /^(ARCHITECT|IMMUTABLE)_/.test(name)), 'tier: no tier moves the architect or the immutable-code stages');
+  // A tier moves what a stage runs on, never what it does.
+  const bed = await scratch();
+  await mkdir(join(bed, 'core'), { recursive: true });
+  await writeFile(join(bed, 'core', 'tiers.json'), JSON.stringify({ low: { WORK_MODEL: 'claude-haiku-4-5', TEST_CMD: 'true', STEP_LINES: '9000' }, odd: 'x' }));
+  expect(JSON.stringify(tiers(bed)) === '{"low":{"WORK_MODEL":"claude-haiku-4-5"}}', `tier: a tier takes only models and efforts — got ${JSON.stringify(tiers(bed))}`);
+
+  const runsOn = async (dir, role) => {
+    const text = await readFile(join(dir, '.claude', 'agents', `${role}.md`), 'utf8').catch(() => '');
+    return `${/^model: (.*)$/m.exec(text)?.[1]} ${/^effort: (.*)$/m.exec(text)?.[1]}`;
+  };
+  const dir = await scratch();
+  run(['init', '--project', dir, '--surfaces', 'frontend', '--core', 'dev', '--tier', 'low']);
+  const profilePath = join(dir, '.nina', 'profile.json');
+  const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+  expect(profile.tier === 'low' && Object.keys(profile)[1] === 'tier', `tier: init records it in the profile, after the pin it names — got ${Object.keys(profile).join(', ')}`);
+  const at = async () => Object.fromEntries(await Promise.all(['architect', 'reviewer', 'design-reviewer', 'implementer'].map(async (r) => [r, await runsOn(dir, r)])));
+  const low = await at();
+  expect(
+    low.architect === 'claude-opus-5-5 xhigh' && low.reviewer === 'claude-sonnet-5-5 high' && low['design-reviewer'] === 'claude-sonnet-5-5 high' && low.implementer === 'claude-sonnet-5-5 medium',
+    `tier: low runs the reviewers on Sonnet at high and the builders at medium, the architect still on Opus at xhigh — got ${JSON.stringify(low)}`,
+  );
+  const toMedium = run(['compose', '--project', dir, '--tier', 'medium'], { loud: true });
+  const medium = await at();
+  expect(
+    toMedium.status === 0 && medium.architect === 'claude-opus-5-5 xhigh' && medium.reviewer === 'claude-opus-5-5 medium' && medium.implementer === 'claude-sonnet-5-5 high',
+    `tier: medium keeps the reviewers on Opus at medium and the builders at high — got ${JSON.stringify(medium)}`,
+  );
+  expect(
+    toMedium.out.includes('tier medium, was low — architect claude-opus-5-5 at xhigh · reviewers claude-opus-5-5 at medium · builders claude-sonnet-5-5 at high') &&
+      toMedium.out.includes('open a new Claude Code session'),
+    `tier: compose --tier says what each kind of stage now runs on, and that an open session may keep the old models — got ${toMedium.out}`,
+  );
+  expect(JSON.parse(await readFile(profilePath, 'utf8')).tier === 'medium', 'tier: compose --tier records it in the profile');
+  run(['compose', '--project', dir]);
+  expect((await at()).reviewer === 'claude-opus-5-5 medium', 'tier: a compose without the flag keeps the tier the profile holds');
+  const again = run(['compose', '--project', dir, '--tier', 'medium'], { loud: true }).out;
+  expect(again.includes('tier medium, as it was') && !again.includes('open a new Claude Code session'), `tier: the same tier again asks for no new session — got ${again}`);
+  run(['compose', '--project', dir, '--tier', 'high']);
+  const high = await at();
+  const own = defaultVocabulary(ROOT);
+  expect(
+    high.reviewer === `${own.DEEP_MODEL} ${own.DEEP_EFFORT}` && high.implementer === `${own.WORK_MODEL} ${own.WORK_EFFORT}` && high.architect === `${own.ARCHITECT_MODEL} ${own.ARCHITECT_EFFORT}`,
+    `tier: high is the release's own models — got ${JSON.stringify(high)}`,
+  );
+  expect(/\n {2}models {5}tier high · architect claude-opus-5-5 at xhigh/.test(run(['status', '--project', dir, '--offline'], { loud: true }).out), 'tier: status says the tier and what each kind of stage runs on');
+  run(['init', '--project', dir, '--surfaces', 'frontend', '--force']);
+  expect(JSON.parse(await readFile(profilePath, 'utf8')).tier === 'high', 'tier: init --force keeps the tier of the profile it replaces');
+
+  // A model the project declares itself wins over its tier, as it wins over the release's default.
+  await writeFile(profilePath, JSON.stringify({ ...JSON.parse(await readFile(profilePath, 'utf8')), tier: 'low', vocabulary: { ...profile.vocabulary, DEEP_MODEL: 'claude-opus-5' } }, null, 2));
+  run(['compose', '--project', dir]);
+  expect((await runsOn(dir, 'reviewer')) === 'claude-opus-5 high', `tier: a declared model wins over the tier's — got ${await runsOn(dir, 'reviewer')}`);
+
+  // A tier the release does not have is refused, and the profile is left as it was.
+  const before = await readFile(profilePath, 'utf8');
+  const unknown = run(['compose', '--project', dir, '--tier', 'max'], { loud: true });
+  expect(
+    unknown.status === 1 && unknown.out.includes('tier "max" is not one dev has: low, medium, high') && (await readFile(profilePath, 'utf8')) === before,
+    `tier: compose refuses a tier its release lacks and writes nothing — got ${unknown.out}`,
+  );
+  const both = run(['compose', '--project', dir, '--check', '--tier', 'low'], { loud: true });
+  expect(both.status === 2 && (await readFile(profilePath, 'utf8')) === before, `tier: --check with --tier is refused, the profile untouched — got ${both.out}`);
+  await writeFile(profilePath, JSON.stringify({ ...JSON.parse(before), tier: 'max' }, null, 2));
+  const handEdited = run(['compose', '--project', dir], { loud: true });
+  const checked = run(['check', '--project', dir], { loud: true });
+  expect(handEdited.status === 1 && handEdited.out.includes('tier "max" is not one'), `tier: compose refuses a profile whose tier its release lacks — got ${handEdited.out}`);
+  expect(checked.status !== 0 && checked.out.includes('tier "max" is not one dev has'), `tier: check reports it — got ${checked.out}`);
+  expect(run(['status', '--project', dir, '--offline'], { loud: true }).out.includes('tier "max" is not one dev has'), 'tier: status says the tier cannot compose');
+  const restart = run(['init', '--project', dir, '--surfaces', 'frontend', '--force'], { loud: true });
+  expect(
+    restart.status === 1 && restart.out.includes('the profile being replaced holds it: pass --tier with one it has, or take "tier" out'),
+    `tier: init --force says a tier it refuses came from the profile it replaces — got ${restart.out}`,
+  );
+
+  // A pin from before tiers has none to give, and a move onto one would leave the profile's tier nowhere to land.
+  const fresh = await scratch();
+  const early = run(['init', '--project', fresh, '--surfaces', 'frontend', '--core', '0.80.0', '--tier', 'low'], { loud: true });
+  expect(early.status === 1 && early.out.includes('tier "low": 0.80.0 has no tiers') && !existsSync(join(fresh, '.nina', 'profile.json')), `tier: init refuses a tier its pin lacks before writing — got ${early.out}`);
+  await writeFile(profilePath, before);
+  const back = run(['upgrade', '--project', dir, '--to', '0.80.0'], { loud: true });
+  expect(
+    back.status === 1 && back.out.includes('— take "tier" out of .nina/profile.json'),
+    `tier: upgrade refuses a move onto a release without the profile's tier, and offers no tier it lacks — got ${back.out}`,
+  );
+
+  // A project that declared the judges' model had the architect on it too; a move that gives the architect a name of
+  // its own says so, rather than move it to the release's default without a word.
+  const declaring = await scratch();
+  run(['init', '--project', declaring, '--surfaces', 'frontend', '--core', '0.80.0']);
+  const ownPath = join(declaring, '.nina', 'profile.json');
+  const ownProfile = JSON.parse(await readFile(ownPath, 'utf8'));
+  await writeFile(ownPath, JSON.stringify({ ...ownProfile, vocabulary: { ...ownProfile.vocabulary, DEEP_MODEL: 'claude-opus-5' } }, null, 2));
+  const split = run(['upgrade', '--project', declaring, '--to', 'dev'], { loud: true }).out;
+  expect(
+    split.includes('ARCHITECT_MODEL, was DEEP_MODEL: claude-opus-5-5, where DEEP_MODEL is claude-opus-5') && !split.includes('IMMUTABLE_MODEL'),
+    `tier: upgrade names a stage that leaves a declared model for a name of its own, and only one this project composes — got ${split}`,
+  );
+  await writeFile(ownPath, JSON.stringify({ ...ownProfile, tier: 'low' }, null, 2));
+  const pre = run(['status', '--project', declaring, '--offline'], { loud: true }).out;
+  expect(pre.includes('0.80.0 has no tiers') && pre.includes('take "tier" out of .nina/profile.json') && !pre.includes('sets one it has'), `tier: status offers no tier a release without them lacks — got ${pre}`);
+
+  // Code that ships immutable keeps its stages on the release's own model at every tier.
+  const chain = await scratch();
+  run(['init', '--project', chain, '--surfaces', 'blockchain', '--core', 'dev', '--tier', 'low']);
+  expect(
+    (await runsOn(chain, 'solidity-auditor')) === 'claude-opus-5-5 high' && (await runsOn(chain, 'solidity-dev')) === 'claude-opus-5-5 high' && (await runsOn(chain, 'reviewer')) === 'claude-sonnet-5-5 high',
+    `tier: at low the solidity stages stay on Opus while the reviewer moves — got ${await runsOn(chain, 'solidity-auditor')}`,
+  );
+}
+
 // ─── cost: what a run spent, from its own transcript, priced when it is read ─────────────
 {
   // A streamed message is written once per content block, under one id, with its output growing.
@@ -6838,6 +6964,18 @@ await release();
   const changed = kept ? spawnSync('git', ['status', '--porcelain'], { cwd: kept, encoding: 'utf8' }).stdout.replace(/\n$/, '').split('\n') : [];
   expect(changed.length === 5 && changed.every((l) => l.startsWith(' M src/')), `eval: the reviewer's diff is the change alone, the composed harness ignored — got ${changed.join(' | ')}`);
   if (kept) await rm(kept, { recursive: true, force: true });
+  // A release at two tiers is two arms: each composes its reviewer at its tier, and the second is read against the first.
+  const tiered = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'high', '--dry-run', '--keep'], { loud: true });
+  const armDirs = Object.fromEntries([...tiered.out.matchAll(/dry run — (\S+) staged in (\S+);/g)].map((m) => [m[1], m[2]]));
+  const reviewerAt = async (arm) => /^model: (.*)$/m.exec(await readFile(join(armDirs[arm] ?? '/nonexistent', '.claude', 'agents', 'reviewer.md'), 'utf8').catch(() => ''))?.[1];
+  expect(
+    tiered.status === 0 && tiered.out.includes('dev@low: caught 4.0/12') && tiered.out.includes('dev@high − dev@low: +0.0 defect(s)') &&
+      (await reviewerAt('dev@low')) === 'claude-sonnet-5-5' && (await reviewerAt('dev@high')) === 'claude-opus-5-5',
+    `eval: --tier composes each release at each tier and compares the arms — got ${tiered.out}`,
+  );
+  for (const d of Object.values(armDirs)) await rm(d, { recursive: true, force: true });
+  const pinned = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'high', '--model', 'claude-sonnet-5-5', '--dry-run'], { loud: true });
+  expect(pinned.status === 2 && pinned.out.includes('--model runs every reviewer on one model'), `eval: --model beside --tier is refused — got ${pinned.out}`);
 
   // Nothing an eval run leaves behind: counted before any of them, so a leak anywhere below shows.
   const leftovers = async () => (await readdir(tmpdir())).filter((f) => /^nina-eval-/.test(f));

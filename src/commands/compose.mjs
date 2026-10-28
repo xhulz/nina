@@ -19,9 +19,9 @@
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { HARNESS, deferredWhy, layerRootFor, readProfile } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { NAME, PLACEHOLDER, defaultVocabulary } from '../vocabulary.mjs';
+import { NAME, PLACEHOLDER, defaultVocabulary, modelsLine, tierProblem } from '../vocabulary.mjs';
 
 export { layerRootFor };
 
@@ -426,7 +426,11 @@ export async function composeProject(target, ctx, options = {}) {
   const resolved = layerRootFor(ctx.root, profile.core);
   if (resolved.error) return { error: resolved.error, written, differ, unfilled: [], skipped };
   const layerRoot = resolved.dir;
-  const defaults = defaultVocabulary(layerRoot);
+  // A tier the pinned release does not have is refused rather than composed as the release's default: the
+  // project asked for other models, and composing these without a word would run every stage on the wrong one.
+  const tierError = tierProblem(layerRoot, profile.tier, profile.core);
+  if (tierError) return { error: tierError, written, differ, unfilled: [], skipped };
+  const defaults = defaultVocabulary(layerRoot, profile.tier);
 
   const coreTree = join(layerRoot, 'core', 'tree');
   const layers = [
@@ -580,15 +584,59 @@ export async function composeProject(target, ctx, options = {}) {
 }
 
 /**
+ * Records a tier in a project's profile, once the release it pins is known to have it.
+ *
+ * The tier lives in the profile, not on the command line: a flag that only composed would be undone by the
+ * next `compose` without it, and every hook that recomposes runs without it. `tier` goes after `core`, the
+ * release whose tiers it names; the rest of the profile keeps its order.
+ *
+ * @param {string} target - The project directory.
+ * @param {string} tier - The level asked for.
+ * @param {{root: string}} ctx - CLI context.
+ * @returns {{error: string} | {tier: string, from: string|undefined, line: string}}
+ */
+export function setTier(target, tier, ctx) {
+  const { path, profile, error } = readProfile(target);
+  if (error) return { error };
+  const layers = layerRootFor(ctx.root, profile.core);
+  if (layers.error) return { error: layers.error };
+  const problem = tierProblem(layers.dir, tier, profile.core);
+  if (problem) return { error: problem };
+  const from = profile.tier;
+  if (from !== tier) {
+    const entries = Object.entries(profile).filter(([key]) => key !== 'tier');
+    const at = entries.findIndex(([key]) => key === 'core') + 1;
+    entries.splice(at, 0, ['tier', tier]);
+    writeFileSync(path, `${JSON.stringify(Object.fromEntries(entries), null, 2)}\n`);
+  }
+  const declared = Object.fromEntries(Object.entries(profile.vocabulary ?? {}).filter(([, value]) => typeof value === 'string'));
+  return { tier, from, line: modelsLine({ ...defaultVocabulary(layers.dir, tier), ...declared }) };
+}
+
+/**
  * `nina compose` — the CLI wrapper around {@link composeProject}.
  *
- * @param {string[]} argv - Command arguments; `--project <dir>` selects the target.
+ * @param {string[]} argv - Command arguments; `--project <dir>` selects the target, `--tier <level>` records the
+ *   project's tier in its profile before composing.
  * @param {{root: string}} ctx - CLI context; `root` is the NINA install directory.
  * @returns {Promise<number>} Process exit code.
  */
 export async function compose(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   const check = argv.includes('--check');
+  const tier = argv.includes('--tier') ? argv[argv.indexOf('--tier') + 1] : undefined;
+  let moved = null;
+  if (tier !== undefined) {
+    if (check) {
+      console.error('  --tier writes the profile, and --check writes nothing: run them one at a time');
+      return 2;
+    }
+    moved = setTier(target, tier, ctx);
+    if (moved.error) {
+      console.error(`  ${moved.error}`);
+      return 1;
+    }
+  }
   const result = await composeProject(target, ctx, { check });
 
   if (result.error) {
@@ -639,6 +687,12 @@ export async function compose(argv, ctx) {
     return bad === 0 ? 0 : 1;
   }
   console.log(`composed ${result.written.length} file(s) → ${relative(process.cwd(), target) || '.'}`);
+  if (moved) {
+    console.log(`  tier ${moved.tier}${moved.from === moved.tier ? ', as it was' : `, was ${moved.from ?? 'not declared'}`} — ${moved.line}`);
+    // Claude Code registers each agent, its frontmatter included, when a session starts; a session left open may
+    // keep the models it registered.
+    if (moved.from !== moved.tier) console.log('  open a new Claude Code session before the next dispatch: one already open may keep the models it started with');
+  }
   if (result.removed.length > 0) {
     console.log(`  removed ${result.removed.length} file(s) composed for a surface this profile no longer declares — a copy of each is in ${REMOVED}/:`);
     for (const rel of result.removed) console.log(`    ${rel}`);
