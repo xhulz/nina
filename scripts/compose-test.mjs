@@ -267,8 +267,9 @@ const BUDGETS = {
   // existed to catch. And for a step split again, whose file becomes its parts' spec: one of 102 KB kept whole was a
   // twentieth of what one project's stages read. And for a sentence dictated about code another step builds, worded
   // as a contract: one read as proof that a guard existed before it did. And for an invisible or lookalike character
-  // written as its escape, checked after each write: raw ones in a spec's table were copied raw into the tests.
-  '.claude/agents/architect.md': 23350,
+  // written as its escape, checked after each write: raw ones in a spec's table were copied raw into the tests. And for
+  // an input the code passes through, given two values across the cases: one value everywhere let a constant pass.
+  '.claude/agents/architect.md': 23750,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 5150,
@@ -292,7 +293,8 @@ const BUDGETS = {
   // forecast by the implementer before it writes, three in a row having finished far past theirs; and for the TSDoc
   // sweep as a command, after it came back three times in a day with its cases named. And for an invisible or lookalike
   // character written as its escape, with the command that lists what the tools wrote raw: they decoded four stages' escapes.
-  '.claude/agents/implementer.md': 25700,
+  // And for a surviving mutant, equivalent or killed and never left to another gate: one was, which that gate let through.
+  '.claude/agents/implementer.md': 26400,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -347,7 +349,10 @@ const BUDGETS = {
   // And, there too, for a check that claims a class covering every member of it — every slot, every form of
   // a value, every state that withholds it: one project's sweeps were lists, sent back three times in two days. And for
   // every file a stage writes kept in its own scratch directory, long output included: two wrote three files at the root.
-  'CLAUDE.md': 32550,
+  // And for its path written out in full by each later call, where a variable does not reach: an implementer kept it
+  // in a note at the root. And, where a project has pii, for a leak walk as wide as what the console prints and a
+  // mutant in each slot the check does not name: one project's steps went back six times for one or the other.
+  'CLAUDE.md': 33500,
 };
 
 /**
