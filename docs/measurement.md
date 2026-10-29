@@ -480,6 +480,16 @@ work comes back a round later. `stats` and `runs` already split a stage by model
 planted defects before a project trusts it. `--model` is refused beside `--tier`: it runs every reviewer on
 one model, and the two tiers would differ in effort alone.
 
+The first reading, on 0.81.0 with `--judge` and two runs a tier: the judge found all twelve defects in every
+report of both. Graded by cited line, `low` caught 11 and 8 and `high` 11 and 10, a difference of one defect
+against a spread of three between two runs of one tier. `low` wrote a little over half as much, 3.7k characters
+a report against 6.5k, and once folded two defects into one issue (`archive-not-idempotent-and-swallows-errors`).
+It raised fewer findings the judge called noise, 4 and 5 against 7 and 8, and cost a third: $0.09
+to $0.12 API-equivalent a review against $0.29 to $0.35. Two runs a tier cannot tell a reviewer that misses one
+defect in twelve from one that misses none, and this is one change, every defect of which the reviewer's
+checklist names. What it says is that the cheaper tier's judge is not visibly worse here. It says nothing of
+the stages that carry a spec out, which `low` also moves to `medium` and no eval runs.
+
 ### Sending it to Langfuse: `nina langfuse`
 
 `stats` and `learn` read the store on a terminal. Langfuse reads the same runs in a UI that filters,
