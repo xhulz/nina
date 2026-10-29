@@ -4284,17 +4284,17 @@ const dated = (date, status = 'active') =>
   const toMedium = run(['compose', '--project', dir, '--tier', 'medium'], { loud: true });
   const medium = await at();
   expect(
-    toMedium.status === 0 && medium.architect === 'claude-opus-5-5 xhigh' && medium.reviewer === 'claude-opus-5-5 medium' && medium.implementer === 'claude-sonnet-5-5 high',
-    `tier: medium keeps the reviewers on Opus at medium and the builders at high — got ${JSON.stringify(medium)}`,
+    toMedium.status === 0 && medium.architect === 'claude-opus-5-5 xhigh' && medium.reviewer === 'claude-sonnet-5-5 xhigh' && medium['design-reviewer'] === 'claude-sonnet-5-5 xhigh' && medium.implementer === 'claude-sonnet-5-5 high',
+    `tier: medium runs the reviewers on Sonnet at xhigh and the builders at high — got ${JSON.stringify(medium)}`,
   );
   expect(
-    toMedium.out.includes('tier medium, was low — architect claude-opus-5-5 at xhigh · reviewers claude-opus-5-5 at medium · builders claude-sonnet-5-5 at high') &&
+    toMedium.out.includes('tier medium, was low — architect claude-opus-5-5 at xhigh · reviewers claude-sonnet-5-5 at xhigh · builders claude-sonnet-5-5 at high') &&
       toMedium.out.includes('open a new Claude Code session'),
     `tier: compose --tier says what each kind of stage now runs on, and that an open session may keep the old models — got ${toMedium.out}`,
   );
   expect(JSON.parse(await readFile(profilePath, 'utf8')).tier === 'medium', 'tier: compose --tier records it in the profile');
   run(['compose', '--project', dir]);
-  expect((await at()).reviewer === 'claude-opus-5-5 medium', 'tier: a compose without the flag keeps the tier the profile holds');
+  expect((await at()).reviewer === 'claude-sonnet-5-5 xhigh', 'tier: a compose without the flag keeps the tier the profile holds');
   const again = run(['compose', '--project', dir, '--tier', 'medium'], { loud: true }).out;
   expect(again.includes('tier medium, as it was') && !again.includes('open a new Claude Code session'), `tier: the same tier again asks for no new session — got ${again}`);
   run(['compose', '--project', dir, '--tier', 'high']);
@@ -6965,13 +6965,22 @@ await release();
   expect(changed.length === 5 && changed.every((l) => l.startsWith(' M src/')), `eval: the reviewer's diff is the change alone, the composed harness ignored — got ${changed.join(' | ')}`);
   if (kept) await rm(kept, { recursive: true, force: true });
   // A release at two tiers is two arms: each composes its reviewer at its tier, and the second is read against the first.
-  const tiered = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'high', '--dry-run', '--keep'], { loud: true });
+  const tiered = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'medium', '--tier', 'high', '--dry-run', '--keep'], { loud: true });
   const armDirs = Object.fromEntries([...tiered.out.matchAll(/dry run — (\S+) staged in (\S+);/g)].map((m) => [m[1], m[2]]));
-  const reviewerAt = async (arm) => /^model: (.*)$/m.exec(await readFile(join(armDirs[arm] ?? '/nonexistent', '.claude', 'agents', 'reviewer.md'), 'utf8').catch(() => ''))?.[1];
+  const specAt = async (arm, field) => new RegExp(`^${field}: (.*)$`, 'm').exec(await readFile(join(armDirs[arm] ?? '/nonexistent', '.claude', 'agents', 'reviewer.md'), 'utf8').catch(() => ''))?.[1];
+  const reviewerAt = (arm) => specAt(arm, 'model');
   expect(
     tiered.status === 0 && tiered.out.includes('dev@low: caught 4.0/12') && tiered.out.includes('dev@high − dev@low: +0.0 defect(s)') &&
       (await reviewerAt('dev@low')) === 'claude-sonnet-5-5' && (await reviewerAt('dev@high')) === 'claude-opus-5-5',
     `eval: --tier composes each release at each tier and compares the arms — got ${tiered.out}`,
+  );
+  // Run as the main agent, claude -p reads a spec's model and not its effort: each arm's run names its spec's level
+  // itself, or every tier reviews at the CLI's default and only the models are compared.
+  const ranAt = Object.fromEntries([...tiered.out.matchAll(/dry run — (\S+) staged in \S+; would run: claude .*?--effort (\S+)/g)].map((m) => [m[1], m[2]]));
+  const efforts = await Promise.all(Object.keys(armDirs).map(async (arm) => [arm, await specAt(arm, 'effort')]));
+  expect(
+    efforts.length === 3 && efforts.every(([arm, effort]) => effort && ranAt[arm] === effort) && new Set(efforts.map(([, e]) => e)).size > 1 && !reviewerCommand({}).args.includes('--effort'),
+    `eval: each arm's review runs at the effort its composed spec names — got ${JSON.stringify(ranAt)} for ${JSON.stringify(efforts)}`,
   );
   for (const d of Object.values(armDirs)) await rm(d, { recursive: true, force: true });
   const pinned = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'high', '--model', 'claude-sonnet-5-5', '--dry-run'], { loud: true });
