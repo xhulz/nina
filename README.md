@@ -25,6 +25,7 @@ the same mistake, NINA turns the lesson into a rule in the next release.
   page on this machine that the command prints a link to.
 - `nina dashboard` puts the office, the tasks, the pipeline, the pills, the learning cycle and the stats in one page,
   a tab each, drawn from the same data the commands print. The commands stay, since the hooks, CI and agents read them.
+  `nina dashboard --demo` shows it all on an invented project, anywhere, with no Claude and no tokens.
 
 ## Why
 
@@ -393,6 +394,7 @@ node scripts/harness-check.mjs    # this repo's own detectors
 | [`src/gate.mjs`](src/gate.mjs) | the loop gate: the ledger, what counts as a round, one answer per hook event |
 | [`src/office.mjs`](src/office.mjs), [`src/office.html`](src/office.html) | `pipeline --view`: the ledger as beats, and the pixel office that draws them |
 | [`src/dashboard.mjs`](src/dashboard.mjs), [`src/dashboard.html`](src/dashboard.html) | `nina dashboard`: each report's data as a tab, and the page that draws them |
+| [`src/demo.mjs`](src/demo.mjs) | `nina dashboard --demo`: an invented project and its history, written by the real writers |
 | [`src/serve.mjs`](src/serve.mjs) | what every page served here shares: loopback, the host check, the port, the opener |
 | [`src/wiring.mjs`](src/wiring.mjs) | the hooks and npm scripts a project needs, read by `init`, `wire`, `check` and `upgrade` |
 | [`src/transcripts.mjs`](src/transcripts.mjs) | the transcript parser |

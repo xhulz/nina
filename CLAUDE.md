@@ -122,6 +122,7 @@ nina where <path> --project ../thing          # does this path belong to the har
 nina pipeline --project ../thing              # the agent chain drawn: gates, loop-backs, models, skills
 nina pipeline --view --project ../thing       # the office: each agent at its stage's desk, its tasks beside, live or --replay, a link to click
 nina dashboard --project ../thing             # the office, tasks, pipeline, pills, learning and stats as tabs of one page, a link to click
+nina dashboard --demo                         # the same on an invented project, anywhere, its office in a loop: to show NINA
 nina wire --project ../thing [--apply]        # merge the hooks and npm scripts its version needs
 nina upgrade --project ../thing --to <v> [--apply]   # what a move costs, then the whole move
 nina gate --selftest --project ../thing       # would the loop gate still hold a loop past its cap?
@@ -161,6 +162,7 @@ src/look.mjs          how a report looks on a terminal: colour, section marks, b
 src/surfaces.mjs      which surfaces a repository's files reveal, and which concern a stack surface needs
 src/office.mjs        pipeline --view: the gate's ledger as beats, served with src/office.html, the pixel office that draws them
 src/dashboard.mjs     nina dashboard: each report's data as a tab, served with src/dashboard.html, the office mounted at /office/
+src/demo.mjs          dashboard --demo: an invented project, its history written by the gate's handler and the snapshot
 src/serve.mjs         what every page served here shares: loopback, the host check, the port, the system's opener
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to

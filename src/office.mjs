@@ -302,6 +302,9 @@ export function busyFor(starts) {
 const REPLAY_MAX_GAP_MS = 3000;
 const REPLAY_MIN_GAP_MS = 500;
 
+/** How long a replay in a loop rests on its last beat before it plays again from the start: the party is seen out. */
+export const LOOP_REST_MS = 8000;
+
 /**
  * Each run the ledger saw start, in order: when, at which stage, by which agent once known, whether it was a message
  * to a running agent, when it was refused, and when its verdict ended it. The beats and the timeline read the same.
@@ -626,10 +629,11 @@ const send = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stri
  * anyone watches live. `serveOffice` mounts them at the root; the dashboard (`nina dashboard`) at `/office/`, where the
  * page's relative `events` reaches `/office/events`.
  *
- * @param {{target: string, wanted?: string, replay?: boolean}} options
+ * @param {{target: string, wanted?: string, replay?: boolean, loop?: boolean, rest?: number}} options - `loop`: a replay
+ *   that ends plays again from the start, for an office left on a screen, after resting `rest` ms on its last beat.
  * @returns {{handle: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, path: string) => boolean, close: () => void}}
  */
-export function officeRoutes({ target, wanted, replay = false }) {
+export function officeRoutes({ target, wanted, replay = false, loop = false, rest = LOOP_REST_MS }) {
   const room = officeRoom(target);
   const graph = parseGraph(readFileSync(join(target, '.claude', 'graph.md'), 'utf8'));
   // A function, so a `$&` or `$'` in a project's name or its owner's is text and not a replacement pattern.
@@ -726,7 +730,16 @@ export function officeRoutes({ target, wanted, replay = false }) {
     const next = () => {
       if (!clients.has(client)) return;
       if (i >= beats.length) {
-        send(client.res, 'end', { beats: beats.length });
+        if (!loop) {
+          send(client.res, 'end', { beats: beats.length });
+          return;
+        }
+        // Played again from its `hello`, which empties the room the page drew.
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          if (clients.has(client)) play(client);
+        }, rest);
+        timers.add(timer);
         return;
       }
       const beat = beats[i];

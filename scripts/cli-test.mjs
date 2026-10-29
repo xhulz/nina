@@ -30,7 +30,7 @@ import { readStatus } from '../src/commands/langfuse.mjs';
 import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
-import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, loopState, projectGateDir, readLedger, replay, roundsFor } from '../src/gate.mjs';
+import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, loopState, projectGateDir, readLedger, replay, roundsFor, sessionLedgers } from '../src/gate.mjs';
 import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
 import { filledSlots, outsideFences, projectSlots, transitiveCitations, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
@@ -41,7 +41,8 @@ import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, planted
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
 import { HANDOFF_MS, PARTY_QUIET_MS, SEATS_MAX, SILENT_MS, STALE_MS, actionOf, busiest, busyFor, officeBeats, officeTimeline, runClock, runFiles, runState, serveOffice, storeNames, wakeClock } from '../src/office.mjs';
-import { serveDashboard } from '../src/dashboard.mjs';
+import { DEMO_OFFICE, dashboardTabs, serveDashboard } from '../src/dashboard.mjs';
+import { DEMO_NAME, makeDemo } from '../src/demo.mjs';
 import { taskList } from '../src/commands/runs.mjs';
 import { pipelineData } from '../src/commands/pipeline.mjs';
 import { pillsData } from '../src/commands/pills.mjs';
@@ -70,6 +71,39 @@ process.on('exit', () => rmSync(RUN_ROOT, { recursive: true, force: true }));
 
 /** A fresh empty project directory. */
 const scratch = () => mkdtemp(join(tmpdir(), 'nina-cli-'));
+
+/** A page's server-sent events, read until `until` says enough or `ms` runs out. */
+const stream = async (url, until, during = () => {}, ms = 6000) => {
+  const events = [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (!until(events)) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      for (let cut = buffer.indexOf('\n\n'); cut >= 0; cut = buffer.indexOf('\n\n')) {
+        const chunk = buffer.slice(0, cut);
+        buffer = buffer.slice(cut + 2);
+        const event = /^event: (.*)$/m.exec(chunk)?.[1];
+        if (event) {
+          events.push({ event, data: JSON.parse(/^data: (.*)$/m.exec(chunk)?.[1] ?? 'null') });
+          await during(events);
+        }
+      }
+    }
+  } catch {
+    // Aborted at the deadline: what arrived is what is judged.
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
+  return events;
+};
 
 // Every run measures into a scratch store. The detectors a composed test bed runs — the lessons
 // detector snapshots, the gate's selftest checks its ledger can be written — would otherwise write
@@ -6679,6 +6713,97 @@ const dated = (date, status = 'active') =>
   );
 }
 
+// ─── dashboard --demo: an invented project, its history written by the real writers ────────
+{
+  // Shown to people with no project open, so a format change has to break this test and not the demo in front of
+  // them: the ledger is written by the gate's hook handler and the store by the snapshot, and every tab is read back.
+  const saved = { data: process.env.NINA_DATA, transcripts: process.env.NINA_TRANSCRIPTS };
+  const ctx = { root: ROOT };
+  const demo = await makeDemo(ctx);
+  try {
+    const tabs = dashboardTabs(demo.project, ctx);
+    const read = Object.fromEntries(await Promise.all(Object.entries(tabs).map(async ([tab, data]) => [tab, await data()])));
+    const shipped = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')).version;
+    expect(
+      read.overview?.project === DEMO_NAME && read.overview.core === shipped && read.pipeline?.line?.includes('reviewer') && read.pills?.active === 2 && read.pills.problems.length === 0,
+      `demo: the project composes at the release this package carries, with its graph and two sound pills — got ${JSON.stringify([read.overview, read.pipeline?.line, read.pills?.active, read.pills?.problems])}`,
+    );
+    const [last, first] = read.tasks?.tasks ?? [];
+    expect(
+      read.tasks?.total >= 20 && first?.name === 'Add archiving to notes' && last?.name === 'Fix the dates on the notes list' && first.how === 'ended at qa PASS' && first.stages.some((st) => st.role === 'reviewer' && st.back === 1),
+      `demo: the tasks tab holds three weeks of tasks, today's two newest, the archive sent back once by the reviewer — got ${read.tasks?.total} ${JSON.stringify([first, last].map((t) => [t?.name, t?.how]))}`,
+    );
+    expect(
+      read.stats?.runs > 100 && read.stats.cost.unpriced === 0 && read.stats.cost.total > 0 && read.stats.stages.rows.some((r) => r.role === 'reviewer' && r.loop > 0),
+      `demo: stats reads every run, priced, and the reviewer's loop-backs — got ${JSON.stringify([read.stats?.runs, read.stats?.cost?.unpriced, read.stats?.cost?.total])}`,
+    );
+    expect(
+      read.learning?.use.read > 0 && read.learning.checks.some((c) => c.role === 'implementer' && c.change === 'lower'),
+      `demo: the stages read their lessons, and the implementer's is read as lowering how often its work came back — got ${JSON.stringify(read.learning?.checks)}`,
+    );
+    // The office plays today's session: both tasks closed, a party for each, every stage of the first at work.
+    const picked = sessionLedgers(demo.project).picked;
+    const ledger = picked ? readLedger(picked.path) : [];
+    const graph = parseGraph(await readFile(join(demo.project, '.claude', 'graph.md'), 'utf8'));
+    const beats = officeBeats(ledger, graph, Number.POSITIVE_INFINITY);
+    const worked = new Set(beats.filter((b) => b.type === 'work').map((b) => b.role));
+    const timeline = officeTimeline(ledger, Date.now());
+    expect(
+      picked?.session === demo.session && ['planner', 'architect', 'design-reviewer', 'implementer', 'reviewer', 'dba', 'qa'].every((role) => worked.has(role)) &&
+        beats.filter((b) => b.type === 'party').length === 2 && beats.some((b) => b.type === 'question') &&
+        JSON.stringify(timeline.map((t) => [t.name, t.how])) === '[["Add archiving to notes","closed"],["Fix the dates on the notes list","closed"]]',
+      `demo: the office replays today, two tasks closed with a party each — got ${JSON.stringify(timeline.map((t) => [t.name, t.how]))} ${JSON.stringify(beats.map((b) => b.type))}`,
+    );
+    // Overlapping: the second task's implementer goes out while the first one's qa is at work.
+    const atOnce = (role, other) => ledger.some((e) => e.k === 'pre' && e.role === role && ledger.some((x) => x.k === 'pre' && x.role === other && x.at < e.at) && !ledger.some((x) => x.k === 'verdict' && x.role === other && x.at < e.at && x.verdict === 'PASS'));
+    expect(atOnce('implementer', 'qa'), 'demo: two pieces of work are on the floor at once');
+    // Nothing in it has happened yet: a run that ends after now reads as still at work on every tab that asks the clock.
+    const records = projectRecords(demo.project) ?? [];
+    const latest = Math.max(...ledger.map((e) => Date.parse(e.at)), ...records.flatMap((r) => [Date.parse(r.ts), Date.parse(r.result_ts ?? r.ts)]));
+    expect(records.length > 0 && latest <= Date.now(), `demo: nothing in the ledger or the store happens after now — the latest is ${new Date(latest).toISOString()}`);
+    expect(!existsSync(join(projectGateDir(demo.project), 'errors.jsonl')), 'demo: the gate took every event the demo handed it without an error');
+  } finally {
+    demo.remove();
+    process.env.NINA_DATA = saved.data;
+    if (saved.transcripts === undefined) delete process.env.NINA_TRANSCRIPTS;
+    else process.env.NINA_TRANSCRIPTS = saved.transcripts;
+  }
+  expect(!existsSync(demo.dir), 'demo: removing it leaves nothing behind');
+
+  // From the command line: anywhere, no project; and gone when Ctrl+C closes it. Its temporary directory is one of its
+  // own, so a suite running beside this one cannot leave something there, nor take it away.
+  const ownTmp = await scratch();
+  const child = spawn(process.execPath, [NINA, 'dashboard', '--demo', '--port', '0'], { cwd: await scratch(), env: { ...process.env, TMPDIR: ownTmp }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let said = '';
+  child.stdout.on('data', (d) => (said += d));
+  child.stderr.on('data', (d) => (said += d));
+  const exited = new Promise((done) => child.on('exit', (code) => done(code)));
+  const url = await new Promise((done) => {
+    const look = setInterval(() => {
+      const found = /Click to open it: (http:\/\/\S+)/.exec(said)?.[1];
+      if (found || child.exitCode !== null) {
+        clearInterval(look);
+        done(found ?? null);
+      }
+    }, 100);
+  });
+  try {
+    const overview = url ? await (await fetch(`${url}/api/overview`)).json() : null;
+    const hello = url ? (await stream(`${url}/office/events`, (events) => events.some((e) => e.event === 'beat'))).find((e) => e.event === 'hello') : null;
+    expect(
+      overview?.project === DEMO_NAME && hello?.data.replay === true && said.includes('a demo: an invented notes app'),
+      `demo: \`nina dashboard --demo\` serves the demo anywhere, its office a replay, and says the data is invented — got ${said}`,
+    );
+  } finally {
+    child.kill('SIGINT');
+  }
+  const code = await exited;
+  const left = await readdir(ownTmp);
+  expect(code === 0 && url !== null && left.length === 0, `demo: Ctrl+C closes it and removes what it made — got exit ${code}, left ${left.join(', ')}`);
+  const both = run(['dashboard', '--demo', '--project', '.']);
+  expect(both.status === 2 && both.out.includes('takes no --project'), `demo: --demo with --project is refused — got ${both.out}`);
+}
+
 // ─── deferred: a decision the project has not made yet, said once, with why ─────────────
 {
   // A project designing before it had code was told the same five things before every message for days.
@@ -8149,37 +8274,6 @@ await release();
   await writeFile(older, `${[ran(0, 'reviewer', 'APPROVED'), ran(1, 'reviewer', 'APPROVED'), ...crowd].flat().map((e) => JSON.stringify(e)).join('\n')}\n`);
   await utimes(older, new Date(Date.now() - 3_600_000), new Date(Date.now() - 3_600_000));
   /** Reads a server-sent stream until `until` says so, calling `during` after each event. */
-  const stream = async (url, until, during = () => {}, ms = 6000) => {
-    const events = [];
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ms);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (!until(events)) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        for (let cut = buffer.indexOf('\n\n'); cut >= 0; cut = buffer.indexOf('\n\n')) {
-          const chunk = buffer.slice(0, cut);
-          buffer = buffer.slice(cut + 2);
-          const event = /^event: (.*)$/m.exec(chunk)?.[1];
-          if (event) {
-            events.push({ event, data: JSON.parse(/^data: (.*)$/m.exec(chunk)?.[1] ?? 'null') });
-            await during(events);
-          }
-        }
-      }
-    } catch {
-      // Aborted at the deadline: what arrived is what is judged.
-    } finally {
-      clearTimeout(timer);
-      controller.abort();
-    }
-    return events;
-  };
   // The run left unfinished is still writing its transcript: the live office keeps it at work, however old the ledger.
   const savedTranscripts = process.env.NINA_TRANSCRIPTS;
   const restoreTranscripts = () => {
@@ -8478,6 +8572,38 @@ await release();
     );
   } finally {
     await replayed.close();
+  }
+  // In a loop, a replay that ends rests on its last beat and plays again from its hello, which empties the room; it never
+  // says it ended, which tells the page to stop. Through the dashboard, as the demo's office is served.
+  {
+    const short = await scratch();
+    await mkdir(join(short, '.claude'), { recursive: true });
+    await writeFile(join(short, '.claude', 'graph.md'), graphText);
+    const shortLedger = ledgerPath(short, 'loop-session');
+    await mkdir(dirname(shortLedger), { recursive: true });
+    const begun = Date.now() - 60_000;
+    const iso = (s) => new Date(begun + s * 1000).toISOString();
+    await writeFile(
+      shortLedger,
+      `${[
+        { k: 'pre', at: iso(0), role: 'implementer', id: 'toolu_lp' },
+        { k: 'verdict', at: iso(1), agent: 'looper', role: 'implementer', verdict: 'DIFF-READY', declared: true },
+        { k: 'dispatch', at: iso(1), role: 'implementer', agent: 'looper', via: 'Agent', id: 'toolu_lp' },
+      ].map((e) => JSON.stringify(e)).join('\n')}\n`,
+    );
+    const looped = await serveDashboard({ target: short, ctx: { root: ROOT }, port: 0, ...DEMO_OFFICE, rest: 50 });
+    try {
+      const played = await stream(`${looped.url}/office/events`, (events) => events.filter((e) => e.event === 'hello').length >= 2, () => {}, 30_000);
+      const second = played.findLastIndex((e) => e.event === 'hello');
+      const once = played.slice(0, second).filter((e) => e.event === 'beat').map((e) => e.data.id);
+      const again = played.slice(second).filter((e) => e.event === 'beat').map((e) => e.data.id);
+      expect(
+        second > 0 && once.length > 0 && again.length > 0 && again[0] === once[0] && !played.some((e) => e.event === 'end') && played[second].data.replay === true,
+        `office: the demo's office, a replay in a loop, plays again from its first beat, and never ends — got ${JSON.stringify(played.map((e) => e.event))}`,
+      );
+    } finally {
+      await looped.close();
+    }
   }
   // Asleep is no silence: an office that looks again two hours after its last look counts a run's quiet from then,
   // rather than sending home an implementer whose transcript went quiet only because the machine slept.
