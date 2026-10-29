@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { readProfile } from './paths.mjs';
 import { projectRecords } from './store.mjs';
 import { officeRoutes } from './office.mjs';
+import { DEMO_OFFICE } from './demo.mjs';
 import { listenHere, openInBrowser, refuseElsewhere, untilStopped } from './serve.mjs';
 import { layerRootFor } from './commands/compose.mjs';
 import { taskList } from './commands/runs.mjs';
@@ -29,9 +30,6 @@ const PAGE = join(dirname(fileURLToPath(import.meta.url)), 'dashboard.html');
 
 /** The port it asks for first, one past the office's. Taken, any free one. */
 export const DASHBOARD_PORT = 6463;
-
-/** How the demo's office plays (`nina dashboard --demo`): its one session, over and over, for a screen left on. */
-export const DEMO_OFFICE = { replay: true, loop: true };
 
 /** How many tasks the tasks tab lists, newest first: a long project's history would otherwise fill the page. */
 const TASKS_SHOWN = 60;
@@ -103,19 +101,19 @@ export function dashboardTabs(target, ctx) {
 /**
  * Serves the dashboard: the page at `/`, each tab's data at `/api/<tab>`, and the office at `/office/`.
  *
- * @param {{target: string, ctx: {root: string}, port?: number, tell?: (line: string) => void, replay?: boolean, loop?: boolean, rest?: number}} options -
- *   `tell` is where a failure is said: the terminal by default. `replay`, `loop` and `rest` are the office's
- *   (`officeRoutes`): the demo's plays its one session over and over.
+ * @param {{target: string, ctx: {root: string}, port?: number, tell?: (line: string) => void, replay?: boolean, loop?: boolean, rest?: number, scale?: number}} options -
+ *   `tell` is where a failure is said: the terminal by default. `replay`, `loop`, `rest` and `scale` are the office's
+ *   (`officeRoutes`): the demo's plays its one session over and over (`DEMO_OFFICE`).
  * @returns {Promise<{url: string, close: () => Promise<void>}>}
  */
-export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT, tell = console.error, replay = false, loop = false, rest }) {
+export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT, tell = console.error, replay = false, loop = false, rest, scale }) {
   const tabs = dashboardTabs(target, ctx);
   const room = JSON.stringify({ project: basename(target) }).replace(/</g, '\\u003c');
   const page = readFileSync(PAGE, 'utf8').replace('/*NINA_DASHBOARD*/null', () => room);
   // The office polls its ledger while anyone watches it: made when its tab is first opened, not before.
   let office = null;
   const officeFor = () => {
-    if (!office) office = officeRoutes({ target, replay, loop, ...(rest === undefined ? {} : { rest }) });
+    if (!office) office = officeRoutes({ target, replay, loop, scale, ...(rest === undefined ? {} : { rest }) });
     return office;
   };
   // What failed is said in the terminal that runs the dashboard, and never in the response: an error's message carries

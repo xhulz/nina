@@ -130,5 +130,8 @@
   },
   "2026-10-28-implementer__fails-if-comment-from-the-per-test-red-list": {
     "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-29-architect__a-row-for-a-behaviour-at-two-call-sites-runs-at-each": {
+    "in": "core/tree/.claude/agents/architect.md"
   }
 }

@@ -40,9 +40,9 @@ import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
 import { checkoutMove, handleEdit, noticeOf } from '../src/guard.mjs';
-import { HANDOFF_MS, PARTY_QUIET_MS, SEATS_MAX, SILENT_MS, STALE_MS, actionOf, busiest, busyFor, officeBeats, officeTimeline, runClock, runFiles, runState, serveOffice, storeNames, wakeClock } from '../src/office.mjs';
-import { DEMO_OFFICE, dashboardTabs, serveDashboard } from '../src/dashboard.mjs';
-import { DEMO_NAME, makeDemo } from '../src/demo.mjs';
+import { HANDOFF_MS, PARTY_QUIET_MS, SEATS_MAX, SILENT_MS, STALE_MS, actionOf, busiest, busyFor, officeBeats, officeTimeline, replayDelays, runClock, runFiles, runState, serveOffice, storeNames, wakeClock } from '../src/office.mjs';
+import { dashboardTabs, serveDashboard } from '../src/dashboard.mjs';
+import { DEMO_AT_DESK, DEMO_NAME, DEMO_OFFICE, makeDemo } from '../src/demo.mjs';
 import { taskList } from '../src/commands/runs.mjs';
 import { pipelineData } from '../src/commands/pipeline.mjs';
 import { pillsData } from '../src/commands/pills.mjs';
@@ -6757,6 +6757,20 @@ const dated = (date, status = 'active') =>
     // Overlapping: the second task's implementer goes out while the first one's qa is at work.
     const atOnce = (role, other) => ledger.some((e) => e.k === 'pre' && e.role === role && ledger.some((x) => x.k === 'pre' && x.role === other && x.at < e.at) && !ledger.some((x) => x.k === 'verdict' && x.role === other && x.at < e.at && x.verdict === 'PASS'));
     expect(atOnce('implementer', 'qa'), 'demo: two pieces of work are on the floor at once');
+    // Each of today's runs sits at its desk 20 to 40 seconds of the replay: squeezed as a real session's replay is, they
+    // were up again within three, before anyone watching had seen them work.
+    const delays = replayDelays(beats, DEMO_OFFICE);
+    const played = [];
+    delays.reduce((at, wait, k) => ((played[k] = at), at + wait), 0);
+    const desks = beats.flatMap((b, k) => {
+      if (b.type !== 'work' || !b.agent) return [];
+      const done = beats.findIndex((v, j) => j > k && v.type === 'verdict' && v.agent === b.agent);
+      return done < 0 ? [] : [played[done] - played[k]];
+    });
+    expect(
+      desks.length >= 10 && desks.every((ms) => ms >= DEMO_AT_DESK[0] && ms <= DEMO_AT_DESK[1] + 2000) && new Set(desks.map((ms) => Math.round(ms / 1000))).size > 3,
+      `demo: each run stays at its desk 20 to 40 seconds of the replay, not all the same — got ${desks.map((ms) => (ms / 1000).toFixed(1)).join(', ')}`,
+    );
     // Nothing in it has happened yet: a run that ends after now reads as still at work on every tab that asks the clock.
     const records = projectRecords(demo.project) ?? [];
     const latest = Math.max(...ledger.map((e) => Date.parse(e.at)), ...records.flatMap((r) => [Date.parse(r.ts), Date.parse(r.result_ts ?? r.ts)]));

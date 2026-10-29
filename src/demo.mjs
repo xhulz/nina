@@ -32,6 +32,19 @@ const BESIDE_REVIEW = ['dba'];
 /** A minute. */
 const MIN = 60_000;
 
+/**
+ * How many times faster than it happened the demo's office plays today's session. Squeezed as a replay of a real
+ * session is, each agent sat at its desk for three seconds at most, up again before anyone watching had seen it work;
+ * at this pace each of today's runs, lasting seven to thirteen minutes, sits there for 20 to 40.
+ */
+export const DEMO_PACE = 20;
+
+/** How long each of today's runs stays at its desk in the demo's office, in ms: at least, and at most. */
+export const DEMO_AT_DESK = [20_000, 40_000];
+
+/** How the demo's office plays (`nina dashboard --demo`): its one session, over and over, at `DEMO_PACE`. */
+export const DEMO_OFFICE = { replay: true, loop: true, scale: 1 / DEMO_PACE };
+
 /** A day. */
 const DAY = 86_400_000;
 
@@ -185,10 +198,11 @@ function seeded(seed) {
  *
  * @returns {{runs: object[], end: number}}
  */
-function taskRuns(random, start, { name, noun, design, sendBack = null, between = 0.2 }) {
+function taskRuns(random, start, { name, noun, design, sendBack = null, between = 0.2, works = null }) {
   const runs = [];
   const slug = noun.toLowerCase().replace(/\s+/g, '-');
   const span = (role) => {
+    if (works) return works();
     const [lo, hi] = WORKS[role];
     return Math.round((lo + random() * (hi - lo)) * MIN);
   };
@@ -260,11 +274,14 @@ export function demoSessions(now) {
     }
     sessions.push({ id: sessionId(random), prompt: 'Next feature, please.', at: morning.getTime() - MIN, runs });
   }
-  // Today's: the archive, sent back once, and the list's dates, begun while the archive's tests run. Laid out from zero,
-  // then moved so its last report came in three minutes ago: nothing in it happens after `now`.
-  const archive = taskRuns(seeded(7), MIN, { name: 'Add archiving to notes', noun: 'archive', design: true, sendBack: 'reviewer' });
+  // Today's: the archive, sent back once, and the list's dates, begun while the archive's tests run. Each run lasts what
+  // sits it at its desk for 20 to 40 seconds of the office's replay. Laid out from zero, then moved so its last report
+  // came in three minutes ago: nothing in it happens after `now`.
+  const desk = seeded(13);
+  const works = () => Math.round((DEMO_AT_DESK[0] + desk() * (DEMO_AT_DESK[1] - DEMO_AT_DESK[0])) * DEMO_PACE);
+  const archive = taskRuns(seeded(7), MIN, { name: 'Add archiving to notes', noun: 'archive', design: true, sendBack: 'reviewer', works });
   const qa = archive.runs.at(-1);
-  const dates = taskRuns(seeded(11), qa.start + 1.5 * MIN, { name: 'Fix the dates on the notes list', noun: 'list dates', design: false });
+  const dates = taskRuns(seeded(11), qa.start + 1.5 * MIN, { name: 'Fix the dates on the notes list', noun: 'list dates', design: false, works });
   const runs = [...archive.runs, ...dates.runs].sort((a, b) => a.start - b.start);
   const shift = now - 3 * MIN - Math.max(...runs.map((r) => r.end));
   for (const r of runs) Object.assign(r, { start: r.start + shift, end: r.end + shift });
