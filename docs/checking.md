@@ -273,6 +273,7 @@ is refused.
 
 ```bash
 nina dashboard --project ../thing [--port <n>] [--open]
+nina dashboard --demo [--port <n>] [--open]          # an invented project, anywhere: to show how it works
 ```
 
 The reports a person reads, a tab each, in a page on this machine, its address printed for a click the way the
@@ -306,3 +307,26 @@ any free one, a request naming another host refused, `--open` for the system's b
 ledger starts when its tab is first opened. `nina help` lists the commands a person runs from day to day, the
 dashboard among them; `nina help --all` lists the rest — measurement and maintenance, most of it drawn better here —
 and every command still runs by name.
+
+### `--demo`
+
+People who had heard of the office asked to see it, and the only way to show it was a real project, whose dispatch
+descriptions say what it is building. `--demo` runs anywhere, with no project, no Claude and no token spent
+(`src/demo.mjs`). It composes an invented notes app into a scratch directory at the release the package carries.
+It gives that app three weeks of work: one to three tasks on most days, the reviewer sending the implementer's work back more
+than half the time until a lesson ten days ago and seldom since, so the learning tab has a comparison to read.
+Today's session has two tasks. The first goes the whole way, planner to qa, the owner asked a question on the way and
+the reviewer sending it back once while the database gate approves beside it. The second starts while the first
+one's qa is at work. The office plays today's session in a loop, resting eight seconds on the last beat before it
+starts again, for a screen left on: a plain replay ends, and says to reload. Ctrl+C, or the terminal closing, removes
+the scratch directory. Today's last report came in three minutes before the demo was made, so no tab reads a run that
+has not happened yet.
+
+The history is written by the writers a real session has, never as hand-written records: the transcripts as Claude
+Code writes them, each run's own with its tool calls, usage and handback, then the snapshot reads them into the store,
+and today's session goes event by event through the gate's own hook handler, `handle`, which writes the ledger the
+office plays. A demo of its own JSON would have drifted from the format the first time either changed, and gone on
+passing its test. `NINA_DATA` and `NINA_TRANSCRIPTS` point into the scratch directory for the rest of the process,
+so every tab reads the demo and nothing of the machine's. What a stage runs on is read from the composed spec, as it
+would be. The test runs the demo in the suite and reads every tab back. It checks the office's beats and both tasks,
+that the gate logged no error, and that the command serves it anywhere, as a replay, and leaves nothing behind.

@@ -30,6 +30,9 @@ const PAGE = join(dirname(fileURLToPath(import.meta.url)), 'dashboard.html');
 /** The port it asks for first, one past the office's. Taken, any free one. */
 export const DASHBOARD_PORT = 6463;
 
+/** How the demo's office plays (`nina dashboard --demo`): its one session, over and over, for a screen left on. */
+export const DEMO_OFFICE = { replay: true, loop: true };
+
 /** How many tasks the tasks tab lists, newest first: a long project's history would otherwise fill the page. */
 const TASKS_SHOWN = 60;
 
@@ -100,18 +103,19 @@ export function dashboardTabs(target, ctx) {
 /**
  * Serves the dashboard: the page at `/`, each tab's data at `/api/<tab>`, and the office at `/office/`.
  *
- * @param {{target: string, ctx: {root: string}, port?: number, tell?: (line: string) => void}} options - `tell` is where
- *   a failure is said: the terminal by default.
+ * @param {{target: string, ctx: {root: string}, port?: number, tell?: (line: string) => void, replay?: boolean, loop?: boolean, rest?: number}} options -
+ *   `tell` is where a failure is said: the terminal by default. `replay`, `loop` and `rest` are the office's
+ *   (`officeRoutes`): the demo's plays its one session over and over.
  * @returns {Promise<{url: string, close: () => Promise<void>}>}
  */
-export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT, tell = console.error }) {
+export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT, tell = console.error, replay = false, loop = false, rest }) {
   const tabs = dashboardTabs(target, ctx);
   const room = JSON.stringify({ project: basename(target) }).replace(/</g, '\\u003c');
   const page = readFileSync(PAGE, 'utf8').replace('/*NINA_DASHBOARD*/null', () => room);
   // The office polls its ledger while anyone watches it: made when its tab is first opened, not before.
   let office = null;
   const officeFor = () => {
-    if (!office) office = officeRoutes({ target });
+    if (!office) office = officeRoutes({ target, replay, loop, ...(rest === undefined ? {} : { rest }) });
     return office;
   };
   // What failed is said in the terminal that runs the dashboard, and never in the response: an error's message carries
@@ -172,13 +176,14 @@ export async function serveDashboard({ target, ctx, port = DASHBOARD_PORT, tell 
 /**
  * Runs the dashboard until Ctrl+C: serves it, says where for a click, and opens it in the system's browser when asked.
  *
- * @param {{target: string, ctx: {root: string}, port?: number, open?: boolean}} options
+ * @param {{target: string, ctx: {root: string}, port?: number, open?: boolean, demo?: boolean}} options - `demo`: the
+ *   project is the demo's, its office a replay in a loop, and the terminal says the data is invented.
  * @returns {Promise<number>} Process exit code.
  */
-export async function viewDashboard({ target, ctx, port = DASHBOARD_PORT, open = false }) {
+export async function viewDashboard({ target, ctx, port = DASHBOARD_PORT, open = false, demo = false }) {
   let dashboard;
   try {
-    dashboard = await serveDashboard({ target, ctx, port });
+    dashboard = await serveDashboard({ target, ctx, port, ...(demo ? DEMO_OFFICE : {}) });
   } catch (error) {
     console.error(`  the dashboard could not open a port — ${error?.message ?? error}\n`);
     return 1;
@@ -186,7 +191,7 @@ export async function viewDashboard({ target, ctx, port = DASHBOARD_PORT, open =
   const stopped = untilStopped();
   const opened = open ? await openInBrowser(dashboard.url) : false;
   // The address ends its line, with nothing after it, so a terminal makes it a link.
-  console.log(`  the dashboard · ${basename(target)}`);
+  console.log(demo ? '  the dashboard · a demo: an invented notes app, three weeks of made-up work, no real project' : `  the dashboard · ${basename(target)}`);
   if (open && !opened) console.log('  No browser could be opened from here.');
   console.log(`  ${opened ? 'Opened in your browser' : 'Click to open it'}: ${dashboard.url}`);
   console.log('  Ctrl+C closes the dashboard.\n');

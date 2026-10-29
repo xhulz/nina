@@ -67,7 +67,12 @@ const COMMANDS = {
     daily: true,
     run: dashboard,
     help: 'the office, the tasks, the pipeline, the pills, the learning and the stats in one page here, its address printed for a click',
-    options: { ...PROJECT, '--port <n>': 'the port to serve it on (default 6463, or any free one)', '--open': 'open it in the system browser too' },
+    options: {
+      ...PROJECT,
+      '--demo': 'an invented project instead, anywhere, its office playing in a loop: to show NINA, no Claude, no tokens',
+      '--port <n>': 'the port to serve it on (default 6463, or any free one)',
+      '--open': 'open it in the system browser too',
+    },
   },
   snapshot: {
     run: snapshot,
