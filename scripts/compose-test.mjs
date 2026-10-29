@@ -294,7 +294,9 @@ const BUDGETS = {
   // sweep as a command, after it came back three times in a day with its cases named. And for an invisible or lookalike
   // character written as its escape, with the command that lists what the tools wrote raw: they decoded four stages' escapes.
   // And for a surviving mutant, equivalent or killed and never left to another gate: one was, which that gate let through.
-  '.claude/agents/implementer.md': 26400,
+  // And for what a test claims to catch, its header and TSDoc too, copied from its own red list: three claims went back
+  // from review, one a mutant red only in the test beside it, two a class wider than the values the row read.
+  '.claude/agents/implementer.md': 26900,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -351,8 +353,10 @@ const BUDGETS = {
   // every file a stage writes kept in its own scratch directory, long output included: two wrote three files at the root.
   // And for its path written out in full by each later call, where a variable does not reach: an implementer kept it
   // in a note at the root. And, where a project has pii, for a leak walk as wide as what the console prints and a
-  // mutant in each slot the check does not name: one project's steps went back six times for one or the other.
-  'CLAUDE.md': 33500,
+  // mutant in each slot the check does not name: one project's steps went back six times for one or the other. And for
+  // a leak test driven by a failure whose raw error holds the value, shown by a control, and a control for each value a
+  // run adds: one proved its mapper on an error that names only the constraint, which no mapper could leak.
+  'CLAUDE.md': 34250,
 };
 
 /**
