@@ -454,7 +454,7 @@ A tier is a named set of the defaults above, in `core/tiers.json`, frozen with e
 | | `high`, the release's own | `medium` | `low` |
 |---|---|---|---|
 | architect | Opus 5.5 · `xhigh` | Opus 5.5 · `xhigh` | Opus 5.5 · `xhigh` |
-| the stages that judge | Opus 5.5 · `high` | Opus 5.5 · `medium` | Sonnet 5.5 · `high` |
+| the stages that judge | Opus 5.5 · `high` | Sonnet 5.5 · `xhigh` | Sonnet 5.5 · `high` |
 | the stages that carry a spec out | Sonnet 5.5 · `xhigh` | Sonnet 5.5 · `high` | Sonnet 5.5 · `medium` |
 | immutable code | Opus 5.5 · `high` | Opus 5.5 · `high` | Opus 5.5 · `high` |
 
@@ -480,15 +480,27 @@ work comes back a round later. `stats` and `runs` already split a stage by model
 planted defects before a project trusts it. `--model` is refused beside `--tier`: it runs every reviewer on
 one model, and the two tiers would differ in effort alone.
 
-The first reading, on 0.81.0 with `--judge` and two runs a tier: the judge found all twelve defects in every
-report of both. Graded by cited line, `low` caught 11 and 8 and `high` 11 and 10, a difference of one defect
-against a spread of three between two runs of one tier. `low` wrote a little over half as much, 3.7k characters
-a report against 6.5k, and once folded two defects into one issue (`archive-not-idempotent-and-swallows-errors`).
-It raised fewer findings the judge called noise, 4 and 5 against 7 and 8, and cost a third: $0.09
-to $0.12 API-equivalent a review against $0.29 to $0.35. Two runs a tier cannot tell a reviewer that misses one
-defect in twelve from one that misses none, and this is one change, every defect of which the reviewer's
-checklist names. What it says is that the cheaper tier's judge is not visibly worse here. It says nothing of
-the stages that carry a spec out, which `low` also moves to `medium` and no eval runs.
+The first reading that ran each review at its spec's effort came on 2026-10-29, with `--judge` and four runs a
+design, the old `medium` from 0.82.0 and the new one from the layers that became 0.83.0. The two readings before
+it, on 0.81.0 and 0.82.0, ran every review at `medium` ([below](#evaluating-a-release)) and compared the models
+alone:
+
+| the stages that judge | caught, graded by line | by the judge | noise | a review | report |
+|---|---|---|---|---|---|
+| Sonnet 5.5 · `high`, `low` | 11, 5, 6, 9: 7.8 | 12.0 | 7.0 | $0.10 | 5.4k |
+| Sonnet 5.5 · `xhigh`, `medium` | 11, 11, 11, 9: 10.5 | 11.3 | 7.3 | $0.22 | 7.4k |
+| Opus 5.5 · `medium`, `medium` until 0.83.0 | 11, 10, 11, 11: 10.8 | 11.8 | 7.0 | $0.32 | 6.6k |
+| Opus 5.5 · `high`, `high` | 11, 11, 11, 11: 11.0 | 12.0 | 8.0 | $0.41 | 7.5k |
+
+The cost is API-equivalent; the eval runs on the login. Every design describes nearly all twelve defects; where
+they part is the line. Sonnet at `high` named every one, and in two of its four runs cited only half of them or fewer
+where they are, a file named without a line in each. At `xhigh` it cited almost as Opus does, at about half Opus's
+price. Opus at `medium` read almost as Opus at `high` for three quarters of the price, which put the old
+`medium` next to `high` rather than between it and `low`. So since 0.83.0 `medium` runs the judges on Sonnet at
+`xhigh`, between the two in cost. The judge credits it least, 11.3, because three of its claims about those
+reports came with a quote the report did not hold, and a claim without its quote is not believed. Four runs a
+design on one change is little: the spread within `low` alone was six defects. Nothing here measures the
+stages that carry a spec out, which `low` and `medium` move to `medium` and `high`, and no eval runs.
 
 ### Sending it to Langfuse: `nina langfuse`
 
@@ -613,8 +625,8 @@ nina eval --release 0.24.0 --dry-run                       # stage, compose and 
 nina eval --regrade <reports dir> --judge                  # read kept reports again, with the judge; no review run
 ```
 
-It runs `claude -p` as the composed reviewer (`--agent reviewer`) in a throwaway copy of the fixture, on the
-login Claude Code already has — a subscription, never a per-token bill: every credential that would bill
+It runs `claude -p` as the composed reviewer (`--agent reviewer`), at the effort its spec names, in a throwaway
+copy of the fixture, on the login Claude Code already has — a subscription, never a per-token bill: every credential that would bill
 per token (or route it through a gateway) is removed from the child's environment unless `--api` asks
 otherwise. The child only reads — a tool allowlist under `--permission-mode dontAsk`, so the reviewer runs
 with the typecheck, lint and `harness:check` its spec mandates denied, the same for every release — loads
@@ -622,6 +634,15 @@ no user settings, so no global hook snapshots the eval into the owner's statisti
 It is not hermetic across machines: user-level agents and skills still load. A run that did not review
 (not logged in, out of turns, `claude` missing) is reported as a failure rather than graded as a review
 that caught nothing.
+
+The effort goes on the command line, as `--effort`, because the CLI does not read it from the spec of its main
+agent. It reads that spec's `model:` and leaves its `effort:` aside, and the transcript of every message says
+so: a reviewer composed at `xhigh` ran at `medium`, the CLI's own default. A subagent dispatched in a session
+does run at its spec's level: in two projects' runs the reviewer ran at `high` under a session set to `xhigh`.
+Until 0.83.0 the eval passed only the model. So every review before it ran at `medium` whatever its release
+said, and no comparison before it measured effort. Tiers that moved only the effort read alike for that
+reason, not because effort moves nothing. A release whose spec names no effort is still run without the flag,
+at the default.
 
 Grading is deterministic and approximate in both directions, which is why every report is kept beside
 it. A cited line goes to the nearest anchor of a defect in its file, within two lines; a citation equally

@@ -18,6 +18,8 @@
  * so running an eval can never start charging an account by accident. The child reads only: the tools
  * it may use are listed and everything else is refused (`--permission-mode dontAsk`), it loads no user
  * settings (so no global hook snapshots the eval into the owner's statistics), and it writes no session.
+ * It runs at the effort the composed spec names, passed as `--effort`: as the main agent `claude -p` reads
+ * a spec's `model:` and not its `effort:`, and until 0.83.0 every review ran at the CLI's own default.
  *
  * Grading is deterministic. A defect with an anchor is caught when the report names its file and a
  * line within two of the anchor's; each reported location is given to the nearest defect in its file,
@@ -38,6 +40,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { composeProject } from './compose.mjs';
+import { frontmatter } from './pills.mjs';
 import { slugFor } from '../paths.mjs';
 import { PROJECTS_ROOT } from '../transcripts.mjs';
 
@@ -451,9 +454,10 @@ function describe(label, graded, total, cost, judged) {
 /**
  * The command a run executes, and the environment it runs in.
  *
- * @param {{model?: string, api?: boolean}} options
+ * @param {{model?: string, api?: boolean, effort?: string}} options - `effort` is the composed spec's own, which
+ *   the CLI does not read from the spec of its main agent.
  */
-export function reviewerCommand({ model, api }) {
+export function reviewerCommand({ model, api, effort }) {
   const env = childEnv(api);
   const args = [
     '-p', PROMPT,
@@ -464,6 +468,7 @@ export function reviewerCommand({ model, api }) {
     '--permission-mode', 'dontAsk',
     '--allowedTools', ...TOOLS,
     ...(model ? ['--model', model] : []),
+    ...(effort ? ['--effort', effort] : []),
   ];
   return { args, env };
 }
@@ -562,7 +567,8 @@ export async function evalCommand(argv, ctx) {
         return 1;
       }
       try {
-        const { args, env } = reviewerCommand(options);
+        const { effort } = frontmatter(readFileSync(join(dir, '.claude', 'agents', 'reviewer.md'), 'utf8')) ?? {};
+        const { args, env } = reviewerCommand({ ...options, effort });
         let report;
         let cost = null;
         if (dry) {
