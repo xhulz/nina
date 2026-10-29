@@ -305,6 +305,28 @@ const REPLAY_MIN_GAP_MS = 500;
 /** How long a replay in a loop rests on its last beat before it plays again from the start: the party is seen out. */
 export const LOOP_REST_MS = 8000;
 
+/** The longest a replay at a scale waits between two beats: a lunch break in the session is not a minute of an empty room. */
+const REPLAY_SCALED_MAX_GAP_MS = 45_000;
+
+/**
+ * How long a replay waits after each beat before the next. Each real gap is squeezed to `REPLAY_MIN_GAP_MS` to
+ * `REPLAY_MAX_GAP_MS`, so hours of a session play in minutes; at a `scale` it is the real gap times the scale instead,
+ * so a run stays at its desk in proportion to how long it worked — the demo's, which an audience watches, sit 20 to 40
+ * seconds where a squeezed replay had them up again in three. The owner speaking passes quickly either way: it moves
+ * nobody across the room, and an answer keeps its wait, or the question it answers would not be seen.
+ *
+ * @param {object[]} beats - The beats in the order they are played.
+ * @param {{scale?: number}} [options] - Replay time per real time.
+ * @returns {number[]} The wait after each beat, in ms.
+ */
+export function replayDelays(beats, { scale } = {}) {
+  return beats.map((beat, k) => {
+    const following = beats[k + 1];
+    const gap = following && following.type !== 'owner' ? following.at - beat.at : 0;
+    return scale ? Math.min(REPLAY_SCALED_MAX_GAP_MS, Math.max(REPLAY_MIN_GAP_MS, gap * scale)) : Math.min(REPLAY_MAX_GAP_MS, Math.max(REPLAY_MIN_GAP_MS, gap));
+  });
+}
+
 /**
  * Each run the ledger saw start, in order: when, at which stage, by which agent once known, whether it was a message
  * to a running agent, when it was refused, and when its verdict ended it. The beats and the timeline read the same.
@@ -629,11 +651,12 @@ const send = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stri
  * anyone watches live. `serveOffice` mounts them at the root; the dashboard (`nina dashboard`) at `/office/`, where the
  * page's relative `events` reaches `/office/events`.
  *
- * @param {{target: string, wanted?: string, replay?: boolean, loop?: boolean, rest?: number}} options - `loop`: a replay
- *   that ends plays again from the start, for an office left on a screen, after resting `rest` ms on its last beat.
+ * @param {{target: string, wanted?: string, replay?: boolean, loop?: boolean, rest?: number, scale?: number}} options - `loop`: a
+ *   replay that ends plays again from the start, for an office left on a screen, after resting `rest` ms on its last
+ *   beat. `scale`: a replay that keeps the session's proportions at that much replay time per real time (`replayDelays`).
  * @returns {{handle: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, path: string) => boolean, close: () => void}}
  */
-export function officeRoutes({ target, wanted, replay = false, loop = false, rest = LOOP_REST_MS }) {
+export function officeRoutes({ target, wanted, replay = false, loop = false, rest = LOOP_REST_MS, scale }) {
   const room = officeRoom(target);
   const graph = parseGraph(readFileSync(join(target, '.claude', 'graph.md'), 'utf8'));
   // A function, so a `$&` or `$'` in a project's name or its owner's is text and not a replacement pattern.
@@ -718,6 +741,7 @@ export function officeRoutes({ target, wanted, replay = false, loop = false, res
     greet(client, state);
     const heard = clock(state.session);
     const beats = officeBeats(state.entries, graph, Number.POSITIVE_INFINITY, heard);
+    const delays = replayDelays(beats, { scale });
     // The timeline as it stood at each beat: cut from the ledger up to that moment, so a replay tells nothing early.
     const known = names(state.entries);
     const look = looks(state.session);
@@ -745,16 +769,12 @@ export function officeRoutes({ target, wanted, replay = false, loop = false, res
       const beat = beats[i];
       send(client.res, 'beat', beat);
       tell(client, tasksAt(beat.at));
-      i += 1;
-      // The owner speaking moves nobody across the room: it passes quickly. An answer keeps its wait, or the question
-      // it answers would not be seen.
-      const quick = i < beats.length && beats[i].type === 'owner';
-      const gap = i < beats.length && !quick ? beats[i].at - beat.at : 0;
       const timer = setTimeout(() => {
         timers.delete(timer);
         next();
-      }, Math.min(REPLAY_MAX_GAP_MS, Math.max(REPLAY_MIN_GAP_MS, gap)));
+      }, delays[i]);
       timers.add(timer);
+      i += 1;
     };
     next();
   };

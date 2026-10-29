@@ -318,9 +318,12 @@ than half the time until a lesson ten days ago and seldom since, so the learning
 Today's session has two tasks. The first goes the whole way, planner to qa, the owner asked a question on the way and
 the reviewer sending it back once while the database gate approves beside it. The second starts while the first
 one's qa is at work. The office plays today's session in a loop, resting eight seconds on the last beat before it
-starts again, for a screen left on: a plain replay ends, and says to reload. Ctrl+C, or the terminal closing, removes
-the scratch directory. Today's last report came in three minutes before the demo was made, so no tab reads a run that
-has not happened yet.
+starts again, for a screen left on: a plain replay ends, and says to reload. It plays at a twentieth of the time the
+session took (`replayDelays` at a `scale`), and each of today's runs lasted seven to thirteen minutes, so each agent
+sits at its desk 20 to 40 seconds and a loop takes about five minutes. A replay of a real session squeezes every gap to
+three seconds at most, which plays hours in minutes. In the demo, though, everyone was up again before anyone watching
+had seen them work. Ctrl+C, or the terminal closing, removes the scratch directory. Today's last report came in three
+minutes before the demo was made, so no tab reads a run that has not happened yet.
 
 The history is written by the writers a real session has, never as hand-written records: the transcripts as Claude
 Code writes them, each run's own with its tool calls, usage and handback, then the snapshot reads them into the store,

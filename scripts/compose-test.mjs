@@ -268,8 +268,9 @@ const BUDGETS = {
   // twentieth of what one project's stages read. And for a sentence dictated about code another step builds, worded
   // as a contract: one read as proof that a guard existed before it did. And for an invisible or lookalike character
   // written as its escape, checked after each write: raw ones in a spec's table were copied raw into the tests. And for
-  // an input the code passes through, given two values across the cases: one value everywhere let a constant pass.
-  '.claude/agents/architect.md': 23750,
+  // an input the code passes through, given two values across the cases: one value everywhere let a constant pass. And
+  // for a behaviour reached from several call sites, pinned at each: rows on one of two catches left seven mutants green.
+  '.claude/agents/architect.md': 24450,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   '.claude/agents/design-reviewer.md': 5150,
