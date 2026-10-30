@@ -297,7 +297,9 @@ const BUDGETS = {
   // And for a surviving mutant, equivalent or killed and never left to another gate: one was, which that gate let through.
   // And for what a test claims to catch, its header and TSDoc too, copied from its own red list: three claims went back
   // from review, one a mutant red only in the test beside it, two a class wider than the values the row read.
-  '.claude/agents/implementer.md': 26900,
+  // And for the clause that finishes a step past its forecast, held to a forecast made first: two implementers in a
+  // day never forecast and finished at twice their size, citing it.
+  '.claude/agents/implementer.md': 27250,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -356,8 +358,9 @@ const BUDGETS = {
   // in a note at the root. And, where a project has pii, for a leak walk as wide as what the console prints and a
   // mutant in each slot the check does not name: one project's steps went back six times for one or the other. And for
   // a leak test driven by a failure whose raw error holds the value, shown by a control, and a control for each value a
-  // run adds: one proved its mapper on an error that names only the constraint, which no mapper could leak.
-  'CLAUDE.md': 34250,
+  // run adds: one proved its mapper on an error that names only the constraint, which no mapper could leak. And for
+  // forbidden values built from the run's inputs, never listed: a spec and four sweeps in a day left values out by hand.
+  'CLAUDE.md': 35000,
 };
 
 /**
