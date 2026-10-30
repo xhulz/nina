@@ -6046,6 +6046,14 @@ const dated = (date, status = 'active') =>
       implementer.includes('finish the step rather than stop mid-way'),
     'compose: the implementer forecasts its step before writing it and stops then, and an overrun found while writing is still finished',
   );
+  // Then three in a day never forecast, finished at twice their size, and cited the clause that finishes a step.
+  expect(
+    implementer.includes('rows, helpers, controls, `fails if` lines and documentation, each with its lines, written in your scratch notes') &&
+      implementer.includes('When the lines you write pass the forecast you made first by more than a quarter, finish the step') &&
+      implementer.includes('That covers a forecast made and found short, never one not made: a run that writes the bulk first has skipped the check') &&
+      !implementer.includes('1.96, 2.1 and 2.18'),
+    'compose: the clause that finishes a step past its forecast covers only a forecast made before the bulk, and without its history',
+  );
   // A sentence dictated about a caller no step had built yet read as proof the guard existed.
   expect(
     patterns.includes('Not a statement about code that is not built yet.') && patterns.includes('it is a contract with its owner named') &&
@@ -6058,9 +6066,21 @@ const dated = (date, status = 'active') =>
   expect(
     privacy.includes('**A test that proves a value stays out matches by containment**') &&
       privacy.includes('where it lists what may be logged, every other value the run carries') &&
-      privacy.includes('each with a control that embeds it in a longer string under an allowed key and must fail the check') &&
+      privacy.includes('Each forbidden value has a control that embeds it in a longer string under an allowed key and must fail the check') &&
       !privacy.includes('missed an amount on a non-enumerable property') && !claude.includes('matches by containment'),
     'compose: a leak check matches by containment over every channel and property, with a control per class, where pii composes and without its history',
+  );
+  // With that standing, a spec needled what read as personal and left a fee and a balance out, and four sweeps in an
+  // afternoon went back for a field, a case, a thin fixture and the package's own normalizer.
+  expect(
+    privacy.includes("every other value the run carries — built from the run's inputs, never listed by hand: the test walks every leaf of its fixtures") &&
+      privacy.includes('which carry what a live run does: every key the source sends, and no slot that holds a value left empty or zero') &&
+      privacy.includes('A text that holds an allowed value is looked for by its other parts too, so a leak that cuts the allowed value out still matches') &&
+      privacy.includes('A value too short for containment to tell apart gets a distinctive fixture, or is matched by equality with its exemption written') &&
+      privacy.includes("the test asserts that no fixture value sits inside another's or inside what a clean run prints") &&
+      privacy.includes("formatted and raw, in any letter case, and as each normalizer of the code's own package leaves it") &&
+      !privacy.includes("14 of a live row's 22 keys") && !claude.includes('never listed by hand'),
+    "compose: a leak check's forbidden values are built from the run's inputs, live in shape, in every case and normal form, where pii composes and without its history",
   );
   // A walk of own keys missed a Map, a symbol key and a nested object, a spy that read only the first argument stayed
   // green, and the silent methods were one list with the rest: learned three times in one project.
