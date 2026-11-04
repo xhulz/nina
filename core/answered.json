@@ -139,5 +139,41 @@
   },
   "2026-10-30-implementer__past-half-again-the-forecast-stop-and-return-blocked": {
     "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-10-31-architect__class-terms-take-a-row-per-member": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-10-31-shared__order-cases-flank-the-group-on-both-sides": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-11-04-architect__a-guard-mutant-is-claimed-only-where-no-other-layer-also-holds": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-11-04-architect__a-needle-list-covers-what-the-code-computes-from-the-inputs": {
+    "in": "surfaces/pii/tree/CLAUDE.md"
+  },
+  "2026-11-04-architect__obsoletes-greps-prose-outside-the-specs-files": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-11-04-implementer__a-claim-says-what-a-run-showed-and-no-more": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-11-04-implementer__past-half-again-the-forecast-stop-and-return-blocked": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-11-04-implementer__the-tsdoc-sweep-regex-needs-a-semicolon-this-repo-omits": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-11-04-implementer__type-alias-fields-get-tsdoc-in-test-stubs-too": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
+  "2026-11-04-qa__the-linked-node-modules-copy-fails-under-the-workers-pool": {
+    "in": "surfaces/edge-cf/tree/.claude/agents/qa.md"
+  },
+  "2026-11-04-shared__an-evasion-no-module-performs-is-ruled-out-in-writing-and-logged": {
+    "in": "core/tree/CLAUDE.md"
+  },
+  "2026-11-04-shared__harness-is-forecast-by-its-declarations": {
+    "in": "core/tree/.claude/agents/architect.md"
   }
 }

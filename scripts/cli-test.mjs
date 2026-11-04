@@ -5060,7 +5060,7 @@ const dated = (date, status = 'active') =>
     ['the re-forecast at its turn', /One that landed more than a quarter over says the steps forecast with it are short\s+by as much: forecast each again at its turn, before it goes out/.test(routed)],
     ['the first round', /write `First round: ~N lines` in its step file with its\s+commit, the count its implementer's first report gave/.test(routed)],
     ['the kind', /from the steps of its `Kind:` where any landed/.test(routed) && (await spec('agents/architect.md')).includes('and say its kind (`Kind: new` for a module of its own, `extends` for a file that exists, `tests` for tests alone)')],
-    ['no trimming to fit', (await spec('agents/implementer.md')).includes('finish the step rather than stop mid-way, and never trim documentation or tests to meet the count')],
+    ['no trimming to fit', (await spec('agents/implementer.md')).includes('finish the step rather than stop mid-way') && (await spec('agents/implementer.md')).includes('Never trim documentation or tests to meet the count')],
     ['the architect only to split', /send the\s+architect only a step the\s+new\s+number puts past\s+400 lines, to be split/.test(routed)],
     ['a rate never multiplied onto another kind\'s', /carries a rate measured on steps of another\s+kind is restated from its own count at its kind's, never multiplied again/.test(routed)],
     ['the commit names its step', /as its step file does \(`<spec> step <n>`\), which is how\s+`nina sizes` finds it/.test(routed)],
@@ -6028,8 +6028,17 @@ const dated = (date, status = 'active') =>
     '  private y: string;',
     'const f = vi.fn<[number], void>();',
     '  send(to: string): Promise<void>;',
+    // A project formatted without semicolons: its members end in none, and the sweep found not one of them.
+    '  undocumented: string',
+    '  payout: {',
+    '  logger: { info: MockInstance; warn: MockInstance }',
+    '  postStarting: async () => {',
+    // A hand-built fake's methods, which end in a comma or carry no colon at all.
+    "  toJSON: () => 'x',",
+    '  toString() {',
+    '  async load(id) {',
   ];
-  const left = ['  amount: 100,', '  owner: { name: 1 },', 'const y = x || {};', 'const z = a && { b: 1 };', 'makeStub({ cents: 1n });', '  expect(a).toBe(b);', '  return a ? b : c;', 'const q: Foo = bar();'];
+  const left = ['  amount: 100,', '  owner: { name: 1 },', '  bank: null,', "  agency: '902817-X',", 'const y = x || {};', 'const z = a && { b: 1 };', 'makeStub({ cents: 1n });', '  expect(a).toBe(b);', '  return a ? b : c;', 'const q: Foo = bar();'];
   await writeFile(join(swept, 'old.ts'), ['export const a = 1;', ...left].join('\n') + '\n');
   // A file whose name has a space in it was split by xargs, and skipped.
   await writeFile(join(swept, 'new stub.test.ts'), flagged.join('\n') + '\n');
@@ -6037,6 +6046,13 @@ const dated = (date, status = 'active') =>
   expect(
     Boolean(sweep) && flagged.every((line) => hits.includes(`new stub.test.ts:${flagged.indexOf(line) + 1}:${line}`)) && !left.some((line) => hits.includes(line)),
     `compose: the implementer's TSDoc sweep is a command, and it lists each line sent back and no value literal — got\n${hits}`,
+  );
+  // A container field went undocumented four times beside its documented members; a literal of plain data needs none.
+  expect(
+    implementer.includes("names — a field that holds a literal as well as the literal's members, which a literal on one line is split to take;") &&
+      implementer.includes('a nested object of plain data is none') &&
+      implementer.includes('so it holds with or without semicolons'),
+    'compose: the sweep names the field that holds a literal beside its members, and leaves plain data alone',
   );
   // Three implementers in a row finished steps far past their forecasts; the third had forecast it before writing on.
   expect(
@@ -6053,6 +6069,16 @@ const dated = (date, status = 'active') =>
       implementer.includes('That covers a forecast made and found short, never one not made: a run that writes the bulk first has skipped the check') &&
       !implementer.includes('1.96, 2.1 and 2.18'),
     'compose: the clause that finishes a step past its forecast covers only a forecast made before the bulk, and without its history',
+  );
+  // With that clause standing, four runs in two days wrote on past their line, and six forecast just under 400 and
+  // finished up to 475: it holds within the lines one run writes, and the cost watch says when a run crosses them.
+  expect(
+    implementer.includes('finish the step rather than stop mid-way — within the ~400 lines one run writes: past them, stop at the next point where what you wrote typechecks and return `BLOCKED`') &&
+      implementer.includes('the cost watch tells you when you cross them. Never trim documentation or tests to meet the count') &&
+      implementer.includes('A forecast already past either limit when made is a `BLOCKED` then, never a step begun') &&
+      implementer.includes("whenever what the step needs grows mid-way — a requirement found, the `fails if` lines a battery's log adds") &&
+      !implementer.includes('between 398 and 475'),
+    'compose: a step past its forecast is finished only within the lines one run writes, a forecast past the line is a BLOCKED, and one is made again as the step grows',
   );
   // A sentence dictated about a caller no step had built yet read as proof the guard existed.
   expect(
@@ -6073,7 +6099,8 @@ const dated = (date, status = 'active') =>
   // With that standing, a spec needled what read as personal and left a fee and a balance out, and four sweeps in an
   // afternoon went back for a field, a case, a thin fixture and the package's own normalizer.
   expect(
-    privacy.includes("every other value the run carries — built from the run's inputs, never listed by hand: the test walks every leaf of its fixtures") &&
+    privacy.includes("every other value the run carries — built from the run's inputs and from what the code computes from them") &&
+      privacy.includes('— never listed by hand: the test walks every leaf of its fixtures') &&
       privacy.includes('which carry what a live run does: every key the source sends, and no slot that holds a value left empty or zero') &&
       privacy.includes('A text that holds an allowed value is looked for by its other parts too, so a leak that cuts the allowed value out still matches') &&
       privacy.includes('A value too short for containment to tell apart gets a distinctive fixture, or is matched by equality with its exemption written') &&
@@ -6081,6 +6108,58 @@ const dated = (date, status = 'active') =>
       privacy.includes("formatted and raw, in any letter case, and as each normalizer of the code's own package leaves it") &&
       !privacy.includes("14 of a live row's 22 keys") && !claude.includes('never listed by hand'),
     "compose: a leak check's forbidden values are built from the run's inputs, live in shape, in every case and normal form, where pii composes and without its history",
+  );
+  // Needles built from the inputs' leaves missed what the code computed from them — a remainder, a debit with its fee —
+  // and a mutant appending one to a thrown error passed every row: three times in two days in one project.
+  expect(
+    privacy.includes("and from what the code computes from them — a sum, a remainder, a fee, got by calling the code's own functions on the fixtures — never listed by hand") &&
+      !privacy.includes("a debit's sum with its fee") && !claude.includes('what the code computes from them'),
+    'compose: the forbidden values include what the code computes from the inputs, got from its own functions, where pii composes and without its history',
+  );
+  // A day's leak sweeps went back round after round, each for a more exotic way past them — a stack hook, a getter, a
+  // prototype swapped and restored — and no module of the code did any. Each had a new issue id, so no cap counted it.
+  const designReviewer = await spec('design-reviewer');
+  expect(
+    claude.includes('A hole is in what ships: a value the code puts, or an edit of its own statements would put, where it must not reach.') &&
+      claude.includes("is neither a hole nor a question for the design while a grep of the project's own source for that construct prints nothing and no dependency it loads in production installs one") &&
+      claude.includes('define a getter that answers the test and the printer differently') &&
+      architect.includes('A way past a test that needs the code under test to work against it is ruled out in writing, not specified: with the grep that shows no module does it, and a one-line follow-up naming the check that would close it') &&
+      claude.includes("the orchestrator lists it among the plan's follow-ups. Once the grep finds one, it blocks.") &&
+      reviewer.includes("A mutation you propose yourself is an edit of the code's own statements, as these are: one that needs the code to work against its test is a note") &&
+      designReviewer.includes('So is a way past a test that needs the code under test to work against it, while a grep') &&
+      router.includes('A note on a way past a test that no module takes (Hard Rule #20) is not carried as work: it goes in a **Follow-ups** list at the end of the plan, made if the plan has none') &&
+      privacy.includes("Each is an edit of the code's own statements — what a call is passed, what an error or an object is built with, a hidden key or a symbol included") &&
+      !claude.includes('restored two microtasks after the throw') && !privacy.includes('restored two microtasks after the throw') &&
+      !claude.includes('what a call is passed, what an error or an object is built with'),
+    "compose: a way past a test that needs the code to work against it is a note while a grep shows no module does so — Hard Rule #20, the reviewers, the router, and pii's mutants where it composes",
+  );
+  // Two projects learned four times each that a row pinned by one member, one flank or one of several layers proves
+  // nothing about the rest; one learned three times that what a change makes false is found by a grep of the whole
+  // tree; and seven of its steps forecast by their rows landed up to 2.4 times their size.
+  expect(
+    architect.includes('A row pins only what alone decides it.') &&
+      architect.includes('gets a row in which it alone makes the difference, beside the mutant that narrows the term to the others') &&
+      architect.includes('puts in the same input a member of the nearest group before it and one of the nearest after, and the thing it places at neither end') &&
+      architect.includes('is claimed only on a row where the others do not already decide the answer, with the one-line reason they do not') &&
+      architect.includes('What the change makes false goes on the list too') &&
+      architect.includes("Find them by a grep of the whole tree — the function's name, the premise's id, the contract's words") &&
+      architect.includes("a test's harness (the helpers its rows call") && architect.includes("never by the rows' prose") &&
+      implementer.includes('Write the harness the rows need first and measure it — `git diff --numstat` for the files it changed, `wc -l` for the ones it made —') &&
+      implementer.includes('A claim that says "each", "only" or "alone" holds for every member it covers') &&
+      implementer.includes('the script compares the first assertion that failed, not only that one did') &&
+      !architect.includes('past 77 cases') && !architect.includes('1.43 to 2.4') && !architect.includes('named it only by its id') &&
+      !implementer.includes('six claims in three days'),
+    'compose: a row pins only what alone decides it, a change lists what it makes false from a grep of the tree, a harness is forecast by its declarations, and a claim of "each" holds for each — without their history',
+  );
+  // qa's copy linked its root node_modules back, and the Workers pool could not find its runner from there: every
+  // stage of one project installed the copy's own instead.
+  const workerQa = await readFile(join(await composed('pager'), '.claude', 'agents', 'qa.md'), 'utf8');
+  const plainQa = await spec('qa');
+  expect(
+    workerQa.includes('stops with "Vitest failed to find the runner". Install the copy\'s own instead, once, from the store and offline') &&
+      workerQa.includes('(`pnpm install --offline --frozen-lockfile` in the copy)') &&
+      plainQa.includes('`ln -s` that one back') && !plainQa.includes('Workers pool'),
+    "compose: where edge-cf composes, qa installs its copy's node_modules offline, which the Workers pool cannot run from linked",
   );
   // A walk of own keys missed a Map, a symbol key and a nested object, a spy that read only the first argument stayed
   // green, and the silent methods were one list with the rest: learned three times in one project.
@@ -6461,6 +6540,58 @@ const dated = (date, status = 'active') =>
   );
   expect(bash('node battery.mjs', 'done\n', { duration_ms: 4 * 60_000 }) === null, 'cost: and one within it is not');
 
+  // A step's size is decided before its code exists, and in one project four runs in two days wrote on past it while
+  // six forecast just under the line and finished as far as 475: an implementer is told, once a round, when what it
+  // wrote into the tree passes the lines one run writes — counted as the snapshot counts them.
+  const written = (agent) => join(projects, 's-cost', 'subagents', `agent-${agent}.jsonl`);
+  let wid = 0;
+  const writes = (...blocks) =>
+    blocks.map((b) => JSON.stringify({ type: 'assistant', message: { id: `w${(wid += 1)}`, usage: { input_tokens: 1, cache_read_input_tokens: 1, output_tokens: 1 }, content: [{ type: 'tool_use', id: `t${wid}`, ...b }] } })).join('\n') + '\n';
+  const body = (n) => `${Array.from({ length: n }, (_, i) => `line ${i}`).join('\n')}\n`;
+  const sized = (agent, extra = {}, stepLines = 400) =>
+    watch({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: agent, agent_type: 'implementer', tool_name: 'Write', ...extra }, { root, warnAt: 0, stepLines });
+  const firstWrites = writes(
+    { name: 'Write', input: { file_path: join(root, 'src', 'a.ts'), content: body(300) } },
+    // Written again: the file holds 250 lines, not 550.
+    { name: 'Write', input: { file_path: join(root, 'src', 'a.ts'), content: body(250) } },
+    // A mirror in the run's scratch directory is not the step.
+    { name: 'Write', input: { file_path: join(projects, 'scratch', 'mirror.mjs'), content: body(900) } },
+    { name: 'Edit', input: { file_path: join(root, 'test', 'a.test.ts'), old_string: 'x', new_string: body(100) } },
+  );
+  for (const agent of ['asize1', 'asize2', 'asize3']) await writeFile(written(agent), firstWrites);
+  expect(sized('asize1') === null, 'size: under the lines one run writes — a file written twice counted once, a scratch mirror not at all — nothing is said');
+  const more = writes({ name: 'MultiEdit', input: { file_path: join(root, 'test', 'a.test.ts'), edits: [{ old_string: 'a', new_string: body(30) }, { old_string: 'b', new_string: body(30) }] } });
+  for (const agent of ['asize1', 'asize2', 'asize3']) await appendFile(written(agent), more);
+  const over = sized('asize1');
+  expect(
+    over?.hookSpecificOutput?.additionalContext?.includes("this round's write calls have put about 410 lines into the tree, an edit's new text counted whole — past the ~400 one implementer run writes") &&
+      over.hookSpecificOutput.additionalContext.includes('Measure what is there now: `git diff --numstat` for the files you changed, `wc -l` for the ones you made.') &&
+      over.hookSpecificOutput.additionalContext.includes('If it is past the limit, stop at the next point where what you have written typechecks, and return `BLOCKED`') &&
+      over.hookSpecificOutput.additionalContext.includes('Never trim documentation or tests to fit') &&
+      over.systemMessage?.includes('implementer asize1 has written about 410 lines this round, past the ~400 one run writes') &&
+      !over.hookSpecificOutput.additionalContext.includes('re-read'),
+    `size: past the lines one run writes, the implementer is told to stop where its code typechecks and hand back the rest, and the person in a line — got ${JSON.stringify(over)}`,
+  );
+  await appendFile(written('asize1'), writes({ name: 'Edit', input: { file_path: join(root, 'src', 'a.ts'), old_string: 'y', new_string: body(50) } }));
+  expect(sized('asize1') === null, 'size: and once, not on every call after');
+  // A run resumed for a fix is a round of its own: it neither inherits the lines of the round before nor stays silent
+  // because that round was told.
+  const said = (role, content) => JSON.stringify({ type: role, message: { role, content } });
+  await appendFile(written('asize1'), `${said('assistant', [{ type: 'tool_use', id: 'hb1', name: 'SubagentHandback', input: { message: 'BLOCKED' } }])}\n${said('user', 'Fix the two rows the reviewer named.')}\n`);
+  await appendFile(written('asize1'), writes({ name: 'Write', input: { file_path: join(root, 'src', 'b.ts'), content: body(60) } }));
+  expect(sized('asize1') === null, 'size: a resumed round starts its count again — 60 lines are not the 470 of two rounds');
+  await appendFile(written('asize1'), writes({ name: 'Write', input: { file_path: join(root, 'src', 'c.ts'), content: body(350) } }));
+  expect(sized('asize1')?.hookSpecificOutput?.additionalContext?.includes('about 410 lines into the tree'), 'size: and is told again when it passes the limit itself');
+  // A path the model spelt in other letters, or through a link, is still inside the project.
+  if (process.platform === 'darwin') {
+    await writeFile(written('asize4'), writes({ name: 'Write', input: { file_path: join(realpathSync(root).toUpperCase(), 'src', 'a.ts'), content: body(401) } }));
+    expect(sized('asize4')?.hookSpecificOutput?.additionalContext?.includes('about 401 lines'), 'size: a path written in other letters on a volume that ignores case is counted in the tree');
+  }
+  expect(
+    sized('asize2', { agent_type: 'reviewer' }) === null && sized('asize3', {}, 0) === null && sized('asize3', {}, Number('{{STEP_LINES}}')) === null,
+    'size: only an implementer is sized, and a limit of 0 or one the vocabulary left unfilled sizes nothing',
+  );
+
   // End to end, through the hook command a composed project runs, at the threshold its profile declares.
   const bed = await sound('plain', 'dev');
   const profilePath = join(bed, '.nina', 'profile.json');
@@ -6494,6 +6625,18 @@ const dated = (date, status = 'active') =>
   expect(
     clippedOut.includes(CLIP_MARK) && clippedOut.includes('8,001 characters'),
     `cost: a composed project's hook clips a shell output past the limit its release states — got ${clippedHook.stdout.slice(0, 300)}${clippedHook.stderr}`,
+  );
+  // And sizes an implementer at the lines its vocabulary gives a run: left out of the composed script, the size watch
+  // would never fire in any project, and every test above would still pass.
+  await writeFile(written('asize5'), writes({ name: 'Write', input: { file_path: join(bed, 'src', 'x.ts'), content: body(401) } }));
+  const sizedHook = spawnSync('sh', ['-c', command ?? 'false'], {
+    input: JSON.stringify({ hook_event_name: 'PostToolUse', session_id: 's-cost', transcript_path: join(projects, 's-cost.jsonl'), agent_id: 'asize5', agent_type: 'implementer', tool_name: 'Write' }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: bed },
+  });
+  expect(
+    JSON.parse(sizedHook.stdout || '{}').hookSpecificOutput?.additionalContext?.includes('about 401 lines into the tree, an edit\'s new text counted whole — past the ~400 one implementer run writes'),
+    `cost: a composed project's hook sizes an implementer at the lines its vocabulary gives a run — got ${sizedHook.stdout.slice(0, 300)}${sizedHook.stderr}`,
   );
 }
 

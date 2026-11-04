@@ -18,15 +18,43 @@
  * Code keeps for the session, and the run sees its first and last lines and where the rest is. And a call
  * that ran past the five minutes a subagent's cache lives makes the next turn write the whole context again,
  * at twelve times a read's price — a quarter of what one project's stages spent — so the run is told then.
+ *
+ * And an implementer is told when the lines its round has written into the tree pass the most one run writes. A
+ * step's size is decided before its code exists, and the rule said so; in one project, in two days, two runs wrote
+ * on past a forecast already over the line, and six more forecast just under it and finished as far as 475.
+ * Counted from the round's own write calls as the snapshot counts them, so runs side by side in one tree are apart.
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { projectGateDir } from './gate.mjs';
-import { CLIP_MARK, contextSize } from './transcripts.mjs';
+import { CLIP_MARK, contextSize, countWrite, roundsOf } from './transcripts.mjs';
 
 /** Where a run's counts are kept between calls, one file per agent. */
 const stateDir = (root) => join(projectGateDir(root), 'cost');
+
+/**
+ * A path as the file system spells it — its links resolved and, on a volume that ignores case, its own case — so a
+ * path the model wrote as `/var/…` or in other letters is still found inside the project. A path no longer there is
+ * spelt from the nearest part of it that is.
+ *
+ * @param {string} path - An absolute path, or one relative to the working directory.
+ * @returns {string}
+ */
+function canonical(path) {
+  let head = resolve(path);
+  const tail = [];
+  for (;;) {
+    try {
+      return join(realpathSync.native(head), ...[...tail].reverse());
+    } catch {
+      const up = dirname(head);
+      if (up === head) return resolve(path);
+      tail.push(basename(head));
+      head = up;
+    }
+  }
+}
 
 /** Runs' counts are dropped this long after their last call: a run does not come back after a week. */
 const KEEP_MS = 7 * 86_400_000;
@@ -164,19 +192,23 @@ export function clipOutput(input, clipAt) {
  * and a warning is due each time the total re-read crosses `warnAt`, then twice it, four times it, and on.
  * A long Bash output is clipped to a file ({@link clipOutput}), and a call that outlived the cache is named.
  *
+ * An implementer whose round has written more lines into the tree than `stepLines` is told, once a round, to measure
+ * what is there and, past the limit, to stop and hand back.
+ *
  * @param {object} input - The PostToolUse hook's input.
- * @param {{root: string, warnAt: number, clipAt?: number, now?: number}} options
+ * @param {{root: string, warnAt: number, clipAt?: number, stepLines?: number, now?: number}} options
  * @returns {object|null} The hook's answer.
  */
-export function watch(input, { root, warnAt, clipAt = 0, now = Date.now() }) {
+export function watch(input, { root, warnAt, clipAt = 0, stepLines = 0, now = Date.now() }) {
   // Only inside a subagent, which is where `agent_id` is set; and an id that could not be a file name is not one.
   if (input?.hook_event_name !== 'PostToolUse' || !/^[A-Za-z0-9_-]{1,64}$/.test(String(input.agent_id ?? ''))) return null;
   // The session's id becomes a directory name below, in the clip's path and the transcript's.
   if (typeof input.transcript_path !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(String(input.session_id ?? ''))) return null;
   const clipped = clipOutput(input, clipAt);
-  const counted = warnAt > 0 ? count(input, { root, warnAt, now }) : null;
+  const sizing = stepLines > 0 && input.agent_type === 'implementer';
+  const counted = warnAt > 0 || sizing ? count(input, { root, warnAt, stepLines: sizing ? stepLines : 0, now }) : null;
   const ran = typeof input.duration_ms === 'number' && input.duration_ms > CACHE_MS ? input.duration_ms : null;
-  if (!clipped && !counted?.due && ran === null) return null;
+  if (!clipped && !counted?.due && !counted?.wrote && ran === null) return null;
   const size = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`);
   const context = [];
   const person = [];
@@ -186,6 +218,14 @@ export function watch(input, { root, warnAt, clipAt = 0, now = Date.now() }) {
         'If what is left is more than one run should carry, stop where your work is whole, hand back what you have, and name what is left, so the orchestrator can send it as its own step. Otherwise finish without widening the work.',
     );
     person.push(`${input.agent_type ?? 'a subagent'} ${input.agent_id.slice(0, 8)} has re-read ${counted.total} tokens of its own context${counted.turn}.`);
+  }
+  if (counted?.wrote) {
+    context.push(
+      `NINA size watch: this round's write calls have put about ${counted.wrote} lines into the tree, an edit's new text counted whole — past the ~${stepLines} one implementer run writes. ` +
+        'Measure what is there now: `git diff --numstat` for the files you changed, `wc -l` for the ones you made. ' +
+        'If it is past the limit, stop at the next point where what you have written typechecks, and return `BLOCKED` with the forecast you made, what is written, and the rest named as its own step. Never trim documentation or tests to fit.',
+    );
+    person.push(`${input.agent_type} ${input.agent_id.slice(0, 8)} has written about ${counted.wrote} lines this round, past the ~${stepLines} one run writes.`);
   }
   if (ran !== null) {
     const minutes = Math.round(ran / 60_000);
@@ -207,19 +247,19 @@ export function watch(input, { root, warnAt, clipAt = 0, now = Date.now() }) {
 }
 
 /**
- * The run's re-read brought up to date from its transcript, and whether a warning is due; null when the
- * transcript is not there.
+ * The run's re-read and the lines it wrote brought up to date from its transcript, and whether a warning is due
+ * for either; null when the transcript is not there.
  *
  * @param {object} input - The PostToolUse hook's input.
- * @param {{root: string, warnAt: number, now: number}} options
- * @returns {{due: boolean, total: string, turn: string, context: number|null}|null}
+ * @param {{root: string, warnAt: number, stepLines: number, now: number}} options - A `warnAt` or `stepLines` of 0 watches nothing of its kind.
+ * @returns {{due: boolean, total: string, turn: string, context: number|null, wrote: number|null}|null} `wrote`, the lines past `stepLines`, once a round.
  */
-function count(input, { root, warnAt, now }) {
+function count(input, { root, warnAt, stepLines, now }) {
   const transcript = join(dirname(input.transcript_path), input.session_id, 'subagents', `agent-${input.agent_id}.jsonl`);
   if (!existsSync(transcript)) return null;
   const dir = stateDir(root);
   const file = join(dir, `${input.agent_id}.json`);
-  let state = { offset: 0, read: {}, warned: 0 };
+  let state = { offset: 0, read: {}, warned: 0, lines: {}, sized: false, round: 1, rounds: {} };
   try {
     state = { ...state, ...JSON.parse(readFileSync(file, 'utf8')) };
   } catch {
@@ -227,8 +267,29 @@ function count(input, { root, warnAt, now }) {
   }
   const { text, to } = gained(transcript, state.offset);
   let last = null;
-  const n = (v) => (typeof v === 'number' ? v : 0);
+  // Only what lands in the tree: a mirror, a battery or a note in the run's scratch directory is not the step.
+  const lines = new Map(Object.entries(state.lines ?? {}));
+  const tree = canonical(root);
+  const inTree = (path) => canonical(resolve(tree, path)).startsWith(tree.endsWith(sep) ? tree : tree + sep);
+  // A run resumed for a fix is a round of its own, sized on its own, as the snapshot counts it.
+  const roundOf = roundsOf(state.rounds ?? {});
   for (const line of text.split('\n')) {
+    const round = roundOf(line);
+    if (round !== state.round) {
+      lines.clear();
+      state.sized = false;
+      state.round = round;
+    }
+    if (stepLines > 0 && /"name":"(Edit|Write|MultiEdit|NotebookEdit)"/.test(line)) {
+      try {
+        for (const block of JSON.parse(line)?.message?.content ?? []) {
+          const path = countWrite(block, lines);
+          if (path !== null && !inTree(path)) lines.delete(path);
+        }
+      } catch {
+        // A torn line loses one write's count.
+      }
+    }
     if (!line.includes('"cache_read_input_tokens"')) continue;
     try {
       const message = JSON.parse(line)?.message;
@@ -248,9 +309,14 @@ function count(input, { root, warnAt, now }) {
   state.at = now;
   const total = Object.values(state.read).reduce((a, b) => a + b, 0);
   let crossed = state.warned;
-  while (total >= warnAt * 2 ** crossed) crossed += 1;
+  while (warnAt > 0 && total >= warnAt * 2 ** crossed) crossed += 1;
   const due = crossed > state.warned;
   state.warned = crossed;
+  state.lines = Object.fromEntries(lines);
+  state.rounds = roundOf.state();
+  const written = [...lines.values()].reduce((sum, n) => sum + n, 0);
+  const wrote = stepLines > 0 && !state.sized && written > stepLines ? written : null;
+  if (wrote !== null) state.sized = true;
   mkdirSync(dir, { recursive: true });
   writeFileSync(file, JSON.stringify(state));
   const size = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${Math.round(v / 1000)}k`);
@@ -259,6 +325,7 @@ function count(input, { root, warnAt, now }) {
     total: `${Math.round(total / 1e6)}M`,
     turn: last === null ? '' : `, and each turn now re-reads about ${size(last)} tokens more`,
     context: typeof state.context === 'number' ? state.context : null,
+    wrote,
   };
 }
 
@@ -278,15 +345,15 @@ function prune(root, now) {
  * The hook: reads the event from stdin, answers on stdout when a warning is due or an output is clipped,
  * and exits 0 whatever happens — a hook that fails must not stop the run it watches.
  *
- * @param {{root: string, warnAt: number, clipAt?: number, stdin?: NodeJS.ReadableStream, stdout?: NodeJS.WritableStream}} options
+ * @param {{root: string, warnAt: number, clipAt?: number, stepLines?: number, stdin?: NodeJS.ReadableStream, stdout?: NodeJS.WritableStream}} options
  * @returns {Promise<number>}
  */
-export async function runCostWatch({ root, warnAt, clipAt = 0, stdin = process.stdin, stdout = process.stdout }) {
+export async function runCostWatch({ root, warnAt, clipAt = 0, stepLines = 0, stdin = process.stdin, stdout = process.stdout }) {
   try {
     const chunks = [];
     for await (const chunk of stdin) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
     const now = Date.now();
-    const answer = watch(JSON.parse(Buffer.concat(chunks).toString('utf8')), { root, warnAt, clipAt, now });
+    const answer = watch(JSON.parse(Buffer.concat(chunks).toString('utf8')), { root, warnAt, clipAt, stepLines, now });
     if (answer) stdout.write(`${JSON.stringify(answer)}\n`);
     if (Math.random() < 0.01) prune(root, now);
   } catch {

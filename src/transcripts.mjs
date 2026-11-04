@@ -124,6 +124,22 @@ const WRITES = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', 
 /** How many lines a text written through an edit tool holds: none for an empty one, a last newline ending one. */
 const linesIn = (text) => (typeof text === 'string' && text.length > 0 ? text.replace(/\n$/, '').split('\n').length : 0);
 
+/**
+ * Counts one write call into a run's lines by file: a `Write` sets its file's count to the lines it wrote, an
+ * edit adds the lines of its new text. The snapshot's `lines_written` and the size watch both count this way.
+ *
+ * @param {object} block - A message's content block.
+ * @param {Map<string, number>} lines - The run's count so far, by the path each call named; updated in place.
+ * @returns {string|null} The path it wrote, or null for a block that writes no file.
+ */
+export function countWrite(block, lines) {
+  const path = block?.type === 'tool_use' ? block.input?.[WRITES[block.name]] : null;
+  if (typeof path !== 'string') return null;
+  const added = { Edit: () => linesIn(block.input.new_string), MultiEdit: () => (Array.isArray(block.input.edits) ? block.input.edits : []).reduce((n, e) => n + linesIn(e?.new_string), 0), NotebookEdit: () => linesIn(block.input.new_source) }[block.name];
+  lines.set(path, block.name === 'Write' ? linesIn(block.input.content) : (lines.get(path) ?? 0) + (added?.() ?? 0));
+  return path;
+}
+
 /** A temporary directory named in a command: what it writes there is scratch, not the tree. */
 const TEMP = /(?:^|[^\w.-])(?:\/private)?\/tmp\/|\/var\/folders\/|\$\{?TMPDIR\b|\bmktemp\b|\/scratchpad\b/;
 
@@ -552,11 +568,15 @@ export const saidToAgent = (row) => {
  * The snapshot, the context sent to Langfuse and `learn --deep` all read rounds through this, so the three
  * cannot disagree about where one ends. Only a line that could open a round or close one is parsed.
  *
- * @returns {(line: string) => number} Called on each line in order; returns the round it belongs to.
+ * A reader that sees a transcript a piece at a time — the cost watch, on each call — starts from where the
+ * last piece left it, which the returned function's `state()` gives.
+ *
+ * @param {{round?: number, reported?: boolean}} [from] - Where an earlier reading stopped.
+ * @returns {((line: string) => number) & {state: () => {round: number, reported: boolean}}} Called on each line in order; returns the round it belongs to.
  */
-export function roundsOf() {
-  let round = 1;
-  let reported = false;
+export function roundsOf(from = {}) {
+  let round = typeof from.round === 'number' ? from.round : 1;
+  let reported = from.reported === true;
   const parse = (line) => {
     try {
       return JSON.parse(line);
@@ -564,7 +584,7 @@ export function roundsOf() {
       return null;
     }
   };
-  return (line) => {
+  const of = (line) => {
     if (reported && line.includes('"user"') && saidToAgent(parse(line))) {
       round += 1;
       reported = false;
@@ -572,6 +592,8 @@ export function roundsOf() {
     if (line.includes('SubagentHandback') && handsBack(parse(line))) reported = true;
     return round;
   };
+  of.state = () => ({ round, reported });
+  return of;
 }
 
 /**
@@ -934,11 +956,8 @@ async function attachAgentDetail(projectDir, dispatches) {
         if (/"name":"(Edit|Write|MultiEdit|NotebookEdit)"/.test(line)) {
           try {
             for (const block of JSON.parse(line)?.message?.content ?? []) {
-              const path = block?.type === 'tool_use' ? block.input?.[WRITES[block.name]] : null;
-              if (typeof path !== 'string') continue;
-              round.written.add(path);
-              const added = { Edit: () => linesIn(block.input.new_string), MultiEdit: () => (Array.isArray(block.input.edits) ? block.input.edits : []).reduce((n, e) => n + linesIn(e?.new_string), 0), NotebookEdit: () => linesIn(block.input.new_source) }[block.name];
-              round.lines.set(path, block.name === 'Write' ? linesIn(block.input.content) : (round.lines.get(path) ?? 0) + (added?.() ?? 0));
+              const path = countWrite(block, round.lines);
+              if (path !== null) round.written.add(path);
             }
           } catch {
             // A torn line loses one edit, not the run's.
