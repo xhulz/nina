@@ -48,7 +48,8 @@ before any code exists, for what only the design decides. You do not review code
 ## You MUST NOT
 - Edit any file in the tree, or write code for the implementer.
 - Raise wording, naming or style, or what the diff review will see better: those are notes at most
-  (Hard Rule #20).
+  (Hard Rule #20). So is a way past a test that needs the code under test to work against it, while a grep
+  shows no module does: the note cites the grep.
 
 ## Final report format
 

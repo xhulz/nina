@@ -270,10 +270,15 @@ const BUDGETS = {
   // written as its escape, checked after each write: raw ones in a spec's table were copied raw into the tests. And for
   // an input the code passes through, given two values across the cases: one value everywhere let a constant pass. And
   // for a behaviour reached from several call sites, pinned at each: rows on one of two catches left seven mutants green.
-  '.claude/agents/architect.md': 24450,
+  // And for a row that pins only what alone decides it — each member of a class, both flanks of an order, a guard's
+  // mutant where no other layer holds — learned three and four times by two projects; for what a change makes false, found by
+  // a grep of the whole tree; for a test's harness forecast by its declarations: seven steps landed up to 2.4 times theirs;
+  // and for a way past a test that needs the code to work against it, ruled out with its grep rather than specified.
+  '.claude/agents/architect.md': 26600,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
-  '.claude/agents/design-reviewer.md': 5150,
+  // And for a way past a test that needs the code under test to work against it, a note while no module does so.
+  '.claude/agents/design-reviewer.md': 5250,
   // Raised for what a D1 project read in its migration tool's source: the SQL D1 runs is not the file as written.
   // And for Hard Rule #20's line: a rejection holds only what blocks.
   '.claude/agents/dba.md': 13500,
@@ -298,19 +303,25 @@ const BUDGETS = {
   // And for what a test claims to catch, its header and TSDoc too, copied from its own red list: three claims went back
   // from review, one a mutant red only in the test beside it, two a class wider than the values the row read.
   // And for the clause that finishes a step past its forecast, held to a forecast made first: two implementers in a
-  // day never forecast and finished at twice their size, citing it.
-  '.claude/agents/implementer.md': 27250,
+  // day never forecast and finished at twice their size, citing it. And for a TSDoc sweep that finds a member without a
+  // semicolon, where it had found none in a project formatted without them; for a claim of "each", "only" or "alone"
+  // held to every member, and a test's harness measured before its rows. And for the clause that finishes a step held
+  // within the lines one run writes, and a forecast made again as a step grows: four runs wrote on past it in two days.
+  // And for a fake's methods in the sweep, an arrow or braces where a member has a colon: both forms had gone unseen.
+  '.claude/agents/implementer.md': 28550,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
-  // overwrite-and-restore. And for running every mutation from one script.
-  '.claude/agents/qa.md': 14050,
+  // overwrite-and-restore. And for running every mutation from one script. And, where a project has edge-cf, for the
+  // copy's node_modules installed rather than linked: the Workers pool could not find its runner through the link.
+  '.claude/agents/qa.md': 14450,
   // Raised for the same profile, which composes every reviewer slot but money's and blockchain's; and to check the
   // rules above — the mutations the implementer ran, a filter's adversarial rows, a mirrored parse's whole path —
   // and a case that skips the code that judges, and a citation that resolves without saying the sentence. And for
-  // Hard Rule #20: notes kept apart from what blocks. And for TSDoc on what a diff changes, not only what it adds.
-  '.claude/agents/reviewer.md': 21700,
+  // Hard Rule #20: notes kept apart from what blocks. And for TSDoc on what a diff changes, not only what it adds. And
+  // for the mutations a reviewer proposes, edits of the code's own statements: one project's went round after round.
+  '.claude/agents/reviewer.md': 21950,
   '.claude/agents/secops.md': 12500,
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
@@ -334,7 +345,8 @@ const BUDGETS = {
   // rate, never multiplied again: one project's steps carried three rates of another kind, at ×2.54 of their count.
   // And for a dispatch named in words anyone understands before its step's id: the plan's ids alone, beside every
   // agent at work, told the owner watching nothing of what each was doing.
-  '.claude/router.md': 19900,
+  // And for a note on a way past a test no module takes, kept among the plan's follow-ups rather than carried as work.
+  '.claude/router.md': 20200,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
@@ -360,7 +372,9 @@ const BUDGETS = {
   // a leak test driven by a failure whose raw error holds the value, shown by a control, and a control for each value a
   // run adds: one proved its mapper on an error that names only the constraint, which no mapper could leak. And for
   // forbidden values built from the run's inputs, never listed: a spec and four sweeps in a day left values out by hand.
-  'CLAUDE.md': 35000,
+  // And for Hard Rule #20's hole, in what ships: a way past a test that needs the code to work against it is a note while
+  // no module does so — one project's leak sweeps went back round after round, each for a more exotic one.
+  'CLAUDE.md': 36200,
 };
 
 /**

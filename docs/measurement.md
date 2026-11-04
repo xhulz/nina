@@ -376,6 +376,24 @@ which counts the clipped outputs and holds none. And a call whose
 its context again, with the size the transcript last gave — and to the person in a line, so the wait that cost it is
 seen while there is still a run to change.
 
+The same reading of the transcript watches an implementer's size. A step's lines are decided before its code
+exists — the architect forecasts them, the implementer forecasts again before the bulk and returns `BLOCKED` past
+half again the step's `Size:` or `STEP_LINES` — and with that standing, in one project, four runs in two days wrote
+on past it: two had forecast past the line before the bulk, and two counted their `fails if` lines and comments at
+half or less, one never forecasting again as its claims grew. Six more forecast just under 400 and, through the clause
+that finishes a step found longer than its forecast, landed between 398 and 475. That clause now holds only within
+`STEP_LINES`, and the watch is what says when a run crosses it. It counts each round's own write calls with the
+snapshot's `countWrite` — a `Write` sets its file's count, an edit adds its new text's lines — and starts again when the
+run is resumed, at the line `roundsOf` opens a round with, as the snapshot does. It keeps only the paths inside the
+project, each spelt as the file system spells it (links resolved, and the volume's own case), so a mirror or a battery
+in the scratch directory is not the step and a path written in other letters still is. The first time a round's total
+passes `STEP_LINES` it tells the run to measure what is there (`git diff --numstat`, `wc -l` on new files) and, past
+the limit, to stop where its code typechecks and return `BLOCKED` with the rest named as its own step, never trimming
+documentation or tests; and it tells the person in a line. Counted from the run's transcript, not from `git diff`, two
+implementers side by side in one tree are not summed. An edit's new text is counted whole, not net of what it replaced,
+so the count leans high on a file edited many times — hence the measuring first; and a file written through the shell
+is not counted at all, as the snapshot marks such a round unmeasured. It is a signal read once a round, not a gate.
+
 ### Which model a stage ran on
 
 A spec's `model:` is the one choice in the harness that moves cost by an order of magnitude, and until

@@ -7,8 +7,9 @@
  * turn now costs and to hand back what is left if it is more than one run should carry, and tells the
  * person in one line. A shell output longer than {{OUTPUT_CLIP}} characters goes to a file, and the run sees
  * its first and last lines and where the rest is; a call that ran past the five minutes the run's cache
- * lives is named to it. It keeps counts only, under ~/.nina/gate/, and lets every call through if anything
- * goes wrong.
+ * lives is named to it. An implementer that has written more than {{STEP_LINES}} lines into the tree is told
+ * once to stop where its code typechecks and hand back the rest as a step of its own. It keeps counts only,
+ * under ~/.nina/gate/, and lets every call through if anything goes wrong.
  *
  * The mechanism lives in the NINA package; this file only says which project it watches, and from what.
  */
@@ -24,4 +25,4 @@ for await (const chunk of process.stdin) chunks.push(chunk);
 const raw = Buffer.concat(chunks).toString('utf8');
 if (!/"agent_id"\s*:\s*"[^"]/.test(raw)) process.exit(0);
 const { runCostWatch } = await import('@xhulz/nina/cost');
-process.exitCode = await runCostWatch({ root: resolve(dirname(dirname(fileURLToPath(import.meta.url)))), warnAt: Number('{{RUN_READ_WARN}}') * 1e6, clipAt: Number('{{OUTPUT_CLIP}}'), stdin: Readable.from([raw]) });
+process.exitCode = await runCostWatch({ root: resolve(dirname(dirname(fileURLToPath(import.meta.url)))), warnAt: Number('{{RUN_READ_WARN}}') * 1e6, clipAt: Number('{{OUTPUT_CLIP}}'), stepLines: Number('{{STEP_LINES}}'), stdin: Readable.from([raw]) });
