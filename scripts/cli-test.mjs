@@ -7412,14 +7412,14 @@ await release();
   expect(onLogin.args.includes('dontAsk') && onLogin.args.includes('--no-session-persistence') && onLogin.args.join(' ').includes('--setting-sources project'), 'eval: the child reads only, loads no user settings, and writes no session');
 
   // End to end without a model: the fixture stages, composes, and the canned report is graded.
-  const { status, out } = run(['eval', '--release', '0.24.0', '--dry-run', '--keep'], { loud: true });
+  const { status, out } = run(['eval', '--release', '0.24.0', '--case', 'reviewer', '--dry-run', '--keep'], { loud: true });
   expect(status === 0 && out.includes('caught 4/12') && out.includes('never caught:'), `eval: a dry run stages the fixture and grades the sample report — got ${out}`);
   const kept = /staged in (\S+);/.exec(out)?.[1];
   const changed = kept ? spawnSync('git', ['status', '--porcelain'], { cwd: kept, encoding: 'utf8' }).stdout.replace(/\n$/, '').split('\n') : [];
   expect(changed.length === 5 && changed.every((l) => l.startsWith(' M src/')), `eval: the reviewer's diff is the change alone, the composed harness ignored — got ${changed.join(' | ')}`);
   if (kept) await rm(kept, { recursive: true, force: true });
   // A release at two tiers is two arms: each composes its reviewer at its tier, and the second is read against the first.
-  const tiered = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'medium', '--tier', 'high', '--dry-run', '--keep'], { loud: true });
+  const tiered = run(['eval', '--release', 'dev', '--case', 'reviewer', '--tier', 'low', '--tier', 'medium', '--tier', 'high', '--dry-run', '--keep'], { loud: true });
   const armDirs = Object.fromEntries([...tiered.out.matchAll(/dry run — (\S+) staged in (\S+);/g)].map((m) => [m[1], m[2]]));
   const specAt = async (arm, field) => new RegExp(`^${field}: (.*)$`, 'm').exec(await readFile(join(armDirs[arm] ?? '/nonexistent', '.claude', 'agents', 'reviewer.md'), 'utf8').catch(() => ''))?.[1];
   const reviewerAt = (arm) => specAt(arm, 'model');
@@ -7439,6 +7439,96 @@ await release();
   for (const d of Object.values(armDirs)) await rm(d, { recursive: true, force: true });
   const pinned = run(['eval', '--release', 'dev', '--tier', 'low', '--tier', 'high', '--model', 'claude-sonnet-5-5', '--dry-run'], { loud: true });
   expect(pinned.status === 2 && pinned.out.includes('--model runs every reviewer on one model'), `eval: --model beside --tier is refused — got ${pinned.out}`);
+
+  // Both tiers caught all twelve defects of the first case, which was invented for the eval: the second is made of
+  // what reviewers in a project sent back, a step of tests whose rows pass on the code and on the mutant each exists
+  // to catch. Every case runs unless --case names some, each graded on its own and summed.
+  const { evalCases } = await import('../src/commands/eval.mjs');
+  const rows = plantedDefects(join(ROOT, 'evals', 'test-rows'));
+  expect(
+    evalCases(ROOT).cases.map((c) => c.name).join() === 'reviewer,test-rows' && evalCases(ROOT, ['nope']).error?.includes('no eval case named nope') &&
+      rows.length === 7 && rows.every((d) => d.file === 'src/lending/loans.test.ts' && d.line > 0) &&
+      reviewerCommand({ spec: evalCases(ROOT, ['test-rows']).cases[0].spec }).args.join(' ').includes('against the spec at .claude/plans/specs/lending-tests.md'),
+    `eval: each directory under evals/ with planted defects is a case, reviewed against its own spec — got ${JSON.stringify(evalCases(ROOT))}`,
+  );
+  // A report names a file once and then cites its lines bare, `(:77)`: those are lines of the file it named last, and
+  // of no planted file when the last it named was another. One review that did so was graded 1/7 and judged 7/7.
+  const bare = (lines) => grade(['VERDICT: REJECTED', 'ISSUES: x', ...lines].join('\n'), rows).caught.sort().join();
+  expect(
+    bare(['- `src/lending/loans.test.ts:27` one kind', '- (`:77`) a hand list']) === 'kind-one-value,reasons-hand-list' &&
+      bare(['- `src/lending/loans.test.ts:27` one kind', '- see `loans.ts:52`', '- (`:77`) a hand list']) === 'kind-one-value' &&
+      bare(['- at 10:30, (`:77`)']) === '',
+    'eval: a bare line citation is read against the file the report named last, and against no other',
+  );
+  // A review cites a row as its block, from where it starts — one counted two lines short, `:52-56`, `:65-68`,
+  // `:73-77` — and graded against the planted line alone it read as missing three defects it named.
+  expect(
+    bare(['- `src/lending/loans.test.ts:52-56` lost is never moved', '- `src/lending/loans.test.ts:65-68` equal fees', '- `src/lending/loans.test.ts:73-77` a hand list']) ===
+      'equal-fees,reasons-hand-list,refusal-one-direction',
+    'eval: a row cited as its block, from where the block starts, is that row\'s defect',
+  );
+  expect(fixtureDiff(join(ROOT, 'evals', 'test-rows')).includes("+    const agreed = { dispatch: 150, intake: 150 };"), 'eval: the change the judge is shown holds the file it adds');
+  const both = run(['eval', '--release', 'dev', '--dry-run', '--keep'], { loud: true });
+  const caseDirs = Object.fromEntries([...both.out.matchAll(/dry run — (\S+) · dev staged in (\S+);/g)].map((m) => [m[1], m[2]]));
+  const addedOnly = caseDirs['test-rows'] ? spawnSync('git', ['status', '--porcelain'], { cwd: caseDirs['test-rows'], encoding: 'utf8' }).stdout.trim() : '';
+  const shownInDiff = caseDirs['test-rows'] ? spawnSync('git', ['diff', '--stat'], { cwd: caseDirs['test-rows'], encoding: 'utf8' }).stdout : '';
+  expect(
+    both.status === 0 && both.out.includes('12 in reviewer, 7 in test-rows planted defects') && both.out.includes('reviewer · dev: caught 4.0/12') &&
+      both.out.includes('test-rows · dev: caught 3.0/7') && both.out.includes('every case · dev: caught 7.0/19') &&
+      addedOnly === 'A src/lending/loans.test.ts' && shownInDiff.includes('loans.test.ts'),
+    `eval: every case runs, each graded on its own and summed, and a file the change adds is in the diff the reviewer reads — got ${both.out} / ${addedOnly}`,
+  );
+  for (const d of Object.values(caseDirs)) await rm(d, { recursive: true, force: true });
+  // Each defect of the second case is real, and stays so as the fixture changes: the planted test passes on the code
+  // and on the defect's mutant, and the row it lacks fails on the mutant and passes on the code — run with Node's own
+  // TypeScript under a stand-in for vitest, since the fixture installs nothing.
+  const [major, minor] = process.versions.node.split('.').map(Number);
+  if (major > 22 || (major === 22 && minor >= 6)) {
+    const caseDir = join(ROOT, 'evals', 'test-rows');
+    const { defects: declared } = JSON.parse(await readFile(join(caseDir, 'defects.json'), 'utf8'));
+    const source = await readFile(join(caseDir, 'base', 'src', 'lending', 'loans.ts'), 'utf8');
+    const planted = (await readFile(join(caseDir, 'after', 'src', 'lending', 'loans.test.ts'), 'utf8')).replace("from './loans.js';", "from './loans.ts';\nimport { REFUSALS } from './loans.ts';");
+    const stand = [
+      'let failed = 0;',
+      'export const describe = (name, body) => body();',
+      'export const it = (name, body) => { try { body(); } catch { failed += 1; } };',
+      'const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);',
+      "const within = (a, b) => (typeof b !== 'object' || b === null ? Object.is(a, b) : Object.keys(b).every((k) => a != null && within(a[k], b[k])));",
+      'const must = (ok) => { if (!ok) throw new Error(); };',
+      'export const expect = (a) => ({ toBe: (b) => must(Object.is(a, b)), toEqual: (b) => must(same(a, b)), toMatchObject: (b) => must(within(a, b)), toBeGreaterThan: (b) => must(a > b), toBeGreaterThanOrEqual: (b) => must(a >= b) });',
+      "process.on('exit', () => { process.exitCode = failed ? 1 : 0; });",
+    ].join('\n');
+    const green = async (code, test) => {
+      const dir = await scratch();
+      await mkdir(join(dir, 'node_modules', 'vitest'), { recursive: true });
+      await writeFile(join(dir, 'node_modules', 'vitest', 'package.json'), '{"name":"vitest","type":"module","main":"index.js"}');
+      await writeFile(join(dir, 'node_modules', 'vitest', 'index.js'), stand);
+      await writeFile(join(dir, 'package.json'), '{"type":"module"}');
+      await writeFile(join(dir, 'loans.ts'), code);
+      await writeFile(join(dir, 'loans.test.ts'), test);
+      return spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', 'loans.test.ts'], { cwd: dir, encoding: 'utf8' }).status === 0;
+    };
+    const withRow = (row) => `${planted}\nit('the row it lacks', () => { ${row} });\n`;
+    const proofs = [];
+    for (const d of declared.filter((x) => x.mutant)) {
+      const mutated = source.replace(d.mutant.from, d.mutant.to);
+      proofs.push({
+        id: d.id,
+        applies: mutated !== source && d.mutant.file === 'src/lending/loans.ts',
+        survives: await green(mutated, planted),
+        caught: !(await green(mutated, withRow(d.row))),
+        holds: await green(source, withRow(d.row)),
+      });
+    }
+    expect(
+      (await green(source, planted)) && proofs.length === 6 && proofs.every((p) => p.applies && p.survives && p.caught && p.holds),
+      `eval: every test-rows defect is real — its mutant passes the planted test, and the row it lacks catches it and passes on the code — got ${JSON.stringify(proofs)}`,
+    );
+  } else {
+    console.log(`  · eval: the test-rows mutants run TypeScript with Node's own types, from 22.6; not proved on ${process.version}`);
+  }
+  const unknownCase = run(['eval', '--release', 'dev', '--case', 'nope', '--dry-run'], { loud: true });
+  expect(unknownCase.status === 2 && unknownCase.out.includes('the cases are reviewer, test-rows'), `eval: a case that does not exist is refused, naming those that do — got ${unknownCase.out}`);
 
   // Nothing an eval run leaves behind: counted before any of them, so a leak anywhere below shows.
   const leftovers = async () => (await readdir(tmpdir())).filter((f) => /^nina-eval-/.test(f));
@@ -7469,15 +7559,15 @@ await release();
   const every = (found, evidence) => defects.map((d) => ({ id: d.id, found, evidence }));
 
   await answer('review', { type: 'result', subtype: 'success', is_error: false, result: sample, total_cost_usd: 0.5 });
-  const ok = nina('--release', '0.24.0', '--reports', reportsDir);
+  const ok = nina('--release', '0.24.0', '--case', 'reviewer', '--reports', reportsDir);
   expect(ok.status === 0 && ok.stdout.includes('caught 4/12') && ok.stdout.includes('$0.50 API-equivalent'), `eval: a real run's JSON is graded and its cost shown — got ${ok.stdout}${ok.stderr}`);
   const [reviewCall] = await calls();
   expect(reviewCall && !reviewCall.key && reviewCall.args.includes('--agent'), `eval: the reviewer runs with no per-token key in reach — got ${JSON.stringify(reviewCall)}`);
   await answer('review', { type: 'result', subtype: 'error_max_turns', is_error: true, result: '' });
-  const failed = nina('--release', '0.24.0', '--reports', reportsDir);
+  const failed = nina('--release', '0.24.0', '--case', 'reviewer', '--reports', reportsDir);
   expect(failed.status === 1 && failed.stderr.includes('error_max_turns') && !failed.stdout.includes('caught 0/12'), `eval: a run that did not review is a failure, not a review that caught nothing — got ${failed.stdout}${failed.stderr}`);
   await answer('review', { type: 'result', subtype: 'success', is_error: false, result: '  ' });
-  const empty = nina('--release', '0.24.0', '--reports', reportsDir);
+  const empty = nina('--release', '0.24.0', '--case', 'reviewer', '--reports', reportsDir);
   expect(empty.status === 1 && empty.stderr.includes('empty review'), `eval: an empty review is a failure too — got ${empty.stdout}${empty.stderr}`);
   expect(runFailure({ error: Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }) }) === '`claude` is not on the PATH', 'eval: a missing claude is said plainly');
 
@@ -7501,6 +7591,18 @@ await release();
   expect(uncalled === null, `eval: an answer that leaves a planted defect uncalled is no judgement, not a zero — got ${uncalled}`);
   expect(readJudgement({ defects: every('true', 'x'), findings: [] }, defects, sample) === null, 'eval: a found that is not a boolean is no judgement either');
   expect(readJudgement('I think it found most of them.', defects, sample) === null, 'eval: an answer that is not the JSON asked for is no judgement');
+  // A quote may leave out what lies between its pieces, never rewrite them: one judge joined two verbatim pieces with
+  // "...", and a review that named the defect was counted as not having done so.
+  const elided = (evidence) => readJudgement({ defects: every(false, '').map((d) => (d.id === 'owner-check' ? { ...d, found: true, evidence } : d)), findings: [] }, defects, sample);
+  expect(
+    elided('`archiveNote` checks that the note exists ... Add the owner check')?.found.join() === 'owner-check' &&
+      elided('Add the owner check … `archiveNote` checks that the note exists')?.unsupported === 1 &&
+      elided('`archiveNote` checks that the note exists ... a sentence the report never wrote')?.unsupported === 1 &&
+      elided("Add the owner check `getNote` has. `services/notes.ts:45` — `setArchived(id, !row.archived)` toggles")?.found.join() === 'owner-check' &&
+      elided("- `services/notes.ts:45` — `setArchived(id, !row.archived)` toggles")?.found.join() === 'owner-check' &&
+      elided('VERDICT ... toggles')?.unsupported === 1 && elided('a ... e')?.unsupported === 1,
+    'eval: a quote of pieces joined by an ellipsis, or of bullets with or without their marks, is believed when each piece is words of the report, in its order, and only then',
+  );
 
   // End to end: the control runs once, every report is judged with no tools and a schema, and a judge
   // that agrees with an empty report marks its own numbers suspect.
@@ -7517,13 +7619,33 @@ await release();
   const lenient = nina('--regrade', kept_, '--judge');
   expect(lenient.stdout.includes('the judge agrees too easily'), `eval: a judge that finds defects in a report that found nothing is called suspect — got ${lenient.stdout}`);
   await answer('review', { type: 'result', subtype: 'success', is_error: false, result: sample, total_cost_usd: 0.5 });
-  const suspectRun = nina('--release', '0.24.0', '--judge', '--reports', reportsDir);
+  const suspectRun = nina('--release', '0.24.0', '--case', 'reviewer', '--judge', '--reports', reportsDir);
   expect(suspectRun.stdout.includes('(1 of 1 judged, suspect)'), `eval: and the release's summary carries the doubt beside the judge's number — got ${suspectRun.stdout}`);
   await answer('judge', { type: 'result', subtype: 'success', is_error: false, result: 'no JSON here' });
   const badJudge = nina('--regrade', kept_, '--judge');
   expect(badJudge.stdout.includes('judge failed') && badJudge.stdout.includes('caught 4/12'), `eval: a judge that fails is said to have failed, and the grading stands — got ${badJudge.stdout}`);
   const plainRegrade = nina('--regrade', kept_);
   expect(plainRegrade.status === 0 && plainRegrade.stdout.includes('caught 4/12') && !plainRegrade.stdout.includes('judge'), 'eval: --regrade without --judge makes no call');
+  // A report is kept under its case's name, and read again against that case's defects.
+  const byCase = await scratch();
+  await writeFile(join(byCase, 'test-rows--0.89.0-1.md'), await readFile(join(ROOT, 'evals', 'test-rows', 'sample-report.md'), 'utf8'));
+  await writeFile(join(byCase, 'reviewer--0.89.0-1.md'), sample);
+  const regradedByCase = nina('--regrade', byCase);
+  const onlyRows = nina('--regrade', byCase, '--case', 'test-rows');
+  expect(
+    regradedByCase.status === 0 && /test-rows--0\.89\.0-1: REJECTED · caught 3\/7/.test(regradedByCase.stdout) && /reviewer--0\.89\.0-1: REJECTED · caught 4\/12/.test(regradedByCase.stdout) &&
+      onlyRows.stdout.includes('caught 3/7') && !onlyRows.stdout.includes('caught 4/12'),
+    `eval: --regrade grades each kept report against its own case, and --case narrows it — got ${regradedByCase.stdout}${regradedByCase.stderr} / ${onlyRows.stdout}`,
+  );
+  // One named before there were cases is the first case's; a directory with none of the cases asked for says so.
+  const flatNamed = await scratch();
+  await writeFile(join(flatNamed, '0.89.0-1.md'), sample);
+  const flatRead = nina('--regrade', flatNamed);
+  const noneOfThem = nina('--regrade', flatNamed, '--case', 'test-rows');
+  expect(
+    /0\.89\.0-1: REJECTED · caught 4\/12/.test(flatRead.stdout) && noneOfThem.status === 1 && noneOfThem.stderr.includes('is of test-rows'),
+    `eval: a report named before cases is the first case's, and a directory with none of the cases asked for says so — got ${flatRead.stdout} / ${noneOfThem.stderr}`,
+  );
   const dryJudge = nina('--regrade', kept_, '--judge', '--dry-run');
   expect(dryJudge.stdout.includes('judge skipped (dry run)') && !dryJudge.stdout.includes('control'), `eval: a dry run spends nothing, even with --judge — got ${dryJudge.stdout}`);
   expect(nina('--regrade', join(kept_, 'nowhere')).status === 1, 'eval: --regrade of a directory with no reports fails');

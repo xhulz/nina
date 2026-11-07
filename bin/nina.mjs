@@ -209,6 +209,7 @@ const COMMANDS = {
     help: "does a release's reviewer catch more planted defects than another's? runs on the login",
     options: {
       '--release <version>': 'a release to measure; give two to compare them',
+      '--case <name>': 'one of the changes under evals/ to review; every one when none is named',
       '--repeat <n>': 'runs per release',
       '--model <id>': 'the model the reviewer runs on',
       '--tier <level>': 'compose each release at this tier; give two to compare them',
