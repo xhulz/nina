@@ -6173,6 +6173,37 @@ const dated = (date, status = 'active') =>
       !claude.includes('Reflect.ownKeys'),
     'compose: a leak walk reads what the console prints, recursively, symbols and holders included, with every forbidden method counted at zero, where pii composes',
   );
+  // Six spied methods missed `dir` and `dirxml`, which print through none of them; then the spy helper's own test
+  // checked four keys, and a helper that skipped `error` passed it. Learned three times in one project.
+  expect(
+    privacy.includes('It spies every function-valued key of the console, own and inherited but `constructor`, never a remembered list') &&
+      privacy.includes("and asserts the list of keys it built is not empty and that, while the spies are installed, each key's value is not the one it replaced, judged by identity and never by calling it; its control runs over the same list.") &&
+      !privacy.includes('which print through none of them') && !claude.includes('function-valued key of the console'),
+    'compose: a silent-console row spies every function-valued key of the console, own and inherited, and asserts each is replaced, where pii composes — without its history',
+  );
+  // A fixture held one receipt kind, every rail change ran one way, and two fees were equal in both fixtures: each
+  // left green the mutant that ignored, narrowed or swapped them, three times in one day.
+  expect(
+    architect.includes('An input the code decides by — a kind, a direction, a field it branches on or prices from — is listed from the code before the rows and takes two or more values, as an input it passes through does.') &&
+      architect.includes('Two inputs a version could swap — two fees, two limits — hold different values in at least one case;') &&
+      architect.includes('a change refused in more than one direction gets a row in each;') &&
+      architect.includes("a property's draws take each order of the values the code compares;") &&
+      architect.includes("and a list the spec promises whole, as every reason, is read from the code's closed list.") &&
+      !architect.includes('every fixture of one receipt kind'),
+    'compose: the architect varies every input the code decides by, tells apart two a swap would confuse, and covers each direction it refuses — without the history',
+  );
+  // A mirror's deep-equality shim passed what the runner's strict matcher failed, a spy check proved in Node read a
+  // console the workers pool never hands the test, and an exemption fired only under Node's console: three reds at a
+  // gate that were no one's bug. The implementer still runs no test runner: it judges, builds or names such a row.
+  expect(
+    implementer.includes('A mirror proves only what it implements, so a row resting on what it fakes is green there and says nothing about the runner.') &&
+      implementer.includes("A comparison is judged by hand, with no matcher's semantics in it (sorted own keys, then `Object.is` per field).") &&
+      implementer.includes("A global or the console the row reads or spies is built as the runner builds it for the file's pool, cited from the runner's source (`<file>:<line>`).") &&
+      implementer.includes('What the mirror still cannot copy — a runtime it cannot run, a console plain `node` cannot build — is named in your report beside the row it leaves unproved, never approximated.') &&
+      implementer.includes('or `pnpm exec vitest` for any reason.') &&
+      !implementer.includes('deep-equality shim'),
+    'compose: a row resting on what a mirror fakes is judged by hand, built as the runner builds it, or named unproved — and the implementer still runs no test runner — without the history',
+  );
   // A sweep of three named attributes, proven by mutants in those three, stayed green with the label in a fourth; the
   // next missed the raw amounts, the one after the state built to show none.
   expect(
