@@ -21,6 +21,8 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HARNESS } from '../paths.mjs';
+import { projectRecords } from '../store.mjs';
+import { isLoopBack } from '../transcripts.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
 import { amber, bold, dim, pink } from '../look.mjs';
 
@@ -310,6 +312,83 @@ export function measure(dir) {
   return { steps, limit, unread };
 }
 
+/** Stages whose rounds belong to a spec or a milestone rather than to one step: the rest are a step's, by role. */
+const SPEC_ROLES = new Set(['planner', 'architect', 'design-reviewer', 'devops', 'secops']);
+
+/** How long after a step's last commit a round that names it may still have started: the record's clock is not git's. */
+const AFTER_LANDING_MS = 30 * 60 * 1000;
+
+/**
+ * Whether a dispatch's description names a step, by the id the router has it end with (`Fix the export spec · M2 15b`):
+ * a whole id, read after the last `·` where there is one, and `step <n>` or `s<n>` anywhere for one that opens with a
+ * digit. A description with no `·` is older prose, where a number names a step only in those two forms, so step 1 is not
+ * every number it holds. After the mark a bare number is read as an id, so `· M2 round 2` names step 2: the window a
+ * step's rounds are looked for in is what keeps that from another step's.
+ *
+ * @param {unknown} desc - A round's `desc`.
+ * @param {string} step - A step's id.
+ * @returns {boolean}
+ */
+export function describes(desc, step) {
+  const text = String(desc ?? '');
+  const marked = text.includes('·');
+  const tail = marked ? text.slice(text.lastIndexOf('·') + 1) : text;
+  const id = `${literal(step)}(?![\\w.-]*\\w)`;
+  // `step 6` and `s15` name steps 6 and 15 wherever they stand; a bare number only after the mark.
+  if (/^\d/.test(step) && new RegExp(`(?:\\bstep[\\s-]*|\\bs)${id}`, 'i').test(text)) return true;
+  return (marked || !/^\d/.test(step)) && new RegExp(`(?<![\\w.-])${id}`, 'i').test(tail);
+}
+
+/**
+ * What each size of step cost once it was built: every landed step matched to the rounds whose dispatch named it — its
+ * implementer's and every stage's after it, told apart by role — between the landing of an earlier step of the same id
+ * and 30 minutes after its own last commit. Two specs building a step of one id at once each count the other's rounds. A step is sent back when a stage after its implementer gave a loop-back verdict; its agent time is the sum of
+ * its rounds'. Grouped by its kind — `tests`, or the rest — and by its first round against the line limit, and read per
+ * 100 lines landed, so a step past the limit is set against the cost of the split that would have made two.
+ *
+ * The limit was a forecast of cost until this measured it: over one project's 327 matched steps, a step of 200 lines or
+ * more was sent back about once per 500 lines whatever its size, and a tests step of 400–600 lines took 13.3
+ * agent-minutes per 100 lines against 19.3 at 200–400 — which is why a tests step is held to half again the limit.
+ *
+ * @param {object[]} steps - From {@link measure}.
+ * @param {object[]} records - The project's rounds, from the store.
+ * @param {number} limit - The lines one run writes.
+ * @returns {{matched: number, landed: number, groups: {kind: string, band: number, steps: number, back: number, loops: number, minutes: number, lines: number}[]}}
+ */
+export function outcome(steps, records, limit) {
+  const landed = steps.filter((s) => s.landed && Number.isFinite(s.t) && s.lines > 0);
+  const rounds = records
+    .filter((r) => r.role && !SPEC_ROLES.has(r.role) && r.desc && r.ts)
+    .map((r) => ({ ...r, at: Date.parse(r.ts) }))
+    .filter((r) => Number.isFinite(r.at));
+  // Where a step's rounds may begin: after the last landing of an earlier step with its id, in any spec.
+  const byId = new Map();
+  for (const s of [...landed].sort((a, b) => a.t - b.t)) byId.set(s.step.toLowerCase(), [...(byId.get(s.step.toLowerCase()) ?? []), s]);
+  const groups = new Map();
+  let matched = 0;
+  for (const s of landed) {
+    const earlier = byId.get(s.step.toLowerCase()).filter((o) => o !== s && o.t < s.t);
+    const from = earlier.length ? Math.max(...earlier.map((o) => o.t)) : -Infinity;
+    const mine = rounds.filter((r) => r.at > from && r.at <= s.t + AFTER_LANDING_MS && describes(r.desc, s.step));
+    if (!mine.some((r) => r.role !== 'implementer')) continue;
+    matched += 1;
+    const first = s.first ?? s.lines;
+    const band = first <= limit / 2 ? 0 : first <= limit ? 1 : first <= limit * 1.5 ? 2 : 3;
+    const kind = s.kind === 'tests' ? 'tests' : 'source';
+    const key = `${kind}:${band}`;
+    const g = groups.get(key) ?? { kind, band, steps: 0, back: 0, loops: 0, minutes: 0, lines: 0 };
+    const loops = mine.filter((r) => r.role !== 'implementer' && isLoopBack(r.verdict)).length;
+    g.steps += 1;
+    g.back += loops > 0 ? 1 : 0;
+    g.loops += loops;
+    g.minutes += mine.reduce((sum, r) => sum + (Number(r.duration_s) || 0), 0) / 60;
+    g.lines += s.lines;
+    groups.set(key, g);
+  }
+  const order = (g) => (g.kind === 'tests' ? 0 : 1) * 10 + g.band;
+  return { matched, landed: landed.length, groups: [...groups.values()].sort((a, b) => order(a) - order(b)) };
+}
+
 /**
  * The rate to forecast a step again at: the median of what its spec's newest landed steps forecast no earlier than it
  * missed by (`measured`), over the steps of its kind where any has landed. A step forecast before the last re-forecast
@@ -465,6 +544,21 @@ export async function sizes(argv) {
     for (const u of unread.filter((x) => x.spec === spec)) {
       const where = u.landed ? `before ${u.hash.slice(0, 7)}, the commit that landed it,` : 'to land,';
       console.log(`    ${u.step.padEnd(10)} ${amber('no forecast it can read')} ${dim(`— its \`Size:\` line ${where} says "${u.said}", so no rate counts it`)}`);
+    }
+  }
+  const records = projectRecords(dir);
+  const bought = records ? outcome(steps, records, limit) : null;
+  if (bought?.matched) {
+    const bands = [`≤${Math.round(limit / 2)}`, `≤${limit}`, `≤${Math.round(limit * 1.5)}`, `>${Math.round(limit * 1.5)}`];
+    console.log(`\n  ${bold(pink('what each size cost'))}${dim(`  ${bought.matched} of ${bought.landed} landed step(s) matched to the rounds their dispatches name, from the implementer on`)}`);
+    console.log(dim(`    ${'first round'.padEnd(17)}${'steps'.padStart(6)}${'sent back'.padStart(11)}${'loop-backs'.padStart(12)}${'agent-min'.padStart(11)}   per 100 lines landed`));
+    let kind = null;
+    for (const g of bought.groups) {
+      const label = `${g.kind === kind ? '' : g.kind}`.padEnd(8) + bands[g.band].padEnd(9);
+      kind = g.kind;
+      const per = (n) => (g.lines > 0 ? ((n / g.lines) * 100).toFixed(2) : '—');
+      const perMin = g.lines > 0 ? ((g.minutes / g.lines) * 100).toFixed(1) : '—';
+      console.log(`    ${label}${String(g.steps).padStart(6)}${`${Math.round((g.back / g.steps) * 100)}%`.padStart(11)}${per(g.loops).padStart(12)}${perMin.padStart(11)}`);
     }
   }
   console.log('');

@@ -795,6 +795,29 @@ export function stageData(records, now = Date.now()) {
   return { rows, outside: [...outside.entries()].sort((a, b) => b[1] - a[1]) };
 }
 
+/**
+ * The rounds under each project's newest release in a window that finished, or should have, and how many of them have
+ * no verdict read — the share the stages table gives, for those releases alone: under `--all`, a project that has not
+ * moved is read under its own newest, not another's. Over one project's three months, 15%
+ * of rounds had none, 401 of them from before the release that made a verdict the report's first line, and the share
+ * read as a pipeline still losing verdicts while the releases since 0.80.0 had lost 10 in 832.
+ *
+ * @param {object[]} records - The rounds in the window.
+ * @param {number} [now] - Against which a round with no report is still running or lost.
+ * @returns {{core: string, of: number, none: number}|null} `core` is the release, or "each project's newest release"
+ *   when they differ. Null when no round records a release.
+ */
+export function unreadUnderNewest(records, now = Date.now()) {
+  const released = (c) => typeof c === 'string' && /^\d+(\.\d+)*$/.test(c);
+  const newest = new Map();
+  for (const r of records) if (released(r.core) && (!newest.has(r.project) || byVersion(r.core, newest.get(r.project)) > 0)) newest.set(r.project, r.core);
+  if (newest.size === 0) return null;
+  const { rows } = stageData(records.filter((r) => newest.get(r.project) === r.core), now);
+  const sum = (key) => rows.reduce((a, s) => a + s[key], 0);
+  const cores = new Set(newest.values());
+  return { core: cores.size === 1 ? [...cores][0] : "each project's newest release", of: sum('done') + sum('lost'), none: sum('unclear') + sum('lost') };
+}
+
 /** The middle of a list of numbers — the upper one of two — or undefined for none. */
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
@@ -948,9 +971,18 @@ export async function stats(argv, ctx) {
     console.log(note(`${outside.reduce((a, [, n]) => a + n, 0)} round(s) by agents outside the pipeline (${named}) — not stages, so no verdict is asked of them.`, 'info'));
   }
   if (unreadable === 0 && lost === 0) console.log(note("every finished round's verdict could be read.", 'ok'));
-  // The same share as the table's column: rounds that finished, or should have, with no verdict read.
+  // The same share as the table's column: rounds that finished, or should have, with no verdict read — and the same
+  // under the newest release the window holds, since a share over months of history is mostly what releases since fixed.
   if (unreadable > 0) {
-    console.log(note(`${pct(unreadable + lost, done + lost)} of finished rounds have no verdict that can be read. Those stages need a verdict token on the report's first line.`, 'warn'));
+    const newest = unreadUnderNewest(records);
+    const whole = `${pct(unreadable + lost, done + lost)} of finished rounds have no verdict that can be read`;
+    if (newest === null || newest.of === 0) {
+      console.log(note(`${whole}. Those stages need a verdict token on the report's first line.`, 'warn'));
+    } else if (newest.none === 0) {
+      console.log(note(`${whole}, none of the ${newest.of} under ${newest.core}${newest.core.startsWith('each') ? '' : ', the newest release here'}: what is left is history.`, 'info'));
+    } else {
+      console.log(note(`${whole}, and ${newest.none} of the ${newest.of} under ${newest.core}${newest.core.startsWith('each') ? '' : ', the newest release here'}. Those stages need a verdict token on the report's first line.`, 'warn'));
+    }
   }
   if (lost > 0) {
     console.log(

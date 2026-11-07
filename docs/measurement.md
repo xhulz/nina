@@ -200,7 +200,11 @@ A round with no report is still running for three hours after it started — the
 minutes — and after that it never reported, or its report could not be found. Those two used to be counted in
 neither the verdicts nor the unreadable ones, so a change in Claude Code that hid every report would have
 left `stats` saying every verdict could be read. They are unreadable now, and `stats` says how many there are
-apart from the reports that lack a verdict line, since the two have different causes.
+apart from the reports that lack a verdict line, since the two have different causes. Beside the share it gives the
+same for the newest release the window's rounds ran under: over the first project's three months 15% of rounds had no
+verdict, 401 of them from before verdicts were the report's first line, and the share read as a pipeline still losing
+them — it was taken for one, and a hook to force a verdict was planned — while the releases since 0.80.0 had lost 10
+in 832, most of them runs stopped by hand.
 
 A run from before the handback existed has no report in its own transcript, so "read in full" could never be
 said of it, and every snapshot read it again: one project's 744 such runs, two seconds before the person saw
@@ -306,6 +310,23 @@ of a new script's steps, one onto another, and stood at ×2.54 of their count wh
 of them would have gone to the architect to be split. It reads this from the file's history, not from the rates a
 `Size:` line names, which are prose each project writes its own way; the router says a forecast carrying another kind's
 rate is restated from its own count.
+
+Under the steps, **what each size cost**: each landed step matched to the rounds whose dispatch named it — the id the
+router has a description end with, `· M2 15b`, or in a description with no `·` one that opens with a digit only as
+`step <n>` or `s<n>` — the rounds of its implementer and of every stage after it, by role, between the last landing of
+an earlier step with the same id and half an hour after its own last commit. Two specs building a step of one id at
+once each count the other's rounds, and after the mark a bare number is an id, so `· M2 round 2` names step 2: the
+window is what keeps either rare. Grouped by kind (`tests`, or the rest) and by its first round against the line limit, it shows how many steps
+a stage after the implementer sent back, and per 100 lines landed the loop-backs and the agent-minutes of every round:
+whether a step past the limit cost more than the two steps a split would have made. Until it, the limit was a forecast
+of cost that nothing checked. The first reading, over 327 of the first project's 341 landed steps: a step of 200 lines
+or more was sent back about once per 500 lines whatever its size — a large one more often, in proportion — and a tests
+step of 400–600 lines took 13.3 agent-minutes per 100 lines against 19.3 at 200–400, since every step pays a review and a
+qa whatever its size. A step of source took 17.3 against 14.5. So an implementer holds a tests step to half again the limit, and its
+`Size:` is a forecast to report against, not a stop; a step of source still stops past either, and the architect still
+splits both at the limit, which is where its forecasts are measured from. Two requests had asked
+implementers to stop sooner, after eleven runs past their forecast that the orchestrator mostly accepted as they were. The block
+reads the store, so it is not part of `--check`, which runs every turn.
 
 ### Where the re-read went
 

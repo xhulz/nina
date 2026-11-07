@@ -179,13 +179,22 @@
   "2026-11-05-implementer__a-mirror-shim-is-not-vitest-prove-exotic-comparisons-once-for-real": {
     "in": "core/tree/.claude/agents/implementer.md"
   },
+  "2026-11-05-implementer__past-half-again-the-forecast-stop-and-return-blocked": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
   "2026-11-06-architect__a-test-spec-varies-every-input-the-code-branches-or-prices-on": {
     "in": "core/tree/.claude/agents/architect.md"
   },
   "2026-11-06-implementer__a-local-bound-to-a-helpers-mock-is-function-valued": {
     "declined": "Hard Rule #9 already covers a local whose value is a function, a mock's included. What failed three times is telling one apart by sight: the copied sweep reads an initializer's syntax, and a destructured helper result shows no arrow. Deciding by a binding's type is a type-checker's job, so this belongs in the project's own lint, which sees the type in milliseconds, rather than in more text every stage reads."
   },
+  "2026-11-06-implementer__forecast-your-step-before-writing-and-stop-past-the-limit": {
+    "in": "core/tree/.claude/agents/implementer.md"
+  },
   "2026-11-07-architect__a-console-silent-row-spies-every-method-that-prints": {
+    "in": "surfaces/pii/tree/CLAUDE.md"
+  },
+  "2026-11-07-architect__a-console-silent-row-spies-every-method-that-prints-again": {
     "in": "surfaces/pii/tree/CLAUDE.md"
   }
 }

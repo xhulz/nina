@@ -313,7 +313,9 @@ const BUDGETS = {
   // And for a fake's methods in the sweep, an arrow or braces where a member has a colon: both forms had gone unseen.
   // And for a row resting on what a mirror fakes — judged by hand, built as the runner builds it, or named unproved:
   // three times one project's mirror was green on a matcher, a console or a global it did not copy, and the runner red.
-  '.claude/agents/implementer.md': 29000,
+  // And for a tests step held to half again the lines and reporting its `Size:` rather than stopping at it: over 327
+  // steps of one project, a tests step of 400–600 lines cost less per line than one of 200–400.
+  '.claude/agents/implementer.md': 29300,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -380,8 +382,10 @@ const BUDGETS = {
   // And for Hard Rule #20's hole, in what ships: a way past a test that needs the code to work against it is a note while
   // no module does so — one project's leak sweeps went back round after round, each for a more exotic one.
   // And, where a project has pii, for a silent-console row that spies every method the console has, own and inherited:
-  // a list of six missed two that print, and a helper's test of four keys passed one that skipped `error`.
-  'CLAUDE.md': 36500,
+  // a list of six missed two that print, and a helper's test of four keys passed one that skipped `error`. And for its
+  // keys checked against a list the test reads itself, and by each spy's count where a runtime hands out a fresh
+  // function on every read: there an identity check passed on all 22 keys whether they were spied or not.
+  'CLAUDE.md': 36750,
 };
 
 /**
