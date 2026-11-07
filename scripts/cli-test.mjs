@@ -2557,9 +2557,44 @@ const dated = (date, status = 'active') =>
   ]);
   const shared = run(['stats', '--snapshots', shares, '--all'], { loud: true }).out;
   expect(
-    /reviewer\s+4\s+4\s+0\s+0%\s+\S+\s+50%/.test(shared) && shared.includes('50% of finished rounds have no verdict that can be read') &&
+    /reviewer\s+4\s+4\s+0\s+0%\s+\S+\s+50%/.test(shared) && shared.includes('50% of finished rounds have no verdict that can be read. Those stages need a verdict token') &&
       !/^\s+Explore\s+\d/m.test(shared) && shared.includes('5 round(s) by agents outside the pipeline (Explore ×5)'),
     `stats: the unreadable share is one number in the table and under it, and Claude Code's own agents are not stages — got ${shared}`,
+  );
+  // Fifteen percent of one project's rounds had no verdict, 401 of them from before verdicts led the report, and read as a
+  // pipeline still losing them while its newest releases had lost 10 in 832: the share is given for the newest one too.
+  const eras = join(await scratch(), 'snaps');
+  await history(eras, '-eras', [
+    ...Array.from({ length: 3 }, (_, i) => ({ role: 'reviewer', verdict: 'UNCLEAR', ts: `2026-01-0${i + 1}`, source: 'none', core: '0.9.0' })),
+    ...Array.from({ length: 4 }, (_, i) => ({ role: 'reviewer', verdict: 'APPROVED', ts: `2026-02-0${i + 1}`, core: '0.10.0' })),
+  ]);
+  const settled = run(['stats', '--snapshots', eras, '--all'], { loud: true }).out;
+  await history(eras, '-eras', [
+    ...Array.from({ length: 3 }, (_, i) => ({ role: 'reviewer', verdict: 'UNCLEAR', ts: `2026-01-0${i + 1}`, source: 'none', core: '0.9.0' })),
+    { role: 'reviewer', verdict: 'UNCLEAR', ts: '2026-02-01', source: 'none', core: '0.10.0' },
+    ...Array.from({ length: 3 }, (_, i) => ({ role: 'reviewer', verdict: 'APPROVED', ts: `2026-02-0${i + 2}`, core: '0.10.0' })),
+  ]);
+  const still = run(['stats', '--snapshots', eras, '--all'], { loud: true }).out;
+  expect(
+    settled.includes('43% of finished rounds have no verdict that can be read, none of the 4 under 0.10.0, the newest release here: what is left is history.') &&
+      !settled.includes('Those stages need a verdict token') &&
+      still.includes('57% of finished rounds have no verdict that can be read, and 1 of the 4 under 0.10.0, the newest release here. Those stages need a verdict token'),
+    `stats: the unreadable share is given for the newest release too, 0.10.0 after 0.9.0, and the advice only while it still loses one — got ${settled} / ${still}`,
+  );
+  // Under --all, a project that has not moved is read under its own newest release, not another project's.
+  const pair = join(await scratch(), 'snaps');
+  await history(pair, '-moved', [
+    ...Array.from({ length: 2 }, (_, i) => ({ role: 'reviewer', verdict: 'UNCLEAR', ts: `2026-01-0${i + 1}`, source: 'none', core: '0.9.0' })),
+    ...Array.from({ length: 2 }, (_, i) => ({ role: 'reviewer', verdict: 'APPROVED', ts: `2026-02-0${i + 1}`, core: '0.10.0' })),
+  ]);
+  await history(pair, '-stayed', [
+    { role: 'reviewer', verdict: 'UNCLEAR', ts: '2026-01-05', source: 'none', core: '0.9.0' },
+    { role: 'reviewer', verdict: 'APPROVED', ts: '2026-01-06', core: '0.9.0' },
+  ]);
+  const paired = run(['stats', '--snapshots', pair, '--all'], { loud: true }).out;
+  expect(
+    paired.includes("50% of finished rounds have no verdict that can be read, and 1 of the 4 under each project's newest release. Those stages need a verdict token"),
+    `stats: under --all each project's rounds are read under its own newest release — got ${paired}`,
   );
 
   // `--project` means one thing in every report: a directory is that project.
@@ -5294,6 +5329,80 @@ const dated = (date, status = 'active') =>
     `sizes: a step to land is forecast again at the rate of the landed steps of its kind — got ${klisted}`,
   );
 
+  // A step's limit was a forecast of cost nothing checked: over 327 steps of one project, a tests step of 400–600 lines
+  // cost less per line than one of 200–400. So each landed step is matched to the rounds its dispatches name, and what
+  // each size cost is shown per 100 lines.
+  const { describes, outcome } = await import('../src/commands/sizes.mjs');
+  expect(
+    describes('Fix the export spec · M2 15b', '15b') && !describes('Fix the export spec · M2 15b', '15') && !describes('Fix the export spec · M2 15b', '5b') &&
+      describes('Implement M5 step 6 new retry unit', '6') && !describes('Implement M5 step 6 new retry unit', '5') && !describes('Use 15 rows', '15') &&
+      describes('Pin the database URL · M9 s15', '15') && !describes('Pin · M9 s15', '1') &&
+      describes('Build the plan · Melhorias PD-1', 'PD-1') && !describes('Build the plan · Melhorias PD-1b', 'PD-1') && !describes('Review rows · T3a4', 'T3a') &&
+      describes('Ship it · X 2', '2') && !describes('Ship v1.2 step', '2') && describes('Fix step 6.', '6') && describes('Implement step 6 · M5', '6'),
+    'sizes: a description names a step by a whole id after its mark, and a number in prose only as step <n> or s<n>',
+  );
+  const at = (hhmm) => Date.parse(`2026-03-02T${hhmm}:00Z`);
+  const round = (role, verdict, desc, hhmm, duration_s) => ({ role, verdict, desc, ts: `2026-03-02T${hhmm}:00Z`, duration_s });
+  const cost = outcome(
+    [
+      { spec: 's', step: '1', landed: true, t: at('12:00'), lines: 500, first: 500, kind: 'tests' },
+      { spec: 's', step: '2', landed: true, t: at('13:00'), lines: 300, first: null, kind: 'new' },
+      { spec: 'r', step: '1', landed: true, t: at('15:00'), lines: 100, first: 100, kind: null },
+      { spec: 's', step: '3', landed: false },
+      // Past half again the limit, measured by what landed where no first round is written.
+      { spec: 's', step: '4', landed: true, t: at('16:00'), lines: 700, first: null, kind: null },
+      // A landing with no count is no step to measure.
+      { spec: 's', step: '5', landed: true, t: at('17:00') },
+    ],
+    [
+      round('architect', 'DONE', 'Spec the rows · s 1', '10:00', 3600),
+      round('implementer', 'DIFF-READY', 'Write the rows · s 1', '11:00', 600),
+      round('reviewer', 'REJECTED', 'Review the rows · s 1', '11:20', 300),
+      round('implementer', 'DIFF-READY', 'Fix the rows · s 1', '11:30', 300),
+      round('reviewer', 'APPROVED', 'Recheck the rows · s 1', '11:45', 300),
+      round('qa', 'PASS', 'Run the rows · s 1', '11:50', 300),
+      round('implementer', 'DIFF-READY', 'Build it · s 2', '12:10', 600),
+      round('reviewer', 'APPROVED', 'Review it · s 2', '12:30', 600),
+      round('reviewer', 'REJECTED', 'Review it again · s 2', '13:45', 600),
+      round('implementer', 'DIFF-READY', 'Write it · r 1', '14:00', 480),
+      round('reviewer', 'APPROVED', 'Review it · r 1', '14:30', 120),
+      round('reviewer', 'APPROVED', 'Review something', '14:40', 900),
+      round('implementer', 'DIFF-READY', 'Write it · s 4', '15:40', 600),
+      round('reviewer', 'REJECTED', 'Review it · s 4', '15:50', 600),
+      round('reviewer', 'APPROVED', 'Review it · s 5', '16:50', 600),
+    ],
+    400,
+  );
+  const group = (kind, band) => cost.groups.find((g) => g.kind === kind && g.band === band);
+  expect(
+    cost.matched === 4 && cost.landed === 4 && cost.groups.map((g) => `${g.kind}:${g.band}`).join(',') === 'tests:2,source:0,source:1,source:3' &&
+      group('source', 3).minutes === 20 && group('source', 3).loops === 1 && group('source', 3).lines === 700 &&
+      JSON.stringify(group('tests', 2)) === JSON.stringify({ kind: 'tests', band: 2, steps: 1, back: 1, loops: 1, minutes: 30, lines: 500 }) &&
+      group('source', 1).minutes === 20 && group('source', 1).loops === 0 && group('source', 0).minutes === 10 && group('source', 0).steps === 1,
+    `sizes: a step's rounds are the ones naming it from its implementer on, after an earlier step of its id landed and up to half an hour after its own commit, banded by kind and first round — got ${JSON.stringify(cost)}`,
+  );
+  // And `nina sizes` prints it, from the project's own store.
+  await mkdir(snapshotsDir(), { recursive: true });
+  const kround = (role, verdict, desc, hhmm, duration_s) => JSON.stringify({ project: slugFor(kinds), dispatch_id: `toolu_${hhmm}`, ...round(role, verdict, desc, hhmm, duration_s) });
+  await writeFile(
+    join(snapshotsDir(), `${slugFor(kinds)}.jsonl`),
+    `${[
+      kround('implementer', 'DIFF-READY', 'Extend b · k-spec b', '10:30', 600),
+      kround('reviewer', 'REJECTED', 'Review b · k-spec b', '10:45', 300),
+      kround('implementer', 'DIFF-READY', 'Fix b · k-spec b', '10:50', 300),
+      kround('reviewer', 'APPROVED', 'Recheck b · k-spec b', '10:55', 300),
+      kround('implementer', 'DIFF-READY', 'Write a · k-spec a', '11:20', 600),
+      kround('reviewer', 'APPROVED', 'Review a · k-spec a', '11:40', 600),
+    ].join('\n')}\n`,
+  );
+  const bought = run(['sizes', '--project', kinds], { loud: true }).out;
+  const bcheck = run(['sizes', '--project', kinds, '--check'], { loud: true }).out;
+  expect(
+    bought.includes('what each size cost') && bought.includes('2 of 2 landed step(s) matched to the rounds their dispatches name') &&
+      /source\s+≤200\s+2\s+50%\s+0\.38\s+17\.3/.test(bought) && !bcheck.includes('what each size cost'),
+    `sizes: what each size cost is shown from the project's store, and not in the detector — got ${bought} / ${bcheck}`,
+  );
+
   // A Size line rewritten into prose left its step out of every rate without a word; and a forecast restated at rates
   // multiplied onto one another, another kind's among them, put the third project's steps at ×2.54 of their count.
   const { unreadSize } = await import('../src/commands/sizes.mjs');
@@ -6080,6 +6189,17 @@ const dated = (date, status = 'active') =>
       !implementer.includes('between 398 and 475'),
     'compose: a step past its forecast is finished only within the lines one run writes, a forecast past the line is a BLOCKED, and one is made again as the step grows',
   );
+  // Over 327 steps of one project a tests step of 400–600 lines cost less per line than one of 200–400, every step paying a
+  // review and a qa: splitting a test file bought a step's fixed cost, so a tests step is held to half again the limit.
+  const graphed = await readFile(join(dir, '.claude', 'graph.md'), 'utf8');
+  expect(
+    implementer.includes('The architect still splits a tests step at the ~400, but in this rule a step whose `Kind:` is `tests` is held to half again them, for your forecast as for what you write, and its `Size:` is a forecast to report against, never a stop') &&
+      (await spec('architect')).includes('One implementer run writes at most 15 files and about 400 lines, tests and fixtures included.') &&
+      implementer.includes("Past either limit, or more than half over the step's `Size:`, return `BLOCKED` then") &&
+      graphed.includes('or a step of source half again its forecast · max 2') &&
+      !implementer.includes('Over 327 steps') && !implementer.includes('13.3 agent-minutes'),
+    'compose: a tests step is held to half again the lines one run writes and reports its Size rather than stopping at it, a step of source still stops — without the history',
+  );
   // A sentence dictated about a caller no step had built yet read as proof the guard existed.
   expect(
     patterns.includes('Not a statement about code that is not built yet.') && patterns.includes('it is a contract with its owner named') &&
@@ -6177,9 +6297,10 @@ const dated = (date, status = 'active') =>
   // checked four keys, and a helper that skipped `error` passed it. Learned three times in one project.
   expect(
     privacy.includes('It spies every function-valued key of the console, own and inherited but `constructor`, never a remembered list') &&
-      privacy.includes("and asserts the list of keys it built is not empty and that, while the spies are installed, each key's value is not the one it replaced, judged by identity and never by calling it; its control runs over the same list.") &&
-      !privacy.includes('which print through none of them') && !claude.includes('function-valued key of the console'),
-    'compose: a silent-console row spies every function-valued key of the console, own and inherited, and asserts each is replaced, where pii composes — without its history',
+      privacy.includes("and asserts the list it built is not empty and equals one the test reads itself — a walk of `Reflect.ownKeys` up the console's prototype chain written in the test, never the helper's output — and that each key is replaced while the spies are installed") &&
+      privacy.includes('by identity where two reads of the key return the same value before they are installed, never by calling the original; where they do not, by calling the key once with no argument, its own spy recording the call and passing nothing on. Its control runs over the same list.') &&
+      !privacy.includes('which print through none of them') && !privacy.includes('on all 22 keys') && !claude.includes('function-valued key of the console'),
+    'compose: a silent-console row spies every function-valued key of the console against a list the test reads itself, judged by identity where a read is stable and by each spy\'s count where it is not, where pii composes — without its history',
   );
   // A fixture held one receipt kind, every rail change ran one way, and two fees were equal in both fixtures: each
   // left green the mutant that ignored, narrowed or swapped them, three times in one day.
@@ -6597,7 +6718,7 @@ const dated = (date, status = 'active') =>
   expect(
     over?.hookSpecificOutput?.additionalContext?.includes("this round's write calls have put about 410 lines into the tree, an edit's new text counted whole — past the ~400 one implementer run writes") &&
       over.hookSpecificOutput.additionalContext.includes('Measure what is there now: `git diff --numstat` for the files you changed, `wc -l` for the ones you made.') &&
-      over.hookSpecificOutput.additionalContext.includes('If it is past the limit, stop at the next point where what you have written typechecks, and return `BLOCKED`') &&
+      over.hookSpecificOutput.additionalContext.includes('If it is past the limit — half again that for a step whose `Kind:` is `tests` — stop at the next point where what you have written typechecks, and return `BLOCKED`') &&
       over.hookSpecificOutput.additionalContext.includes('Never trim documentation or tests to fit') &&
       over.systemMessage?.includes('implementer asize1 has written about 410 lines this round, past the ~400 one run writes') &&
       !over.hookSpecificOutput.additionalContext.includes('re-read'),

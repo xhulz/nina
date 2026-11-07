@@ -223,7 +223,7 @@ export function watch(input, { root, warnAt, clipAt = 0, stepLines = 0, now = Da
     context.push(
       `NINA size watch: this round's write calls have put about ${counted.wrote} lines into the tree, an edit's new text counted whole — past the ~${stepLines} one implementer run writes. ` +
         'Measure what is there now: `git diff --numstat` for the files you changed, `wc -l` for the ones you made. ' +
-        'If it is past the limit, stop at the next point where what you have written typechecks, and return `BLOCKED` with the forecast you made, what is written, and the rest named as its own step. Never trim documentation or tests to fit.',
+        'If it is past the limit — half again that for a step whose `Kind:` is `tests` — stop at the next point where what you have written typechecks, and return `BLOCKED` with the forecast you made, what is written, and the rest named as its own step. Never trim documentation or tests to fit.',
     );
     person.push(`${input.agent_type} ${input.agent_id.slice(0, 8)} has written about ${counted.wrote} lines this round, past the ~${stepLines} one run writes.`);
   }
