@@ -27,6 +27,9 @@ Every other file: `src/lending/loans.ts` does not change.
   fee.
 - **RF-1** — every refusal has a message.
 
+## Obsolescence list
+None: nothing becomes dead with this change.
+
 ## Premises
 - `DAILY_FEE` is `{ book: 25, disc: 100 }` — `src/lending/loans.ts`.
 - `REFUSALS` is the closed list of refusal reasons — `src/lending/loans.ts`.

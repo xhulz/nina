@@ -1,0 +1,141 @@
+{
+  "describe": "Eight defects a reviewer approved and a later stage sent back, in a project that runs the harness, rebuilt on neutral code: a box office's seat holds. Three are in the code — a key read past what a number holds, a value written before the check that refuses it, a message changed that a test the diff never touches asserts — and five are rows that pass on the code and also on the mutant they exist to catch, each of a shape the reviewer had to reason about rather than spot. Each declares how it is proved: a mutant and the row the test lacks, a fix and the row that fails without it, or the test the change breaks. A defect is caught when the report names a file and a line within two of one of its anchors. A row's defect is caught too where an issue the report raises cites the file and names the row, `HL-1`: a review reading a new file through its diff counts its lines a few off.",
+  "spec": ".claude/plans/specs/seat-holds.md",
+  "test": "src/tickets/tickets.test.ts",
+  "defects": [
+    {
+      "id": "key-past-safe-integer",
+      "file": "src/tickets/keys.ts",
+      "anchor": [
+        "const SEAT_KEY = /^R?(0|[1-9][0-9]*)$/;",
+        "return Number.parseInt(digits, 10);"
+      ],
+      "what": "the key's digits have no bound and are read with parseInt, so past 2^53 two keys read back as one seat: the spec says every key it accepts is its own seat's",
+      "fix": {
+        "file": "src/tickets/keys.ts",
+        "from": "const SEAT_KEY = /^R?(0|[1-9][0-9]*)$/;",
+        "to": "const SEAT_KEY = /^R?(0|[1-9][0-9]{0,5})$/;"
+      },
+      "row": "expect(() => parseSeatKey('9007199254740993')).toThrow(SeatKeyError);"
+    },
+    {
+      "id": "message-breaks-caller-test",
+      "file": "src/tickets/orders.test.ts",
+      "anchor": [
+        "expect(() => orderOf('ana', ['3', 'x9'])).toThrow('not a seat key: x9');",
+        "throw new SeatKeyError(`seat key must be a number, optionally after R: ${key}`);"
+      ],
+      "what": "the refusal's message changed, and orders.test.ts, which the diff does not touch and the spec says keeps its callers, asserts the old one: the change breaks it",
+      "breaks": "src/tickets/orders.test.ts"
+    },
+    {
+      "id": "price-written-before-check",
+      "file": "src/tickets/holds.ts",
+      "anchor": [
+        "book.prices.set(seat, cents);",
+        "expect(() => setHoldPrice(book, 4, -1)).toThrow(OutOfRangeError);"
+      ],
+      "names": [
+        "PR-1"
+      ],
+      "what": "the price is written before the check that refuses it, so a refused price stays in the book; the spec says a refused price writes nothing, and PR-1 only checks the throw",
+      "fix": {
+        "file": "src/tickets/holds.ts",
+        "from": "  book.prices.set(seat, cents);\n  if (!within(cents, 0, MAX_PRICE)) {\n    throw new OutOfRangeError(`price out of range: ${cents}`);\n  }\n",
+        "to": "  if (!within(cents, 0, MAX_PRICE)) {\n    throw new OutOfRangeError(`price out of range: ${cents}`);\n  }\n  book.prices.set(seat, cents);\n"
+      },
+      "row": "const refused = { prices: new Map<number, number>() };\nexpect(() => setHoldPrice(refused, 4, -1)).toThrow(OutOfRangeError);\nexpect(refused.prices.has(4)).toBe(false);"
+    },
+    {
+      "id": "other-row-answers-either-way",
+      "file": "src/tickets/tickets.test.ts",
+      "anchor": [
+        "// HL-1 — fails if a held or a paid hold is not live",
+        "it('finds a live hold and not a released one', () => {",
+        "const holds = [hold('h1', 'ana', 'paid'), hold('h2', 'ana', 'held')];"
+      ],
+      "names": [
+        "HL-1"
+      ],
+      "what": "HL-1's fixture holds a paid and a held hold together, so a version that counts only held holds as live still finds one: no row has a paid hold alone",
+      "mutant": {
+        "file": "src/tickets/holds.ts",
+        "from": "hold.owner === owner && hold.state !== 'released'",
+        "to": "hold.owner === owner && hold.state === 'held'"
+      },
+      "row": "expect(hasLiveHold([hold('h1', 'ana', 'paid')], 'ana')).toBe(true);"
+    },
+    {
+      "id": "range-after-unchanged-untested",
+      "file": "src/tickets/tickets.test.ts",
+      "anchor": [
+        "// LM-1 — fails if a change in range is not applied",
+        "expect(() => changeLimits({ perOrder: 4, perDay: 10 }, { perOrder: 12, perDay: 12 })).toThrow(OutOfRangeError);"
+      ],
+      "names": [
+        "LM-1"
+      ],
+      "what": "the only out-of-range row also changes the limits, so a version that returns unchanged before checking the range passes: the spec refuses an out-of-range limit even when it equals the stored one, and no row tries that",
+      "mutant": {
+        "file": "src/tickets/holds.ts",
+        "from": "  if (!within(next.perOrder, 1, 8) || !within(next.perDay, 1, 20)) {\n    throw new OutOfRangeError(`limits out of range: ${next.perOrder}/${next.perDay}`);\n  }\n  if (next.perOrder === stored.perOrder && next.perDay === stored.perDay) return 'unchanged';\n",
+        "to": "  if (next.perOrder === stored.perOrder && next.perDay === stored.perDay) return 'unchanged';\n  if (!within(next.perOrder, 1, 8) || !within(next.perDay, 1, 20)) {\n    throw new OutOfRangeError(`limits out of range: ${next.perOrder}/${next.perDay}`);\n  }\n"
+      },
+      "row": "expect(() => changeLimits({ perOrder: 12, perDay: 10 }, { perOrder: 12, perDay: 10 })).toThrow(OutOfRangeError);"
+    },
+    {
+      "id": "cycle-hides-what-is-beside-it",
+      "file": "src/tickets/tickets.test.ts",
+      "anchor": [
+        "// RC-1 — fails if a needle nested in a receipt is missed",
+        "expect(mentions(loop, EMAIL)).toBe(false);"
+      ],
+      "names": [
+        "RC-1"
+      ],
+      "what": "the cycle row holds no needle, so a version whose cycle guard ends the whole walk at the first revisit passes; the spec says a cycle ends the walk without hiding what sits beside it, and no row puts a needle beside one",
+      "mutant": {
+        "file": "src/tickets/receipts.ts",
+        "from": "if (seen.has(next)) continue;",
+        "to": "if (seen.has(next)) return false;"
+      },
+      "row": "const beside: Record<string, unknown> = { contact: EMAIL };\nbeside.self = beside;\nexpect(mentions(beside, EMAIL)).toBe(true);"
+    },
+    {
+      "id": "fixture-message-has-no-id",
+      "file": "src/tickets/tickets.test.ts",
+      "anchor": [
+        "// QU-1 — fails if a release is not logged with its message's id.",
+        "const message: ReleaseMessage = { body: { seat: 9, holdId: 'h-9' } };"
+      ],
+      "names": [
+        "QU-1"
+      ],
+      "what": "the fixture message has no id, so its id reads as 'undefined' and a version that logs that word for every message passes; the spec says each fixture message carries a distinctive id",
+      "mutant": {
+        "file": "src/tickets/queue.ts",
+        "from": "messageId: String(message.id)",
+        "to": "messageId: 'undefined'"
+      },
+      "row": "const sent: ReleaseMessage = { id: 'msg-7f3a', body: { seat: 9, holdId: 'h-9' } };\nconst lines: LogLine[] = [];\nhandleRelease(sent, lines);\nexpect(lines[0].messageId).toBe('msg-7f3a');"
+    },
+    {
+      "id": "headers-not-compared",
+      "file": "src/tickets/tickets.test.ts",
+      "anchor": [
+        "// AN-1 — fails if a buyer cannot see their own hold",
+        "expect(foreign.body).toBe(missing.body);"
+      ],
+      "names": [
+        "AN-1"
+      ],
+      "what": "AN-1 compares status and body but not headers, so a version that marks a foreign seat with a header passes; the spec says the two answers are the same, headers included",
+      "mutant": {
+        "file": "src/tickets/api.ts",
+        "from": "  if (hold.owner !== buyer) return notFound();",
+        "to": "  if (hold.owner !== buyer) return { ...notFound(), headers: { 'content-type': 'text/plain', 'x-held': 'yes' } };"
+      },
+      "row": "const others = [hold('h2', 'bo', 'held', 6)];\nexpect(holdAnswer(others, 'ana', 6)).toEqual(holdAnswer(others, 'ana', 7));"
+    }
+  ]
+}

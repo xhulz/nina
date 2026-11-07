@@ -745,3 +745,25 @@ anchors too. And the judge's quotes ran two of the report's bullets together, or
 "...": a quote and the report are now read with the marks that open a list item set aside on both, and a quote as
 pieces in order across an ellipsis, each of twelve characters or more, so each is still words of the report
 rather than `a ... e`.
+
+So the third case, `escaped`, is made of what a reviewer approved and a later stage sent back. Over the first
+project's 322 steps a review approved, 16 were sent back afterwards with no fix between: 9 by the integration
+tester, 4 by qa, 3 by a later review. About half needed the runtime to show — a timing budget, an unhandled
+rejection only one test pool raises — and no review of a diff could have caught them; the eight that reading
+could are rebuilt on a box office's seat holds. Three are in the code: a key whose digits lost their bound and are
+read with `parseInt`, so past 2^53 two keys are one seat; a price written before the check that refuses it; a
+message changed that a test the diff never touches asserts. Five are rows: a fixture whose other row answers the
+question either way, an out-of-range row that also changes the value so the order of two checks never shows, a
+cycle row with nothing beside the cycle, a fixture message with no id, two answers compared without the headers the
+spec names. The proof is now one for every case and of three kinds: a mutant the planted test passes and the row it
+lacks catches; for a defect in the code, a fix and the row that fails without it; for a broken caller, the test that
+was green before the change and is red after.
+
+Its first reading, at 0.90.0, two runs at each tier: the high tier named all eight both times, at $0.52–0.56
+API-equivalent; the low tier, at $0.13–0.16, all eight once, and once six and a half — it missed that the hold
+fixture's other row answers either way, and called the changed message out of scope without the test it breaks,
+which the grading credits by its line and the judge does not. That is the first difference the eval has shown
+between the tiers, one defect in two runs, and two runs cannot tell it from noise. The grading read the second low
+run as 4/8 at first: it cited every row of the new file three to five lines off, as a review reading a file through
+its diff does, and named each one, so a row's defect may also name the row (`names`), and an issue that cites the
+file and names it is that defect.
