@@ -1,0 +1,107 @@
+{
+  "describe": "Seven defects in a step that only adds tests, each the shape of one a reviewer sent back in a project that runs the harness, rebuilt here on neutral code. Every row passes on the code as it is, and six of the seven also pass on a mutant they exist to catch: the review has to see that the row cannot fail, or that a case the spec names has no row. The seventh is a missing TSDoc. A defect is caught when the report names the test file and a line within two of one of its anchors: the row's comment, its `it` line and the planted line, since a review cites a row from where its block starts. Each of those six names its mutant, an edit of `src/lending/loans.ts`, and the row the test lacks; the suite proves that the planted test passes on the code and on the mutant, and that the row fails on the mutant and passes on the code.",
+  "spec": ".claude/plans/specs/lending-tests.md",
+  "defects": [
+    {
+      "id": "tsdoc-missing",
+      "file": "src/lending/loans.test.ts",
+      "anchor": "function loanOf(kind: ItemKind, state: Loan['state'] = 'open'): Loan {",
+      "what": "a test helper with no TSDoc, beside one that has it"
+    },
+    {
+      "id": "kind-one-value",
+      "file": "src/lending/loans.test.ts",
+      "anchor": [
+        "// LF-1 — fails if the fee is not the kind's daily fee times the days late.",
+        "it('charges three days late at the daily fee', () => {",
+        "const late = loanOf('book');"
+      ],
+      "what": "every lateFee row lends a book, so a version that charges every kind the book's daily fee passes: the kind the fee is priced from takes one value",
+      "mutant": {
+        "file": "src/lending/loans.ts",
+        "from": "DAILY_FEE[loan.kind]",
+        "to": "DAILY_FEE.book"
+      },
+      "row": "expect(lateFee(loanOf('disc'), daysAfterDue(3))).toBe(3 * DAILY_FEE.disc);"
+    },
+    {
+      "id": "fails-if-false",
+      "file": "src/lending/loans.test.ts",
+      "anchor": [
+        "// LF-2 — fails if the clamp to zero is removed",
+        "it('charges nothing for a loan returned on time', () => {",
+        "expect(lateFee(loanOf('book'), daysAfterDue(0))).toBe(0);"
+      ],
+      "what": "the row's claim is false: on the due date the days are zero with or without the clamp, so removing it leaves the row green; and the spec's early return has no row",
+      "mutant": {
+        "file": "src/lending/loans.ts",
+        "from": "Math.max(0, days)",
+        "to": "days"
+      },
+      "row": "expect(lateFee(loanOf('book'), daysAfterDue(-2))).toBe(0);"
+    },
+    {
+      "id": "property-one-order",
+      "file": "src/lending/loans.test.ts",
+      "anchor": [
+        "// LF-P — fails if a fee can come out negative",
+        "it('is never negative and always a whole number of daily fees', () => {",
+        "for (let n = 0; n <= 60; n += 1) {"
+      ],
+      "what": "the property only draws returns on or after the due date, so the one order that could make a fee negative is never tried",
+      "mutant": {
+        "file": "src/lending/loans.ts",
+        "from": "Math.max(0, days)",
+        "to": "days"
+      },
+      "row": "for (let n = -60; n <= 60; n += 1) expect(lateFee(loanOf('book'), daysAfterDue(n))).toBeGreaterThanOrEqual(0);"
+    },
+    {
+      "id": "refusal-one-direction",
+      "file": "src/lending/loans.test.ts",
+      "anchor": [
+        "// MV-2 — fails if a final loan can move.",
+        "it('refuses to move a returned loan', () => {"
+      ],
+      "what": "a final loan is refused only out of returned; a move out of lost, which the spec names, has no row, so a version that lets a lost loan move passes",
+      "mutant": {
+        "file": "src/lending/loans.ts",
+        "from": "  if (loan.state === 'lost') return { ok: false, refusal: 'already-lost' };\n",
+        "to": ""
+      },
+      "row": "expect(move(loanOf('disc', 'lost'), 'returned')).toEqual({ ok: false, refusal: 'already-lost' });"
+    },
+    {
+      "id": "equal-fees",
+      "file": "src/lending/loans.test.ts",
+      "anchor": [
+        "// TR-1 — fails if a branch is charged the other's fee.",
+        "it('charges the dispatch fee to the sender and the intake fee to the receiver', () => {",
+        "const agreed = { dispatch: 150, intake: 150 };"
+      ],
+      "what": "the two fees are equal, so a version that charges each branch the other's fee passes",
+      "mutant": {
+        "file": "src/lending/loans.ts",
+        "from": "{ sender: fees.dispatch, receiver: fees.intake }",
+        "to": "{ sender: fees.intake, receiver: fees.dispatch }"
+      },
+      "row": "expect(transferCharges({ dispatch: 150, intake: 40 })).toEqual({ sender: 150, receiver: 40 });"
+    },
+    {
+      "id": "reasons-hand-list",
+      "file": "src/lending/loans.test.ts",
+      "anchor": [
+        "// RF-1 — fails if a refusal has no message.",
+        "it('has a message for every refusal', () => {",
+        "for (const refusal of ['same-state', 'already-returned', 'already-lost'] as const) {"
+      ],
+      "what": "every refusal is checked from a hand list that leaves out overdue, instead of REFUSALS, the code's closed list",
+      "mutant": {
+        "file": "src/lending/loans.ts",
+        "from": "overdue: 'An overdue loan cannot be renewed; return it first.'",
+        "to": "overdue: ''"
+      },
+      "row": "for (const reason of REFUSALS) expect(explain(reason).length).toBeGreaterThan(0);"
+    }
+  ]
+}

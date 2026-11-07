@@ -660,6 +660,7 @@ each one caught.
 ```bash
 nina eval --release 0.23.0 --release 0.24.0 --repeat 2    # two releases, two runs each
 nina eval --release 0.81.0 --tier low --tier high          # one release at two tiers: each tier is an arm
+nina eval --release 0.89.0 --case test-rows                # one case of those under evals/; every case when none is named
 nina eval --release 0.24.0 --dry-run                       # stage, compose and grade a canned report; no model
 nina eval --regrade <reports dir> --judge                  # read kept reports again, with the judge; no review run
 ```
@@ -709,3 +710,38 @@ unable to close their tags. It is a call per report, so it is off by default, an
 `--regrade` runs it over kept reports without reviewing again. On the first real report, before the quote
 and the control existed, it identified all twelve — the swallowed error the grading missed was described in
 words.
+
+The change is a **case**, and there is more than one: each directory under `evals/` that holds a `defects.json`
+is reviewed by every arm, graded on its own and summed over all of them, and `--case <name>` runs the ones named.
+A kept report is named for its case (`<case>--<arm>-<n>.md`) and `--regrade` reads it against that case; one
+named before cases existed is the first case's. The first, `reviewer`, was invented for the eval, and at 0.82.0
+both tiers caught all twelve of its defects: an eval every arm passes cannot tell a release, a tier or a stage
+left out from another, and that is what the harness needs to know before anything is made faster. So the
+second, `test-rows`, is made of what reviewers in the first project actually sent back, rebuilt on neutral code —
+lending rules — and copied from no project: a step that only adds tests, whose rows all pass on the code. Six of
+its seven defects are a row that also passes on the mutant it exists to catch: a fee priced by kind that only
+ever sees one kind, a refusal tested out of one state of the two the spec names, two fees equal so a swap passes,
+a property that never draws the order that could go negative, a `fails if` claim the row cannot keep, every
+reason checked from a hand list that leaves one out; the seventh is a missing TSDoc. Each of the six names its
+mutant and the row the test lacks in `defects.json`, and the suite proves that the planted test passes on the
+code and on the mutant, and that the row fails on the mutant and passes on the code — so a defect cannot quietly
+stop being one as the fixture changes. A change that adds a file is staged with it marked as intended
+(`git add --intent-to-add`), or the `git diff` the reviewer is told to read would show nothing of it.
+
+The first real reading of it, at 0.89.0, two runs at each tier: every review caught all seven, at $0.12–0.15
+API-equivalent on the low tier and $0.40–0.45 on the high, and the judge, which read a report that found nothing
+as 0, read seven in three of the four. So the second case does not tell the tiers apart either: on the shapes of
+defect reviewers really sent back, a reviewer at the low tier, at a third of the price, catches what the high
+tier does. What would tell them apart is a case of defects a reviewer let through, found later by qa, a later
+round or the owner.
+
+Before that reading the eval said otherwise, twice, and both times it was the eval. The first high report was
+graded 1/7: it named the test file once and cited the rest of its lines bare, `(:31-34)`, which the grading now
+reads against the file the report named last, and against no planted file when the last it named was another.
+Then the low reports were graded 4/7 and judged 4/7 and 3/7, and the doc said the low tier had missed three, when
+both named all seven. Their citations were blocks, `:52-56`, read as their first line, and each defect was anchored
+at its planted line alone, three or four lines into the block; each now has the row's comment and its `it` line as
+anchors too. And the judge's quotes ran two of the report's bullets together, or joined two verbatim pieces with
+"...": a quote and the report are now read with the marks that open a list item set aside on both, and a quote as
+pieces in order across an ellipsis, each of twelve characters or more, so each is still words of the report
+rather than `a ... e`.

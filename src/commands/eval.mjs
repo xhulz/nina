@@ -1,7 +1,7 @@
 /**
  * `nina eval` — does a release's reviewer catch more of a planted set of defects than another's?
  *
- *   nina eval --release 0.23.0 --release 0.24.0 [--repeat 2] [--model <m>] [--judge] [--keep]
+ *   nina eval --release 0.23.0 --release 0.24.0 [--case <name>] [--repeat 2] [--model <m>] [--judge] [--keep]
  *   nina eval --release 0.81.0 --tier low --tier high [--repeat 2]
  *   nina eval --release 0.24.0 --dry-run
  *   nina eval --regrade <reports dir> [--judge]
@@ -33,6 +33,12 @@
  * inside a line range, which no citation reaches — and whether each finding outside the planted set is a
  * real problem or noise. It is a call per report on the same login, so it is off by default; `--regrade`
  * re-reads kept reports, with or without it, without running a reviewer again.
+ *
+ * The change is a case, and there is more than one: each directory under `evals/` that holds a `defects.json` is
+ * reviewed by every arm, and `--case` names the ones to run. The first, `reviewer`, was invented for the eval, and
+ * both tiers caught all twelve of its defects, so it could not tell a release or a tier from another. `test-rows` is
+ * made of what reviewers in a project that runs the harness actually sent back: a step of tests whose every row
+ * passes on the code, and also on the mutant it exists to catch.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -69,10 +75,43 @@ const PROFILE = (core, tier) => ({
   vocabulary: { OWNER: 'the maintainer', API_DIR: 'src/server', APP_DIR: 'src/web', PKG_SCOPE: '@notes', EMITTING_PKGS: '`core`' },
 });
 
+/** The spec of the first case, the one a command built with none named reviews against. */
+const FIRST_SPEC = '.claude/plans/specs/archive-notes.md';
+
 /** The prompt the reviewer gets: what a dispatch from the orchestrator would say, and no more. */
-const PROMPT =
-  'Review the uncommitted change in this repository (git diff) against the spec at ' +
-  '.claude/plans/specs/archive-notes.md. Follow your spec and report exactly as it says.';
+const promptFor = (spec) => `Review the uncommitted change in this repository (git diff) against the spec at ${spec}. Follow your spec and report exactly as it says.`;
+
+/**
+ * The eval's cases: each directory under `evals/` that holds a `defects.json`, in name order — or the ones named.
+ *
+ * @param {string} root - The NINA install.
+ * @param {string[]} [names] - The cases `--case` named; every case when empty.
+ * @returns {{cases: {name: string, fixture: string, spec: string}[]}|{error: string}}
+ */
+export function evalCases(root, names = []) {
+  const dir = join(root, 'evals');
+  const all = existsSync(dir) ? readdirSync(dir).filter((name) => existsSync(join(dir, name, 'defects.json'))).sort() : [];
+  const unknown = names.filter((name) => !all.includes(name));
+  if (unknown.length) return { error: `no eval case named ${unknown.join(', ')} — the cases are ${all.join(', ')}` };
+  return {
+    cases: (names.length ? [...new Set(names)] : all).map((name) => ({
+      name,
+      fixture: join(dir, name),
+      spec: JSON.parse(readFileSync(join(dir, name, 'defects.json'), 'utf8')).spec ?? FIRST_SPEC,
+    })),
+  };
+}
+
+/**
+ * Files the change adds, marked as intended in the index: `git diff` shows a file git does not track as nothing, and
+ * a reviewer told to review the diff of a step that only adds a test file would read an empty one.
+ */
+function intendNew(fixture, git) {
+  const added = readdirSync(join(fixture, 'after'), { recursive: true })
+    .map(String)
+    .filter((rel) => !existsSync(join(fixture, 'base', rel)) && statSync(join(fixture, 'after', rel)).isFile());
+  if (added.length) git('add', '--intent-to-add', '--', ...added);
+}
 
 /**
  * Loads the planted defects, with each anchor resolved to its line in the changed tree.
@@ -132,7 +171,18 @@ export function grade(report, defects) {
   const files = [...new Set(defects.flatMap((d) => [d.file, ...d.at.map((a) => a.file)]))];
   const matching = (cited) => files.filter((f) => f === cited || f.endsWith(`/${cited}`));
   const fileLevel = (candidates) => defects.filter((d) => d.line === null && candidates.includes(d.file));
-  lines.forEach((text, i) => {
+  // A bare `:31-34` cites lines of the file the report named last: a report names a file once and then its lines, and
+  // one that did so for six of seven defects was graded 1/7 where the judge read 7/7. A file it named that holds no
+  // planted defect is named last as much as one that does, so its lines are never given to another.
+  let named = null;
+  lines.forEach((raw, i) => {
+    const text = raw.replace(/([\w./-]+\.(?:ts|tsx|js|mjs|json|md))|(^|[\s(`])(:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)/g, (whole, path, lead, cited) => {
+      if (path) {
+        named = path;
+        return whole;
+      }
+      return named ? `${lead}${named}${cited}` : whole;
+    });
     // A line the report marks ✅ is something it confirmed, not something it found.
     if (text.includes('✅')) return;
     const raised = issuesAt >= 0 && i > issuesAt && /^\s*(?:[-*]|\d+[.)])\s/.test(text);
@@ -200,6 +250,7 @@ async function build(dir, fixture, core, ctx, tier) {
   // The change lands on top of the commit, and the harness beside it, ignored — so the diff the
   // reviewer reads is the change alone.
   cpSync(join(fixture, 'after'), dir, { recursive: true });
+  intendNew(fixture, git);
   mkdirSync(join(dir, '.nina'), { recursive: true });
   writeFileSync(join(dir, '.nina', 'profile.json'), JSON.stringify(PROFILE(core, tier), null, 2));
   const result = await composeProject(dir, ctx);
@@ -224,11 +275,15 @@ export function fixtureDiff(fixture) {
     git('add', '-A');
     git('commit', '-q', '-m', 'base');
     cpSync(join(fixture, 'after'), dir, { recursive: true });
+    intendNew(fixture, git);
     return git('diff').stdout;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/** The fewest characters each piece of a quote joined by an ellipsis holds. */
+const ELIDED_PIECE = 12;
 
 /** What the judge must answer: a call on every planted defect, with the words it rests on, and on everything else. */
 const JUDGE_SCHEMA = {
@@ -320,7 +375,9 @@ function jsonIn(text) {
  *
  * It must call every planted defect, each `found` a boolean: an omitted id or a `"yes"` is an answer that
  * does not say what it means, and reading it as "not found" would report a zero the judge never gave. A
- * `found: true` must quote the report — whitespace aside, the evidence is a substring of it — or it is
+ * `found: true` must quote the report — whitespace and the marks that open a list item aside, the evidence is a
+ * substring of it, or pieces of it in order joined by an ellipsis, each of twelve characters or more, the way a quote
+ * leaves out what lies between; a judge quoting two bullets as one sentence drops the `- ` between them — or it is
  * not believed, and is counted apart as unsupported.
  *
  * @param {unknown} answer - The structured output, or the judge's final message holding it.
@@ -336,14 +393,25 @@ export function readJudgement(answer, defects, report) {
   const calls = new Map(object.defects.map((d) => [d?.id, d]));
   if (defects.some((d) => typeof calls.get(d.id)?.found !== 'boolean')) return null;
   if (object.findings.some((f) => f?.call !== 'real' && f?.call !== 'noise')) return null;
-  const flat = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+  // The report and the quote read alike: whitespace collapsed, and the marks that open a list item set aside on both.
+  const flat = (s) => String(s ?? '').replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, '').replace(/\s+/g, ' ').trim();
   const body = flat(report);
   let unsupported = 0;
   const found = defects
     .filter((d) => calls.get(d.id).found)
     .filter((d) => {
       const evidence = flat(calls.get(d.id).evidence);
-      if (evidence && body.includes(evidence)) return true;
+      // Every piece verbatim, each after the one before it: a quote that skips text, never one that rewrites it. Across
+      // an ellipsis each piece is long enough to be words of this report, or `a ... e` would quote any report there is.
+      const pieces = evidence.split(/\s*(?:\.\.\.|…)\s*/).filter(Boolean);
+      let from = 0;
+      const quoted = pieces.length > 0 && (pieces.length === 1 || pieces.every((piece) => piece.length >= ELIDED_PIECE)) && pieces.every((piece) => {
+        const at = body.indexOf(piece, from);
+        if (at < 0) return false;
+        from = at + piece.length;
+        return true;
+      });
+      if (quoted) return true;
       unsupported += 1;
       return false;
     })
@@ -454,13 +522,13 @@ function describe(label, graded, total, cost, judged) {
 /**
  * The command a run executes, and the environment it runs in.
  *
- * @param {{model?: string, api?: boolean, effort?: string}} options - `effort` is the composed spec's own, which
- *   the CLI does not read from the spec of its main agent.
+ * @param {{model?: string, api?: boolean, effort?: string, spec?: string}} options - `effort` is the composed spec's
+ *   own, which the CLI does not read from the spec of its main agent; `spec` the case's, the first case's when absent.
  */
-export function reviewerCommand({ model, api, effort }) {
+export function reviewerCommand({ model, api, effort, spec = FIRST_SPEC }) {
   const env = childEnv(api);
   const args = [
-    '-p', PROMPT,
+    '-p', promptFor(spec),
     '--agent', 'reviewer',
     '--output-format', 'json',
     '--no-session-persistence',
@@ -504,44 +572,55 @@ export async function evalCommand(argv, ctx) {
     return 2;
   }
 
-  const fixture = join(ctx.root, 'evals', 'reviewer');
-  const defects = plantedDefects(fixture);
+  const picked = evalCases(ctx.root, argv.flatMap((a, i) => (a === '--case' ? [argv[i + 1]] : [])));
+  if (picked.error) {
+    console.error(`  ${picked.error}\n`);
+    return 2;
+  }
   const judging = options.judge && !dry;
-  const diff = judging ? fixtureDiff(fixture) : null;
+  const cases = picked.cases.map((c) => ({ ...c, defects: plantedDefects(c.fixture), suspect: false, diff: judging ? fixtureDiff(c.fixture) : null }));
   /** How a run's judge is reported when it is not asked to run. */
   const unjudged = options.judge && dry ? { skipped: 'dry run' } : null;
+  // A line names its case when there is more than one: one case's count read as another's is what this would hide.
+  const named = (c, text) => (cases.length > 1 ? `${c.name} · ${text}` : text);
 
-  // The negative control, once per invocation: a report that found nothing must come out 0 identified.
-  let suspect = false;
-  const control = () => {
+  // The negative control, once per case: a report that found nothing must come out 0 identified.
+  const control = (c) => {
     if (!judging) return;
-    const judged = judge(defects, CONTROL_REPORT, diff, options);
-    suspect = Boolean(judged.failed) || judged.found.length > 0;
-    console.log(
-      judged.failed
-        ? `  judge control failed: ${judged.failed} — the judge's numbers below cannot be trusted`
-        : `  judge control, a report that found nothing: ${judged.found.length}/${defects.length} identified` +
-            (judged.found.length > 0 ? ' — the judge agrees too easily, and its numbers below are suspect' : ''),
-    );
+    const judged = judge(c.defects, CONTROL_REPORT, c.diff, options);
+    c.suspect = Boolean(judged.failed) || judged.found.length > 0;
+    const said = judged.failed
+      ? `judge control failed: ${judged.failed} — the judge's numbers below cannot be trusted`
+      : `judge control, a report that found nothing: ${judged.found.length}/${c.defects.length} identified` +
+        (judged.found.length > 0 ? ' — the judge agrees too easily, and its numbers below are suspect' : '');
+    console.log(`  ${named(c, said)}`);
   };
 
-  // Kept reports, read again: the grading as it is now, and the judge if asked, with no reviewer run.
+  // Kept reports, read again: the grading as it is now, and the judge if asked, with no reviewer run. A report is
+  // named for its case (`<case>--<arm>-<n>.md`); one named before there were cases is the first case's.
   if (regrade) {
     const files = existsSync(regrade) ? readdirSync(regrade).filter((f) => f.endsWith('.md')).sort() : [];
-    if (files.length === 0) {
-      console.error(`  no reports in ${regrade}\n`);
+    const caseOf = (file) => (file.includes('--') ? file.slice(0, file.indexOf('--')) : 'reviewer');
+    const mine = files.filter((file) => cases.some((c) => c.name === caseOf(file)));
+    if (mine.length === 0) {
+      console.error(files.length ? `  no report in ${regrade} is of ${cases.map((c) => c.name).join(' or ')} — each is named \`<case>--<arm>-<n>.md\`\n` : `  no reports in ${regrade}\n`);
       return 1;
     }
-    control();
-    for (const file of files) {
-      const report = readFileSync(join(regrade, file), 'utf8');
-      const judged = judging ? judge(defects, report, diff, options) : unjudged;
-      console.log(describe(file.replace(/\.md$/, ''), grade(report, defects), defects.length, null, judged));
+    for (const c of cases) {
+      const own = mine.filter((file) => caseOf(file) === c.name);
+      if (own.length === 0) continue;
+      control(c);
+      for (const file of own) {
+        const report = readFileSync(join(regrade, file), 'utf8');
+        const judged = judging ? judge(c.defects, report, c.diff, options) : unjudged;
+        console.log(describe(file.replace(/\.md$/, ''), grade(report, c.defects), c.defects.length, null, judged));
+      }
     }
     return 0;
   }
-  control();
-  console.log(`  ${defects.length} planted defects · ${releases.length} release(s)${levels.length ? ` × ${levels.length} tier(s)` : ''} × ${repeat} run(s) · reviewer via \`claude -p\`` +
+  for (const c of cases) control(c);
+  const planted = cases.length > 1 ? `${cases.map((c) => `${c.defects.length} in ${c.name}`).join(', ')} planted defects` : `${cases[0].defects.length} planted defects`;
+  console.log(`  ${planted} · ${releases.length} release(s)${levels.length ? ` × ${levels.length} tier(s)` : ''} × ${repeat} run(s) · reviewer via \`claude -p\`` +
     (options.api ? ' with the API credentials in the environment' : ' on the login, never a per-token key') + '\n');
 
   // Every report is kept, whatever the grade said: a number is only as good as the text behind it, and
@@ -557,73 +636,88 @@ export async function evalCommand(argv, ctx) {
     writeFileSync(join(reports, name), text);
   };
   const results = [];
-  for (const { core, tier, label } of arms) {
-    for (let n = 1; n <= repeat; n += 1) {
-      let dir;
-      try {
-        dir = await stage(fixture, core, ctx, tier);
-      } catch (error) {
-        console.error(`  ✗ ${label}: ${error.message}`);
-        return 1;
-      }
-      try {
-        const { effort } = frontmatter(readFileSync(join(dir, '.claude', 'agents', 'reviewer.md'), 'utf8')) ?? {};
-        const { args, env } = reviewerCommand({ ...options, effort });
-        let report;
-        let cost = null;
-        if (dry) {
-          console.log(`  dry run — ${label} staged in ${dir}; would run: claude ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}`);
-          report = readFileSync(join(fixture, 'sample-report.md'), 'utf8');
-        } else {
-          const run = spawnSync('claude', args, { cwd: dir, env, encoding: 'utf8', timeout: 1_800_000, maxBuffer: 64 * 1024 * 1024 });
-          const failed = runFailure(run, { review: true });
-          // A run that did not review — not logged in, rate-limited, out of turns — is a failure to report,
-          // not a review that caught nothing: graded, it would drag its release's mean down.
-          if (failed) {
-            console.error(`  ✗ ${label} run ${n}: ${failed}`);
-            return 1;
-          }
-          const out = JSON.parse(run.stdout);
-          report = out.result ?? '';
-          cost = typeof out.total_cost_usd === 'number' ? out.total_cost_usd : null;
+  for (const c of cases) {
+    for (const { core, tier, label } of arms) {
+      for (let n = 1; n <= repeat; n += 1) {
+        let dir;
+        try {
+          dir = await stage(c.fixture, core, ctx, tier);
+        } catch (error) {
+          console.error(`  ✗ ${named(c, label)}: ${error.message}`);
+          return 1;
         }
-        keepReport(`${label}-${n}.md`, report);
-        const graded = grade(report, defects);
-        const judged = judging ? judge(defects, report, diff, options) : unjudged;
-        results.push({ arm: label, n, ...graded, cost, judged });
-        console.log(describe(`${label} run ${n}`, graded, defects.length, cost, judged));
-      } finally {
-        if (!dry) forgetProject(dir);
-        if (!keep) rmSync(dir, { recursive: true, force: true });
+        try {
+          const { effort } = frontmatter(readFileSync(join(dir, '.claude', 'agents', 'reviewer.md'), 'utf8')) ?? {};
+          const { args, env } = reviewerCommand({ ...options, effort, spec: c.spec });
+          let report;
+          let cost = null;
+          if (dry) {
+            console.log(`  dry run — ${named(c, label)} staged in ${dir}; would run: claude ${args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}`);
+            report = readFileSync(join(c.fixture, 'sample-report.md'), 'utf8');
+          } else {
+            const run = spawnSync('claude', args, { cwd: dir, env, encoding: 'utf8', timeout: 1_800_000, maxBuffer: 64 * 1024 * 1024 });
+            const failed = runFailure(run, { review: true });
+            // A run that did not review — not logged in, rate-limited, out of turns — is a failure to report,
+            // not a review that caught nothing: graded, it would drag its release's mean down.
+            if (failed) {
+              console.error(`  ✗ ${named(c, label)} run ${n}: ${failed}`);
+              return 1;
+            }
+            const out = JSON.parse(run.stdout);
+            report = out.result ?? '';
+            cost = typeof out.total_cost_usd === 'number' ? out.total_cost_usd : null;
+          }
+          keepReport(`${c.name}--${label}-${n}.md`, report);
+          const graded = grade(report, c.defects);
+          const judged = judging ? judge(c.defects, report, c.diff, options) : unjudged;
+          results.push({ case: c.name, arm: label, n, ...graded, cost, judged });
+          console.log(describe(named(c, `${label} run ${n}`), graded, c.defects.length, cost, judged));
+        } finally {
+          if (!dry) forgetProject(dir);
+          if (!keep) rmSync(dir, { recursive: true, force: true });
+        }
       }
     }
   }
 
   if (reports) console.log(`\n  reports: ${reports}`);
   else console.log('');
-  for (const { label } of arms) {
-    const runs = results.filter((r) => r.arm === label);
-    const mean = runs.reduce((a, r) => a + r.caught.length, 0) / runs.length;
-    const always = defects.filter((d) => runs.every((r) => !r.caught.includes(d.id))).map((d) => d.id);
-    const judged = runs.filter((r) => r.judged && !r.judged.failed && !r.judged.skipped);
-    console.log(
-      `  ${label}: caught ${mean.toFixed(1)}/${defects.length} on average over ${runs.length} run(s)` +
-        (judged.length
-          ? `, ${(judged.reduce((a, r) => a + r.judged.found.length, 0) / judged.length).toFixed(1)} identified by the judge (${judged.length} of ${runs.length} judged${suspect ? ', suspect' : ''})`
-          : '') +
-        (always.length ? ` — never caught: ${always.join(', ')}` : ''),
-    );
-  }
-  // Each arm against the first, with the widest spread any arm showed between its own runs.
-  const counts = arms.map(({ label }) => results.filter((r) => r.arm === label).map((r) => r.caught.length));
   const mean = (xs) => xs.reduce((x, y) => x + y, 0) / xs.length;
-  const spread = Math.max(...counts.map((xs) => Math.max(...xs) - Math.min(...xs)));
-  for (let i = 1; i < arms.length; i += 1) {
-    const delta = mean(counts[i]) - mean(counts[0]);
-    console.log(
-      `\n  ${arms[i].label} − ${arms[0].label}: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} defect(s)` +
-        (repeat > 1 ? `, against a run-to-run spread of ${spread} within one` : ' — one run each cannot tell a difference from noise'),
-    );
+  for (const c of cases) {
+    const ofCase = results.filter((r) => r.case === c.name);
+    for (const { label } of arms) {
+      const runs = ofCase.filter((r) => r.arm === label);
+      const always = c.defects.filter((d) => runs.every((r) => !r.caught.includes(d.id))).map((d) => d.id);
+      const judged = runs.filter((r) => r.judged && !r.judged.failed && !r.judged.skipped);
+      console.log(
+        `  ${named(c, label)}: caught ${mean(runs.map((r) => r.caught.length)).toFixed(1)}/${c.defects.length} on average over ${runs.length} run(s)` +
+          (judged.length
+            ? `, ${mean(judged.map((r) => r.judged.found.length)).toFixed(1)} identified by the judge (${judged.length} of ${runs.length} judged${c.suspect ? ', suspect' : ''})`
+            : '') +
+          (always.length ? ` — never caught: ${always.join(', ')}` : ''),
+      );
+    }
+    // Each arm against the first, with the widest spread any arm showed between its own runs.
+    const counts = arms.map(({ label }) => ofCase.filter((r) => r.arm === label).map((r) => r.caught.length));
+    const spread = Math.max(...counts.map((xs) => Math.max(...xs) - Math.min(...xs)));
+    for (let i = 1; i < arms.length; i += 1) {
+      const delta = mean(counts[i]) - mean(counts[0]);
+      console.log(
+        `\n  ${named(c, `${arms[i].label} − ${arms[0].label}`)}: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} defect(s)` +
+          (repeat > 1 ? `, against a run-to-run spread of ${spread} within one` : ' — one run each cannot tell a difference from noise'),
+      );
+    }
+  }
+  // And over every case, each arm's mean catches summed: what a release or a tier catches of everything planted.
+  if (cases.length > 1) {
+    const total = cases.reduce((a, c) => a + c.defects.length, 0);
+    const sum = (label) => cases.reduce((a, c) => a + mean(results.filter((r) => r.case === c.name && r.arm === label).map((r) => r.caught.length)), 0);
+    console.log('');
+    for (const { label } of arms) console.log(`  every case · ${label}: caught ${sum(label).toFixed(1)}/${total}`);
+    for (let i = 1; i < arms.length; i += 1) {
+      const delta = sum(arms[i].label) - sum(arms[0].label);
+      console.log(`  every case · ${arms[i].label} − ${arms[0].label}: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} defect(s)`);
+    }
   }
   return 0;
 }

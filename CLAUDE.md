@@ -135,7 +135,7 @@ nina runs --project ../thing                  # what each piece of work cost: it
 nina sizes --project ../thing                 # each step's forecast against the lines it landed, and the steps to land at that rate
 nina langfuse login && nina langfuse on       # keys once; then this project sends its runs after every turn (--prompts: the handoffs only)
 nina export --langfuse [--dry-run]            # by hand: the history from before a project was turned on
-nina eval --release <a> --release <b>         # which release's reviewer catches more planted defects
+nina eval --release <a> --release <b>         # which release's reviewer catches more planted defects, case by case
 nina release <version>                        # freeze the working layers; never rewritten
 ```
 
@@ -167,7 +167,7 @@ src/serve.mjs         what every page served here shares: loopback, the host che
 core/ surfaces/       the harness itself, as it is being worked on
 releases/<version>/   frozen copies that projects pin to
 fixtures/             projects that exist to be composed and checked
-evals/                a change with planted defects, for `nina eval` to review release against release
+evals/                changes with planted defects, one case each, for `nina eval` to review release against release
 scripts/              this repo's own drift detectors
 ~/.nina/snapshots/    measured pipeline history (NOT in the repo — see docs/installing.md)
 ```
