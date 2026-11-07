@@ -274,7 +274,10 @@ const BUDGETS = {
   // mutant where no other layer holds — learned three and four times by two projects; for what a change makes false, found by
   // a grep of the whole tree; for a test's harness forecast by its declarations: seven steps landed up to 2.4 times theirs;
   // and for a way past a test that needs the code to work against it, ruled out with its grep rather than specified.
-  '.claude/agents/architect.md': 26600,
+  // And for an input the code decides by, varied like one it passes through, two a swap would confuse told apart, and
+  // each direction it refuses, a list promised whole read from the code: one project's fixtures held a kind, a direction
+  // and two equal fees, three times in a day.
+  '.claude/agents/architect.md': 27000,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   // And for a way past a test that needs the code under test to work against it, a note while no module does so.
@@ -308,7 +311,9 @@ const BUDGETS = {
   // held to every member, and a test's harness measured before its rows. And for the clause that finishes a step held
   // within the lines one run writes, and a forecast made again as a step grows: four runs wrote on past it in two days.
   // And for a fake's methods in the sweep, an arrow or braces where a member has a colon: both forms had gone unseen.
-  '.claude/agents/implementer.md': 28550,
+  // And for a row resting on what a mirror fakes — judged by hand, built as the runner builds it, or named unproved:
+  // three times one project's mirror was green on a matcher, a console or a global it did not copy, and the runner red.
+  '.claude/agents/implementer.md': 29000,
   '.claude/agents/integration-tester.md': 15500,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
@@ -374,7 +379,9 @@ const BUDGETS = {
   // forbidden values built from the run's inputs, never listed: a spec and four sweeps in a day left values out by hand.
   // And for Hard Rule #20's hole, in what ships: a way past a test that needs the code to work against it is a note while
   // no module does so — one project's leak sweeps went back round after round, each for a more exotic one.
-  'CLAUDE.md': 36200,
+  // And, where a project has pii, for a silent-console row that spies every method the console has, own and inherited:
+  // a list of six missed two that print, and a helper's test of four keys passed one that skipped `error`.
+  'CLAUDE.md': 36500,
 };
 
 /**
