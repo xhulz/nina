@@ -1,6 +1,7 @@
 {
-  "describe": "Seven defects in a step that only adds tests, each the shape of one a reviewer sent back in a project that runs the harness, rebuilt here on neutral code. Every row passes on the code as it is, and six of the seven also pass on a mutant they exist to catch: the review has to see that the row cannot fail, or that a case the spec names has no row. The seventh is a missing TSDoc. A defect is caught when the report names the test file and a line within two of one of its anchors: the row's comment, its `it` line and the planted line, since a review cites a row from where its block starts. Each of those six names its mutant, an edit of `src/lending/loans.ts`, and the row the test lacks; the suite proves that the planted test passes on the code and on the mutant, and that the row fails on the mutant and passes on the code.",
+  "describe": "Seven defects in a step that only adds tests, each the shape of one a reviewer sent back in a project that runs the harness, rebuilt here on neutral code. Every row passes on the code as it is, and six of the seven also pass on a mutant they exist to catch: the review has to see that the row cannot fail, or that a case the spec names has no row. The seventh is a missing TSDoc. A defect is caught when the report names the test file and a line within two of one of its anchors: the row's comment, its `it` line and the planted line, since a review cites a row from where its block starts. Each of those six names its mutant, an edit of `src/lending/loans.ts`, and the row the test lacks; the suite proves that the planted test passes on the code and on the mutant, and that the row fails on the mutant and passes on the code. A row's defect is caught too where an issue the report raises cites the file and names the row, `LF-1`.",
   "spec": ".claude/plans/specs/lending-tests.md",
+  "test": "src/lending/loans.test.ts",
   "defects": [
     {
       "id": "tsdoc-missing",
@@ -15,6 +16,9 @@
         "// LF-1 — fails if the fee is not the kind's daily fee times the days late.",
         "it('charges three days late at the daily fee', () => {",
         "const late = loanOf('book');"
+      ],
+      "names": [
+        "LF-1"
       ],
       "what": "every lateFee row lends a book, so a version that charges every kind the book's daily fee passes: the kind the fee is priced from takes one value",
       "mutant": {
@@ -32,6 +36,9 @@
         "it('charges nothing for a loan returned on time', () => {",
         "expect(lateFee(loanOf('book'), daysAfterDue(0))).toBe(0);"
       ],
+      "names": [
+        "LF-2"
+      ],
       "what": "the row's claim is false: on the due date the days are zero with or without the clamp, so removing it leaves the row green; and the spec's early return has no row",
       "mutant": {
         "file": "src/lending/loans.ts",
@@ -48,6 +55,9 @@
         "it('is never negative and always a whole number of daily fees', () => {",
         "for (let n = 0; n <= 60; n += 1) {"
       ],
+      "names": [
+        "LF-P"
+      ],
       "what": "the property only draws returns on or after the due date, so the one order that could make a fee negative is never tried",
       "mutant": {
         "file": "src/lending/loans.ts",
@@ -62,6 +72,9 @@
       "anchor": [
         "// MV-2 — fails if a final loan can move.",
         "it('refuses to move a returned loan', () => {"
+      ],
+      "names": [
+        "MV-2"
       ],
       "what": "a final loan is refused only out of returned; a move out of lost, which the spec names, has no row, so a version that lets a lost loan move passes",
       "mutant": {
@@ -79,6 +92,9 @@
         "it('charges the dispatch fee to the sender and the intake fee to the receiver', () => {",
         "const agreed = { dispatch: 150, intake: 150 };"
       ],
+      "names": [
+        "TR-1"
+      ],
       "what": "the two fees are equal, so a version that charges each branch the other's fee passes",
       "mutant": {
         "file": "src/lending/loans.ts",
@@ -95,13 +111,17 @@
         "it('has a message for every refusal', () => {",
         "for (const refusal of ['same-state', 'already-returned', 'already-lost'] as const) {"
       ],
+      "names": [
+        "RF-1"
+      ],
       "what": "every refusal is checked from a hand list that leaves out overdue, instead of REFUSALS, the code's closed list",
       "mutant": {
         "file": "src/lending/loans.ts",
         "from": "overdue: 'An overdue loan cannot be renewed; return it first.'",
         "to": "overdue: ''"
       },
-      "row": "for (const reason of REFUSALS) expect(explain(reason).length).toBeGreaterThan(0);"
+      "row": "for (const reason of REFUSALS) expect(explain(reason).length).toBeGreaterThan(0);",
+      "imports": "import { REFUSALS } from './loans.js';"
     }
   ]
 }

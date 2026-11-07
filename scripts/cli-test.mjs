@@ -7446,7 +7446,7 @@ await release();
   const { evalCases } = await import('../src/commands/eval.mjs');
   const rows = plantedDefects(join(ROOT, 'evals', 'test-rows'));
   expect(
-    evalCases(ROOT).cases.map((c) => c.name).join() === 'reviewer,test-rows' && evalCases(ROOT, ['nope']).error?.includes('no eval case named nope') &&
+    evalCases(ROOT).cases.map((c) => c.name).join() === 'escaped,reviewer,test-rows' && evalCases(ROOT, ['nope']).error?.includes('no eval case named nope') &&
       rows.length === 7 && rows.every((d) => d.file === 'src/lending/loans.test.ts' && d.line > 0) &&
       reviewerCommand({ spec: evalCases(ROOT, ['test-rows']).cases[0].spec }).args.join(' ').includes('against the spec at .claude/plans/specs/lending-tests.md'),
     `eval: each directory under evals/ with planted defects is a case, reviewed against its own spec — got ${JSON.stringify(evalCases(ROOT))}`,
@@ -7467,27 +7467,37 @@ await release();
       'equal-fees,reasons-hand-list,refusal-one-direction',
     'eval: a row cited as its block, from where the block starts, is that row\'s defect',
   );
+  // A review that read a new file through its diff cited every row three to five lines off, and named each one: an issue
+  // that cites the file and names a planted row is that row's defect, and a mention without the file, or above the
+  // issues, is not.
+  const escapedRows = plantedDefects(join(ROOT, 'evals', 'escaped'));
+  const byName = (lines) => grade(lines.join('\n'), escapedRows).caught.sort().join();
+  expect(
+    byName(['VERDICT: REJECTED', 'ISSUES: x', '6. **`hold-live-test-blind`** — `src/tickets/tickets.test.ts:31-32` (HL-1)']) === 'other-row-answers-either-way' &&
+      byName(['VERDICT: REJECTED', 'ISSUES: x', '- HL-1 cannot fail, its other row answers either way']) === '' &&
+      byName(['VERDICT: REJECTED', '- `src/tickets/tickets.test.ts:31` (HL-1)', 'ISSUES: x']) === '' &&
+      byName(['VERDICT: REJECTED', 'ISSUES: x', '- `src/tickets/tickets.test.ts:31` (HL-10)']) === '',
+    'eval: an issue citing the test file and naming a planted row is that row\'s defect, at any line; no file, no issue or another name is not',
+  );
   expect(fixtureDiff(join(ROOT, 'evals', 'test-rows')).includes("+    const agreed = { dispatch: 150, intake: 150 };"), 'eval: the change the judge is shown holds the file it adds');
   const both = run(['eval', '--release', 'dev', '--dry-run', '--keep'], { loud: true });
   const caseDirs = Object.fromEntries([...both.out.matchAll(/dry run — (\S+) · dev staged in (\S+);/g)].map((m) => [m[1], m[2]]));
   const addedOnly = caseDirs['test-rows'] ? spawnSync('git', ['status', '--porcelain'], { cwd: caseDirs['test-rows'], encoding: 'utf8' }).stdout.trim() : '';
   const shownInDiff = caseDirs['test-rows'] ? spawnSync('git', ['diff', '--stat'], { cwd: caseDirs['test-rows'], encoding: 'utf8' }).stdout : '';
   expect(
-    both.status === 0 && both.out.includes('12 in reviewer, 7 in test-rows planted defects') && both.out.includes('reviewer · dev: caught 4.0/12') &&
-      both.out.includes('test-rows · dev: caught 3.0/7') && both.out.includes('every case · dev: caught 7.0/19') &&
+    both.status === 0 && both.out.includes('8 in escaped, 12 in reviewer, 7 in test-rows planted defects') && both.out.includes('escaped · dev: caught 3.0/8') && both.out.includes('reviewer · dev: caught 4.0/12') &&
+      both.out.includes('test-rows · dev: caught 3.0/7') && both.out.includes('every case · dev: caught 10.0/27') &&
       addedOnly === 'A src/lending/loans.test.ts' && shownInDiff.includes('loans.test.ts'),
     `eval: every case runs, each graded on its own and summed, and a file the change adds is in the diff the reviewer reads — got ${both.out} / ${addedOnly}`,
   );
   for (const d of Object.values(caseDirs)) await rm(d, { recursive: true, force: true });
-  // Each defect of the second case is real, and stays so as the fixture changes: the planted test passes on the code
-  // and on the defect's mutant, and the row it lacks fails on the mutant and passes on the code — run with Node's own
-  // TypeScript under a stand-in for vitest, since the fixture installs nothing.
+  // Each case's defects are real, and stay so as a fixture changes. A test's defect names a mutant — an edit of the
+  // code as the change leaves it — that the planted test passes, and the row it lacks, which fails on the mutant and
+  // passes on the code; a defect in the code names its fix and the row that fails on the change and passes once
+  // fixed; a change that breaks a test it never touched names that test, green before and red after. Run with Node's
+  // own TypeScript under a stand-in for vitest, since no fixture installs anything.
   const [major, minor] = process.versions.node.split('.').map(Number);
   if (major > 22 || (major === 22 && minor >= 6)) {
-    const caseDir = join(ROOT, 'evals', 'test-rows');
-    const { defects: declared } = JSON.parse(await readFile(join(caseDir, 'defects.json'), 'utf8'));
-    const source = await readFile(join(caseDir, 'base', 'src', 'lending', 'loans.ts'), 'utf8');
-    const planted = (await readFile(join(caseDir, 'after', 'src', 'lending', 'loans.test.ts'), 'utf8')).replace("from './loans.js';", "from './loans.ts';\nimport { REFUSALS } from './loans.ts';");
     const stand = [
       'let failed = 0;',
       'export const describe = (name, body) => body();',
@@ -7495,40 +7505,60 @@ await release();
       'const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);',
       "const within = (a, b) => (typeof b !== 'object' || b === null ? Object.is(a, b) : Object.keys(b).every((k) => a != null && within(a[k], b[k])));",
       'const must = (ok) => { if (!ok) throw new Error(); };',
-      'export const expect = (a) => ({ toBe: (b) => must(Object.is(a, b)), toEqual: (b) => must(same(a, b)), toMatchObject: (b) => must(within(a, b)), toBeGreaterThan: (b) => must(a > b), toBeGreaterThanOrEqual: (b) => must(a >= b) });',
+      'const threw = (fn, what) => { try { fn(); } catch (e) { return what === undefined || (typeof what === "string" ? String(e?.message).includes(what) : e instanceof what); } return false; };',
+      'export const expect = (a) => ({ toBe: (b) => must(Object.is(a, b)), toEqual: (b) => must(same(a, b)), toMatchObject: (b) => must(within(a, b)), toBeGreaterThan: (b) => must(a > b), toBeGreaterThanOrEqual: (b) => must(a >= b), toThrow: (w) => must(threw(a, w)) });',
       "process.on('exit', () => { process.exitCode = failed ? 1 : 0; });",
     ].join('\n');
-    const green = async (code, test) => {
+    // A project as the change leaves it (`after` over `base`), or as it was, with one edit made and a row added.
+    const project = async (caseDir, { before = false, edit = null, test = null, row = null, imports = '' } = {}) => {
       const dir = await scratch();
+      await cp(join(caseDir, 'base', 'src'), join(dir, 'src'), { recursive: true });
+      if (!before) await cp(join(caseDir, 'after', 'src'), join(dir, 'src'), { recursive: true, force: true });
       await mkdir(join(dir, 'node_modules', 'vitest'), { recursive: true });
       await writeFile(join(dir, 'node_modules', 'vitest', 'package.json'), '{"name":"vitest","type":"module","main":"index.js"}');
       await writeFile(join(dir, 'node_modules', 'vitest', 'index.js'), stand);
       await writeFile(join(dir, 'package.json'), '{"type":"module"}');
-      await writeFile(join(dir, 'loans.ts'), code);
-      await writeFile(join(dir, 'loans.test.ts'), test);
-      return spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', 'loans.test.ts'], { cwd: dir, encoding: 'utf8' }).status === 0;
+      let applied = edit === null;
+      for (const rel of (await walk(join(dir, 'src'))).filter((f) => f.endsWith('.ts'))) {
+        const path = join(dir, 'src', rel);
+        let text = await readFile(path, 'utf8');
+        if (edit && `src/${rel}` === edit.file && text.includes(edit.from)) {
+          text = text.replace(edit.from, edit.to);
+          applied = true;
+        }
+        if (row && `src/${rel}` === test) text = `${text}\n${imports}\nit('the row it lacks', () => {\n${row}\n});\n`;
+        await writeFile(path, text.replace(/(from\s+'\.{1,2}\/[^']+)\.js'/g, "$1.ts'"));
+      }
+      return { dir, applied };
     };
-    const withRow = (row) => `${planted}\nit('the row it lacks', () => { ${row} });\n`;
+    const green = ({ dir }, test) => spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', test], { cwd: dir, encoding: 'utf8' }).status === 0;
     const proofs = [];
-    for (const d of declared.filter((x) => x.mutant)) {
-      const mutated = source.replace(d.mutant.from, d.mutant.to);
-      proofs.push({
-        id: d.id,
-        applies: mutated !== source && d.mutant.file === 'src/lending/loans.ts',
-        survives: await green(mutated, planted),
-        caught: !(await green(mutated, withRow(d.row))),
-        holds: await green(source, withRow(d.row)),
-      });
+    for (const name of ['test-rows', 'escaped']) {
+      const caseDir = join(ROOT, 'evals', name);
+      const { test, defects: declared } = JSON.parse(await readFile(join(caseDir, 'defects.json'), 'utf8'));
+      const baseline = green(await project(caseDir), test);
+      for (const d of declared.filter((x) => x.mutant || x.fix || x.breaks)) {
+        const add = { test, row: d.row, imports: d.imports ?? '' };
+        if (d.mutant) {
+          const mutated = await project(caseDir, { edit: d.mutant });
+          proofs.push({ case: name, id: d.id, baseline, applies: mutated.applied, survives: green(mutated, test), caught: !green(await project(caseDir, { edit: d.mutant, ...add }), test), holds: green(await project(caseDir, add), test) });
+        } else if (d.fix) {
+          const fixed = await project(caseDir, { edit: d.fix, ...add });
+          proofs.push({ case: name, id: d.id, baseline, applies: fixed.applied, survives: green(await project(caseDir, { edit: d.fix }), test), caught: !green(await project(caseDir, add), test), holds: green(fixed, test) });
+        } else {
+          proofs.push({ case: name, id: d.id, baseline, applies: true, survives: green(await project(caseDir, { before: true }), d.breaks), caught: !green(await project(caseDir), d.breaks), holds: true });
+        }
+      }
     }
     expect(
-      (await green(source, planted)) && proofs.length === 6 && proofs.every((p) => p.applies && p.survives && p.caught && p.holds),
-      `eval: every test-rows defect is real — its mutant passes the planted test, and the row it lacks catches it and passes on the code — got ${JSON.stringify(proofs)}`,
+      proofs.length === 14 && proofs.every((p) => p.baseline && p.applies && p.survives && p.caught && p.holds),
+      `eval: every case's defects are real — a mutant the planted test passes and its row catches, a fix whose row fails without it, a test the change breaks — got ${JSON.stringify(proofs.filter((p) => !(p.baseline && p.applies && p.survives && p.caught && p.holds)))} of ${proofs.length}`,
     );
   } else {
-    console.log(`  · eval: the test-rows mutants run TypeScript with Node's own types, from 22.6; not proved on ${process.version}`);
+    console.log(`  · eval: the cases' defects run TypeScript with Node's own types, from 22.6; not proved on ${process.version}`);
   }
   const unknownCase = run(['eval', '--release', 'dev', '--case', 'nope', '--dry-run'], { loud: true });
-  expect(unknownCase.status === 2 && unknownCase.out.includes('the cases are reviewer, test-rows'), `eval: a case that does not exist is refused, naming those that do — got ${unknownCase.out}`);
+  expect(unknownCase.status === 2 && unknownCase.out.includes('the cases are escaped, reviewer, test-rows'), `eval: a case that does not exist is refused, naming those that do — got ${unknownCase.out}`);
 
   // Nothing an eval run leaves behind: counted before any of them, so a leak anywhere below shows.
   const leftovers = async () => (await readdir(tmpdir())).filter((f) => /^nina-eval-/.test(f));

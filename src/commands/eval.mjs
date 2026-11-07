@@ -38,7 +38,8 @@
  * reviewed by every arm, and `--case` names the ones to run. The first, `reviewer`, was invented for the eval, and
  * both tiers caught all twelve of its defects, so it could not tell a release or a tier from another. `test-rows` is
  * made of what reviewers in a project that runs the harness actually sent back: a step of tests whose every row
- * passes on the code, and also on the mutant it exists to catch.
+ * passes on the code, and also on the mutant it exists to catch. Both tiers caught all of it, so `escaped` is made of
+ * what a reviewer approved and a later stage sent back.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -121,7 +122,9 @@ function intendNew(fixture, git) {
  * service should have formatted is as visible where the route formats it. Each anchor is looked up in
  * every planted file, and must match exactly one line in all of them.
  *
- * @returns {{id: string, at: {file: string, line: number}[], file: string, line: number|null, what: string}[]}
+ * A row's defect may also name the row (`names: ["HL-1"]`), which an issue the report raises can cite it by.
+ *
+ * @returns {{id: string, at: {file: string, line: number}[], file: string, line: number|null, what: string, names: string[]}[]}
  *   `at` lists every place; `file` and `line` are the first, for a defect named by its file alone `line` is null.
  */
 export function plantedDefects(fixture) {
@@ -129,13 +132,14 @@ export function plantedDefects(fixture) {
   const tree = (file) => [join(fixture, 'after', file), join(fixture, 'base', file)].find(existsSync);
   const files = [...new Set(defects.map((d) => d.file))];
   return defects.map((d) => {
-    if (!d.anchor) return { id: d.id, at: [], file: d.file, line: null, what: d.what };
+    const names = Array.isArray(d.names) ? d.names : [];
+    if (!d.anchor) return { id: d.id, at: [], file: d.file, line: null, what: d.what, names };
     const at = [d.anchor].flat().map((anchor) => {
       const hits = files.flatMap((file) => readFileSync(tree(file), 'utf8').split('\n').flatMap((l, i) => (l.includes(anchor) ? [{ file, line: i + 1 }] : [])));
       if (hits.length !== 1) throw new Error(`defect ${d.id}: its anchor must match exactly one line — "${anchor}" matched ${hits.length}`);
       return hits[0];
     });
-    return { id: d.id, at, file: at[0].file, line: at[0].line, what: d.what };
+    return { id: d.id, at, file: at[0].file, line: at[0].line, what: d.what, names };
   });
 }
 
@@ -186,6 +190,12 @@ export function grade(report, defects) {
     // A line the report marks ✅ is something it confirmed, not something it found.
     if (text.includes('✅')) return;
     const raised = issuesAt >= 0 && i > issuesAt && /^\s*(?:[-*]|\d+[.)])\s/.test(text);
+    // An issue that cites a planted file and names a row, `(HL-1)`, is that row's defect whatever line it gives: a
+    // review that read a new file through its diff cited every row three to five lines off, and named each one.
+    if (raised) {
+      const cites = [...text.matchAll(/([\w./-]+\.(?:ts|tsx|js|mjs|json|md))/g)].some((m) => matching(m[1].replace(/^\.\//, '')).length > 0);
+      if (cites) for (const d of defects) if ((d.names ?? []).some((name) => new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(text))) caught.add(d.id);
+    }
     // `path:1,36` cites two lines; `path:41-49` cites a block, read as its first line — crediting every
     // defect inside a block would let one citation catch four neighbours again.
     for (const m of text.matchAll(/([\w./-]+\.(?:ts|tsx|js|mjs|json|md))(?::(\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*))?/g)) {
