@@ -186,10 +186,10 @@ commit, the count its implementer's first report gave: the rounds after it are t
 the rate is measured by the first. One that landed more than a quarter over says the steps forecast with it are short
 by as much: forecast each again at its turn, before it goes out — a `Size:` line that opens with its number, at the rate
 `nina sizes` prints for it, from the steps of its `Kind:` where any landed — and send the architect only a step the new
-number puts past {{STEP_LINES}} lines, to be split. A forecast that already carries a rate measured on steps of another
-kind is restated from its own count at its kind's, never multiplied again: `nina sizes` shows what a step carries over
-its first forecast beside what its kind's steps missed by. The rest wait for their turn, when the steps before them will have measured the
-rate again.
+number puts past {{STEP_LINES}} lines, to be split, or a `Kind: tests` step past half again them, which its implementer
+may write. A forecast that already carries a rate measured on steps of another kind is restated from its own count at
+its kind's, never multiplied again: `nina sizes` shows what a step carries over its first forecast beside what its
+kind's steps missed by. The rest wait for their turn, when the steps before them will have measured the rate again.
 
 ### Commits
 

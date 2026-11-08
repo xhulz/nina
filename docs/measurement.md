@@ -324,7 +324,16 @@ or more was sent back about once per 500 lines whatever its size — a large one
 step of 400–600 lines took 13.3 agent-minutes per 100 lines against 19.3 at 200–400, since every step pays a review and a
 qa whatever its size. A step of source took 17.3 against 14.5. So an implementer holds a tests step to half again the limit, and its
 `Size:` is a forecast to report against, not a stop; a step of source still stops past either, and the architect still
-splits both at the limit, which is where its forecasts are measured from. Two requests had asked
+splits both at the limit, which is where its forecasts are measured from: over the first project's 154 landed tests
+steps, the middle half came in at 0.98 to 1.38 times their forecast and one in ten past 1.65, so a plan at half again the
+limit would stop about half its steps there. A step forecast again is another matter. Sent back to the architect whenever its
+new number passed the limit, a tests step paid for certain what an overrun costs only when it happens — an architect run
+and every stage of one more step — and came back as pieces of 200 to 300 lines, the band that costs more per line: one
+spec of the first project cut one step four times over (`8a3b2`, `8a3c`, `8a3d`, `8a3d2`), and `nina sizes` called 14
+more of its tests steps, forecast again at 409 to 504, to be split, while its 27 tests steps of 400–600 had taken 12.9
+agent-minutes per 100 lines against 19.3 for its 90 of 200–400. So since 0.92.0 the router sends a tests step forecast
+again to the architect only past half again the limit, what its implementer may write, and `nina sizes` marks it past
+that, its `--check` saying so too. Two requests had asked
 implementers to stop sooner, after eleven runs past their forecast that the orchestrator mostly accepted as they were. The block
 reads the store, so it is not part of `--check`, which runs every turn.
 
@@ -767,3 +776,13 @@ between the tiers, one defect in two runs, and two runs cannot tell it from nois
 run as 4/8 at first: it cited every row of the new file three to five lines off, as a review reading a file through
 its diff does, and named each one, so a row's defect may also name the row (`names`), and an issue that cites the
 file and names it is that defect.
+
+Four more runs at each tier, at 0.91.0, each report read whole: the high tier named all eight every time, 48 of 48
+over the six runs, at $0.52–0.67 a review; the low tier, at $0.12–0.16, came to 44 of 48. It missed the fixture
+whose other row answers either way in three of six — once calling it acceptable — set the changed message that
+breaks a caller's test aside as out of scope or a note in two, and once put its verdict below the first line, where
+the gate cannot read it. What the low tier misses is the class that escapes to qa and the integration tester, so the
+reviewer stays on the high tier. The automatic grade is a floor, not the reading — it gave one low report 5 of 8
+where the report named all eight — and the judge and the reports read whole are the measure. Crediting an issue by
+the file a report named last was tried and dropped: it credited a report that called the fixture's defect
+acceptable.

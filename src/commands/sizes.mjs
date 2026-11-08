@@ -34,6 +34,23 @@ const SPECS = join('.claude', 'plans', 'specs');
 /** A landed step past its forecast by more than this sets off the detector. */
 export const OVERRUN = 1.25;
 
+/**
+ * A step of tests alone may write half again the lines one run writes, as the implementer holds it: splitting a test
+ * file buys another review and qa, not fewer findings. A step forecast again past the limit goes to the architect to be
+ * split only past what its kind may write — that split costs an architect run and a step's every stage for certain,
+ * where a step that overruns in the writing costs them only when it does.
+ */
+export const TESTS_HELD = 1.5;
+
+/**
+ * The lines a step to land may be forecast at before it is split: the limit, half again it for a tests step.
+ *
+ * @param {{kind?: string|null}} step - A step from {@link measure}.
+ * @param {number} limit - The lines one run writes.
+ * @returns {number}
+ */
+export const splitPast = (step, limit) => (step.kind === 'tests' ? Math.round(limit * TESTS_HELD) : limit);
+
 /** How many of a spec's newest landed steps its rate is measured over. */
 const RATE_OVER = 5;
 
@@ -348,7 +365,8 @@ export function describes(desc, step) {
  *
  * The limit was a forecast of cost until this measured it: over one project's 327 matched steps, a step of 200 lines or
  * more was sent back about once per 500 lines whatever its size, and a tests step of 400–600 lines took 13.3
- * agent-minutes per 100 lines against 19.3 at 200–400 — which is why a tests step is held to half again the limit.
+ * agent-minutes per 100 lines against 19.3 at 200–400 — which is why a tests step is held to half again the limit
+ * ({@link TESTS_HELD}).
  *
  * @param {object[]} steps - From {@link measure}.
  * @param {object[]} records - The project's rounds, from the store.
@@ -373,7 +391,7 @@ export function outcome(steps, records, limit) {
     if (!mine.some((r) => r.role !== 'implementer')) continue;
     matched += 1;
     const first = s.first ?? s.lines;
-    const band = first <= limit / 2 ? 0 : first <= limit ? 1 : first <= limit * 1.5 ? 2 : 3;
+    const band = first <= limit / 2 ? 0 : first <= limit ? 1 : first <= limit * TESTS_HELD ? 2 : 3;
     const kind = s.kind === 'tests' ? 'tests' : 'source';
     const key = `${kind}:${band}`;
     const g = groups.get(key) ?? { kind, band, steps: 0, back: 0, loops: 0, minutes: 0, lines: 0 };
@@ -479,13 +497,14 @@ export async function sizes(argv) {
       const again = stale.slice(0, 4).map((s) => {
         const rate = rateOf(steps, s);
         const next = Math.round(s.forecast.lines * (rate?.rate ?? 1));
-        return `${s.step} ~${s.forecast.lines} → ~${next}${rate?.kind ? ` (${rate.kind})` : ''}${next > limit ? ` past ${limit}` : ''}`;
+        const past = splitPast(s, limit);
+        return `${s.step} ~${s.forecast.lines} → ~${next}${rate?.kind ? ` (${rate.kind})` : ''}${next > past ? ` past ${past}` : ''}`;
       });
       const first = step.first === null ? '' : `, ${step.first} in its first round (${times(step.measured)})`;
       said.push(
         `step ${step.step} of ${step.spec} landed ${step.lines} lines against ~${step.forecast.lines} (${times(step.ratio)}${first}); ` +
           `before the next of its ${stale.length} step(s) forecast when it was goes out, forecast that one again — a \`Size:\` line at the rate \`nina sizes\` gives it — ` +
-          `and split it if that puts it past ${limit}; the rest at their turn: ${again.join(', ')}${stale.length > again.length ? ', …' : ''}`,
+          `and split it if that puts it past ${limit}, or ${Math.round(limit * TESTS_HELD)} for a step of tests alone; the rest at their turn: ${again.join(', ')}${stale.length > again.length ? ', …' : ''}`,
       );
     }
     // Only a step still to land: its line can be written again now, and once it lands, the line it carried is history.
@@ -517,7 +536,7 @@ export async function sizes(argv) {
   };
   for (const spec of [...new Set([...steps, ...unread].map((s) => s.spec))]) {
     const mine = steps.filter((s) => s.spec === spec);
-    console.log(`\n  ${bold(pink(spec))}${dim(`  landed against the forecast it was built to; limit ${limit} lines`)}`);
+    console.log(`\n  ${bold(pink(spec))}${dim(`  landed against the forecast it was built to; limit ${limit} lines, ${Math.round(limit * TESTS_HELD)} for tests`)}`);
     for (const s of mine.filter((x) => x.landed).sort((a, b) => a.t - b.t)) {
       const mark = s.measured > OVERRUN ? amber(times(s.ratio)) : times(s.ratio);
       const files = s.forecast.files === null ? `${s.files} file(s)` : `${s.files} file(s) of ${s.forecast.files}`;
@@ -537,7 +556,7 @@ export async function sizes(argv) {
       console.log(
         `    ${s.step.padEnd(10)} ~${String(s.forecast.lines).padEnd(5)} → ~${String(next).padEnd(5)} ` +
           dim(`to land, at ${times(rate.rate)} over ${rate.over} ${rate.kind ? `${rate.kind} ` : ''}step(s) forecast as it was`) +
-          (next > limit ? amber(`  past ${limit}: split`) : '') +
+          (next > splitPast(s, limit) ? amber(`  past ${splitPast(s, limit)}: split`) : '') +
           carried(s),
       );
     }
@@ -549,7 +568,7 @@ export async function sizes(argv) {
   const records = projectRecords(dir);
   const bought = records ? outcome(steps, records, limit) : null;
   if (bought?.matched) {
-    const bands = [`≤${Math.round(limit / 2)}`, `≤${limit}`, `≤${Math.round(limit * 1.5)}`, `>${Math.round(limit * 1.5)}`];
+    const bands = [`≤${Math.round(limit / 2)}`, `≤${limit}`, `≤${Math.round(limit * TESTS_HELD)}`, `>${Math.round(limit * TESTS_HELD)}`];
     console.log(`\n  ${bold(pink('what each size cost'))}${dim(`  ${bought.matched} of ${bought.landed} landed step(s) matched to the rounds their dispatches name, from the implementer on`)}`);
     console.log(dim(`    ${'first round'.padEnd(17)}${'steps'.padStart(6)}${'sent back'.padStart(11)}${'loop-backs'.padStart(12)}${'agent-min'.padStart(11)}   per 100 lines landed`));
     let kind = null;

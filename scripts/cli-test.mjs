@@ -5097,7 +5097,8 @@ const dated = (date, status = 'active') =>
     ['the kind', /from the steps of its `Kind:` where any landed/.test(routed) && (await spec('agents/architect.md')).includes('and say its kind (`Kind: new` for a module of its own, `extends` for a file that exists, `tests` for tests alone)')],
     ['no trimming to fit', (await spec('agents/implementer.md')).includes('finish the step rather than stop mid-way') && (await spec('agents/implementer.md')).includes('Never trim documentation or tests to meet the count')],
     ['the architect only to split', /send the\s+architect only a step the\s+new\s+number puts past\s+400 lines, to be split/.test(routed)],
-    ['a rate never multiplied onto another kind\'s', /carries a rate measured on steps of another\s+kind is restated from its own count at its kind's, never multiplied again/.test(routed)],
+    ['a tests step split only past what its implementer may write', /or a `Kind: tests` step past half again them, which its implementer\s+may write\./.test(routed) && detectors.includes('or past half again it for a step of `Kind: tests`, to split')],
+    ['a rate never multiplied onto another kind\'s', /carries a rate measured on steps of another\s+kind is restated from its own count at\s+its kind's, never multiplied again/.test(routed)],
     ['the commit names its step', /as its step file does \(`<spec> step <n>`\), which is how\s+`nina sizes` finds it/.test(routed)],
     ['the architect forecasts at the rate', (await spec('agents/architect.md')).includes('at the rate `nina sizes` measured on the steps that landed')],
   ]) expect(held, `compose: a step is measured against its forecast at each commit — keeps ${clause}`);
@@ -5262,7 +5263,7 @@ const dated = (date, status = 'active') =>
   expect(
     fired.status === 1 &&
       fired.out.includes(
-        'step 1 of feat-spec landed 150 lines against ~100 (×1.50); before the next of its 2 step(s) forecast when it was goes out, forecast that one again — a `Size:` line at the rate `nina sizes` gives it — and split it if that puts it past 400; the rest at their turn: 2 ~200 → ~230, 3 ~150 → ~173',
+        'step 1 of feat-spec landed 150 lines against ~100 (×1.50); before the next of its 2 step(s) forecast when it was goes out, forecast that one again — a `Size:` line at the rate `nina sizes` gives it — and split it if that puts it past 400, or 600 for a step of tests alone; the rest at their turn: 2 ~200 → ~230, 3 ~150 → ~173',
       ),
     `sizes: the detector speaks when the newest step overran and the steps forecast with it were not forecast again — got ${fired.out}`,
   );
@@ -5327,6 +5328,41 @@ const dated = (date, status = 'active') =>
   expect(
     /c\s+~100\s+→ ~100\s+to land, at ×1\.00 over 1 extends step\(s\)/.test(klisted) && /d\s+~100\s+→ ~110\s+to land, at ×1\.10 over 1 new step\(s\)/.test(klisted),
     `sizes: a step to land is forecast again at the rate of the landed steps of its kind — got ${klisted}`,
+  );
+
+  // A step forecast again went back to the architect whenever its new number passed the limit, a tests step too, which
+  // its implementer may write to half again it: one project's tests steps were cut four times over, each cut an
+  // architect run and every stage of one more step, where an overrun costs them only when it happens.
+  const held = await scratch();
+  const hgit = (...args) => spawnSync('git', ['-C', held, ...args], { encoding: 'utf8' });
+  const hspecs = join(held, '.claude', 'plans', 'specs');
+  await mkdir(hspecs, { recursive: true });
+  await mkdir(join(held, '.nina'), { recursive: true });
+  await mkdir(join(held, 'src'), { recursive: true });
+  await writeFile(join(held, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', surfaces: [], vocabulary: {} }));
+  const hstep = (n, kind, size) => writeFile(join(hspecs, `h-spec.step-${n}.md`), `# Step ${n}\n\nKind: ${kind}\n- **Size:** ~${size} lines in 1 file.\n`);
+  hgit('init', '-q');
+  hgit('config', 'user.email', 'test@example.com');
+  hgit('config', 'user.name', 'test');
+  await hstep('x', 'extends', 100);
+  await hstep('t1', 'tests', 350);
+  await hstep('t2', 'tests', 450);
+  await hstep('s1', 'extends', 350);
+  hgit('add', '-A');
+  spawnSync('git', ['-C', held, 'commit', '-qm', 'Plan in steps (h-spec)'], { env: { ...process.env, GIT_COMMITTER_DATE: '2026-03-03T10:00:00Z', GIT_AUTHOR_DATE: '2026-03-03T10:00:00Z' } });
+  await writeFile(join(held, 'src', 'x.ts'), lines(150));
+  hgit('add', '-A');
+  spawnSync('git', ['-C', held, 'commit', '-qm', 'h step x (h-spec step x)'], { env: { ...process.env, GIT_COMMITTER_DATE: '2026-03-03T11:00:00Z', GIT_AUTHOR_DATE: '2026-03-03T11:00:00Z' } });
+  const hlisted = run(['sizes', '--project', held], { loud: true }).out;
+  const hcheck = run(['sizes', '--project', held, '--check'], { loud: true }).out;
+  expect(
+    /t1\s+~350\s+→ ~525\s+to land, at ×1\.50 over 1 step\(s\) forecast as it was(?!\s+past)/.test(hlisted) &&
+      /t2\s+~450\s+→ ~675\s+to land, at ×1\.50 over 1 step\(s\) forecast as it was\s+past 600: split/.test(hlisted) &&
+      /s1\s+~350\s+→ ~525\s+to land, at ×1\.50 over 1 extends step\(s\) forecast as it was\s+past 400: split/.test(hlisted) &&
+      hlisted.includes('limit 400 lines, 600 for tests') &&
+      hcheck.includes('t1 ~350 → ~525,') && hcheck.includes('t2 ~450 → ~675 past 600') && hcheck.includes('s1 ~350 → ~525 (extends) past 400') &&
+      hcheck.includes('split it if that puts it past 400, or 600 for a step of tests alone'),
+    `sizes: a tests step forecast again is split only past half again the limit, a step of source past the limit — got ${hlisted} / ${hcheck}`,
   );
 
   // A step's limit was a forecast of cost nothing checked: over 327 steps of one project, a tests step of 400–600 lines
