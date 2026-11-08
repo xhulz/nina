@@ -233,6 +233,7 @@ Every named declaration gets a TSDoc block (`/** ... */`) — exported or not: f
 ### Enforcement
 Reviewer verifies coverage. **Missing TSDoc on any declaration or member the diff adds or changes — test files
 included, as Hard Rule #9 counts them — = `REJECTED`.**
+<!-- nina:slot project.8 tsdoc-check -->
 
 ---
 

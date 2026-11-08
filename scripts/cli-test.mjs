@@ -5094,10 +5094,12 @@ const dated = (date, status = 'active') =>
     ['the detector', detectors.includes("args: ['sizes', '--check', '--quiet']") && detectors.includes('ignore: /^sizes: current$/')],
     ['the re-forecast at its turn', /One that landed more than a quarter over says the steps forecast with it are short\s+by as much: forecast each again at its turn, before it goes out/.test(routed)],
     ['the first round', /write `First round: ~N lines` in its step file with its\s+commit, the count its implementer's first report gave/.test(routed)],
-    ['the kind', /from the steps of its `Kind:` where any landed/.test(routed) && (await spec('agents/architect.md')).includes('and say its kind (`Kind: new` for a module of its own, `extends` for a file that exists, `tests` for tests alone)')],
+    ['the kind', /from the steps of its `Kind:` where any landed/.test(routed) && (await spec('agents/architect.md')).includes('and say its kind (`Kind: new` for a module of its own, `extends` for a file that exists, `tests` for a file of tests alone, new or not)')],
     ['no trimming to fit', (await spec('agents/implementer.md')).includes('finish the step rather than stop mid-way') && (await spec('agents/implementer.md')).includes('Never trim documentation or tests to meet the count')],
+    ['a tests step planned to the limit, its half again a margin', (await spec('agents/architect.md')).includes('or the forecast passes either (400 lines for tests too: the half again an implementer may write is margin, never a plan), split it into numbered steps, each one piece') && !(await spec('agents/architect.md')).includes('~550 lines')],
+    ['the rate beside the forecast', (await spec('agents/architect.md')).includes('at the rate `nina sizes` measured on the steps that landed, named beside it;')],
     ['the architect only to split', /send the\s+architect only a step the\s+new\s+number puts past\s+400 lines, to be split/.test(routed)],
-    ['a tests step split only past what its implementer may write', /or a `Kind: tests` step past half again them, which its implementer\s+may write\./.test(routed) && detectors.includes('or past half again it for a step of `Kind: tests`, to split')],
+    ['a tests step split only past what its implementer may write', /or a `Kind: tests` step past half again them, which its implementer\s+may write:/.test(routed) && detectors.includes('or past half again it for a step of `Kind: tests`, to split')],
     ['a rate never multiplied onto another kind\'s', /carries a rate measured on steps of another\s+kind is restated from its own count at\s+its kind's, never multiplied again/.test(routed)],
     ['the commit names its step', /as its step file does \(`<spec> step <n>`\), which is how\s+`nina sizes` finds it/.test(routed)],
     ['the architect forecasts at the rate', (await spec('agents/architect.md')).includes('at the rate `nina sizes` measured on the steps that landed')],
@@ -5372,7 +5374,7 @@ const dated = (date, status = 'active') =>
     /t1\s+~350\s+→ ~525\s+to land, at ×1\.50 over 1 step\(s\) forecast as it was(?!\s+past)/.test(hlisted) &&
       /t2\s+~450\s+→ ~675\s+to land, at ×1\.50 over 1 step\(s\) forecast as it was\s+past 600: split/.test(hlisted) &&
       /s1\s+~350\s+→ ~525\s+to land, at ×1\.50 over 1 extends step\(s\) forecast as it was\s+past 400: split/.test(hlisted) &&
-      hlisted.includes('limit 400 lines, 600 for tests') &&
+      hlisted.includes('a step is planned to 400 lines, and a tests step forecast again is split past 600') &&
       hcheck.includes('t1 ~350 → ~525,') && hcheck.includes('t2 ~450 → ~675 past 600') && hcheck.includes('s1 ~350 → ~525 (extends) past 400') &&
       hcheck.includes('split it if that puts it past 400, or 600 for a step of tests alone'),
     `sizes: a tests step forecast again is split only past half again the limit, a step of source past the limit — got ${hlisted} / ${hcheck}`,
@@ -5981,6 +5983,45 @@ const dated = (date, status = 'active') =>
   expect(
     digest(whole) === digest({ ...whole, notified_ms: 1234, agent_read_bytes: 99, status: 'completed' }) && digest(whole) !== digest({ ...whole, tokens: { output: 11 } }),
     'langfuse: what was sent is recognised by what went, not by what the record learned after',
+  );
+}
+
+// ─── what a stage may stop, and when a gate that deletes shared rows goes out ─────────────
+{
+  // An implementer cleaned up its battery by a pattern while qa and two implementers ran theirs; twice more a stage
+  // stopped its own wait loop by a pattern every stage's loop shared. And a tester was twice sent out to run a live
+  // test that deletes rows in the shared database beside the dba still checking that cleanup's scope.
+  const withDb = await composed('ledger');
+  const none = await composed('plain');
+  const read = (dir, rel) => readFile(join(dir, rel), 'utf8');
+  for (const dir of [withDb, none]) {
+    const claude = await read(dir, 'CLAUDE.md');
+    expect(
+      claude.includes('killed when it ends or times out — by the group or PID recorded at its start, never by a pattern of its command, which other stages\' match too; one that waits on another\'s process only waits.') &&
+        claude.includes('A gate that will delete rows in a shared database writes: it waits for the database gate.') &&
+        // qa's own sweep kills by pattern, kept to its checkout: the rule names it, and qa still keeps to that root.
+        claude.includes("qa alone sweeps by pattern: strays under its own checkout's root.") &&
+        (await read(dir, '.claude/agents/qa.md')).includes('ps ax -o pid=,command= | grep -F "$ROOT/" | grep -iE "$STRAY"') &&
+        /a gate that will delete rows in a shared database writes, and waits for the database\s+gate/.test(await read(dir, '.claude/graph.md')) &&
+        (await read(dir, '.claude/router.md')).includes("a gate that will delete rows in a shared database writes, and waits for the database gate's approval of that cleanup"),
+      'compose: a stage stops only what it started, and a gate that deletes shared rows waits for the database gate',
+    );
+  }
+  const tester = await read(withDb, '.claude/agents/integration-tester.md');
+  expect(
+    tester.includes("A test that deletes rows in the shared database runs only once the dba approved its cleanup's scope") &&
+      tester.includes('a dispatch that does not say the dba approved them gets read-only work first, then a question to the orchestrator') &&
+      !tester.includes('took days to obtain'),
+    'compose: where a project has a database, its tester runs a live delete only once the dba approved its scope — without the history',
+  );
+  // A project that wrote its own TSDoc lint had nowhere in patterns' enforcement to name it.
+  const patterns = await readFile(join(ROOT, 'core', 'tree', '.claude', 'patterns.md'), 'utf8');
+  const routed = await read(withDb, '.claude/router.md');
+  expect(
+    patterns.includes('included, as Hard Rule #9 counts them — = `REJECTED`.**\n<!-- nina:slot project.8 tsdoc-check -->\n') &&
+      !(await read(withDb, '.claude/patterns.md')).includes('nina:slot') &&
+      /may write: a step is first planned to 400, and the half again holds only for a forecast made again\./.test(routed),
+    'compose: patterns\' TSDoc enforcement takes a project\'s own check, and every step is planned to the limit',
   );
 }
 

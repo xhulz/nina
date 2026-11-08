@@ -166,6 +166,13 @@ wrote over whatever was still in the way, with no copy kept, and so did every co
 added to a profile by hand. `upgrade --force` still replaces such a file, keeping a copy in
 `.nina/replaced/`, and puts it back if the move rolls back.
 
+A fragment under `.nina/project/tree/` is text spliced into a file, not a file of its own: the one for
+`scripts/harness-check.mjs` is a run of entries for an array the core opens, and read alone it does not
+parse. So a project's linter and formatter leave `.nina/project/tree/` out, as they leave out what is
+generated; the composed files they read whole. `wire` writes hooks and npm scripts, never a linter's
+configuration, whose format each linter chooses and whose rules are the project's: the first project's
+Biome counted 17 errors in that fragment, and the fix is a line in its own configuration.
+
 `init --force` starts a project over and asks again only about its surfaces, which is what `init` itself
 advises for adding one. It keeps the pin, every vocabulary value the layers still use or that overrides a
 default, the integrations while the surface stays, and any other key the profile holds, and says what it

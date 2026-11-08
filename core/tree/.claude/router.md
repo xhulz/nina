@@ -145,7 +145,7 @@ run them one after another and buy nothing.
 
 | Together | Why it is safe | What it buys |
 |---|---|---|
-| **`reviewer` ∥ every gate the diff triggered** after the implementer | all read-only + Bash | the gates stop being a serial prefix to the review |
+| **`reviewer` ∥ every gate the diff triggered** after the implementer | all read-only + Bash; a gate that will delete rows in a shared database writes, and waits for the database gate's approval of that cleanup | the gates stop being a serial prefix to the review |
 | **`reviewer` fanned out by dimension** — one per axis of risk the diff carries, such as tenant isolation, patterns and spec-scope | read-only; they never touch the same output | **the biggest single win.** One reviewer carrying ~15 checklists over a 500-line diff misses things; three narrow ones do not. Faster *and* better |
 | **`architect` across the sibling specs of one milestone** (`<feature>-spec1..N`) | each writes its own file under `.claude/plans/specs/` | the specs share context, so designing them together is more coherent than one-at-a-time, and the whole milestone is specced in one pass |
 | **`devops` ∥ `secops`** at the end of a milestone | devops only reads code; what it writes is a deploy target, not the tree | the audit and the preview deploy stop being sequential |
@@ -187,7 +187,7 @@ the rate is measured by the first. One that landed more than a quarter over says
 by as much: forecast each again at its turn, before it goes out — a `Size:` line that opens with its number, at the rate
 `nina sizes` prints for it, from the steps of its `Kind:` where any landed — and send the architect only a step the new
 number puts past {{STEP_LINES}} lines, to be split, or a `Kind: tests` step past half again them, which its implementer
-may write. A forecast that already carries a rate measured on steps of another kind is restated from its own count at
+may write: a step is first planned to {{STEP_LINES}}, and the half again holds only for a forecast made again. A forecast that already carries a rate measured on steps of another kind is restated from its own count at
 its kind's, never multiplied again: `nina sizes` shows what a step carries over its first forecast beside what its
 kind's steps missed by. The rest wait for their turn, when the steps before them will have measured the rate again.
 

@@ -337,7 +337,12 @@ more of its tests steps, forecast again at 409 to 504, to be split, while its 35
 agent-minutes per 100 lines against 19.6 for its 123 of 200–400 (12.9 against 19.3 over 27 and 90 as 0.92.0 read them,
 before it read a `Kind:` written after a sentence). So since 0.92.0 the router sends a tests step forecast
 again to the architect only past half again the limit, what its implementer may write, and `nina sizes` marks it past
-that, its `--check` saying so too. Two requests had asked
+that, its `--check` saying so too. Its header said "limit 400 lines, 600 for tests" at first, and the first spec the
+first project wrote under it planned a test file at ~550 lines, "inside the ~600 a tests step may take": the header now
+says that a step is planned to the limit and that 600 is where a tests step forecast again is split, and the architect
+that the half again is a margin for a forecast that fell short, never a size to plan to. A file of tests alone is
+`Kind: tests` whether it is new or not, and the rate a forecast was made at is written beside it, so a reviewer can work
+it again: two of that project's specs had forecast new test files at the rate of new source. Two requests had asked
 implementers to stop sooner, after eleven runs past their forecast that the orchestrator mostly accepted as they were. The block
 reads the store, so it is not part of `--check`, which runs every turn.
 
