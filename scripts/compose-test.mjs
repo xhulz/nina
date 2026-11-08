@@ -276,8 +276,9 @@ const BUDGETS = {
   // and for a way past a test that needs the code to work against it, ruled out with its grep rather than specified.
   // And for an input the code decides by, varied like one it passes through, two a swap would confuse told apart, and
   // each direction it refuses, a list promised whole read from the code: one project's fixtures held a kind, a direction
-  // and two equal fees, three times in a day.
-  '.claude/agents/architect.md': 27000,
+  // and two equal fees, three times in a day. And for a tests step planned to the limit, its half again a margin and its
+  // rate named: the first spec planned after `nina sizes` printed "600 for tests" put a test file at ~550 lines.
+  '.claude/agents/architect.md': 27100,
   // A new stage: one step's design was wrong twice, found each time only in the diff, a round of every stage each.
   // Raised for the probe that found an issue, kept and named for the architect's correction to run.
   // And for a way past a test that needs the code under test to work against it, a note while no module does so.
@@ -316,7 +317,9 @@ const BUDGETS = {
   // And for a tests step held to half again the lines and reporting its `Size:` rather than stopping at it: over 327
   // steps of one project, a tests step of 400–600 lines cost less per line than one of 200–400.
   '.claude/agents/implementer.md': 29300,
-  '.claude/agents/integration-tester.md': 15500,
+  // Raised where a project has a database: a live test that deletes rows in the shared one runs only once the dba
+  // approved its cleanup's scope — twice one project's tester was sent out beside the dba still checking it.
+  '.claude/agents/integration-tester.md': 15650,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
@@ -333,8 +336,9 @@ const BUDGETS = {
   '.claude/agents/solidity-auditor.md': 9000,
   '.claude/agents/solidity-dev.md': 8500,
   '.claude/frontend.md': 3000,
-  // Raised for the design-reviewer's stage and edges.
-  '.claude/graph.md': 6950,
+  // Raised for the design-reviewer's stage and edges. And for a gate that deletes rows in a shared database, which
+  // writes and so waits for the database gate rather than going out beside it.
+  '.claude/graph.md': 7050,
   // Raised for a D1 project's findings that hold for every project: a schema generator never writes the
   // tracked schema, and an integration may be of more than one kind. And for TSDoc about code not built yet, a
   // contract naming its owner: a lesson one project learned three times.
@@ -353,7 +357,9 @@ const BUDGETS = {
   // And for a dispatch named in words anyone understands before its step's id: the plan's ids alone, beside every
   // agent at work, told the owner watching nothing of what each was doing.
   // And for a note on a way past a test no module takes, kept among the plan's follow-ups rather than carried as work.
-  '.claude/router.md': 20200,
+  // And for every step planned to the limit, a tests step's half again held for a forecast made again — an architect
+  // read it as room to plan to — and a gate that deletes shared rows kept from going out beside the database gate.
+  '.claude/router.md': 20400,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
@@ -384,8 +390,11 @@ const BUDGETS = {
   // And, where a project has pii, for a silent-console row that spies every method the console has, own and inherited:
   // a list of six missed two that print, and a helper's test of four keys passed one that skipped `error`. And for its
   // keys checked against a list the test reads itself, and by each spy's count where a runtime hands out a fresh
-  // function on every read: there an identity check passed on all 22 keys whether they were spied or not.
-  'CLAUDE.md': 36750,
+  // function on every read: there an identity check passed on all 22 keys whether they were spied or not. And for a
+  // worker stopped by the PID it started with, never a pattern another stage's process matches — three times in one
+  // project — and a gate that deletes shared rows waiting for the database gate; and qa's sweep of its own checkout's
+  // strays named as the one kill by pattern, so the rule and qa's spec do not contradict each other.
+  'CLAUDE.md': 37100,
 };
 
 /**

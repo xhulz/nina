@@ -544,7 +544,7 @@ export async function sizes(argv) {
   };
   for (const spec of [...new Set([...steps, ...unread].map((s) => s.spec))]) {
     const mine = steps.filter((s) => s.spec === spec);
-    console.log(`\n  ${bold(pink(spec))}${dim(`  landed against the forecast it was built to; limit ${limit} lines, ${Math.round(limit * TESTS_HELD)} for tests`)}`);
+    console.log(`\n  ${bold(pink(spec))}${dim(`  landed against the forecast it was built to; a step is planned to ${limit} lines, and a tests step forecast again is split past ${Math.round(limit * TESTS_HELD)}`)}`);
     for (const s of mine.filter((x) => x.landed).sort((a, b) => a.t - b.t)) {
       const mark = s.measured > OVERRUN ? amber(times(s.ratio)) : times(s.ratio);
       const files = s.forecast.files === null ? `${s.files} file(s)` : `${s.files} file(s) of ${s.forecast.files}`;

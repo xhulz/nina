@@ -196,5 +196,11 @@
   },
   "2026-11-07-architect__a-console-silent-row-spies-every-method-that-prints-again": {
     "in": "surfaces/pii/tree/CLAUDE.md"
+  },
+  "2026-11-08-architect__test-only-file-is-forecast-at-the-tests-rate": {
+    "in": "core/tree/.claude/agents/architect.md"
+  },
+  "2026-11-08-shared__a-stage-kills-only-the-processes-it-started": {
+    "in": "core/tree/CLAUDE.md"
   }
 }
