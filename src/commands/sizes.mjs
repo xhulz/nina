@@ -51,6 +51,14 @@ export const TESTS_HELD = 1.5;
  */
 export const splitPast = (step, limit) => (step.kind === 'tests' ? Math.round(limit * TESTS_HELD) : limit);
 
+/**
+ * Where a step file's label is one: opening its line, or following a sentence's end in it — `Builds on: R6a. Kind:
+ * tests. Size: ~237 lines`. Not after a letter or a backtick, so `pixKeyKind:` in a type, `font-size:` in a step's
+ * CSS and a sentence that names the `Kind:` line are none. Read at the opening of a line alone, the kind and the first
+ * round of 99 and 11 of one project's step files, written after a sentence, were read as none.
+ */
+const LABEL = String.raw`(?:^[\s>*_-]*|[.;][ \t]+[*_]*)`;
+
 /** How many of a spec's newest landed steps its rate is measured over. */
 const RATE_OVER = 5;
 
@@ -65,7 +73,7 @@ const NOT_CODE = /^(\.claude\/|\.nina\/|CLAUDE\.md$)|(^|\/)(pnpm-lock\.yaml|pack
  * @returns {number|null}
  */
 export function firstRoundIn(text) {
-  const m = /^[\s>*_-]*First round:[*_ \t]*~?[ \t]*(\d[\d,]*)[ \t]*lines?\b/im.exec(text);
+  const m = new RegExp(`${LABEL}First round:[*_ \\t]*~?[ \\t]*(\\d[\\d,]*)[ \\t]*lines?\\b`, 'im').exec(text);
   return m ? Number(m[1].replace(/,/g, '')) : null;
 }
 
@@ -77,7 +85,7 @@ export function firstRoundIn(text) {
  * @returns {string|null}
  */
 export function kindIn(text) {
-  const m = /^[\s>*_-]*Kind:[*_ \t]*([A-Za-z][\w-]*)/m.exec(text);
+  const m = new RegExp(`${LABEL}Kind:[*_ \\t]*([A-Za-z][\\w-]*)`, 'm').exec(text);
   return m ? m[1].toLowerCase() : null;
 }
 
@@ -97,15 +105,15 @@ export function forecastIn(text) {
 /**
  * What a step file's `Size:` line says when {@link forecastIn} reads no forecast from it, or null when it reads one or
  * the file has no such line. A step whose line was rewritten into prose — "round 1 landed +498/−95 against ~272" — was
- * left out of every rate without a word. The label opens its line, as `Kind:` does: `font-size:` in a step's CSS and a
- * sentence that names the `Size:` line are no line of their own.
+ * left out of every rate without a word. The label is one where {@link LABEL} says, as `Kind:` is: `font-size:` in a
+ * step's CSS and a sentence that names the `Size:` line are no line of their own.
  *
  * @param {string} text - A step file.
  * @returns {string|null} The line after `Size:`, shortened.
  */
 export function unreadSize(text) {
   if (forecastIn(text)) return null;
-  const m = /^[\s>*_-]*Size:[*_ \t]*([^\n]*)/im.exec(text);
+  const m = new RegExp(`${LABEL}Size:[*_ \\t]*([^\\n]*)`, 'im').exec(text);
   if (!m) return null;
   const said = m[1].trim();
   return said.length > 72 ? `${said.slice(0, 71)}…` : said;
