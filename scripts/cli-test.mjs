@@ -5190,6 +5190,19 @@ const dated = (date, status = 'active') =>
       forecastIn('No size here; 40 lines in 2 files') === null,
     'sizes: a forecast is read from the Size line, its files when it gives them, and nowhere else',
   );
+  // One project wrote a step's labels after a sentence, on one line, in 99 step files: read at a line's opening alone,
+  // their kind and first round were none, so they were measured at every kind's rate and held to a step of source's limit.
+  const { kindIn, firstRoundIn, unreadSize: unreadIn } = await import('../src/commands/sizes.mjs');
+  const inline = 'Package `apps/api`. Builds on: R6a (the service). Kind: tests. First round: ~394 lines. Size: ~287 lines in 1 file';
+  expect(
+    kindIn(inline) === 'tests' && firstRoundIn(inline) === 394 &&
+      kindIn('**Builds on:** nothing. **Kind:** extends') === 'extends' &&
+      kindIn('# Step 2\n\nKind: new\n') === 'new' && firstRoundIn('- **First round:** ~1,020 lines') === 1020 &&
+      unreadIn('Builds on: R1. Size: round 1 landed +498/−95') === 'round 1 landed +498/−95' &&
+      kindIn('type Pix = { pixKeyKind: PixKeyKind }') === null && kindIn('Write the `Kind: tests` line first.') === null &&
+      kindIn('the kind: tests') === null && firstRoundIn('its First round: ~300 lines') === null,
+    'sizes: a label opens its line or follows a sentence\'s end in it, never after a word or a backtick',
+  );
   expect(
     names('1.6 step 10e2b: x (1.6-spec-c step 10e2b)', '1.6-spec-c', '10e2b') &&
       !names('x (1.6-spec-c step 10e2b1)', '1.6-spec-c', '10e2b') &&

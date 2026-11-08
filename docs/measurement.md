@@ -299,10 +299,13 @@ A step file whose `Size:` line reads as no forecast is listed, with what the lin
 rate without a word: in the third project an orchestrator rewrote one step's line between its fix rounds into "round 1
 landed +498/−95 against ~272", and that step went missing from every rate. The detector names only a step still to
 land, whose line can be written again now; a landed step's line is history, and a detector that speaks about history
-speaks every turn for good. The label opens its line, as `Kind:` does, so `font-size:` in a step's CSS and a sentence
-that names the line are not one. Nor is a line it cannot read read more loosely: another project writes `~220 raw lines
-… ≤ ~400 at the milestone`, where the forecast it means is the second number, and read as the first every one of its
-steps would have overrun.
+speaks every turn for good. The label opens its line or follows a sentence's end in it, as `Kind:` and `First round:`
+do, so `font-size:` in a step's CSS, `pixKeyKind:` in a type and a sentence that names the line are not one. Read at the
+opening of a line alone until 0.92.1, the kind of 99 of the first project's step files and the first round of 11,
+written after a sentence (`Builds on: R6a. Kind: tests. First round: ~394 lines.`), were read as none: those steps were
+measured at every kind's rate and held to the limit of a step of source. Nor is a line it cannot read read more loosely:
+another project writes `~220 raw lines … ≤ ~400 at the milestone`, where the forecast it means is the second number, and
+read as the first every one of its steps would have overrun.
 
 Beside a step still to land, `nina sizes` shows what it carries over its first forecast — the oldest number its file
 held in a commit — and what its kind's landed steps missed by. The third project's steps were restated at three rates
@@ -324,14 +327,15 @@ or more was sent back about once per 500 lines whatever its size — a large one
 step of 400–600 lines took 13.3 agent-minutes per 100 lines against 19.3 at 200–400, since every step pays a review and a
 qa whatever its size. A step of source took 17.3 against 14.5. So an implementer holds a tests step to half again the limit, and its
 `Size:` is a forecast to report against, not a stop; a step of source still stops past either, and the architect still
-splits both at the limit, which is where its forecasts are measured from: over the first project's 154 landed tests
-steps, the middle half came in at 0.98 to 1.38 times their forecast and one in ten past 1.65, so a plan at half again the
+splits both at the limit, which is where its forecasts are measured from: over the first project's 201 landed tests
+steps, the middle half came in at 0.98 to 1.41 times their forecast and one in ten past 1.69, so a plan at half again the
 limit would stop about half its steps there. A step forecast again is another matter. Sent back to the architect whenever its
 new number passed the limit, a tests step paid for certain what an overrun costs only when it happens — an architect run
 and every stage of one more step — and came back as pieces of 200 to 300 lines, the band that costs more per line: one
 spec of the first project cut one step four times over (`8a3b2`, `8a3c`, `8a3d`, `8a3d2`), and `nina sizes` called 14
-more of its tests steps, forecast again at 409 to 504, to be split, while its 27 tests steps of 400–600 had taken 12.9
-agent-minutes per 100 lines against 19.3 for its 90 of 200–400. So since 0.92.0 the router sends a tests step forecast
+more of its tests steps, forecast again at 409 to 504, to be split, while its 35 tests steps of 400–600 had taken 15.9
+agent-minutes per 100 lines against 19.6 for its 123 of 200–400 (12.9 against 19.3 over 27 and 90 as 0.92.0 read them,
+before it read a `Kind:` written after a sentence). So since 0.92.0 the router sends a tests step forecast
 again to the architect only past half again the limit, what its implementer may write, and `nina sizes` marks it past
 that, its `--check` saying so too. Two requests had asked
 implementers to stop sooner, after eleven runs past their forecast that the orchestrator mostly accepted as they were. The block
