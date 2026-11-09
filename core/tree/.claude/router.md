@@ -19,9 +19,9 @@ task into a chain over them.
 
 <!-- nina:slot project.3 track-flow-diagram -->
 
-The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated. Every gate the diff triggers runs beside the reviewer, and `qa` goes out once all of them approved. The reviewer's `Gates` line names the gates the diff triggers: send any you did not. When the architect's report says `Design review: needed`, says nothing of it, or the change builds a check, scanner, parser or filter, send the spec to the `design-reviewer` before the implementer, once per spec, before its first step: a design flaw found in the spec costs one correction, found in the diff a whole round.
+The stages, and the edges between them, are in `.claude/graph.md` — the one place they are stated. Every gate the diff triggers runs beside the reviewer, and `qa` goes out once all of them approved<!-- nina:pace fast --> a spec's last step<!-- /nina:pace -->. The reviewer's `Gates` line names the gates the diff triggers: send any you did not. When the architect's report says `Design review: needed`, says nothing of it, or the change builds a check, scanner, parser or filter, send the spec to the `design-reviewer` before the implementer, once per spec, before its first step: a design flaw found in the spec costs one correction, found in the diff a whole round.
 
-**Every loop has a cap.** Before dispatching a loop-back, count the rounds the SAME issue has already made on that edge. At the cap `.claude/graph.md` gives it, do not dispatch again: stop and hand {{OWNER}} the report from every round. A third attempt at a fix that failed twice is rarely different from the second, each round costs minutes to hours<!-- nina:why -->, and until this rule existed nothing in the pipeline could stop a loop at all<!-- /nina:why -->. A different issue on the same edge starts its own count. A stage that sends work back names each issue on the `ISSUES` line under its verdict; when you dispatch a round — the fix, and the check of the fix — copy that line into both dispatches, so the stage that checks can keep the id of an issue that is still open. That id is what your count is of.
+**Every loop has a cap.** Before dispatching a loop-back, count the rounds the SAME issue has already made on that edge. At the cap `.claude/graph.md` gives it, do not dispatch again: <!-- nina:pace full -->stop and hand {{OWNER}} the report from every round.<!-- /nina:pace --><!-- nina:pace fast -->a finding of a review — the reviewer's or the design-reviewer's — is settled as a follow-up: resume the reviewer that raised it, saying this pace takes it so, and it passes with the issue listed; carry it to the plan's follow-ups. Anything else stops, and {{OWNER}} gets the report from every round: a hole in security, isolation or data, a test that fails, a deploy or another gate's run that failed (Hard Rule #20).<!-- /nina:pace --><!-- nina:pace full --> A third attempt at a fix that failed twice is rarely different from the second, each round costs minutes to hours<!-- nina:why -->, and until this rule existed nothing in the pipeline could stop a loop at all<!-- /nina:why -->.<!-- /nina:pace --> A different issue on the same edge starts its own count. A stage that sends work back names each issue on the `ISSUES` line under its verdict; when you dispatch a round — the fix, and the check of the fix — copy that line into both dispatches, so the stage that checks can keep the id of an issue that is still open. That id is what your count is of.
 
 Where the project wires the **loop gate** (`scripts/loop-gate.mjs`, run by hooks — `nina wire` puts them
 in place), the cap is held for you. It counts a round when a dispatch acts on a loop-back a stage
@@ -38,10 +38,26 @@ refusal by resuming the fixer or making the fix yourself.
 The gate trusts the ids it is given: an issue renamed between rounds starts its count over, so an edge
 still goes to {{OWNER}} once it has gone round more than twice its cap with no approval between. It does
 not see a fix you make without a subagent — so keep your own count as well, gate or no gate. When you
-dispatch a second round on an edge, say "round 2 of max 2 on <edge>" in the dispatch itself, so the
+dispatch a round on an edge, say "round N of max {{LOOP_CAP}} on <edge>" in the dispatch itself, so the
 count is in the transcript for whoever reads it next. After a compaction the gate hands you its open loops
 and the documents to read again, and a new session begins with the loops the one before it left open, said on
 its first prompt; `nina gate --status` lists them, and what closes each, at any time.
+
+<!-- nina:pace fast -->
+### At the `fast` pace
+
+This project runs at `fast`, by {{OWNER}}'s choice: a bug found later is fixed then, rather than every gate's round paid now.
+
+- **Do not stop to ask.** A choice the spec or the plan left open — a copy, a label, an order, which of two ways —
+  you make: the option the stage recommended, or the one closest to what the project already does. List each under
+  **Decided for you** when you report the step, and go on to the next. Stop only before a production deploy, an
+  operation that deletes or rewrites data others share, or a purchase.
+- **Steps follow one another with no qa between.** A step the reviewer and its gates approved is committed, and the
+  next one goes out; qa runs once, after a spec's last step, and before any deploy. What it finds goes to the
+  implementer as one fix round for the spec. A gate that runs a live service runs once too, when a spec's last step is written.
+- **A loop stops at its cap, `max {{LOOP_CAP}}`.** A review's finding back after its fix is settled as a follow-up,
+  not a round; anything else back goes to {{OWNER}} (§ *Every loop has a cap* above).
+<!-- /nina:pace -->
 
 ### Milestone gate
 
@@ -69,7 +85,7 @@ what must hold when it is done. The reviewer reviews against it and asks none of
 spec carries — an Obsolescence list, a preview-deploy plan, a skill citation, integration premises. A
 change that needs one of those needs an architect. Say in it whether the change touches a critical path
 (`CLAUDE.md` § *Critical paths*): one that touches none, and builds no check whose refusing is the feature, is a
-simple change, and the implementer leaves its tests' mutations to qa rather than running each twice.
+simple change<!-- nina:pace full -->, and the implementer leaves its tests' mutations to qa rather than running each twice<!-- /nina:pace -->.
 
 ### A spec is corrected in place
 A spec sent back is corrected where it is wrong; new work comes as a new step file or spec. Never ask for

@@ -54,6 +54,7 @@ import { fileURLToPath } from 'node:url';
 import { REQUIRES, SLOT, composeProject, defaultsTree, stripWhy } from '../src/commands/compose.mjs';
 import { NOTICE_HEAD } from '../src/guard.mjs';
 import { ANSWERED, answers } from '../src/commands/learn.mjs';
+import { defaultVocabulary, paces } from '../src/vocabulary.mjs';
 import { PLACEHOLDER } from '../src/vocabulary.mjs';
 import { NEEDS } from '../src/surfaces.mjs';
 
@@ -112,6 +113,7 @@ async function runFixture(name) {
     if (rel.endsWith('.md') && !(rel in BUDGETS)) failures.push(`${rel}: composed with no size budget — add one to BUDGETS, deliberately`);
     else if (rel in BUDGETS && text.length > BUDGETS[rel]) failures.push(`${rel}: ${text.length} characters, over its budget of ${BUDGETS[rel]}`);
     if (text.includes('nina:why')) failures.push(`${rel}: a nina:why passage survived composition`);
+    if (text.includes('nina:pace')) failures.push(`${rel}: a nina:pace marker survived composition`);
     // A marker composed as text is one the compiler did not read. A surface named with a digit, `d1`, once
     // composed every one of its slots that way: no fragment of it reached a project, and every check passed.
     if (/<!-- nina:(?:slot|requires) /.test(text)) failures.push(`${rel}: a nina:slot or nina:requires marker survived composition`);
@@ -244,6 +246,12 @@ const HISTORY = /\b\d+ (?:times|invocations|runs|rounds) (?:in|out of) \d+\b[^.]
  * fixtures have empty project layers, so this bounds the harness's own share of each file; a project's
  * fragments come on top. Only documents are budgeted: they are what a dispatch reads.
  */
+/** The paces this release has, from `core/paces.json`: a pace passage names one of them. */
+const PACES = paces(ROOT);
+
+/** The vocabulary the release answers itself. */
+const DEFAULTS = defaultVocabulary(ROOT);
+
 const BUDGETS = {
   '.claude/agents-overview.md': 6000,
   // The specs below with no room left were raised by 250 for the section asking each shell command's description, which
@@ -318,8 +326,9 @@ const BUDGETS = {
   // steps of one project, a tests step of 400–600 lines cost less per line than one of 200–400.
   '.claude/agents/implementer.md': 29300,
   // Raised where a project has a database: a live test that deletes rows in the shared one runs only once the dba
-  // approved its cleanup's scope — twice one project's tester was sent out beside the dba still checking it.
-  '.claude/agents/integration-tester.md': 15650,
+  // approved its cleanup's scope — twice one project's tester was sent out beside the dba still checking it. And at the
+  // `fast` pace, for running once a spec, after its last step.
+  '.claude/agents/integration-tester.md': 15750,
   '.claude/agents/planner.md': 10500,
   // Raised when qa began running each new test's named mutation: read through, tests that could not fail slipped by.
   // Raised again when the mutation moved to a copy of the tree, with its workspace links: the classifier refuses
@@ -337,8 +346,9 @@ const BUDGETS = {
   '.claude/agents/solidity-dev.md': 8500,
   '.claude/frontend.md': 3000,
   // Raised for the design-reviewer's stage and edges. And for a gate that deletes rows in a shared database, which
-  // writes and so waits for the database gate rather than going out beside it.
-  '.claude/graph.md': 7050,
+  // writes and so waits for the database gate rather than going out beside it. And at the `fast` pace, for a
+  // loop past its cap settled as a follow-up, and the steps that go on to the next without a qa.
+  '.claude/graph.md': 7600,
   // Raised for a D1 project's findings that hold for every project: a schema generator never writes the
   // tracked schema, and an integration may be of more than one kind. And for TSDoc about code not built yet, a
   // contract naming its owner: a lesson one project learned three times.
@@ -359,7 +369,9 @@ const BUDGETS = {
   // And for a note on a way past a test no module takes, kept among the plan's follow-ups rather than carried as work.
   // And for every step planned to the limit, a tests step's half again held for a forecast made again — an architect
   // read it as room to plan to — and a gate that deletes shared rows kept from going out beside the database gate.
-  '.claude/router.md': 20400,
+  // And at the `fast` pace, for its own section: no stop to ask, no qa between steps, a loop settled at its cap. One
+  // project's branch spent 29 of its 69 hours with no stage running, the orchestrator waiting on a question.
+  '.claude/router.md': 20700,
   '.claude/templates/integration.md': 3000,
   // Raised when Hard Rule #9 named the members a sweep kept skipping — a fake's accessors, a type alias's fields, a
   // local whose value is a function — and the three it does not cover. Raised again when Hard Rule #12 gave a
@@ -514,6 +526,30 @@ async function surfaceLeaks() {
       // it disappears, while the notice and `where` still offer the slot to fill.
       for (const passage of raw.match(/<!-- nina:why -->[\s\S]*?<!-- \/nina:why -->/g) ?? []) {
         if (passage.includes('nina:slot')) found.push(`${layer.label}/${rel}: a nina:why passage holds a slot, which would compose to nothing`);
+      }
+      // A pace passage is one pace's text: it opens with a pace the release has, closes before another opens, and
+      // holds no project slot — what a project owes is read from the layers whole, so a slot only one pace composes
+      // would be asked of every project, at the pace that drops it too.
+      const markers = [...raw.matchAll(/<!-- (\/?)nina:pace(?: ([a-z]+))? -->/g)];
+      markers.forEach((m, i) => {
+        const opens = m[1] === '';
+        if (opens && !Object.hasOwn(PACES, m[2] ?? '')) found.push(`${layer.label}/${rel}: a nina:pace passage names "${m[2]}", which is no pace in core/paces.json`);
+        if (opens !== (i % 2 === 0)) found.push(`${layer.label}/${rel}: a nina:pace marker ${opens ? 'opens inside another passage' : 'closes no passage'}`);
+      });
+      if (markers.length % 2 === 1) found.push(`${layer.label}/${rel}: a nina:pace passage is left unclosed`);
+      // A passage is a block — both markers on lines of their own — or inline, neither: an opener alone on its line
+      // closed at the end of a line of text matches no block, and its lines are kept or dropped with a blank left.
+      const alone = (m) => (m.index === 0 || raw[m.index - 1] === '\n') && raw[m.index + m[0].length] === '\n';
+      for (let i = 0; i + 1 < markers.length; i += 2) {
+        if (alone(markers[i]) !== alone(markers[i + 1])) found.push(`${layer.label}/${rel}: a nina:pace passage has one marker on a line of its own and the other inside a line`);
+      }
+      for (const passage of raw.match(/<!-- nina:pace [a-z]+ -->[\s\S]*?<!-- \/nina:pace -->/g) ?? []) {
+        if (/nina:slot project\./.test(passage)) found.push(`${layer.label}/${rel}: a nina:pace passage holds a project slot`);
+        // What a project owes is read from the layers whole: a name only one pace composes would be owed at the other.
+        const outside = raw.replace(/<!-- nina:pace [a-z]+ -->[\s\S]*?<!-- \/nina:pace -->/g, '');
+        for (const [, name] of passage.matchAll(/\{\{([A-Z][A-Z0-9_]*)\}\}/g)) {
+          if (!(name in DEFAULTS) && !outside.includes(`{{${name}}}`)) found.push(`${layer.label}/${rel}: {{${name}}} appears only in a nina:pace passage and has no default, so a project would owe it at either pace`);
+        }
       }
       // What a project composes is what is audited: history kept in the layers is not composed.
       const text = stripWhy(raw, { keepLines: true });

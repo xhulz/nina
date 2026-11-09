@@ -42,14 +42,16 @@ export const TOOK_OVER = { ARCHITECT_MODEL: 'DEEP_MODEL', IMMUTABLE_MODEL: 'DEEP
  * upper-case name is ignored rather than trusted: a default reaches every project that pins it.
  *
  * With a tier, that tier's models and efforts replace the release's own, so every reader of a
- * default — compose, check, init, upgrade — reads the one the project composes. A tier the release
- * does not have moves nothing here; {@link tierProblem} is what says so.
+ * default — compose, check, init, upgrade — reads the one the project composes. With a pace, that pace's
+ * limits do the same. A tier or a pace the release does not have moves nothing here; {@link tierProblem}
+ * and {@link paceProblem} are what say so.
  *
  * @param {string} layerRoot - A release directory, or the working tree.
  * @param {string} [tier] - The profile's `tier`, when it declares one.
+ * @param {string} [pace] - The profile's `pace`, when it declares one.
  * @returns {Record<string, string>}
  */
-export function defaultVocabulary(layerRoot, tier) {
+export function defaultVocabulary(layerRoot, tier, pace) {
   let defaults = {};
   try {
     const parsed = JSON.parse(readFileSync(join(layerRoot, 'core', 'vocabulary.json'), 'utf8'));
@@ -58,7 +60,10 @@ export function defaultVocabulary(layerRoot, tier) {
     return {};
   }
   const levels = tiers(layerRoot);
-  return tier !== undefined && Object.hasOwn(levels, tier) ? { ...defaults, ...levels[tier] } : defaults;
+  if (tier !== undefined && Object.hasOwn(levels, tier)) defaults = { ...defaults, ...levels[tier] };
+  const kept = paces(layerRoot);
+  if (pace !== undefined && Object.hasOwn(kept, pace)) defaults = { ...defaults, ...kept[pace] };
+  return defaults;
 }
 
 /**
@@ -98,6 +103,50 @@ export function tierProblem(layerRoot, tier, release = 'this release') {
   const levels = Object.keys(tiers(layerRoot));
   if (levels.length === 0) return `tier "${tier}": ${release} has no tiers — they came in 0.81.0`;
   if (typeof tier !== 'string' || !levels.includes(tier)) return `tier "${tier}" is not one ${release} has: ${levels.join(', ')}`;
+  return null;
+}
+
+/** The pace a project runs at when its profile names none: every gate, every step, as the release wrote them. */
+export const FULL_PACE = 'full';
+
+/**
+ * The paces a layer root supplies, pace → the limits it moves, from `core/paces.json`.
+ *
+ * A pace is how much checking a project's pipeline does: `full`, the release's own, or `fast`, which takes the
+ * passages marked `nina:pace fast` in place of those marked `nina:pace full` and moves a few limits — the lines one
+ * step may write, how many times a loop goes round. It is the other axis from a tier: a tier moves what a stage
+ * runs on and never what it does, a pace moves what it does and never what it runs on, so a pace takes no
+ * `_MODEL` or `_EFFORT` name. A release from before paces has none.
+ *
+ * @param {string} layerRoot - A release directory, or the working tree.
+ * @returns {Record<string, Record<string, string>>}
+ */
+export function paces(layerRoot) {
+  try {
+    const parsed = JSON.parse(readFileSync(join(layerRoot, 'core', 'paces.json'), 'utf8'));
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, moves]) => moves !== null && typeof moves === 'object' && !Array.isArray(moves))
+        .map(([pace, moves]) => [pace, Object.fromEntries(Object.entries(moves).filter(([name, value]) => NAME.test(name) && !TIERED.test(name) && typeof value === 'string'))]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Why a pace cannot compose against a release, or null when it can — or when none is declared.
+ *
+ * @param {string} layerRoot - A release directory, or the working tree.
+ * @param {unknown} pace - The profile's `pace`, as written.
+ * @param {string} [release] - The release's name, for the message.
+ * @returns {string|null}
+ */
+export function paceProblem(layerRoot, pace, release = 'this release') {
+  if (pace === undefined) return null;
+  const known = Object.keys(paces(layerRoot));
+  if (known.length === 0) return `pace "${pace}": ${release} has no paces — they came in 0.93.0`;
+  if (typeof pace !== 'string' || !known.includes(pace)) return `pace "${pace}" is not one ${release} has: ${known.join(', ')}`;
   return null;
 }
 

@@ -23,7 +23,7 @@ import { tidyRetired } from './pills.mjs';
 import { lacksPackage, missingFragment, missingWiring, shippedScripts } from '../wiring.mjs';
 import { runSteps } from '../steps.mjs';
 import { granted } from '../tools.mjs';
-import { TOOK_OVER, defaultVocabulary, tierProblem, tiers } from '../vocabulary.mjs';
+import { TOOK_OVER, defaultVocabulary, paceProblem, paces, tierProblem, tiers } from '../vocabulary.mjs';
 
 /** What stops a move from outside it: Ctrl-C, a `kill`, the terminal closing. */
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
@@ -296,6 +296,13 @@ export async function upgrade(argv, ctx) {
     console.error(`  ${tierError} — ${way} "tier" out of ${HARNESS}/profile.json before the move\n`);
     return 1;
   }
+  // The same for a pace: composed at the release's own, a project that asked for `fast` would run every gate again.
+  const paceError = paceProblem(onto.dir, profile.pace, to);
+  if (paceError) {
+    const way = Object.keys(paces(onto.dir)).length > 0 ? `set one ${to} has with \`nina compose --pace\`, or take` : 'take';
+    console.error(`  ${paceError} — ${way} "pace" out of ${HARNESS}/profile.json before the move\n`);
+    return 1;
+  }
 
   const surfaces = profile.surfaces ?? [];
   const available = (await surfacesIn(onto.dir));
@@ -321,7 +328,7 @@ export async function upgrade(argv, ctx) {
 
   const declared = profile.vocabulary ?? {};
   // A name the new release supplies a default for is not owed: it composes as the default until declared.
-  const defaultsAfter = defaultVocabulary(onto.dir, profile.tier);
+  const defaultsAfter = defaultVocabulary(onto.dir, profile.tier, profile.pace);
   const waits = (key) => typeof profile.deferred?.[key] === 'string' && profile.deferred[key].trim() !== '';
   const needed = [...vocabAfter].filter((v) => ((!(v in declared) && !(v in defaultsAfter)) || declared[v] === null) && !waits(v)).sort();
   const unused = Object.keys(declared).filter((v) => !vocabAfter.has(v)).sort();

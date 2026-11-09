@@ -21,7 +21,7 @@ import { HARNESS, deferredWhy, layerRootFor, readProfile } from '../paths.mjs';
 import { expectedUnfilled } from '../expected.mjs';
 import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { NAME, PLACEHOLDER, defaultVocabulary, modelsLine, tierProblem } from '../vocabulary.mjs';
+import { FULL_PACE, NAME, PLACEHOLDER, defaultVocabulary, modelsLine, paceProblem, tierProblem } from '../vocabulary.mjs';
 
 export { layerRootFor };
 
@@ -51,6 +51,33 @@ const WHY = /<!-- nina:why -->[\s\S]*?<!-- \/nina:why -->/g;
  */
 export function stripWhy(text, { keepLines = false } = {}) {
   return String(text).replace(WHY, (passage) => (keepLines ? passage.replace(/[^\n]/g, '') : ''));
+}
+
+/**
+ * A passage on lines of its own, kept at one pace only: its marker lines go with it, so no blank line is left. Its body
+ * holds no closer, so an opener on its own line whose closer ends a line of text is no block: matched lazily to the next
+ * closer that starts a line, it ate the lines between them and the passage after.
+ */
+const PACE_BLOCK = /^<!-- nina:pace ([a-z]+) -->\n((?:(?!<!-- \/nina:pace -->)[\s\S])*?)^<!-- \/nina:pace -->(?:\n|$)/gm;
+
+/** A passage inside a line, kept at one pace only. */
+const PACE = /<!-- nina:pace ([a-z]+) -->([\s\S]*?)<!-- \/nina:pace -->/g;
+
+/**
+ * A layer's text at one pace: each `nina:pace <name>` passage kept, less its markers, when the project runs at that
+ * pace, and dropped when it does not. A rule a pace changes is written twice, once a passage for each, so the text a
+ * stage reads at `fast` is a rule it can follow rather than the full rule beside an override that contradicts it —
+ * a contradiction a stage settles its own way each time (Hard Rule #17). Applied, like `nina:why`, to each piece
+ * before the pieces are joined, so a marker left unclosed in one layer cannot pair with a closer in another; one
+ * still standing after it is reported as malformed.
+ *
+ * @param {string} text - Layer text, its `nina:why` passages already stripped.
+ * @param {string} [pace] - The project's pace; `full` when its profile names none.
+ * @returns {string}
+ */
+export function applyPace(text, pace = FULL_PACE) {
+  const keep = (_, at, body) => (at === pace ? body : '');
+  return String(text).replace(PACE_BLOCK, keep).replace(PACE, keep);
 }
 
 /**
@@ -296,7 +323,7 @@ export async function readLayerText(path) {
  * @param {string} path - The fragment file in the layer's tree.
  * @returns {Promise<Map<string, string>>} slot id -> fragment text.
  */
-async function readFragments(path) {
+async function readFragments(path, pace = FULL_PACE) {
   const bySlot = new Map();
   const text = await readLayerText(path);
   if (text === null) return bySlot;
@@ -317,7 +344,7 @@ async function readFragments(path) {
   }
   flush();
   // Each fragment on its own, so a marker left unclosed cannot reach past the slot it was written in.
-  for (const [slot, fragment] of bySlot) bySlot.set(slot, stripWhy(fragment));
+  for (const [slot, fragment] of bySlot) bySlot.set(slot, applyPace(stripWhy(fragment), pace));
   return bySlot;
 }
 
@@ -428,9 +455,10 @@ export async function composeProject(target, ctx, options = {}) {
   const layerRoot = resolved.dir;
   // A tier the pinned release does not have is refused rather than composed as the release's default: the
   // project asked for other models, and composing these without a word would run every stage on the wrong one.
-  const tierError = tierProblem(layerRoot, profile.tier, profile.core);
+  const tierError = tierProblem(layerRoot, profile.tier, profile.core) ?? paceProblem(layerRoot, profile.pace, profile.core);
   if (tierError) return { error: tierError, written, differ, unfilled: [], skipped };
-  const defaults = defaultVocabulary(layerRoot, profile.tier);
+  const defaults = defaultVocabulary(layerRoot, profile.tier, profile.pace);
+  const pace = profile.pace ?? FULL_PACE;
 
   const coreTree = join(layerRoot, 'core', 'tree');
   const layers = [
@@ -460,7 +488,7 @@ export async function composeProject(target, ctx, options = {}) {
 
   /** Slots the core expects a declared layer to fill, and no layer did. */
   const unfilled = [];
-  /** Files a `nina:why` marker composed into, unclosed. */
+  /** Each file a `nina:why` or `nina:pace` marker composed into, unclosed, as `<path>: a <marker> marker`. */
   const malformed = [];
 
   for (const rel of (await walk(coreTree)).sort()) {
@@ -493,12 +521,12 @@ export async function composeProject(target, ctx, options = {}) {
     // History is stripped from each piece before the pieces are joined. Joined first, an opener left
     // unclosed in one layer paired with the closer of a passage in another, and everything between them
     // — the core's own rules included — was stripped without a word.
-    core = stripWhy(core);
+    core = applyPace(stripWhy(core), pace);
 
     /** Fragments for this file: surfaces in declared order, project layer last (it wins). */
     const fragments = new Map();
     for (const layer of layers) {
-      for (const [slot, text] of await readFragments(join(layer, rel))) fragments.set(slot, text);
+      for (const [slot, text] of await readFragments(join(layer, rel), pace)) fragments.set(slot, text);
     }
 
     const out = [];
@@ -542,7 +570,7 @@ export async function composeProject(target, ctx, options = {}) {
     // for it: the rule, and the reason that generalizes, are what an agent acts on. Each piece was
     // stripped on its own above; a marker still here was left unclosed, and is said, like a hole.
     let text = out.join('\n');
-    if (text.includes('nina:why')) malformed.push(rel);
+    for (const marker of ['nina:why', 'nina:pace']) if (text.includes(marker)) malformed.push(`${rel}: a ${marker} marker`);
     for (const [name, value] of Object.entries(profile.vocabulary ?? {})) {
       // `null` means "declared but not filled in yet": it composes as owed, below, and `check` reports it,
       // rather than the rule composing with a hole where a noun should be.
@@ -614,10 +642,48 @@ export function setTier(target, tier, ctx) {
 }
 
 /**
+ * Records a pace in a project's profile, once the release it pins is known to have it.
+ *
+ * Like the tier, it lives in the profile rather than on the command line, so the hooks that recompose keep it.
+ * `pace` goes after `tier` when there is one, else after `core`; the rest of the profile keeps its order.
+ *
+ * @param {string} target - The project directory.
+ * @param {string} pace - The pace asked for.
+ * @param {{root: string}} ctx - CLI context.
+ * @returns {{error: string} | {pace: string, from: string|undefined, line: string}}
+ */
+export function setPace(target, pace, ctx) {
+  const { path, profile, error } = readProfile(target);
+  if (error) return { error };
+  const layers = layerRootFor(ctx.root, profile.core);
+  if (layers.error) return { error: layers.error };
+  const problem = paceProblem(layers.dir, pace, profile.core);
+  if (problem) return { error: problem };
+  const from = profile.pace;
+  if (from !== pace) {
+    const entries = Object.entries(profile).filter(([key]) => key !== 'pace');
+    const after = entries.some(([key]) => key === 'tier') ? 'tier' : 'core';
+    entries.splice(entries.findIndex(([key]) => key === after) + 1, 0, ['pace', pace]);
+    writeFileSync(path, `${JSON.stringify(Object.fromEntries(entries), null, 2)}\n`);
+  }
+  return { pace, from, line: paceLine({ ...defaultVocabulary(layers.dir, profile.tier, pace), ...(profile.vocabulary ?? {}) }) };
+}
+
+/**
+ * What a pace moves, in one line, from the values a project composes with.
+ *
+ * @param {Record<string, unknown>} values - The project's vocabulary over its release's defaults.
+ * @returns {string}
+ */
+export function paceLine(values) {
+  return `a step writes ~${values.STEP_LINES ?? '?'} lines, and a loop goes round ${values.LOOP_CAP ?? '?'} time(s) before it is settled`;
+}
+
+/**
  * `nina compose` — the CLI wrapper around {@link composeProject}.
  *
  * @param {string[]} argv - Command arguments; `--project <dir>` selects the target, `--tier <level>` records the
- *   project's tier in its profile before composing.
+ *   project's tier in its profile before composing, and `--pace <pace>` (`--fast` for `--pace fast`) its pace.
  * @param {{root: string}} ctx - CLI context; `root` is the NINA install directory.
  * @returns {Promise<number>} Process exit code.
  */
@@ -625,7 +691,20 @@ export async function compose(argv, ctx) {
   const target = resolve(argv.includes('--project') ? argv[argv.indexOf('--project') + 1] : '.');
   const check = argv.includes('--check');
   const tier = argv.includes('--tier') ? argv[argv.indexOf('--tier') + 1] : undefined;
+  const pace = argv.includes('--fast') ? 'fast' : argv.includes('--pace') ? argv[argv.indexOf('--pace') + 1] : undefined;
   let moved = null;
+  let paced = null;
+  if (pace !== undefined) {
+    if (check) {
+      console.error('  --pace writes the profile, and --check writes nothing: run them one at a time');
+      return 2;
+    }
+    paced = setPace(target, pace, ctx);
+    if (paced.error) {
+      console.error(`  ${paced.error}`);
+      return 1;
+    }
+  }
   if (tier !== undefined) {
     if (check) {
       console.error('  --tier writes the profile, and --check writes nothing: run them one at a time');
@@ -671,7 +750,7 @@ export async function compose(argv, ctx) {
     if (owed.length > 12) console.log(`    … and ${owed.length - 12} more`);
   }
   for (const slot of awaited) console.log(`  ${slot} is new in this core and still to fill`);
-  for (const rel of result.malformed) console.log(`  ✗ ${rel}: a nina:why marker is unclosed, and its text was composed`);
+  for (const said of result.malformed) console.log(`  ✗ ${said} is unclosed, and its text was composed`);
 
   if (check) {
     const bad = result.differ.length + owed.length + result.malformed.length;
@@ -692,6 +771,10 @@ export async function compose(argv, ctx) {
     // Claude Code registers each agent, its frontmatter included, when a session starts; a session left open may
     // keep the models it registered.
     if (moved.from !== moved.tier) console.log('  open a new Claude Code session before the next dispatch: one already open may keep the models it started with');
+  }
+  if (paced) {
+    console.log(`  pace ${paced.pace}${paced.from === paced.pace ? ', as it was' : `, was ${paced.from ?? FULL_PACE}`} — ${paced.line}`);
+    if (paced.from !== paced.pace) console.log('  open a new Claude Code session before the next dispatch: one already open keeps the rules it read');
   }
   if (result.removed.length > 0) {
     console.log(`  removed ${result.removed.length} file(s) composed for a surface this profile no longer declares — a copy of each is in ${REMOVED}/:`);

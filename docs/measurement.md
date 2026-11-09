@@ -559,6 +559,31 @@ reports came with a quote the report did not hold, and a claim without its quote
 design on one change is little: the spread within `low` alone was six defects. Nothing here measures the
 stages that carry a spec out, which `low` and `medium` move to `medium` and `high`, and no eval runs.
 
+### At what pace
+
+A tier spends less on each stage; a pace runs fewer of them, later. `nina compose --fast` sets a project to
+`fast`, and `--pace full` sets it back ([composition](composition.md#a-rule-written-twice-ninapace)). At `fast`:
+
+- the implementer runs the test files its step wrote, and those that import a file it changed, with one worker;
+  it builds no mirror and runs no mutation, and no stage runs one after it;
+- qa runs once a spec, after its last step and before any deploy, and so does a gate that runs a live service; a
+  step the reviewer and its gates approved is committed and the next goes out;
+- fewer findings block (Hard Rule #20): a defect in what the spec asked for, in security, data or a contract, a
+  test that cannot run or asserts nothing. A sharper test, a row left out, a mutation no one proved are notes;
+- a loop stops at one round (`LOOP_CAP`): a review's finding back after its fix is passed by the reviewer that
+  raised it, as a follow-up; a hole in security, isolation or data, a failing test or a failed run goes to the owner;
+- the orchestrator does not stop to ask: it decides what a spec left open, lists it as decided, and stops only
+  before a production deploy, an operation that deletes or rewrites shared data, or a purchase;
+- the privacy rule keeps what production code may not do, and asks one test per place a value could leave;
+- a step is planned to 800 lines.
+
+It came from one project on 2026-11-09, `feat/melhorias-iv`, 126 steps: 69 hours of clock, 29 of them with no stage
+running, the orchestrator waiting on a question; 137 agent-hours, the implementer's 68, about 29 of those waiting on
+mutation batteries that qa ran again; 81 of the 126 steps tests alone; qa failed 1 of 89 runs; the reviewer sent 51
+of 238 back, most for a row or a test's strength. A branch before it ran 78 hours of agent work over ten days. Its
+owner chose a bug found and fixed later over paying every gate's round now. Nothing here measures what `fast` lets
+through: `runs` and `stats` split a project's history by release, and the first weeks at `fast` are the reading.
+
 ### Sending it to Langfuse: `nina langfuse`
 
 `stats` and `learn` read the store on a terminal. Langfuse reads the same runs in a UI that filters,

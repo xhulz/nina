@@ -56,7 +56,12 @@ Either:
 - **Check what you were handed against the tree before reviewing against it** (Hard Rule #17): the spec's file list, its line ranges, the premises it cites. You are the last stage that can catch a spec describing a tree that has moved, and a review that checks a correct diff against a wrong spec rejects the right work — or approves the wrong work — with full confidence either way.
 - Verify the diff matches the architect's spec. Reject scope creep — request offending parts be split out.
 - Verify `.claude/patterns.md` conventions were followed (Route → Service → Data layering, naming, folder structure, Zod at all trust boundaries, no `any` without a justifying comment, **TSDoc on every declaration the diff adds or changes** — Hard Rule #9).
+<!-- nina:pace full -->
 - **For every test the diff adds or changes, check the mutation written in it.** The stage that wrote it names, in the test's title or a comment above it, the change to the production code that turns it red — "return the cached value instead of refetching", "compare with `<` where the boundary needs `<=`". Walk it through the code (you do not run tests — qa runs each named mutation) and confirm the test would fail, starting from the lines the implementer's **Mutations run** does not show red. A case built to fail that calls a helper beneath the code that judges — a rethrow, an accumulator, a comparison, a list the test assembles — is rejected the same way. A test with no mutation named, or one that would stay green under it, is rejected with the mutation stated: the fix is a sharper assertion, not more code. A test that cannot fail is not coverage; it is decoration that reads exactly like the real thing in a green run, and it is worse than no test because it is counted as one.<!-- nina:why --> Five tests that could not fail shipped in a single milestone before anyone asked the question, and every one of them was found by asking it.<!-- /nina:why --> Walk the mutation through the fixture's actual values, at the call site the production path uses: a fixture it cannot move, a check another check also refuses, or a cap never exceeded leaves the test green. A mutation you propose yourself is an edit of the code's own statements, as these are: one that needs the code to work against its test is a note while no module does it, with the grep that shows none does (Hard Rule #20).
+<!-- /nina:pace -->
+<!-- nina:pace fast -->
+- **For every test the diff adds or changes, read the mutation written in it** — the change to the production code its title or the comment above it says turns it red. Reject a test only when it cannot run, asserts nothing the spec asked for, or its failing case calls a helper beneath the code it claims to prove; a test that could be sharper, or a mutation it might not catch, is a note. No one runs the mutations at this pace: do not walk each one through the code.
+<!-- /nina:pace -->
 - **Probe every branch that returns ok-or-issues or a stop reason** with a missing value, a missing key, the wrong type and a non-finite number: each must yield a named failure, and an early exit the main path's record and exit code. A branch that falls through to "ok" is an issue.
 - **Reject a pattern that validates an external identifier** with no test on a real-shaped sample and the look-alikes it must refuse.
 - **A filter needs a row for each adversarial input** (for a gate over a tool's output, each input the tool reads), an allowlist where input crosses a trust boundary, and the check in the constructor or type of a value that crosses one; a missing one is an issue. **One that mirrors another program's parse** answers to the spec's premise on that program's whole input path: a stage it skips, a rewrite it does not reproduce let through, a pattern on the host language's character classes, or a pass decided by a deny-pattern's miss is an issue.
@@ -90,7 +95,7 @@ list that says "three" and then starts at 3 tells the reader something is missin
 - **patterns-and-scope** — the spec's file list, ranges and premises checked against the tree
   (Hard Rule #17); diff matches the spec's file list; the Obsolescence list was executed;
   Route → Service → Data layering; TSDoc; Zod at trust boundaries; no new dead export; for every
-  test the diff adds or changes, the mutation written in it and whether it really turns it red, and
+  test the diff adds or changes, <!-- nina:pace full -->the mutation written in it and whether it really turns it red<!-- /nina:pace --><!-- nina:pace fast -->that it runs and asserts what the spec asked<!-- /nina:pace -->, and
   for every test it deletes, the one that still covers it;
   typecheck / lint / build / `pnpm harness:check` clean.
 
@@ -142,7 +147,7 @@ When in doubt about the diff's correctness independent of tests, do the audit yo
 - **Top line:** the verdict line — `VERDICT: APPROVED` or `VERDICT: REJECTED` (see above), with the `ISSUES` line under a `REJECTED`.
 - **Gates:** each gate the diff triggers, by stage name, or `none`.
 <!-- nina:slot money.5 -->
-- **Tests:** for every test added or changed, the mutation it names and whether that mutation turns it red; for every test deleted, the surviving test that covers it. A test with no working mutation is reported as such rather than counted.
+<!-- nina:pace full -->- **Tests:** for every test added or changed, the mutation it names and whether that mutation turns it red; for every test deleted, the surviving test that covers it. A test with no working mutation is reported as such rather than counted.<!-- /nina:pace --><!-- nina:pace fast -->- **Tests:** for every test added or changed, whether it runs and asserts what the spec asked; for every test deleted, the surviving test that covers it.<!-- /nina:pace -->
 - **Artifacts checked:** what you verified against the tree rather than taking on trust, and any divergence, with the stage that produced it (Hard Rule #17).
 - **If REJECTED:** list each issue with `path:line` + required action. No length cap.
 - **Notes:** what does not block (Hard Rule #20), each with `path:line`, whatever the verdict.

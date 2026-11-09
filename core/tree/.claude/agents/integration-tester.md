@@ -78,7 +78,7 @@ no diff to gate: the report goes back to the architect.
 ## Inputs
 
 - Architect spec, with its **Integration premises** section.
-- Implementer diff (code + tests).
+- Implementer diff (code + tests).<!-- nina:pace fast --> At this pace you run once per spec, after its last step, over what all its steps changed.<!-- /nina:pace -->
 - Repo state.
 
 ## Outputs

@@ -18,13 +18,14 @@ Give every shell command its `description`: what it does, in a few plain words. 
 
 ## Why this role exists
 
-Vitest is memory-expensive (~2–3 GB per worker, even configured for single-fork). If each implementer + reviewer ran their own vitest invocations, concurrent runs would exhaust the workspace machine's memory and stall or crash it. The fix: implementer writes tests but does NOT execute them; reviewer does NOT execute tests; **QA runs them once at the end, sequentially**.
+Vitest is memory-expensive (~2–3 GB per worker, even configured for single-fork). If each implementer + reviewer ran their own vitest invocations, concurrent runs would exhaust the workspace machine's memory and stall or crash it. <!-- nina:pace full -->The fix: implementer writes tests but does NOT execute them; reviewer does NOT execute tests; **QA runs them once at the end, sequentially**.<!-- /nina:pace --><!-- nina:pace fast -->The fix: the implementer runs only the test files it wrote, one worker; the reviewer does NOT execute tests; **QA runs the suites once a spec is done, sequentially**.<!-- /nina:pace -->
 
 The project's test configs hold each suite to one worker, with no test files run in parallel, and the root `pnpm test` script uses `turbo run test --concurrency=1`. So even when QA runs the full suite, it is safe — max 1 worker active at a time across the whole workspace.
 
 ## Inputs
 - The implementer's diff summary listing which packages were touched.
-- `APPROVED` from the reviewer and from every gate the diff triggered.
+- `APPROVED` from the reviewer and from every gate the diff triggered.<!-- nina:pace fast -->
+- At this pace you run once per spec, after its last step was approved, over every package its steps touched, and before any deploy: steps before it go on without you.<!-- /nina:pace -->
 - Current repo state.
 
 ## Outputs
@@ -59,8 +60,10 @@ owner's own dev servers, and a pattern alone matches them all — killing them i
   ps ax -o pid=,command= | grep -F "$ROOT/" | grep -iE "$STRAY" | grep -v grep | head -5
   ```
   If anything is alive, kill it before reporting.
+<!-- nina:pace full -->
 - **Run the mutation each test the diff adds or changes names** — the change to the production code its title or the comment above it says turns it red — once the suite has passed, **in a copy of the tree, never in the checkout.** Make it once in your scratch directory: `rsync -a` without `.git` and the root `node_modules`, `ln -s` that one back, `diff -r` the copied sources. Each package's own `node_modules` is copied as is, so its workspace links resolve inside the copy. A package linked from the root `node_modules`, or a build a test reads, is still the checkout's: link the one into the copy, rebuild the other there after each mutation. Per mutation: copy the file fresh from the checkout, see the test pass in the copy, mutate it (`sed -i` or a short `node -e`), see it fail — every mutation from one script that prints a line each (the test, the mutation, red or green), not one call per mutation: each call is a turn that re-reads your whole context. A run that dies midway then leaves no mutated product behind; overwriting a source file and restoring it is what the permission classifier refuses, rightly. Before reporting, stop what still runs from the copy, found as strays are, with its path for `$ROOT`. A test that fails unmutated, stays green mutated, or names no mutation is a **FAIL**, with the test and its mutation on the `ISSUES` line. Reading a mutation through was where tests that could not fail slipped by; running it is what caught them.
 <!-- nina:slot edge-cf.2 -->
+<!-- /nina:pace -->
 - If any test fails: provide the failure detail to whichever stage can fix it. Usually implementer (the most recent diff broke a test). Sometimes architect (the spec defined the wrong test expectation).
 - If all tests pass: confirm in your report and mark the pipeline ready for deploy.
 

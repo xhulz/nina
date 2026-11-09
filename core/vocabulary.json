@@ -7,6 +7,7 @@
   "IMMUTABLE_EFFORT": "high",
   "IMMUTABLE_MODEL": "claude-opus-5-5",
   "LINT_CMD": "pnpm lint",
+  "LOOP_CAP": "2",
   "OUTPUT_CLIP": "8000",
   "RUN_READ_WARN": "40",
   "STEP_FILES": "15",
