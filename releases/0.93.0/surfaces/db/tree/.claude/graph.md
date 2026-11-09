@@ -1,0 +1,11 @@
+<!-- nina:slot db.1 -->
+- `dba` — gate: runs when the schema, a migration or a query is touched
+
+<!-- nina:slot db.2 -->
+- `implementer` → `dba` on `DIFF-READY` — the diff touches the schema, a migration or a query
+- `dba` → `qa` on `APPROVED` — once the reviewer, and every other gate the diff went to, approved too
+<!-- nina:pace fast -->
+- `dba` → `done` on `APPROVED` — a step before its spec's last, once the reviewer approved too: the next step goes out
+<!-- /nina:pace -->
+- `dba` → `implementer` on `REJECTED` — a query or schema change in the diff is unsafe · max {{LOOP_CAP}}
+- `dba` → `architect` on `REJECTED` — the spec's migration or data design is unsafe · max {{LOOP_CAP}}
