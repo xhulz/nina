@@ -126,6 +126,8 @@ const COMMANDS = {
       '--drift': 'with --check: only whether the files on disk are what the layers compose',
       '--expect-unfilled <slots>': 'slots, comma-separated, a move is known to leave unfilled',
       '--tier <level>': 'record what the stages run on — low, medium or high — in the profile, then compose',
+      '--pace <pace>': 'record how much checking the pipeline does — full or fast — in the profile, then compose',
+      '--fast': 'the same as --pace fast: fewer gates, later, and a loop settled at its cap',
     },
   },
   where: { daily: true, run: where, help: 'say which layer owns a path, and where a change to it goes', args: '<path>', options: PROJECT },

@@ -60,6 +60,10 @@ These mechanisms connect the layers:
   an agent's `description:`, which Claude Code needs to load the agent at all, and a line a project may need
   to replace rather than add to, like qa's per-package test command. The project's fragment still wins;
   until it writes one, the default composes, and the slot is not counted as owed.
+- **`<!-- nina:pace fast -->…<!-- /nina:pace -->`** and its `full` twin mark a rule written once for each
+  **pace** a project can run at: `full`, every gate as the release wrote it, or `fast` (`nina compose --fast`),
+  fewer gates, later, and a loop settled at its cap. Composing keeps the project's pace's passages and drops the
+  other's, and `core/paces.json` moves the limits a pace changes (`STEP_LINES`, `LOOP_CAP`).
 - **`{{VOCABULARY}}`** placeholders are filled from the profile, which is how the core
   states a rule without naming one project's provider, packages or models.
 
@@ -98,7 +102,7 @@ must not break.
 
 | To change | Read first |
 |---|---|
-| a layer, `compose`, the notice, `nina:why`, the size budgets, the edit guard, the tools a spec may use | [`docs/composition.md`](docs/composition.md) |
+| a layer, `compose`, the notice, `nina:why`, `nina:pace`, the size budgets, the edit guard, the tools a spec may use | [`docs/composition.md`](docs/composition.md) |
 | `init`, `wire`, the hooks a project needs, the vocabulary and its defaults, how a project installs NINA | [`docs/installing.md`](docs/installing.md) |
 | `check`, `where`, `pipeline` and its office, `dashboard`, `status`, deferred decisions | [`docs/checking.md`](docs/checking.md) |
 | the pipeline graph, the loop gate, the `ISSUES` line | [`docs/loop-gate.md`](docs/loop-gate.md) |
@@ -117,6 +121,7 @@ nina init --project ../thing                  # profile, TODO, wiring, and a fir
 nina status --project ../thing                # one screen: pin, install, newest release, hooks, gate, check, cost, learning
 nina compose --project ../thing [--check]     # rebuild a project's harness files, or say if they drifted
 nina compose --project ../thing --tier low    # what its stages run on — low, medium or high — kept in its profile
+nina compose --project ../thing --fast        # fewer gates, later: no mutation runs, qa once a spec, a loop settled at its cap (--pace full undoes it)
 nina check --project ../thing                 # is what the project declared about itself true?
 nina where <path> --project ../thing          # does this path belong to the harness, and which layer?
 nina pipeline --project ../thing              # the agent chain drawn: gates, loop-backs, models, skills

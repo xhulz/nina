@@ -31,11 +31,11 @@ import { frontmatter } from '../src/commands/pills.mjs';
 import { askOrder } from '../src/commands/init.mjs';
 import { parseGraph, validateGraph } from '../src/graph.mjs';
 import { declaredVerdict, forwardEdges, handle, ledgerPath, loopEdges, loopState, projectGateDir, readLedger, replay, roundsFor, sessionLedgers } from '../src/gate.mjs';
-import { byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
+import { applyPace, byVersion, defaultedSlots, generatedNotice, layerRootFor, stamp, walk } from '../src/commands/compose.mjs';
 import { filledSlots, outsideFences, projectSlots, transitiveCitations, unwiredScripts } from '../src/commands/check.mjs';
 import { release } from '../src/commands/release.mjs';
 import { snapshotsDir } from '../src/paths.mjs';
-import { NAME as VOCABULARY_NAME, defaultVocabulary, tiers } from '../src/vocabulary.mjs';
+import { NAME as VOCABULARY_NAME, defaultVocabulary, paces, tiers } from '../src/vocabulary.mjs';
 import { costOf, priceOf } from '../src/prices.mjs';
 import { CONTROL_REPORT, fixtureDiff, forgetProject, grade, judgePrompt, plantedDefects, readJudgement, reviewerCommand, runFailure } from '../src/commands/eval.mjs';
 import { GATE, applyWiring, matcherReaches, missingWiring, packageInstalled, settingsFile, shippedScripts } from '../src/wiring.mjs';
@@ -5379,6 +5379,13 @@ const dated = (date, status = 'active') =>
       hcheck.includes('split it if that puts it past 400, or 600 for a step of tests alone'),
     `sizes: a tests step forecast again is split only past half again the limit, a step of source past the limit — got ${hlisted} / ${hcheck}`,
   );
+  // At the fast pace a step is planned to its pace's limit, and measured against it.
+  await writeFile(join(held, '.nina', 'profile.json'), JSON.stringify({ core: 'dev', pace: 'fast', surfaces: [], vocabulary: {} }));
+  const quick = run(['sizes', '--project', held], { loud: true }).out;
+  expect(
+    quick.includes('a step is planned to 800 lines, and a tests step forecast again is split past 1200') && !/past \d+: split/.test(quick),
+    `sizes: at the fast pace a step is planned to that pace's limit — got ${quick}`,
+  );
 
   // A step's limit was a forecast of cost nothing checked: over 327 steps of one project, a tests step of 400–600 lines
   // cost less per line than one of 200–400. So each landed step is matched to the rounds its dispatches name, and what
@@ -6023,6 +6030,127 @@ const dated = (date, status = 'active') =>
       /may write: a step is first planned to 400, and the half again holds only for a forecast made again\./.test(routed),
     'compose: patterns\' TSDoc enforcement takes a project\'s own check, and every step is planned to the limit',
   );
+}
+
+// ─── the fast pace: fewer gates, later, and a loop settled at its cap ─────────────────
+{
+  // One project's branch took 69 hours of clock for 126 steps: 29 with no stage running, the orchestrator waiting on a
+  // question, and of the implementer's 68 agent-hours about 29 spent waiting on mutation batteries that qa ran again.
+  // Its owner chose to fix a bug found later over paying every gate's round now, for that project alone.
+  const kept = applyPace('a\n<!-- nina:pace full -->\nF\n<!-- /nina:pace -->\n<!-- nina:pace fast -->\nS\n<!-- /nina:pace -->\nmax <!-- nina:pace full -->2<!-- /nina:pace --><!-- nina:pace fast -->1<!-- /nina:pace -->.\n', 'fast');
+  const full = applyPace('a\n<!-- nina:pace full -->\nF\n<!-- /nina:pace -->\n<!-- nina:pace fast -->\nS\n<!-- /nina:pace -->\nmax <!-- nina:pace full -->2<!-- /nina:pace --><!-- nina:pace fast -->1<!-- /nina:pace -->.\n');
+  expect(kept === 'a\nS\nmax 1.\n' && full === 'a\nF\nmax 2.\n', `pace: a passage is kept without its markers at its own pace and dropped, lines and all, at the other — got ${JSON.stringify([kept, full])}`);
+  // An opener on its own line closed inside a line is no block: matched to the next closer that starts a line, it ate
+  // the text between them and the passage after. The audit refuses such a passage; composing keeps what follows it.
+  const mixed = applyPace('a\n<!-- nina:pace fast -->\nS <!-- /nina:pace -->\nmid\n<!-- nina:pace full -->\nF\n<!-- /nina:pace -->\nend\n');
+  expect(mixed.includes('mid\nF\nend') && !mixed.includes('S'), `pace: a passage whose markers stand differently eats nothing after it — got ${JSON.stringify(mixed)}`);
+  expect(
+    defaultVocabulary(ROOT).STEP_LINES === '400' && defaultVocabulary(ROOT).LOOP_CAP === '2' &&
+      defaultVocabulary(ROOT, undefined, 'fast').STEP_LINES === '800' && defaultVocabulary(ROOT, undefined, 'fast').LOOP_CAP === '1' &&
+      defaultVocabulary(ROOT, 'low', 'fast').WORK_EFFORT === 'medium' && paces(ROOT).fast.WORK_MODEL === undefined,
+    'pace: `fast` moves the step size and the loop cap, a tier still moves the models beside it, and a pace moves no model',
+  );
+
+  const slow = await composed('ledger');
+  const quick = await composed('brisk');
+  const read = (dir, rel) => readFile(join(dir, rel), 'utf8');
+  const caps = async (dir) => loopEdges(parseGraph(await read(dir, '.claude/graph.md'))).get('reviewer')?.get('REJECTED')?.get('implementer');
+  expect((await caps(slow)) === 2 && (await caps(quick)) === 1, `pace: a loop goes round twice at full and once at fast, as the gate reads the graph — got ${await caps(slow)}, ${await caps(quick)}`);
+  const graphs = [await read(slow, '.claude/graph.md'), await read(quick, '.claude/graph.md')];
+  expect(
+    graphs[0].includes('never runs the tests') && !graphs[0].includes('a step before its spec\'s last') &&
+      graphs[1].includes('runs only the tests it wrote') && graphs[1].includes('- `reviewer` → `qa` on `APPROVED` — a spec\'s last step, or a step that goes to deploy') &&
+      graphs[1].includes('- `dba` → `done` on `APPROVED` — a step before its spec\'s last') &&
+      graphs[1].includes('settled as a follow-up: the reviewer that raised it is resumed') && graphs[1].includes('a failing test, a failed deploy or gate run — goes to the\nowner') && !graphs[1].includes('a third attempt at a fix'),
+    'pace: at fast the graph sends a step on without qa, and settles a loop past its cap as a follow-up',
+  );
+  for (const [dir, at] of [[slow, 'full'], [quick, 'fast']]) {
+    const problems = validateGraph(parseGraph(await read(dir, '.claude/graph.md')), new Map());
+    expect(!problems.some((p) => /cap|nowhere|no edge/i.test(p)), `pace: the graph composed at ${at} still caps every loop and routes every verdict — got ${problems.join('; ')}`);
+  }
+  const implementers = [await read(slow, '.claude/agents/implementer.md'), await read(quick, '.claude/agents/implementer.md')];
+  expect(
+    implementers[0].includes('A mirror script of your own') && implementers[0].includes('**Read your mutation run before you report it.**') && implementers[0].includes('about 400 lines') &&
+      !implementers[1].includes('mirror') && !implementers[1].includes('**Mutations run:**') && implementers[1].includes('Run the test files this step adds or changes') &&
+      implementers[1].includes('- **Tests run:**') && implementers[1].includes('about 800 lines') && implementers[1].includes('The reviewer reads it; at this pace no one runs it.'),
+    'pace: at fast the implementer runs the tests it wrote, builds no mirror and runs no mutation, and writes a step of ~800 lines',
+  );
+  const watches = [await read(slow, 'scripts/cost-watch.mjs'), await read(quick, 'scripts/cost-watch.mjs')];
+  expect(watches[0].includes("stepLines: Number('400')") && watches[1].includes("stepLines: Number('800')"), 'pace: the size watch holds an implementer to the step its pace sets');
+  const claudes = [await read(slow, 'CLAUDE.md'), await read(quick, 'CLAUDE.md')];
+  expect(
+    claudes[0].includes('A value absent from an error that never held it proves nothing') && !claudes[0].includes("At this project's pace") &&
+      !claudes[1].includes('A value absent from an error that never held it proves nothing') &&
+      claudes[1].includes('A test for each place a sensitive value could leave') && claudes[1].includes('No sensitive value in a log, an error message') &&
+      claudes[1].includes("At this project's pace, `fast`, a finding blocks only when shipping it would break something") &&
+      claudes[1].includes('**Test execution policy (`fast`):**') && !claudes[1].includes('**Test scoping (speed'),
+    'pace: at fast the privacy rule keeps what production code may not do and one test per exit, and fewer findings block',
+  );
+  const routers = [await read(slow, '.claude/router.md'), await read(quick, '.claude/router.md')];
+  expect(
+    !routers[0].includes('### At the `fast` pace') && routers[0].includes('stop and hand the maintainer the report from every round') &&
+      routers[1].includes('### At the `fast` pace') && routers[1].includes('**Decided for you**') && routers[1].includes('**A loop stops at its cap, `max 1`.**') &&
+      routers[1].includes('resume the reviewer that raised it') && routers[1].includes('a test that fails, a deploy or another gate\'s run that failed') &&
+      !routers[1].includes('stop and hand the maintainer the report from every round') && !routers[1].includes('A third attempt') && !routers[1].includes('leaves its tests\' mutations to qa'),
+    'pace: at fast the orchestrator decides what it would have asked, and settles a review\'s finding at its cap — nothing else',
+  );
+  // The composed fast specs say nothing the fast rules undo: a stage handed both settles them its own way.
+  const said = [implementers[1], await read(quick, '.claude/agents/qa.md'), claudes[1], routers[1]].join('\n');
+  const stale = ['DOES NOT run vitest', 'does NOT execute them', 'Mutations run', 'mirror', 'qa runs each named mutation', 'Test scoping'].filter((s) => said.includes(s));
+  expect(stale.length === 0 && implementers[1].includes('description: Use after the architect') && implementers[1].includes('Runs only the test files it wrote, never the suite'), `pace: no fast spec keeps a sentence the fast rules undo — found ${stale.join(', ')}`);
+  // Past the cap the orchestrator resumes the reviewer, which passes: the loop closes, and the next step goes out unheld.
+  const quickGraph = parseGraph(graphs[1]);
+  const step = (agent, verdict) => [{ k: 'dispatch', role: 'reviewer', agent }, { k: 'verdict', role: 'reviewer', verdict, agent, declared: true, issues: verdict === 'REJECTED' ? ['weak-row'] : undefined }];
+  const capped = [...step('q1', 'REJECTED'), { k: 'dispatch', role: 'implementer', agent: 'f1' }, ...step('q2', 'REJECTED')];
+  const heldAt = roundsFor(capped, 'implementer', loopEdges(quickGraph), forwardEdges(quickGraph))[0];
+  const settledAt = roundsFor([...capped, { k: 'dispatch', role: 'reviewer', agent: 'q2', via: 'SendMessage', resumed: true }, { k: 'verdict', role: 'reviewer', verdict: 'APPROVED', agent: 'q2', declared: true }], 'implementer', loopEdges(quickGraph), forwardEdges(quickGraph));
+  expect(
+    heldAt?.round === 2 && heldAt.max === 1 && settledAt.length === 0,
+    `gate: at fast the second round of an issue is past the cap, and the reviewer resumed to pass it lets the next step go — got ${JSON.stringify([heldAt, settledAt])}`,
+  );
+  const qas = [await read(slow, '.claude/agents/qa.md'), await read(quick, '.claude/agents/qa.md')];
+  const reviewers = [await read(slow, '.claude/agents/reviewer.md'), await read(quick, '.claude/agents/reviewer.md')];
+  expect(
+    qas[0].includes('**Run the mutation each test the diff adds or changes names**') && !qas[1].includes('Run the mutation each test') && qas[1].includes('At this pace you run once per spec') &&
+      !qas[1].includes('Vitest failed to find the runner') &&
+      reviewers[0].includes('check the mutation written in it.**') && reviewers[1].includes('read the mutation written in it**') && !reviewers[1].includes('Walk it through the code'),
+    'pace: at fast qa runs once a spec and no mutation, and the reviewer reads a test\'s mutation without walking it',
+  );
+
+  // The pace lives in the profile, after the tier or the release, so a hook that recomposes keeps it.
+  const dir = await scratch();
+  await cp(join(ROOT, 'fixtures', 'plain', '.nina'), join(dir, '.nina'), { recursive: true });
+  const set = run(['compose', '--fast', '--project', dir], { loud: true });
+  const profile = JSON.parse(await readFile(join(dir, '.nina', 'profile.json'), 'utf8'));
+  expect(
+    set.status === 0 && Object.keys(profile).indexOf('pace') === Object.keys(profile).indexOf('core') + 1 && profile.pace === 'fast' &&
+      set.out.includes('pace fast, was full — a step writes ~800 lines, and a loop goes round 1 time(s) before it is settled') && set.out.includes('open a new Claude Code session'),
+    `compose: --fast records the pace after the release and says what it moves — got ${set.out}`,
+  );
+  const again = run(['compose', '--pace', 'fast', '--project', dir], { loud: true });
+  expect(again.status === 0 && again.out.includes('pace fast, as it was') && !again.out.includes('open a new Claude Code session'), `compose: the same pace again moves nothing — got ${again.out}`);
+  const back = run(['compose', '--pace', 'full', '--project', dir], { loud: true });
+  expect(back.status === 0 && back.out.includes('pace full, was fast') && (await read(dir, '.claude/graph.md')).includes('never runs the tests'), `compose: --pace full composes every gate again — got ${back.out}`);
+  const unknown = run(['compose', '--pace', 'reckless', '--project', dir], { loud: true });
+  expect(unknown.status === 1 && unknown.out.includes('pace "reckless" is not one this release has: full, fast') || unknown.out.includes('pace "reckless" is not one dev has: full, fast'), `compose: a pace the release lacks is refused, with those it has — got ${unknown.out}`);
+  const bare = run(['compose', '--project', dir, '--pace'], { loud: true });
+  expect(bare.status === 2 && bare.out.includes('--pace needs a value'), `compose: --pace with no pace is refused, not ignored — got ${bare.out}`);
+  const both = run(['compose', '--fast', '--check', '--project', dir], { loud: true });
+  expect(both.status === 2 && both.out.includes('--pace writes the profile, and --check writes nothing'), `compose: --fast and --check are refused together — got ${both.out}`);
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ ...profile, pace: 'reckless' }));
+  const checked = run(['check', '--project', dir], { loud: true });
+  expect(checked.status !== 0 && checked.out.includes('pace "reckless" is not one'), `check: a pace the release lacks is a problem — got ${checked.out}`);
+  await writeFile(join(dir, '.nina', 'profile.json'), JSON.stringify({ ...profile, core: '0.92.2', pace: 'fast' }));
+  const old = run(['compose', '--project', dir], { loud: true });
+  expect(old.status === 1 && old.out.includes('pace "fast": 0.92.2 has no paces — they came in 0.93.0'), `compose: a release from before paces refuses one rather than run every gate unasked — got ${old.out}`);
+
+  // A marker left open in a project's own fragment is said, as an unclosed nina:why is.
+  const open = await composed('plain');
+  await mkdir(join(open, '.nina', 'project', 'tree', '.claude'), { recursive: true });
+  const slotted = (await readFile(join(ROOT, 'core', 'tree', '.claude', 'router.md'), 'utf8')).match(/<!-- nina:slot project\.1[^>]*-->/)[0];
+  await writeFile(join(open, '.nina', 'project', 'tree', '.claude', 'router.md'), `${slotted}\nOurs.<!-- nina:pace fast -->never closed\n`);
+  const unclosed = run(['compose', '--project', open], { loud: true });
+  expect(unclosed.out.includes('.claude/router.md: a nina:pace marker is unclosed') && !unclosed.out.includes('nina:why marker'), `compose: a pace marker left open is named — got ${unclosed.out}`);
 }
 
 // ─── models and effort: the release's, not the alias's or the session's ─────────────────

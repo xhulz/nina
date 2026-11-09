@@ -20,7 +20,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HARNESS } from '../paths.mjs';
+import { HARNESS, layerRootFor } from '../paths.mjs';
 import { projectRecords } from '../store.mjs';
 import { isLoopBack } from '../transcripts.mjs';
 import { defaultVocabulary } from '../vocabulary.mjs';
@@ -237,7 +237,10 @@ export function measure(dir) {
       return {};
     }
   })();
-  const limit = Number(profile?.vocabulary?.STEP_LINES) || Number(defaultVocabulary(PACKAGE).STEP_LINES) || 400;
+  // The release the project pins, at its pace: a project at `fast` plans to the limit that pace sets.
+  const layers = profile?.core ? layerRootFor(PACKAGE, profile.core) : { dir: PACKAGE };
+  const limit =
+    Number(profile?.vocabulary?.STEP_LINES) || Number(defaultVocabulary(layers.dir ?? PACKAGE, profile?.tier, profile?.pace).STEP_LINES) || 400;
   // It runs every turn: a project with no step file does not pay for its history.
   const files = stepFiles(dir);
   if (files.length === 0) return git(dir, ['rev-parse', '--verify', '--quiet', 'HEAD']) === null ? null : { steps: [], limit, unread: [] };

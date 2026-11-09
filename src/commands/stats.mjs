@@ -739,7 +739,7 @@ function stepLimitOf(ctx, key = 'STEP_FILES') {
         const found = decodeProjectDir(project);
         const profile = found ? JSON.parse(readFileSync(join(found, HARNESS, 'profile.json'), 'utf8')) : null;
         const layers = profile ? layerRootFor(ctx.root, profile.core) : null;
-        const value = profile?.vocabulary?.[key] ?? (layers?.dir ? defaultVocabulary(layers.dir)[key] : undefined);
+        const value = profile?.vocabulary?.[key] ?? (layers?.dir ? defaultVocabulary(layers.dir, profile.tier, profile.pace)[key] : undefined);
         const n = Number(value);
         limit = value !== undefined && value !== null && value !== '' && Number.isFinite(n) && n > 0 ? n : null;
       } catch {

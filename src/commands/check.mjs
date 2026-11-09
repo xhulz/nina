@@ -17,7 +17,7 @@ import { HOOK_SCRIPTS, missingWiring, shippedScripts } from '../wiring.mjs';
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { SLOT, closedGate, defaultedSlots, layerRootFor, noticeOf, readLayerText, stripWhy, walk } from './compose.mjs';
-import { PLACEHOLDER, defaultVocabulary, tierProblem } from '../vocabulary.mjs';
+import { PLACEHOLDER, defaultVocabulary, paceProblem, tierProblem } from '../vocabulary.mjs';
 import { missingNeeds } from '../surfaces.mjs';
 import { resolveCitation } from './pills.mjs';
 
@@ -491,7 +491,9 @@ export async function check(argv, ctx) {
   const declared = profile.vocabulary ?? {};
   const tierError = tierProblem(resolved.dir, profile.tier, profile.core);
   if (tierError) problems.push(tierError);
-  const defaults = defaultVocabulary(resolved.dir, profile.tier);
+  const paceError = paceProblem(resolved.dir, profile.pace, profile.core);
+  if (paceError) problems.push(paceError);
+  const defaults = defaultVocabulary(resolved.dir, profile.tier, profile.pace);
   for (const name of [...referenced].sort()) {
     const unanswered = !(name in declared) ? !(name in defaults) : declared[name] === null || declared[name] === '';
     if (unanswered && expected.has(`{{${name}}}`)) notes.push(`vocabulary {{${name}}} is new in this core and still to fill`);

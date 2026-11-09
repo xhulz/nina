@@ -112,6 +112,31 @@ out: `upgrade` runs the same detection over the project's files, and a surface t
 that they show — a Prisma schema, for `prisma` — holds the move until it is declared or `--force` is
 passed.
 
+## A rule written twice: `nina:pace`
+
+A project picks how much checking its pipeline does with its **pace**: `full`, the release's own, or `fast`
+(`nina compose --fast`, or `--pace <pace>`, recorded in the profile as `pace`). A rule the pace changes is
+written once for each, as a passage marked `<!-- nina:pace full -->…<!-- /nina:pace -->` and one marked
+`<!-- nina:pace fast -->…<!-- /nina:pace -->`, on lines of their own or inside a line. Composing keeps the
+passages of the project's pace, less their markers, and drops the others, the lines they stood on with them, so
+no blank line splits a list or a table. Like `nina:why`, it runs on each piece — the core file, each fragment —
+before they are joined, and a marker still standing afterwards was left unclosed: `compose` names it, and the
+fixture's audit fails.
+
+The obvious version was an override: one section at `fast` saying which rules no longer hold. It would compose the
+mirror and the mutation battery into the implementer's spec beside a sentence telling it not to build them, a
+contradiction each stage settles its own way (Hard Rule #17), and every dispatch would pay for both. Written twice,
+each pace reads only rules it follows, and the `fast` composition is smaller: about 4,300 characters less of
+`CLAUDE.md` and 6,700 less of the implementer's spec in the `ledger` profile.
+
+A pace also moves limits, from `core/paces.json`: the lines one step writes (`STEP_LINES`) and how many times a
+loop goes round (`LOOP_CAP`, which each capped edge of the graph reads, so the loop gate holds the pace's number).
+It is the other axis from a tier: a tier moves what a stage runs on and never what it does, a pace what it does
+and never what it runs on, so `paces.json` takes no `_MODEL` or `_EFFORT` name. The audit refuses a passage that
+names a pace the release lacks, one opened inside another, one left open, and one holding a project slot — the
+readers that ask what a project owes read the layers whole, so a slot one pace drops would still be asked of it.
+The `brisk` fixture is `ledger` at `fast`, held to every property and budget the others are.
+
 ## A slot the file cannot do without: `core/defaults/`
 
 Every project slot is the project's to write, and until it does, `check` counts it as owed and the slot

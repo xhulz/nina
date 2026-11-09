@@ -18,7 +18,7 @@ import { HARNESS, readProfile } from '../paths.mjs';
 import { costOf } from '../prices.mjs';
 import { runOf } from '../transcripts.mjs';
 import { missingWiring, shippedScripts } from '../wiring.mjs';
-import { defaultVocabulary, modelsLine, tierProblem, tiers } from '../vocabulary.mjs';
+import { FULL_PACE, defaultVocabulary, modelsLine, paceProblem, paces, tierProblem, tiers } from '../vocabulary.mjs';
 import { amber, bold, dim, green, pink } from '../look.mjs';
 import { byVersion, layerRootFor } from './compose.mjs';
 import { filedRequests } from './learn.mjs';
@@ -124,6 +124,13 @@ export async function status(argv, ctx) {
         ? warn(`${tierError} — ${Object.keys(tiers(layers.dir)).length > 0 ? '`nina compose --tier <level>` sets one it has' : `take "tier" out of ${HARNESS}/profile.json`}`)
         : `${profile.tier === undefined ? "the release's own" : `tier ${bold(profile.tier)}`} · ${modelsLine({ ...defaultVocabulary(layers.dir, profile.tier), ...declared })}`,
     );
+    // How much checking it does: every gate at `full`, the release's own; fewer and later at `fast`.
+    const paceError = paceProblem(layers.dir, profile.pace, pinned);
+    if (paceError) row('pace', warn(`${paceError} — ${Object.keys(paces(layers.dir)).length > 0 ? '`nina compose --pace <pace>` sets one it has' : `take "pace" out of ${HARNESS}/profile.json`}`));
+    else if (Object.keys(paces(layers.dir)).length > 0) {
+      const values = { ...defaultVocabulary(layers.dir, profile.tier, profile.pace), ...declared };
+      row('pace', `${bold(profile.pace ?? FULL_PACE)} · a step writes ~${values.STEP_LINES} lines, a loop goes round ${values.LOOP_CAP} time(s)`);
+    }
   } else {
     row('hooks', warn(layers.error));
   }

@@ -1,0 +1,34 @@
+{
+  "describe": "The ledger fixture at the fast pace: the passages marked `nina:pace fast` compose in place of those marked `full`, and the loop caps and step size move. Exists to hold every fast composition to the same audits and budgets as the full one.",
+  "deny": [
+    "Spliter",
+    "Asaas",
+    "asaas",
+    "afinz",
+    "Payout",
+    "escrow",
+    "sobra",
+    "PIX",
+    "KYC",
+    "CPF",
+    "CNPJ",
+    "LGPD",
+    "centavos",
+    "BRL",
+    "DETECTADA",
+    "TRANSFERENCIA",
+    "ESCROW_RETENTION",
+    "IncomingEntry",
+    "AuditLog",
+    "AccountProcessor"
+  ],
+  "absent": [
+    ".claude/agents/solidity-dev.md",
+    ".claude/agents/solidity-auditor.md"
+  ],
+  "present": [
+    ".claude/agents/dba.md",
+    ".claude/agents/integration-tester.md",
+    ".claude/templates/integration.md"
+  ]
+}
