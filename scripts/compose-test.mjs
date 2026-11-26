@@ -5,7 +5,7 @@
  * While the harness was being extracted, the test was that a composition reproduced a live
  * project byte for byte. That oracle is gone: projects now pin a frozen release, so the
  * working core has no running tree to be checked against. What stands in its place is a
- * fixture project per shape worth testing, and eleven properties that must hold for each:
+ * fixture project per shape worth testing, and twelve properties that must hold for each:
  *
  *   1. No `{{PLACEHOLDER}}` survives — the profile's vocabulary covers what the core says.
  *   2. Every unfilled slot belongs to the PROJECT layer. A declared surface that leaves one
