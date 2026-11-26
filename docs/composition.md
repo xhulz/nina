@@ -13,7 +13,7 @@ later phase, against a second project that can check the rewrite.
 Once a project pins a release, the working core is free to move, and that is when the harness
 can be made generic — the extraction's compromises are recorded in `core/GAPS.md`, closed and
 open. What replaces the byte-exact proof is `fixtures/`: one project per shape worth testing,
-and eleven properties that must hold for each, plus one audit of the layers themselves.
+and twelve properties that must hold for each, plus one audit of the layers themselves.
 
 ```bash
 node scripts/compose-test.mjs        # or: pnpm compose:test
